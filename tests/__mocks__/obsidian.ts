@@ -17,6 +17,7 @@ export class PluginSettingTab { app: any; plugin: any; containerEl: any; constru
 export class Setting { constructor(public containerEl: any) {} setName(_: string) { return this; } setDesc(_: string) { return this; } addText(cb: any) { cb({ setValue: () => ({ onChange: () => {} }), setPlaceholder: () => ({}) }); return this; } addSlider(cb: any) { cb({ setLimits: () => ({ setValue: () => ({ onChange: () => {} }) }) }); return this; } }
 export class TFile { path = ""; basename = ""; extension = "md"; }
 export function setIcon(_el: any, _name: string): void {}
+export function getLanguage(): string { return "en"; }
 export class Notice { constructor(_message: string) {} }
 import { vi } from "vitest";
 

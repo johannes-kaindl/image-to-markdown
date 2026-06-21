@@ -101,6 +101,13 @@ step. The plugin always works on the note you have open.
 
 ## Step 5 — Open the sidebar; your image is already selected
 
+> A note on language: the plugin's interface follows **Obsidian's display language**
+> automatically — English here, German if your Obsidian is set to German. This manual is
+> written in English and quotes the English labels; the German names are shown in
+> parentheses where they help. The language is picked up when the plugin loads, so if you
+> ever switch Obsidian's language, reload the plugin (or restart Obsidian) to see the
+> change.
+
 Click the ribbon icon **"Image → Markdown"** on the left. A sidebar opens with the title
 **"IMG → MD"**.
 
@@ -113,9 +120,9 @@ disabled, which is your cue to convert it.)
 <!-- TODO(submission): screenshot of the "IMG → MD" sidebar listing one pre-selected image with the "Transkribieren" button — CORE-META-03 -->
 ![The IMG → MD sidebar with the image pre-selected](../images/tutorial-sidebar.png)
 
-## Step 6 — Click "Transkribieren" and watch it stream
+## Step 6 — Click "Transcribe" and watch it stream
 
-Click the **"Transkribieren"** button.
+Click the **"Transcribe"** button (**"Transkribieren"** in German).
 
 Now watch the sidebar rather than waiting for a final result. The plugin sends your image
 to your local server and **streams the answer back live**, filling a card for the image
@@ -130,9 +137,9 @@ never written into your note.)
 The card is read-only and shows the raw Markdown as plain text, and there is a copy
 button if you want to grab the result by hand. Wait until the stream finishes.
 
-## Step 7 — Click "Notiz anlegen" and see the result
+## Step 7 — Click "Create note" and see the result
 
-When the transcript is complete, click **"Notiz anlegen"** ("create note") on the card.
+When the transcript is complete, click **"Create note"** (**"Notiz anlegen"** in German) on the card.
 
 Here is what just happened, and why it is safe:
 
@@ -151,8 +158,8 @@ list on the next scan and you get no duplicate notes.
 Open your original note again and look: the scanned page is now living text. You have
 done it.
 
-(If you had several images, **"Alle anlegen"** ("create all") would do the same for every
-card at once — but one image was all we needed for your first success.)
+(If you had several images, **"Create all"** (**"Alle anlegen"** in German) would do the
+same for every card at once — but one image was all we needed for your first success.)
 
 ## What you learned
 
@@ -164,10 +171,10 @@ In this tutorial you:
 - Set the **"Vision-Endpunkt"** correctly — base URL only, no trailing `/v1`.
 - Opened a note with an embedded image and saw it **pre-selected** in the **"IMG → MD"**
   sidebar.
-- Clicked **"Transkribieren"** and watched the transcript **stream in live**, including a
-  reasoning model's thoughts block.
-- Clicked **"Notiz anlegen"** and ended up with a new transcript note, with the original
-  image embed **non-destructively replaced** by an embed of that note.
+- Clicked **"Transcribe"** ("Transkribieren") and watched the transcript **stream in
+  live**, including a reasoning model's thoughts block.
+- Clicked **"Create note"** ("Notiz anlegen") and ended up with a new transcript note, with
+  the original image embed **non-destructively replaced** by an embed of that note.
 
 Most importantly, you now have a feel for the rhythm of the tool: open a note, open the
 sidebar, transcribe, create the note.
@@ -176,8 +183,8 @@ sidebar, transcribe, create the note.
 
 - For task-focused recipes — transcribing a whole note at once, using the editor
   context-menu entry **"Image → Markdown"** on a single image under the cursor, or
-  running the batch command **"Bilder der aktiven Notiz transkribieren"** without the
-  sidebar — see the [How-to guides](how-to.md).
+  running the batch command **"Transcribe the images of the active note"** ("Bilder der
+  aktiven Notiz transkribieren") without the sidebar — see the [How-to guides](how-to.md).
 - For the exact list of settings, defaults, supported formats, and commands, see the
   [Reference](reference.md).
 

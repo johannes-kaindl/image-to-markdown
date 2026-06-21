@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { ImgToMdState, ImgItem } from "./img_to_md_state";
+import { t } from "./i18n";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 
@@ -39,14 +40,14 @@ export class ImgToMdView extends ItemView {
     this.modelSel = c.createEl("select", { cls: "img2md-model dropdown" }) as HTMLSelectElement;
     this.modelSel.addEventListener("change", () => this.deps.setModel(this.modelSel?.value ?? ""));
     const head = c.createDiv({ cls: "img2md-head" });
-    this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: "Alle abwählen" });
+    this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: t("view.deselectAll") });
     this.toggleBtn.addEventListener("click", () => { this.state.toggleAll(); this.renderList(); });
-    this.runBtn = head.createEl("button", { cls: "img2md-run mod-cta", text: "Transkribieren" });
+    this.runBtn = head.createEl("button", { cls: "img2md-run mod-cta", text: t("view.transcribe") });
     this.runBtn.addEventListener("click", () => this.onRunClick());
     this.listEl = c.createDiv({ cls: "img2md-list" });
     this.cardsEl = c.createDiv({ cls: "img2md-cards" });
     const foot = c.createDiv({ cls: "img2md-foot" });
-    foot.createEl("button", { cls: "img2md-all", text: "Alle anlegen" }).addEventListener("click", () => void this.writeAll());
+    foot.createEl("button", { cls: "img2md-all", text: t("view.createAll") }).addEventListener("click", () => void this.writeAll());
     await this.refreshStatus();
     await this.refreshModels();
     await this.rescan();
@@ -54,9 +55,9 @@ export class ImgToMdView extends ItemView {
 
   async refreshStatus(): Promise<void> {
     const el = this.statusEl; if (!el) return;
-    el.setText("Vision-LLM: prüfe…");
+    el.setText(t("view.checking"));
     const ok = await this.deps.ping();
-    el.setText(ok ? "● Vision-LLM verbunden" : "○ Vision-LLM offline — in den Settings prüfen");
+    el.setText(ok ? t("view.connected") : t("view.offline"));
   }
 
   private async refreshModels(): Promise<void> {
@@ -88,8 +89,8 @@ export class ImgToMdView extends ItemView {
 
   private renderList(): void {
     const el = this.listEl; if (!el) return; el.empty();
-    this.toggleBtn?.setText(this.state.allSelected() ? "Alle abwählen" : "Alle auswählen");
-    if (!this.state.items.length) { el.createDiv({ cls: "img2md-empty", text: "Keine Bilder in dieser Notiz." }); return; }
+    this.toggleBtn?.setText(this.state.allSelected() ? t("view.deselectAll") : t("view.selectAll"));
+    if (!this.state.items.length) { el.createDiv({ cls: "img2md-empty", text: t("view.noImages") }); return; }
     for (const item of this.state.items) {
       const row = el.createDiv({ cls: "img2md-item" });
       const cb = row.createEl("input", { cls: "img2md-check" }) as HTMLInputElement;
@@ -97,7 +98,7 @@ export class ImgToMdView extends ItemView {
       cb.checked = this.state.isSelected(item.link);
       cb.disabled = !item.supported;
       cb.addEventListener("change", () => { this.state.toggle(item.link); this.renderList(); });
-      const label = item.supported ? this.basename(item.link) : `${this.basename(item.link)} — nicht unterstützt`;
+      const label = item.supported ? this.basename(item.link) : t("view.unsupportedSuffix", this.basename(item.link));
       row.createEl("span", { cls: "img2md-name", text: label });
     }
   }
@@ -107,27 +108,27 @@ export class ImgToMdView extends ItemView {
     for (let i = 0; i < this.state.cards.length; i++) {
       const card = this.state.cards[i];
       const cardEl = el.createDiv({ cls: "img2md-card" });
-      cardEl.createDiv({ cls: "img2md-card-head", text: `Bild ${card.index}/${card.total} · ${this.basename(card.item.link)}` });
+      cardEl.createDiv({ cls: "img2md-card-head", text: t("view.cardHead", card.index, card.total, this.basename(card.item.link)) });
       if (card.reasoning) {
         const live = card.status === "streaming" && card.text === "";
         const det = cardEl.createEl("details", { cls: "img2md-reasoning" }) as HTMLDetailsElement;
         det.open = live;
-        det.createEl("summary", { cls: "img2md-reasoning-sum", text: live ? "💭 denkt nach…" : "💭 Gedanken" });
+        det.createEl("summary", { cls: "img2md-reasoning-sum", text: live ? t("view.thinking") : t("view.thoughts") });
         det.createDiv({ cls: "img2md-reasoning-body", text: card.reasoning });
       }
       if (card.text) cardEl.createDiv({ cls: "img2md-text", text: card.text });
-      if (card.status === "error") cardEl.createDiv({ cls: "img2md-error", text: card.error ?? "Fehler" });
+      if (card.status === "error") cardEl.createDiv({ cls: "img2md-error", text: card.error ?? t("view.error") });
       if (card.status === "written") {
-        const w = cardEl.createDiv({ cls: "img2md-written", text: `✓ angelegt: ${card.writtenPath}` });
+        const w = cardEl.createDiv({ cls: "img2md-written", text: t("view.created", card.writtenPath ?? "") });
         w.addEventListener("click", () => { if (card.writtenPath) this.deps.openPath(card.writtenPath); });
       }
       if (card.text) {
         const actions = cardEl.createDiv({ cls: "img2md-card-actions" });
-        const copyBtn = actions.createEl("button", { cls: "img2md-copy clickable-icon", attr: { "aria-label": "Transkript kopieren" } });
+        const copyBtn = actions.createEl("button", { cls: "img2md-copy clickable-icon", attr: { "aria-label": t("view.copyTranscript") } });
         setIcon(copyBtn, "copy");
         copyBtn.addEventListener("click", () => this.deps.copyText(card.text));
         if (card.status === "done") {
-          actions.createEl("button", { cls: "img2md-write", text: "Notiz anlegen" }).addEventListener("click", () => void this.writeOne(i));
+          actions.createEl("button", { cls: "img2md-write", text: t("view.createNote") }).addEventListener("click", () => void this.writeOne(i));
         }
       }
     }
@@ -165,8 +166,8 @@ export class ImgToMdView extends ItemView {
       this.renderCards();
     }
     // Nach Abbruch: noch nicht verarbeitete Karten kennzeichnen.
-    for (let i = 0; i < cards.length; i++) if (cards[i].status === "streaming") this.state.setError(i, "Abgebrochen");
-    this.running = false; this.runBtn?.setText("Transkribieren");
+    for (let i = 0; i < cards.length; i++) if (cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
+    this.running = false; this.runBtn?.setText(t("view.transcribe"));
     this.controller = null;
     this.renderCards();
   }

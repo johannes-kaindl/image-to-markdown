@@ -1,6 +1,8 @@
 // Vision-Capability-Detektion — vision-only-Adaptation von vault-rag/src/capabilities.ts.
 // Reiner Kern: keine obsidian-/DOM-Imports (in Node testbar, PROF-OBS-03/04).
 
+import { t } from "./i18n";
+
 export type Confidence = "no" | "likely" | "confirmed";
 
 const RANK: Record<Confidence, number> = { no: 0, likely: 1, confirmed: 2 };
@@ -84,14 +86,15 @@ export function resolveVision(meta: Confidence | null, model: string): Confidenc
 
 /** UI-Display: Lucide-Icon-Name + Kurz-Text + State-Klasse. */
 export function visionDisplay(c: Confidence): { icon: string; text: string; state: "ok" | "likely" | "error" } {
-  if (c === "confirmed") return { icon: "eye", text: "Vision", state: "ok" };
-  if (c === "likely") return { icon: "help-circle", text: "Vision unbestätigt", state: "likely" };
-  return { icon: "alert-triangle", text: "Kein Vision", state: "error" };
+  if (c === "confirmed") return { icon: "eye", text: t("cap.confirmed"), state: "ok" };
+  if (c === "likely") return { icon: "help-circle", text: t("cap.likely"), state: "likely" };
+  return { icon: "alert-triangle", text: t("cap.none"), state: "error" };
 }
 
 // ── Aktiver Vision-Test (Bild-Erzeugung lebt in der DOM-Schicht settings.ts) ──
 export const VISION_TEST_TOKEN = "VX7";
-export const VISION_TEST_PROMPT = "Gib nur den Text im Bild aus.";
+// Interne Vision-Probe (nicht nutzersichtbar) — bewusst EN-kanonisch, keine Lokalisierung.
+export const VISION_TEST_PROMPT = "Output only the text in the image.";
 
 /** true, wenn die Modell-Antwort das Token enthält (alphanumerisch normalisiert, case-insensitive). */
 export function isVisionConfirmed(response: string, token: string = VISION_TEST_TOKEN): boolean {

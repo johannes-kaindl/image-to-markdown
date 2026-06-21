@@ -126,7 +126,7 @@ describe("runImgToMd", () => {
     const r = await runImgToMd(io, "q.md");
     expect(r).toEqual({ transcribed: 0, skipped: 1 });
     expect(Object.keys(created)).toEqual([]);
-    expect(notices.some(n => n.includes("nicht unterstützt"))).toBe(true);
+    expect(notices.some(n => n.includes("not supported"))).toBe(true);
   });
   it("leeres Transkript → keine Notiz", async () => {
     const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]], transcribe: async () => ({ content: "   ", model: "vmodel" }) });

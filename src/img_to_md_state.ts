@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 export interface ImgItem { raw: string; link: string; ext: string; supported: boolean }
 
 export type CardStatus = "streaming" | "done" | "error" | "written";
@@ -63,7 +65,7 @@ export class ImgToMdState {
   setDone(i: number): void {
     const c = this.cards[i]; if (!c) return;
     if (c.text.trim()) c.status = "done";
-    else { c.status = "error"; c.error = "Leeres Transkript"; }
+    else { c.status = "error"; c.error = t("core.emptyTranscript"); }
   }
 
   setError(i: number, msg: string): void { const c = this.cards[i]; if (c) { c.status = "error"; c.error = msg; } }

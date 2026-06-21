@@ -55,7 +55,7 @@ describe("ImgToMdState — Karten", () => {
     const s2 = new ImgToMdState(); s2.setItems(items); s2.startCards();
     s2.appendContent(0, "   "); s2.setDone(0);
     expect(s2.cards[0].status).toBe("error");
-    expect(s2.cards[0].error).toBe("Leeres Transkript");
+    expect(s2.cards[0].error).toBe("Empty transcript");
   });
   it("setError + markWritten setzen Status", () => {
     const s = new ImgToMdState(); s.setItems(items); s.startCards();

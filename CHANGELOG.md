@@ -12,7 +12,7 @@ Erstes Release. Ausgegliedert aus [vault-rag](https://codeberg.org/jkaindl/vault
 
 - **Sidebar-View** mit Bild-Auswahl, live streamender Transkription (Gedanken-Block bei
   Reasoning-Modellen, Kopier-Button) und Notiz-Anlage pro Bild bzw. „Alle anlegen".
-- **Command** „Bilder der aktiven Notiz transkribieren" (Batch).
+- **Commands** „Bilder der aktiven Notiz transkribieren" (Batch) und „Sidebar öffnen".
 - **Editor-Kontextmenü** „Image → Markdown" für das Bild unter dem Cursor.
 - Geteilter SSE-Streaming-Transport; `VisionClient` mit `ping`/`listModels` für Modell-Picker
   und Verbindungsstatus.
@@ -21,6 +21,11 @@ Erstes Release. Ausgegliedert aus [vault-rag](https://codeberg.org/jkaindl/vault
   „Vision-Fähigkeit"-Anzeige mit aktivem „Vision testen"-Button; „Modelle laden"-Fallback bei offline.
 - **Vision-Capability-Detektion** (`capabilities.ts`): Namens-Heuristik + Metadaten-Probe gegen
   Ollama (`/api/show`) und LM Studio (`/api/v1/models`, `/api/v0/models`).
+- **Zweisprachige Oberfläche (Englisch/Deutsch):** alle nutzersichtbaren Strings folgen der
+  Sprach-Einstellung von Obsidian. Englisch ist kanonisch, Deutsch ist die Übersetzung; die
+  Sprache wird einmalig beim Laden des Plugins erkannt, ein Wechsel wird also nach einem
+  Plugin-Reload wirksam. Auch der mitgelieferte Standard-Vision-Prompt ist lokalisiert; Marken-
+  und Steuer-Strings („Image → Markdown", „IMG → MD", „Stop") bleiben unverändert.
 - `npm run deploy` (env-gesteuert via `$OBSIDIAN_PLUGIN_DIR`).
 
 ### Behoben
