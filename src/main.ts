@@ -45,10 +45,6 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshImgViews()));
   }
 
-  onunload() {
-    this.app.workspace.getLeavesOfType(VIEW_TYPE_IMGMD).forEach(l => l.detach());
-  }
-
   reconnectVision(): void {
     this.visionClient = new VisionClient(this.settings.visionEndpoint, this.settings.visionModel);
   }
@@ -108,7 +104,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   private refreshImgViews(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_IMGMD)) {
-      void (leaf.view as ImgToMdView).refresh();
+      if (leaf.view instanceof ImgToMdView) void leaf.view.refresh();
     }
   }
 
