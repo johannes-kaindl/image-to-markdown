@@ -1,4 +1,5 @@
 import { streamSSE } from "./sse";
+import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
 
 /** Normalisiert eine Endpoint-Eingabe: trailing Slashes + ein trailing `/v1` strippen.
  *  So funktioniert sowohl `http://host:1234` als auch `http://host:1234/v1` — die Client-
@@ -50,6 +51,19 @@ export class VisionClient {
     if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
     const j = await res.json() as { model?: string; choices?: { message?: { content?: string } }[] };
     return { content: j.choices?.[0]?.message?.content ?? "", model: j.model ?? this.model };
+  }
+
+  /** Passive Vision-Erkennung: native Metadaten-Probe + Namens-Heuristik.
+   *  this.endpoint ist bereits /v1-frei (normalizeEndpoint) → korrekte Basis-URL. */
+  async visionConfidence(model: string): Promise<Confidence> {
+    return resolveVision(await fetchVisionCapability(this.endpoint, model), model);
+  }
+
+  /** Aktiver Vision-Test: schickt das übergebene Test-Bild und prüft, ob die Antwort
+   *  das erwartete Token enthält. Throws bei Netz-/HTTP-Fehler (Endpoint nicht erreichbar). */
+  async testVision(dataUrl: string): Promise<boolean> {
+    const { content } = await this.transcribe(dataUrl, VISION_TEST_PROMPT);
+    return isVisionConfirmed(content);
   }
 
   /** Streamende Variante für die Sidebar: liefert content+reasoning live, plus das Modell
