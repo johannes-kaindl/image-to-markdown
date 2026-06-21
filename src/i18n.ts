@@ -87,8 +87,8 @@ const DE: Dict = {
   "settings.model.desc": "Vision-fähiges Modell (Qwen2-VL, Llama-3.2-Vision …)",
   "settings.capability.name": "Vision-Fähigkeit",
   "settings.testVision": "Vision testen",
-  "settings.endpointUnreachable": "Endpoint nicht erreichbar",
-  "settings.endpointOfflinePlaceholder": "(Endpoint offline)",
+  "settings.endpointUnreachable": "Endpunkt nicht erreichbar",
+  "settings.endpointOfflinePlaceholder": "(Endpunkt offline)",
   "settings.loadModels": "Modelle laden",
   "settings.prompt.name": "Vision-Prompt",
   "settings.prompt.desc": "Anweisung an das Vision-Modell. Der Bild-Inhalt wird mitgeschickt.",
@@ -123,8 +123,8 @@ const DE: Dict = {
   "core.skippedSuffix": ", {0} übersprungen",
   "core.emptyTranscript": "Leeres Transkript",
   "cap.confirmed": "Vision",
-  "cap.likely": "Vision unbestätigt",
-  "cap.none": "Kein Vision",
+  "cap.likely": "Vision (unbestätigt)",
+  "cap.none": "Keine Vision",
 };
 
 const STRINGS: Record<Lang, Dict> = { en: EN, de: DE };
