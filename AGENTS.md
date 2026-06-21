@@ -54,6 +54,7 @@ in vault-rag und hier. Ein npm-Shared-Package wäre für ~5 KB stabilen Code Ove
 npm install                       # Deps
 npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
+npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
 npm test                          # vitest run (83 Tests)
 npx vitest run tests/<datei>      # eine Test-Datei
 npx tsc --noEmit                  # Typecheck
@@ -100,4 +101,3 @@ Stand 2026-06-21 — frisch ausgegliedert, **noch nicht released**. Bewusste, be
 - **CORE-GIT-01** — Codeberg-`origin` + GitHub-Mirror beim Forge-Setup gesetzt (2026-06-21).
 - **PROF-TS-01** — npm-Scripts ohne `lint`/`typecheck` (von vault-rag geerbt; `npx tsc --noEmit` verfügbar). *Grund:* offen.
 - **PROF-TS-04** — kein `tsconfig.build.json`-Split (ein `tsconfig.json` + `vitest.config.ts` reicht). *Grund:* klein genug.
-- **PROF-OBS-02** — kein `deploy`-Script. *Grund:* env-gesteuertes `npm run deploy` nachzuziehen.
