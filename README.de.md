@@ -33,6 +33,9 @@ Duplikate. Nichts verlässt die Maschine: keine Cloud, keine Telemetrie, kein VP
   Gedanken-/Thinking-Block bei Reasoning-Modellen und einem Kopier-Button. Pro Karte gibt es
   „Notiz anlegen", außerdem „Alle anlegen". Karten sind read-only; rohes Markdown im
   pre-wrap. Nach dem Schreiben fällt das behandelte Bild beim Re-Scan aus der Liste.
+- **Zweisprachige Oberfläche (Deutsch / English)** — alle nutzersichtbaren Texte folgen der
+  Sprach-Einstellung von Obsidian; Englisch ist kanonisch, Deutsch wird automatisch geliefert.
+  Die Sprache wird einmalig beim Laden des Plugins erkannt (zum Wechseln neu laden).
 - **Command** „Bilder der aktiven Notiz transkribieren" (`transcribe-active-note`) —
   Batch-Transkription ohne Sidebar.
 - **Command** „Sidebar öffnen" (`open-sidebar`) — öffnet die Sidebar.
@@ -54,30 +57,55 @@ Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 
 ## Installation
 
-- **Community Plugins:** „Coming soon" — `image-to-markdown` wird für das
-  Obsidian-Community-Plugin-Directory vorbereitet.
-- **Manuell:** `main.js`, `manifest.json` und `styles.css` aus dem
-  [letzten Release](https://codeberg.org/jkaindl/image-to-markdown/releases) nach
-  `<vault>/.obsidian/plugins/image-to-markdown/` legen, dann unter **Settings → Community
-  plugins** aktivieren.
-- **BRAT (Beta):** den GitHub-Mirror `johannes-kaindl/image-to-markdown` in
-  [BRAT](https://github.com/TfTHacker/obsidian42-brat) eintragen.
-- **From source:**
+### Community Plugins
 
-  ```bash
-  git clone https://codeberg.org/jkaindl/image-to-markdown
-  cd image-to-markdown
-  npm install
-  npm run build   # → main.js
-  ```
+**Coming soon.** `image-to-markdown` wird für das Obsidian-Community-Plugin-Directory
+vorbereitet.
 
-  Danach `main.js`, `manifest.json` und `styles.css` nach
-  `<vault>/.obsidian/plugins/image-to-markdown/` kopieren.
+### Manuell
 
-> Hinweis: nicht in-place — nach dem Build müssen `main.js`/`manifest.json`/`styles.css` ins
-> Vault-Plugin-Verzeichnis kopiert werden, danach Obsidian neu laden.
+`main.js`, `manifest.json` und `styles.css` aus dem
+[letzten Release](https://codeberg.org/jkaindl/image-to-markdown/releases) nach
+`<vault>/.obsidian/plugins/image-to-markdown/` legen, dann unter **Settings → Community
+plugins** aktivieren.
 
-## Konfiguration
+### BRAT (Beta)
+
+Den GitHub-Mirror `johannes-kaindl/image-to-markdown` in
+[BRAT](https://github.com/TfTHacker/obsidian42-brat) eintragen.
+
+### From source
+
+```bash
+git clone https://codeberg.org/jkaindl/image-to-markdown
+cd image-to-markdown
+npm install
+npm run build   # → main.js
+```
+
+Danach `main.js`, `manifest.json` und `styles.css` nach
+`<vault>/.obsidian/plugins/image-to-markdown/` kopieren und Obsidian neu laden.
+
+## Verwendung
+
+1. Das Plugin auf den lokalen Vision-Server ausrichten (siehe [Konfiguration](#konfiguration)
+   weiter unten) und sicherstellen, dass das Modell geladen ist.
+2. Eine Notiz mit eingebetteten Bildern öffnen.
+3. Auf das Ribbon-Icon **„Image → Markdown"** klicken (oder den Command **„Sidebar öffnen"**
+   ausführen), um die Sidebar **„IMG → MD"** zu öffnen. Die eingebetteten Bilder erscheinen als
+   vorausgewählte Checkbox-Liste; nicht unterstützte Formate sind deaktiviert.
+4. Auf **„Transkribieren"** klicken. Jedes ausgewählte Bild bekommt eine Karte, die sich live mit
+   dem gestreamten Markdown füllt. Bei Reasoning-Modellen den Gedanken-Block aufklappen, um dem
+   Modell beim Denken zuzusehen; über den Kopier-Button das rohe Markdown übernehmen.
+5. Auf **„Notiz anlegen"** einer einzelnen Karte klicken oder mit **„Alle anlegen"** alle
+   Transkripte auf einmal schreiben. Jedes Bild wird zu einer Transkript-Notiz, und sein Embed in
+   der Quellnotiz wird durch einen Embed der neuen Notiz ersetzt.
+
+Lieber ohne Sidebar? Den Command **„Bilder der aktiven Notiz transkribieren"** ausführen, um die
+aktive Notiz im Batch zu transkribieren. Oder im Editor mit Rechtsklick auf ein Bild
+**„Image → Markdown"** wählen, um nur das Bild unter dem Cursor zu transkribieren.
+
+### Konfiguration
 
 Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 
@@ -104,6 +132,17 @@ Modell wirklich Bilder lesen kann — Details im [Handbuch](docs/manual/referenc
 ![Settings-Tab „Vision (Image → Markdown)"](docs/images/settings.png)
 <!-- TODO(submission): Settings-Tab mit Endpoint, Modell-Dropdown und Prompt — CORE-META-03 -->
 
+## Funktionsweise
+
+- Für jedes ausgewählte Bild baut das Plugin einen multimodalen chat-completions-Request (das
+  Bild im `content`-Array) an den konfigurierten OpenAI-kompatiblen Vision-Endpoint und streamt
+  das Markdown zurück (SSE; `content` + `reasoning_content`).
+- Es schreibt eine Transkript-Notiz pro Bild (gebündelt, read-once/write-once, keine Race) mit
+  `transcribed_by`-Frontmatter (Modell aus `response.model`) und ersetzt den Bild-Embed in der
+  Quellnotiz durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
+
+Architektur- und Modul-Layout stehen in [AGENTS.md](AGENTS.md).
+
 ## Unterstützte Formate
 
 - **An das Modell gesendet:** PNG, JPG, JPEG, WebP, GIF.
@@ -122,17 +161,6 @@ Modell wirklich Bilder lesen kann — Details im [Handbuch](docs/manual/referenc
   tatsächlich genutzte Modell wird aus `response.model` gelesen und landet im
   `transcribed_by`-Frontmatter der Transkript-Notiz.
 - **Vision-Endpoint-Default `:8080` (MLX) ≠ LM Studio `:1234`.**
-
-## Funktionsweise
-
-- Für jedes ausgewählte Bild baut das Plugin einen multimodalen chat-completions-Request (das
-  Bild im `content`-Array) an den konfigurierten OpenAI-kompatiblen Vision-Endpoint und streamt
-  das Markdown zurück (SSE; `content` + `reasoning_content`).
-- Es schreibt eine Transkript-Notiz pro Bild (gebündelt, read-once/write-once, keine Race) mit
-  `transcribed_by`-Frontmatter (Modell aus `response.model`) und ersetzt den Bild-Embed in der
-  Quellnotiz durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
-
-Architektur- und Modul-Layout stehen in [AGENTS.md](AGENTS.md).
 
 ## Dokumentation
 

@@ -16,9 +16,10 @@ Image to Markdown turns the embedded images of an Obsidian note — scans, scree
 
 ## Features
 
-- **Sidebar view.** A ribbon icon (`scan-text`, label "Image → Markdown") opens the "IMG → MD" view. It lists every embedded image of the active note as a checkbox list — all preselected, with unsupported formats disabled. The **"Transkribieren"** (Transcribe) button streams the vision model's answer **live** into one card per image, including an expandable thinking block for reasoning models and a copy button. Each card has a **"Notiz anlegen"** (Create note) button, plus **"Alle anlegen"** (Create all). Cards are read-only and show the raw Markdown pre-wrapped. After a transcript is written, the handled image drops out of the list on the next scan.
-- **Command "Bilder der aktiven Notiz transkribieren"** (Transcribe the images in the active note, id `transcribe-active-note`) — batch transcription without opening the sidebar.
-- **Command "Sidebar öffnen"** (Open sidebar, id `open-sidebar`) — opens the sidebar view.
+- **Sidebar view.** A ribbon icon (`scan-text`, label "Image → Markdown") opens the "IMG → MD" view. It lists every embedded image of the active note as a checkbox list — all preselected, with unsupported formats disabled. The **"Transcribe"** button streams the vision model's answer **live** into one card per image, including an expandable thinking block for reasoning models and a copy button. Each card has a **"Create note"** button, plus **"Create all"**. Cards are read-only and show the raw Markdown pre-wrapped. After a transcript is written, the handled image drops out of the list on the next scan.
+- **Bilingual UI (English / Deutsch)** — every user-facing string follows Obsidian's language setting; English is canonical, German is provided automatically. The language is detected once when the plugin loads (reload to switch).
+- **Command "Transcribe images in the active note"** (id `transcribe-active-note`) — batch transcription without opening the sidebar.
+- **Command "Open sidebar"** (id `open-sidebar`) — opens the sidebar view.
 - **Editor context-menu entry "Image → Markdown"** (icon `scan-text`) — transcribes only the image under the cursor.
 
 Reasoning models that emit `reasoning_content` in the stream, or inline `<think>` tags, get their thoughts collected into the expandable thinking block. Reasoning is ephemeral — it is shown to you but **never** added to the LLM history.
@@ -62,11 +63,11 @@ Then copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/p
 
 1. Point the plugin at your local vision server (see [Configuration](#configuration) below) and make sure the model is loaded.
 2. Open a note that contains embedded images.
-3. Click the ribbon icon **"Image → Markdown"** (or run the command **"Sidebar öffnen"**) to open the **"IMG → MD"** sidebar. The embedded images appear as a preselected checkbox list; unsupported formats are disabled.
-4. Click **"Transkribieren"**. Each selected image gets a card that fills live with the streamed Markdown. For reasoning models, expand the thinking block to watch the model reason; use the copy button to grab the raw Markdown.
-5. Click **"Notiz anlegen"** on a single card, or **"Alle anlegen"** to write every transcript at once. Each image becomes one transcript note, and its embed in the source note is replaced by an embed of the new note.
+3. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to open the **"IMG → MD"** sidebar. The embedded images appear as a preselected checkbox list; unsupported formats are disabled.
+4. Click **"Transcribe"**. Each selected image gets a card that fills live with the streamed Markdown. For reasoning models, expand the thinking block to watch the model reason; use the copy button to grab the raw Markdown.
+5. Click **"Create note"** on a single card, or **"Create all"** to write every transcript at once. Each image becomes one transcript note, and its embed in the source note is replaced by an embed of the new note.
 
-Prefer to skip the sidebar? Run the command **"Bilder der aktiven Notiz transkribieren"** to batch-transcribe the active note. Or right-click an image in the editor and choose **"Image → Markdown"** to transcribe only the image under the cursor.
+Prefer to skip the sidebar? Run the command **"Transcribe images in the active note"** to batch-transcribe the active note. Or right-click an image in the editor and choose **"Image → Markdown"** to transcribe only the image under the cursor.
 
 ### Configuration
 
@@ -80,7 +81,7 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 
-The settings tab also shows a **connection status** with a **"Verbindung testen"** (Test connection) button, and a **"Vision-Fähigkeit"** (Vision capability) row with a **"Vision testen"** (Test vision) button that confirms whether the selected model can actually read images — see the [manual reference](docs/manual/reference.md#vision-capability-detection).
+Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](docs/manual/reference.md#vision-capability-detection).
 
 ![The "Vision (Image → Markdown)" settings tab](docs/images/settings.png)
 <!-- TODO(submission): the settings tab — Vision-Endpunkt, model dropdown and prompt — CORE-META-03 -->

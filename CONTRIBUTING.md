@@ -33,11 +33,13 @@ Contributions of all sizes are welcome: bug reports, fixes, docs, and features. 
 
 Run these locally before you commit, and make sure they're green:
 
-- **Tests:** `npm test` — the suite is test-driven and currently has 83 tests (Vitest).
+- **Tests:** `npm test` — the suite is test-driven and currently has 111 tests (Vitest).
 - **Typecheck:** `npx tsc --noEmit` — must be clean.
 - **Pre-commit hooks:** let them run; don't skip them with `--no-verify`.
 
 The project is test-driven, so new behavior should arrive with tests.
+
+All user-facing strings (UI labels, commands, notices) go through the i18n module (`src/i18n.ts`) with English canonical + German translation; never hard-code UI text — see [`AGENTS.md`](AGENTS.md) § Conventions (PROF-OBS-07).
 
 ## Where to work
 

@@ -5,8 +5,11 @@ section is a self-contained recipe with steps. They assume the plugin is
 installed and a local vision endpoint is already configured — if not, start with
 the setup notes in the [README](../../README.md).
 
-> Some of the UI is in German, as it appears in Obsidian. Where that is the case,
-> the German strings are quoted verbatim (with an English gloss in parentheses).
+> The plugin's UI follows **Obsidian's display language** (English is canonical,
+> German is the translation). This guide is written in English and quotes the
+> English labels, with the German equivalent in parentheses where it helps. The
+> language is detected once when the plugin loads — reload the plugin to switch.
+> See [Reference → UI language & localization](reference.md#ui-language--localization).
 
 ## Recipes
 
@@ -95,7 +98,14 @@ a specific language, or to change the formatting style.
    settings (heading **"Vision (Image → Markdown)"**).
 2. Edit the **"Vision-Prompt"** text area.
 
-The default prompt (German) is:
+The shipped default prompt is localized — you start from the variant matching
+Obsidian's language. The English default is:
+
+> Transcribe the text in the image exactly to Markdown. Preserve the structure:
+> headings, paragraphs, **emphasis**, lists and tables. Output only the Markdown,
+> no comments.
+
+and the German default is:
 
 > Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur:
 > Überschriften, Absätze, **Hervorhebungen**, Listen und Tabellen. Gib nur das
@@ -105,9 +115,9 @@ Some examples of how you might change it:
 
 - **Output language**: append an instruction such as `Output in English.` to get
   English Markdown instead of the source language.
-- **Keep it terse**: keep the line `Gib nur das Markdown aus, keine Kommentare.`
-  (Output only the Markdown, no comments) so the model does not wrap the result
-  in prose.
+- **Keep it terse**: keep the closing instruction (`Output only the Markdown, no
+  comments.` / `Gib nur das Markdown aus, keine Kommentare.`) so the model does
+  not wrap the result in prose.
 - **Style**: ask for a particular table or heading style, or to preserve line
   breaks exactly.
 
@@ -197,9 +207,9 @@ capability hint and an active test.
    model:
    - **"Vision"** (eye icon) — confirmed vision, from server metadata or a
      previous test.
-   - **"Vision unbestätigt"** (Vision unconfirmed) — the model *name* looks
+   - **"Vision (unbestätigt)"** (Vision unconfirmed) — the model *name* looks
      vision-capable, but nothing has confirmed it.
-   - **"Kein Vision"** (No vision) — no vision signal found.
+   - **"Keine Vision"** (No vision) — no vision signal found.
 3. To confirm for sure, click **"Vision testen"** (Test vision). It sends a small
    generated image with a known word to the model and checks the reply; on
    success the row switches to **"Vision"**.

@@ -135,6 +135,32 @@ misconfiguration. The how-to and reference pages cover the exact settings and th
 endpoint footguns; the point for *understanding* is simply that transcription quality is a
 property of the model and prompt you chose, both of which are fully in your hands.
 
+## Why the interface speaks your language
+
+The plugin's interface is bilingual, and the choice of which language you see is not arbitrary:
+it follows **Obsidian's own display language**, not the operating system. **English is the
+canonical language and German is its translation** — the English strings are written first and
+the German ones track them, which keeps a single source of truth and avoids two interfaces
+drifting apart.
+
+The language is detected **once, when the plugin loads**, and then stays fixed for that session.
+This is a deliberate trade rather than a limitation. A live language switch would mean rebuilding
+every label, notice, and view the moment Obsidian's setting changed — extra machinery to maintain
+for an action almost nobody performs mid-task. Tying detection to load instead keeps the code
+small and the behaviour predictable; the only cost is that switching languages asks for a plugin
+reload (or an Obsidian restart), which is a fair price for a setting you change once and forget.
+
+One detail is worth calling out because it is easy to overlook: the **shipped default prompt is
+itself localized**. A first-time German user does not open the settings to find an English
+instruction they must mentally translate before trusting it — they see a sensible, idiomatic
+instruction in their own language from the very first run. The default is meant to be usable as-is,
+and "usable as-is" only holds if it reads naturally to the person reading it.
+
+A small set of strings stays the same in every language on purpose: the plugin name
+"Image → Markdown", the sidebar title "IMG → MD", and the "Stop" control. These are brand and
+control marks rather than prose; translating them would buy nothing and would make the tool harder
+to talk about across languages.
+
 ## Where to go deeper
 
 This page deliberately stays out of the code. If you want the module layout — which files are
