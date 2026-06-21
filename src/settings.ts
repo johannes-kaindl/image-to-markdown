@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, setIcon, Notice } from "obsidian";
 import type ImageToMarkdownPlugin from "./main";
 import { VisionClient } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
+import { t, defaultVisionPrompt } from "./i18n";
 
 export interface ImageToMarkdownSettings {
   visionEndpoint: string;
@@ -9,15 +10,14 @@ export interface ImageToMarkdownSettings {
   visionPrompt: string;
 }
 
-export const DEFAULT_VISION_PROMPT =
-  "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, " +
-  "**Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare.";
-
-export const DEFAULT_SETTINGS: ImageToMarkdownSettings = {
-  visionEndpoint: "http://localhost:8080",
-  visionModel: "",
-  visionPrompt: DEFAULT_VISION_PROMPT,
-};
+/** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
+export function defaultSettings(): ImageToMarkdownSettings {
+  return {
+    visionEndpoint: "http://localhost:8080",
+    visionModel: "",
+    visionPrompt: defaultVisionPrompt(),
+  };
+}
 
 // 1x1-PNG-Fallback, falls Canvas/DOM nicht verfügbar (z.B. Test-Umgebung ohne 2d-Context).
 const FALLBACK_PNG =
@@ -58,18 +58,18 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     const showPing = (dot: HTMLElement, ok: boolean): void => {
       dot.toggleClass("is-ok", ok);
       dot.toggleClass("is-error", !ok);
-      dot.setText(ok ? "● verbunden" : "○ offline");
+      dot.setText(ok ? t("settings.connected") : t("settings.offline"));
     };
 
-    new Setting(containerEl).setName("Vision (Image → Markdown)").setHeading();
+    new Setting(containerEl).setName(t("settings.heading")).setHeading();
 
     // ── Endpoint + Status-Dot + Test ──
     const epSetting = new Setting(containerEl)
-      .setName("Vision-Endpunkt")
-      .setDesc("OpenAI-kompatibler Server mit Vision-Modell (z.B. LM Studio)")
-      .addText(t => t.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.visionEndpoint)
+      .setName(t("settings.endpoint.name"))
+      .setDesc(t("settings.endpoint.desc"))
+      .addText(tx => tx.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.visionEndpoint)
         .onChange(async (v: string) => { this.plugin.settings.visionEndpoint = v.trim(); await this.plugin.saveSettings(); this.plugin.reconnectVision(); }))
-      .addButton(b => b.setButtonText("Verbindung testen").onClick(async () => {
+      .addButton(b => b.setButtonText(t("settings.testConnection")).onClick(async () => {
         b.setDisabled(true);
         const ok = await new VisionClient(endpoint(), "").ping();
         showPing(dot, ok);
@@ -79,10 +79,10 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     void new VisionClient(endpoint(), "").ping().then(ok => showPing(dot, ok));
 
     // ── Modell ──
-    const modelSetting = new Setting(containerEl).setName("Vision-Modell").setDesc("Vision-fähiges Modell (Qwen2-VL, Llama-3.2-Vision …)");
+    const modelSetting = new Setting(containerEl).setName(t("settings.model.name")).setDesc(t("settings.model.desc"));
 
     // ── Vision-Fähigkeit (Icon + Text) + aktiver Test ──
-    const capSetting = new Setting(containerEl).setName("Vision-Fähigkeit");
+    const capSetting = new Setting(containerEl).setName(t("settings.capability.name"));
     const capEl = capSetting.descEl.createSpan({ cls: "img2md-cap" });
     const capIcon = capEl.createSpan();
     const capText = capEl.createSpan();
@@ -97,14 +97,14 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       if (this.confirmedModels.has(model)) { renderCap("confirmed"); return; }
       void new VisionClient(endpoint(), "").visionConfidence(model).then(renderCap);
     };
-    capSetting.addButton(b => b.setButtonText("Vision testen").onClick(async () => {
+    capSetting.addButton(b => b.setButtonText(t("settings.testVision")).onClick(async () => {
       const model = this.plugin.settings.visionModel;
       b.setDisabled(true);
       try {
         const ok = await new VisionClient(endpoint(), model).testVision(makeVisionTestImage());
         if (ok) { this.confirmedModels.add(model); renderCap("confirmed"); } else { renderCap("no"); }
       } catch {
-        new Notice("Endpoint nicht erreichbar");
+        new Notice(t("settings.endpointUnreachable"));
       } finally {
         b.setDisabled(false);
       }
@@ -121,22 +121,22 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           d.onChange(async (v: string) => { this.plugin.settings.visionModel = v; await this.plugin.saveSettings(); this.plugin.reconnectVision(); showCaps(v); });
         });
       } else {
-        modelSetting.addText(t => t.setPlaceholder("(Endpoint offline)").setValue(cur)
+        modelSetting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
           .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); this.plugin.reconnectVision(); }));
-        modelSetting.addButton(b => b.setButtonText("Modelle laden").onClick(() => this.display()));
+        modelSetting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => this.display()));
       }
       showCaps(this.plugin.settings.visionModel);
     });
 
     // ── Prompt (große Textarea) ──
     new Setting(containerEl)
-      .setName("Vision-Prompt")
-      .setDesc("Anweisung an das Vision-Modell. Der Bild-Inhalt wird mitgeschickt.")
-      .addTextArea(t => {
-        t.setValue(this.plugin.settings.visionPrompt)
+      .setName(t("settings.prompt.name"))
+      .setDesc(t("settings.prompt.desc"))
+      .addTextArea(ta => {
+        ta.setValue(this.plugin.settings.visionPrompt)
           .onChange(async (v: string) => { this.plugin.settings.visionPrompt = v; await this.plugin.saveSettings(); });
-        t.inputEl.rows = 8;
-        t.inputEl.addClass("img2md-prompt-textarea");
+        ta.inputEl.rows = 8;
+        ta.inputEl.addClass("img2md-prompt-textarea");
       });
   }
 }

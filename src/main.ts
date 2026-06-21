@@ -1,9 +1,10 @@
-import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64 } from "obsidian";
-import { DEFAULT_SETTINGS, ImageToMarkdownSettings, ImageToMarkdownSettingTab } from "./settings";
+import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage } from "obsidian";
+import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab } from "./settings";
 import { VisionClient } from "./vision_client";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS } from "./img_to_md";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
+import { setLang, pickLang, t } from "./i18n";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -14,17 +15,24 @@ export default class ImageToMarkdownPlugin extends Plugin {
     if (f instanceof TFile) this.app.workspace.getLeaf(false).openFile(f);
   };
 
+  /** UI-Sprache: obsidian.getLanguage() (≥1.8), Fallback moment.locale(). */
+  private detectLang(): string | undefined {
+    try { const l = getLanguage?.(); if (l) return l; } catch { /* ältere Obsidian-Version */ }
+    return (window as unknown as { moment?: { locale?: () => string } }).moment?.locale?.();
+  }
+
   async onload() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    setLang(pickLang(this.detectLang()));
+    this.settings = Object.assign({}, defaultSettings(), await this.loadData());
     this.visionClient = new VisionClient(this.settings.visionEndpoint, this.settings.visionModel);
 
     this.addSettingTab(new ImageToMarkdownSettingTab(this.app, this));
     this.registerView(VIEW_TYPE_IMGMD, (leaf: WorkspaceLeaf) => new ImgToMdView(leaf, this.makeImgViewDeps()));
     this.addRibbonIcon("scan-text", "Image → Markdown", () => this.activateImgMdView());
-    this.addCommand({ id: "open-sidebar", name: "Sidebar öffnen", callback: () => this.activateImgMdView() });
-    this.addCommand({ id: "transcribe-active-note", name: "Bilder der aktiven Notiz transkribieren", callback: () => {
+    this.addCommand({ id: "open-sidebar", name: t("cmd.openSidebar"), callback: () => this.activateImgMdView() });
+    this.addCommand({ id: "transcribe-active-note", name: t("cmd.transcribeActive"), callback: () => {
       const f = this.app.workspace.getActiveFile();
-      if (!f) { new Notice("Keine aktive Notiz."); return; }
+      if (!f) { new Notice(t("notice.noActiveNote")); return; }
       void runImgToMd(this.makeImgIO(), f.path);
     } });
     this.registerEvent(this.app.workspace.on("editor-menu", (menu: Menu, editor: Editor) => {
@@ -85,7 +93,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       },
       transcribeStream: async (sourcePath, item, onContent, onReasoning, signal) => {
         const resolved = this.app.metadataCache.getFirstLinkpathDest(item.link, sourcePath);
-        if (!resolved) throw new Error(`Bild nicht gefunden: ${item.link}`);
+        if (!resolved) throw new Error(t("core.imageNotFound", item.link));
         const dataUrl = `data:image/${this.mimeOf(resolved.extension)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(resolved.path))}`;
         return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
       },
@@ -98,7 +106,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       getModel: () => this.settings.visionModel,
       setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); this.reconnectVision(); },
       openPath: this.openPath,
-      copyText: (t: string) => { void navigator.clipboard.writeText(t); new Notice("Kopiert"); },
+      copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },
     };
   }
 
