@@ -31,14 +31,14 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)".
 
 | Name (verbatim) | Description | Default |
 | --- | --- | --- |
-| "Vision Endpoint" | OpenAI-compatible server hosting a vision model. Enter the base URL. | `http://localhost:8080` |
-| "Vision Modell" | Vision-capable model (examples: Qwen2-VL, Llama-3.2-Vision). Dropdown populated from the endpoint's `/v1/models`; falls back to a free-text field when the endpoint is offline. | `""` (empty) |
-| "Vision Prompt" | Instruction sent to the vision model (free-text area). | "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, \*\*Hervorhebungen\*\*, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
+| "Vision-Endpunkt" | OpenAI-compatible server hosting a vision model. Enter the base URL. | `http://localhost:8080` |
+| "Vision-Modell" | Vision-capable model (examples: Qwen2-VL, Llama-3.2-Vision). Dropdown populated from the endpoint's `/v1/models`; falls back to a free-text field when the endpoint is offline. | `""` (empty) |
+| "Vision-Prompt" | Instruction sent to the vision model (free-text area). | "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, \*\*Hervorhebungen\*\*, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
 
 Notes:
 
 - The default endpoint `http://localhost:8080` is the MLX default. LM Studio listens on `:1234` — this is the most common misconfiguration.
-- "Vision Modell" defaults to empty; the model actually used is read from `response.model`. LM Studio ignores the `model` field in the request and uses the loaded model, so the effective model name comes back in the response.
+- "Vision-Modell" defaults to empty; the model actually used is read from `response.model`. LM Studio ignores the `model` field in the request and uses the loaded model, so the effective model name comes back in the response.
 
 ## Endpoint normalization
 

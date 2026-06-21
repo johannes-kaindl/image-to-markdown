@@ -83,9 +83,9 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 
 | Einstellung | Default | Hinweis |
 |---|---|---|
-| **Vision Endpoint** | `http://localhost:8080` | OpenAI-kompatibler Server mit Vision-Modell. Das ist der MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
-| **Vision Modell** | (leer) | Vision-fähiges Modell (z.B. Qwen2-VL, Llama-3.2-Vision). Dropdown, gefüllt aus `/v1/models` des Endpoints; ist der Endpoint offline, wird es zum Freitextfeld. Das tatsächlich genutzte Modell wird aus `response.model` gelesen. |
-| **Vision Prompt** | Markdown-Transkription (siehe unten) | Anweisung an das Vision-Modell, frei editierbar (Text-Area). |
+| **Vision-Endpunkt** | `http://localhost:8080` | OpenAI-kompatibler Server mit Vision-Modell. Das ist der MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
+| **Vision-Modell** | (leer) | Vision-fähiges Modell (z.B. Qwen2-VL, Llama-3.2-Vision). Dropdown, gefüllt aus `/v1/models` des Endpoints; ist der Endpoint offline, wird es zum Freitextfeld. Das tatsächlich genutzte Modell wird aus `response.model` gelesen. |
+| **Vision-Prompt** | Markdown-Transkription (siehe unten) | Anweisung an das Vision-Modell, frei editierbar (Text-Area). |
 
 Default-Prompt:
 
