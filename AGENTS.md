@@ -26,7 +26,7 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`capabilities.ts`, `sse.ts`, `think_splitter.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
+`capabilities.ts`, `i18n.ts`, `sse.ts`, `think_splitter.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
 `settings.ts`, `img_to_md_view.ts` importieren `obsidian`. Die View bekommt alle Abhängigkeiten
 über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
@@ -44,10 +44,12 @@ capabilities.ts     Vision-Capability-Detektion (vision-only, Fork aus vault-rag
                     visionDisplay · isVisionConfirmed. Reiner Kern, DOM-frei.
 sse.ts              streamSSE + parseSSE (OpenAI-SSE, content + reasoning_content). Kopiert aus vault-rag.
 think_splitter.ts   ThinkSplitter (inline <think>-Tags). Kopiert aus vault-rag.
-settings.ts         ImageToMarkdownSettings · DEFAULT_SETTINGS · SettingTab: Endpoint (Status-Dot +
+i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t() (Fallback lang→en→key,
+                    {0}-Interpolation) · pickLang · setLang/getLang · defaultVisionPrompt. EN kanonisch.
+settings.ts         ImageToMarkdownSettings · defaultSettings() (Prompt sprachabhängig) · SettingTab: Endpoint (Status-Dot +
                     „Verbindung testen") · Modell + „Vision-Fähigkeit" (visionConfidence + aktiver
                     „Vision testen") · Prompt (große Textarea) · makeVisionTestImage (Canvas, DOM-Schicht).
-main.ts             Plugin-Entry: View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient.
+main.ts             Plugin-Entry: Sprach-Detektion (setLang beim onload), View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient.
 ```
 
 **Geteilter Transport ist kopiert, nicht geteilt:** `sse.ts`/`think_splitter.ts` existieren identisch
@@ -72,6 +74,8 @@ npx tsc --noEmit                  # Typecheck
   Änderung müssen **alle Tests grün** bleiben. `npx tsc --noEmit` separat laufen (vitest ≠ tsc).
 - **Commits:** Conventional Commits, deutsche Beschreibung erlaubt. **Nur berührte Dateien stagen.**
   Trailer bei substanziellem AI-Beitrag: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
+- **i18n:** nutzersichtbare Strings via `t()` aus `i18n.ts` (EN kanonisch, EN/DE nach App-Sprache) — Workspace-Standard
+  PROF-OBS-07 (`_docs/docs/obsidian-i18n.md`). Keine Muttersprachen-Literale in der UI; Marken-/Steuer-Strings (`Image → Markdown`, `Stop`) bleiben literal.
 
 ## Gotchas
 
