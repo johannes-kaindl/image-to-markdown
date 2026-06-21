@@ -128,7 +128,7 @@ export class ImgToMdView extends ItemView {
         setIcon(copyBtn, "copy");
         copyBtn.addEventListener("click", () => this.deps.copyText(card.text));
         if (card.status === "done") {
-          actions.createEl("button", { cls: "img2md-write", text: "Notiz anlegen" }).addEventListener("click", () => void this.writeOne(i));
+          actions.createEl("button", { cls: "img2md-write", text: t("view.createNote") }).addEventListener("click", () => void this.writeOne(i));
         }
       }
     }
