@@ -39,7 +39,7 @@ describe("ImgToMdView — Gerüst + Liste", () => {
   });
   it("zeigt Verbindungsstatus nach onOpen", async () => {
     const okV = mkView({ ping: async () => true }); await okV.view.onOpen();
-    expect(all(okV.view.contentEl, "img2md-status")[0].textContent).toContain("verbunden");
+    expect(all(okV.view.contentEl, "img2md-status")[0].textContent).toContain("connected");
     const offV = mkView({ ping: async () => false }); await offV.view.onOpen();
     expect(all(offV.view.contentEl, "img2md-status")[0].textContent).toContain("offline");
   });
@@ -54,9 +54,9 @@ describe("ImgToMdView — Gerüst + Liste", () => {
   it("Toggle-Button: alle an → 'Alle abwählen', nach Klick 'Alle auswählen'", async () => {
     const { view } = mkView(); await view.onOpen();
     const btn = () => all(view.contentEl, "img2md-toggle")[0];
-    expect(btn().textContent).toBe("Alle abwählen");
+    expect(btn().textContent).toBe("Deselect all");
     btn().click();
-    expect(btn().textContent).toBe("Alle auswählen");
+    expect(btn().textContent).toBe("Select all");
     expect(all(view.contentEl, "img2md-check")[0].checked).toBe(false);
   });
   it("Modell-Switcher ruft setModel bei Auswahl", async () => {
@@ -87,7 +87,7 @@ describe("ImgToMdView — Transkribieren", () => {
   });
   it("Karten-Kopf zeigt 'Bild i/n · name'", async () => {
     const { view } = mkView(); await view.onOpen(); await view.run();
-    expect(all(view.contentEl, "img2md-card-head")[0].textContent).toContain("Bild 1/1");
+    expect(all(view.contentEl, "img2md-card-head")[0].textContent).toContain("Image 1/1");
     expect(all(view.contentEl, "img2md-card-head")[0].textContent).toContain("a.png");
   });
   it("Kopier-Button kopiert den Transkript-Text", async () => {
@@ -123,7 +123,7 @@ describe("ImgToMdView — Transkribieren", () => {
     const btn = () => all(view.contentEl, "img2md-run")[0];
     expect(btn().textContent).toBe("Stop");
     release(); await p;
-    expect(btn().textContent).toBe("Transkribieren");
+    expect(btn().textContent).toBe("Transcribe");
   });
   it("Stop markiert die laufende Karte als abgebrochen, ohne 'Notiz anlegen'", async () => {
     const transcribeStream = vi.fn((_sp: string, _it: any, _oc: any, _or: any, signal: AbortSignal) =>
@@ -137,7 +137,7 @@ describe("ImgToMdView — Transkribieren", () => {
     await p;
     const errs = all(view.contentEl, "img2md-error");
     expect(errs.length).toBe(1);
-    expect(errs[0].textContent).toContain("Abgebrochen");
+    expect(errs[0].textContent).toContain("Aborted");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
   });
 });
