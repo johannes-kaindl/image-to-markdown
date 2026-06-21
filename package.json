@@ -1,0 +1,19 @@
+{
+  "name": "image-to-markdown",
+  "version": "0.1.0",
+  "description": "Bilder einer Notiz per lokalem Vision-LLM nach Markdown transkribieren.",
+  "keywords": ["obsidian", "obsidian-plugin", "vision", "ocr", "image-to-markdown", "transcription", "local-first", "offline"],
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "obsidian": "^1.5.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "happy-dom": "^14.0.0"
+  }
+}
