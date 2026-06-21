@@ -62,9 +62,10 @@ npm install                       # Deps
 npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
 npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
-npm test                          # vitest run (83 Tests)
+npm test                          # vitest run (111 Tests)
 npx vitest run tests/<datei>      # eine Test-Datei
-npx tsc --noEmit                  # Typecheck
+npm run typecheck                 # tsc --noEmit (separat von vitest)
+npm run version-bump 0.2.0        # Version synct package.json/manifest.json/versions.json
 ```
 
 ## Conventions
@@ -99,14 +100,11 @@ npx tsc --noEmit                  # Typecheck
 
 ## Abweichungen von der Leitkonvention
 
-Stand 2026-06-21 — frisch ausgegliedert, **noch nicht released**. Bewusste, begründete Abweichungen
-(comply-or-explain), aufzulösen in der submission-readiness-Session:
+Stand 2026-06-21 — **Release 0.1.0**. Verbleibende bewusste, begründete Abweichungen (comply-or-explain):
 
-- **CORE-META-02/03** — keine Badge-Zeile / kein Hero-Bild. *Grund:* pre-release; mit erstem Release/Screenshots.
-- **CORE-META-04** — kein Diátaxis-Manual. *Grund:* pre-release; skaliert mit Reife.
-- **CORE-META-06** — `CHANGELOG.md` vorhanden; `CONTRIBUTING.md`/`SECURITY.md` fehlen. *Grund:* vor Release nachziehen.
-- **CORE-META-07** — `LICENSE` (AGPL-3.0) vorhanden; Dual-License-Option (`LICENSING.md`/`CLA.md`) noch nicht. *Grund:* bei Bedarf.
-- **CORE-META-09** — kein `README.de.md`. *Grund:* optional; EN-`README.md` kanonisch.
-- **CORE-GIT-01** — Codeberg-`origin` + GitHub-Mirror beim Forge-Setup gesetzt (2026-06-21).
-- **PROF-TS-01** — npm-Scripts ohne `lint`/`typecheck` (von vault-rag geerbt; `npx tsc --noEmit` verfügbar). *Grund:* offen.
+- **CORE-META-02/03** — Badge-Zeile/Hero-Bild + Feature-Screenshots noch nicht final. *Grund:* Screenshots brauchen das laufende Plugin (Jay-Handover); mit/nach 0.1.0.
+- **CORE-META-07** — `LICENSE` (AGPL-3.0) + `LICENSE-DOCS` (CC BY-SA 4.0) vorhanden; separate `LICENSING.md`/`CLA.md` (Dual-License-Option) noch nicht. *Grund:* rechtliche Entscheidung, bei Bedarf — CONTRIBUTING nennt „commercial dual-license on request".
+- **PROF-TS-01** — `typecheck` + `version-bump` vorhanden; `lint` (eslint-Setup) noch offen. *Grund:* eslint-Einführung separat (kein Pre-Release-Risiko aufmachen).
 - **PROF-TS-04** — kein `tsconfig.build.json`-Split (ein `tsconfig.json` + `vitest.config.ts` reicht). *Grund:* klein genug.
+
+Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Diátaxis-Manual `docs/manual/`), CORE-META-06 (`CONTRIBUTING.md`/`SECURITY.md`), CORE-META-09 (`README.de.md`), PROF-OBS-02 (`npm run deploy`), PROF-OBS-07 (UI-Lokalisierung EN/DE). Codeberg-`origin` + GitHub-Push-Mirror aktiv (CORE-GIT-01).

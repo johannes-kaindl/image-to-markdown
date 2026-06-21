@@ -1,13 +1,15 @@
 {
   "name": "image-to-markdown",
   "version": "0.1.0",
-  "description": "Bilder einer Notiz per lokalem Vision-LLM nach Markdown transkribieren.",
+  "description": "Transcribe the images in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
   "keywords": ["obsidian", "obsidian-plugin", "vision", "ocr", "image-to-markdown", "transcription", "local-first", "offline"],
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "version-bump": "node scripts/version-bump.mjs",
     "deploy": "npm run build && cp main.js manifest.json styles.css \"${OBSIDIAN_PLUGIN_DIR:?Setze OBSIDIAN_PLUGIN_DIR auf dein Vault-Plugin-Verzeichnis}\"/"
   },
   "devDependencies": {

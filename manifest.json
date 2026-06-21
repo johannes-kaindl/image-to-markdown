@@ -3,7 +3,9 @@
   "name": "Image to Markdown",
   "version": "0.1.0",
   "minAppVersion": "1.4.0",
-  "description": "Bilder einer Notiz per lokalem Vision-LLM nach Markdown transkribieren.",
+  "description": "Transcribe the images in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
   "author": "Johannes Kaindl",
+  "authorUrl": "https://codeberg.org/jkaindl",
+  "helpUrl": "https://codeberg.org/jkaindl/image-to-markdown",
   "isDesktopOnly": false
 }
