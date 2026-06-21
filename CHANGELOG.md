@@ -17,3 +17,12 @@ Erstes Release. Ausgegliedert aus [vault-rag](https://codeberg.org/jkaindl/vault
 - Geteilter SSE-Streaming-Transport; `VisionClient` mit `ping`/`listModels` für Modell-Picker
   und Verbindungsstatus.
 - Nicht-destruktiv & idempotent: pro Bild eine Transkript-Notiz, Bild-Embed wird ersetzt.
+- **Settings-QoL:** große, resizebare Prompt-Textarea; Verbindungs-Status-Dot + „Verbindung testen";
+  „Vision-Fähigkeit"-Anzeige mit aktivem „Vision testen"-Button; „Modelle laden"-Fallback bei offline.
+- **Vision-Capability-Detektion** (`capabilities.ts`): Namens-Heuristik + Metadaten-Probe gegen
+  Ollama (`/api/show`) und LM Studio (`/api/v1/models`, `/api/v0/models`).
+- `npm run deploy` (env-gesteuert via `$OBSIDIAN_PLUGIN_DIR`).
+
+### Behoben
+
+- Sidebar-View überlebt jetzt einen Plugin-Reload/-Update (kein Leaf-Detach in `onunload` mehr).

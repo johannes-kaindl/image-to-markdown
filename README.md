@@ -80,6 +80,8 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 
+The settings tab also shows a **connection status** with a **"Verbindung testen"** (Test connection) button, and a **"Vision-Fähigkeit"** (Vision capability) row with a **"Vision testen"** (Test vision) button that confirms whether the selected model can actually read images — see the [manual reference](docs/manual/reference.md#vision-capability-detection).
+
 ![The "Vision (Image → Markdown)" settings tab](docs/images/settings.png)
 <!-- TODO(submission): the settings tab — Vision-Endpunkt, model dropdown and prompt — CORE-META-03 -->
 

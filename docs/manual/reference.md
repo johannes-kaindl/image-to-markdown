@@ -40,6 +40,28 @@ Notes:
 - The default endpoint `http://localhost:8080` is the MLX default. LM Studio listens on `:1234` — this is the most common misconfiguration.
 - "Vision-Modell" defaults to empty; the model actually used is read from `response.model`. LM Studio ignores the `model` field in the request and uses the loaded model, so the effective model name comes back in the response.
 
+### Connection & model controls
+
+Alongside the three settings the tab shows:
+
+- A **connection status dot** next to "Vision-Endpunkt" (auto-pinged when the tab opens) plus a **"Verbindung testen"** (Test connection) button — both call the endpoint's `/v1/models` and report `● verbunden` / `○ offline`.
+- A **"Vision-Fähigkeit"** (Vision capability) row for the selected model, plus a **"Vision testen"** (Test vision) button — see [Vision capability detection](#vision-capability-detection).
+- A **"Modelle laden"** (Load models) button that appears when the endpoint is offline, to refresh the model dropdown once the server is up.
+
+## Vision capability detection
+
+The "Vision-Fähigkeit" row reports one of three states for the selected model:
+
+| Display | Confidence | Meaning |
+| --- | --- | --- |
+| 👁 "Vision" | confirmed | Server metadata or an active test confirmed vision. |
+| "Vision unbestätigt" | likely | The model name looks vision-capable, but it is unconfirmed. |
+| "Kein Vision" | no | No vision signal found. |
+
+It is computed passively from two sources, taking the stronger signal: a **name heuristic** (e.g. `llava`, `*-vl`, `pixtral`, `glm-4v`, `gemma3` ≥ 4B) and a **metadata probe** of the endpoint (Ollama `/api/show`, LM Studio `/api/v1/models` / `/api/v0/models`).
+
+The **"Vision testen"** button confirms vision **actively**: it sends a small generated image containing a known token to the model and checks whether the reply contains that token. On success the model is marked `confirmed` for the rest of the settings session. This is the reliable check when an endpoint exposes no capability metadata (a plain `/v1` server).
+
 ## Endpoint normalization
 
 The client appends `/v1/...` to the configured endpoint itself. To stay robust against a trailing `/v1` in the input, the endpoint is normalized before use:

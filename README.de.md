@@ -97,6 +97,10 @@ Default-Prompt:
 `/v1` selbst an (`normalizeEndpoint` strippt ein abschließendes `/v1`; beide Formen werden
 akzeptiert).
 
+Der Settings-Tab zeigt außerdem einen **Verbindungs-Status** mit „**Verbindung testen**" sowie
+eine **„Vision-Fähigkeit"**-Zeile mit „**Vision testen**"-Button, der aktiv prüft, ob das gewählte
+Modell wirklich Bilder lesen kann — Details im [Handbuch](docs/manual/reference.md#vision-capability-detection).
+
 ![Settings-Tab „Vision (Image → Markdown)"](docs/images/settings.png)
 <!-- TODO(submission): Settings-Tab mit Endpoint, Modell-Dropdown und Prompt — CORE-META-03 -->
 

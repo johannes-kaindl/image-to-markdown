@@ -17,6 +17,7 @@ the setup notes in the [README](../../README.md).
 5. [Point at LM Studio instead of MLX](#point-at-lm-studio-instead-of-mlx)
 6. [Handle iPhone / HEIC images](#handle-iphone--heic-images)
 7. [Pick or pin a specific model](#pick-or-pin-a-specific-model)
+8. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
 
 ---
 
@@ -170,7 +171,8 @@ Choose exactly which vision model runs, or pin one when you have several loaded.
      endpoint's `/v1/models`. Pick the model you want (examples: Qwen2-VL,
      Llama-3.2-Vision).
    - When the endpoint is offline, the same setting becomes a **free-text field**
-     so you can type a model name.
+     so you can type a model name, with a **"Modelle laden"** (Load models) button
+     to refresh the dropdown once the server is back up.
 
 Good to know:
 
@@ -181,6 +183,34 @@ Good to know:
   in the `transcribed_by` frontmatter of each transcript note, taken from
   `response.model` — so the note always reflects the real model, not just what
   you selected.
+
+---
+
+## Check whether your model supports vision
+
+Image to Markdown only works with **vision-capable** models. Picking a text-only
+model leads to empty or garbage transcripts, so the settings tab surfaces a
+capability hint and an active test.
+
+1. Open the Image to Markdown settings (heading **"Vision (Image → Markdown)"**).
+2. Look at the **"Vision-Fähigkeit"** (Vision capability) row for the selected
+   model:
+   - **"Vision"** (eye icon) — confirmed vision, from server metadata or a
+     previous test.
+   - **"Vision unbestätigt"** (Vision unconfirmed) — the model *name* looks
+     vision-capable, but nothing has confirmed it.
+   - **"Kein Vision"** (No vision) — no vision signal found.
+3. To confirm for sure, click **"Vision testen"** (Test vision). It sends a small
+   generated image with a known word to the model and checks the reply; on
+   success the row switches to **"Vision"**.
+
+Good to know:
+
+- The passive hint combines a model-name heuristic with a metadata probe of your
+  endpoint (Ollama `/api/show`, LM Studio `/api/v1/models` / `/api/v0/models`).
+- The active **"Vision testen"** button is the reliable check when your endpoint
+  exposes no capability metadata (a plain `/v1` server) — it actually runs the
+  model on an image.
 
 ---
 

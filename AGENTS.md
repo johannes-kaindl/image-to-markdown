@@ -26,7 +26,7 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`sse.ts`, `think_splitter.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
+`capabilities.ts`, `sse.ts`, `think_splitter.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
 `settings.ts`, `img_to_md_view.ts` importieren `obsidian`. Die View bekommt alle Abhängigkeiten
 über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
@@ -38,10 +38,15 @@ img_to_md.ts        reiner Kern: findImageEmbeds · buildTranscriptNote · repla
 img_to_md_state.ts  ImgToMdState — Bild-Auswahl + Ergebnis-Karten (kein DOM/I/O).
 img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten.
 vision_client.ts    VisionClient → OpenAI-kompatibler /v1/chat/completions (transcribe +
-                    transcribeStream) · ping/listModels · normalizeEndpoint.
+                    transcribeStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint.
+capabilities.ts     Vision-Capability-Detektion (vision-only, Fork aus vault-rag): guessVision (Namens-
+                    Heuristik) · parse* (Ollama/LM Studio v0/v1) · fetchVisionCapability · resolveVision ·
+                    visionDisplay · isVisionConfirmed. Reiner Kern, DOM-frei.
 sse.ts              streamSSE + parseSSE (OpenAI-SSE, content + reasoning_content). Kopiert aus vault-rag.
 think_splitter.ts   ThinkSplitter (inline <think>-Tags). Kopiert aus vault-rag.
-settings.ts         ImageToMarkdownSettings · DEFAULT_SETTINGS · SettingTab (Endpoint/Modell/Prompt).
+settings.ts         ImageToMarkdownSettings · DEFAULT_SETTINGS · SettingTab: Endpoint (Status-Dot +
+                    „Verbindung testen") · Modell + „Vision-Fähigkeit" (visionConfidence + aktiver
+                    „Vision testen") · Prompt (große Textarea) · makeVisionTestImage (Canvas, DOM-Schicht).
 main.ts             Plugin-Entry: View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient.
 ```
 
