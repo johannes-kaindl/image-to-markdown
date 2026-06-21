@@ -1,7 +1,17 @@
 import { streamSSE } from "./sse";
 
+/** Normalisiert eine Endpoint-Eingabe: trailing Slashes + ein trailing `/v1` strippen.
+ *  So funktioniert sowohl `http://host:1234` als auch `http://host:1234/v1` — die Client-
+ *  Methoden hängen `/v1/...` selbst an, ein doppeltes `/v1` würde sonst 200+Fehler-Body geben. */
+export function normalizeEndpoint(endpoint: string): string {
+  return endpoint.trim().replace(/\/+$/, "").replace(/\/v1$/, "").replace(/\/+$/, "");
+}
+
 export class VisionClient {
-  constructor(private endpoint: string, private model: string) {}
+  private endpoint: string;
+  constructor(endpoint: string, private model: string) {
+    this.endpoint = normalizeEndpoint(endpoint);
+  }
 
   /** Verbindungs-Check gegen den OpenAI-kompatiblen Endpoint (GET /v1/models). */
   async ping(): Promise<boolean> {

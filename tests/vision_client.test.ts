@@ -84,6 +84,14 @@ describe("VisionClient.ping / listModels", () => {
     expect(await new VisionClient("http://x:8080", "vm").ping()).toBe(true);
     expect(fetchMock.mock.calls[0][0]).toBe("http://x:8080/v1/models");
   });
+  it("normalisiert einen Endpoint mit /v1-Suffix (kein doppeltes /v1)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await new VisionClient("http://h:1234/v1", "m").ping();
+    await new VisionClient("http://h:1234/v1/", "m").listModels();
+    expect(fetchMock.mock.calls[0][0]).toBe("http://h:1234/v1/models");
+    expect(fetchMock.mock.calls[1][0]).toBe("http://h:1234/v1/models");
+  });
   it("ping() liefert false bei Netzfehler", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     expect(await new VisionClient("http://x", "vm").ping()).toBe(false);
