@@ -76,6 +76,36 @@ describe("VisionClient.transcribeStream", () => {
   });
 });
 
+describe("VisionClient.visionConfidence", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("liefert 'confirmed' aus Ollama-Metadaten", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ capabilities: ["vision"] }) }));
+    expect(await new VisionClient("http://h:1234", "").visionConfidence("m")).toBe("confirmed");
+  });
+  it("fällt ohne Metadaten auf die Namens-Heuristik zurück", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    expect(await new VisionClient("http://h:1234", "").visionConfidence("qwen2-vl")).toBe("likely");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    expect(await new VisionClient("http://h:1234", "").visionConfidence("qwen3:8b")).toBe("no");
+  });
+});
+
+describe("VisionClient.testVision", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("true wenn die Antwort das Token enthält", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: "VX7" } }] }) }));
+    expect(await new VisionClient("http://h", "m").testVision("data:image/png;base64,AA")).toBe(true);
+  });
+  it("false wenn das Token fehlt", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: "eine Katze" } }] }) }));
+    expect(await new VisionClient("http://h", "m").testVision("data:image/png;base64,AA")).toBe(false);
+  });
+  it("wirft bei HTTP-/Netzfehler (→ 'Endpoint nicht erreichbar')", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await expect(new VisionClient("http://h", "m").testVision("d")).rejects.toThrow("500");
+  });
+});
+
 describe("VisionClient.ping / listModels", () => {
   afterEach(() => vi.unstubAllGlobals());
   it("ping() ruft /v1/models und liefert ok", async () => {

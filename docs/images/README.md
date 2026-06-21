@@ -38,7 +38,7 @@ placeholders to resolve. Keep this table in sync whenever a doc adds or renames 
 | --- | --- | --- |
 | `hero.png` | `README.md`, `README.de.md` (hero) | The **"IMG → MD"** sidebar open next to a source note, mid-transcription — a card streaming Markdown live. The money shot. |
 | `sidebar-streaming.png` | `README.md`, `README.de.md` (Features) | A single transcription card with the **live stream**, the expandable **thinking block**, and the **copy button** all visible. |
-| `settings.png` | `README.md`, `README.de.md` (Configuration) | The settings tab under the **"Vision (Image → Markdown)"** heading: **"Vision Endpoint"**, the **"Vision Modell"** dropdown, and the **"Vision Prompt"** text area. |
+| `settings.png` | `README.md`, `README.de.md` (Configuration) | The settings tab under the **"Vision (Image → Markdown)"** heading: **"Vision-Endpunkt"**, the **"Vision-Modell"** dropdown, and the **"Vision-Prompt"** text area. |
 | `tutorial-lmstudio.png` | `docs/manual/tutorial.md` (step 1) | A local server (e.g. LM Studio) with a **vision-capable model loaded**, listening on its port (LM Studio uses `:1234`). |
 | `tutorial-sidebar.png` | `docs/manual/tutorial.md` (step 5) | The sidebar's **checkbox list** of embedded images for the active note (all pre-selected), with the **"Transkribieren"** button. The "before you press the button" state. |
 | `context-menu.png` | `docs/manual/how-to.md` (single image) | The editor **right-click context menu** open over an embedded image, with the **"Image → Markdown"** entry highlighted. |
@@ -69,9 +69,9 @@ placeholders to resolve. Keep this table in sync whenever a doc adds or renames 
 ### `settings.png`
 
 - **Shows:** **Settings → Community plugins → Image to Markdown**, the section under the
-  **"Vision (Image → Markdown)"** heading: the **"Vision Endpoint"** text field, the
-  **"Vision Modell"** dropdown (populated from `/v1/models` when the endpoint is online), and
-  the **"Vision Prompt"** text area with the default prompt.
+  **"Vision (Image → Markdown)"** heading: the **"Vision-Endpunkt"** text field, the
+  **"Vision-Modell"** dropdown (populated from `/v1/models` when the endpoint is online), and
+  the **"Vision-Prompt"** text area with the default prompt.
 - **Frame:** the settings pane. Width ~1000–1200 px.
 
 ### `tutorial-lmstudio.png`
@@ -121,10 +121,10 @@ placeholders to resolve. Keep this table in sync whenever a doc adds or renames 
    (e.g. LM Studio, Ollama, or an MLX server) — capture `tutorial-lmstudio.png` here. In
    **Settings → Image → Markdown**, under the **"Vision (Image → Markdown)"** heading
    (`settings.png`), set:
-   - **"Vision Endpoint"** to your server's base URL **without** a trailing `/v1` (the client
+   - **"Vision-Endpunkt"** to your server's base URL **without** a trailing `/v1` (the client
      appends `/v1` itself). Remember the default `http://localhost:8080` is the MLX default —
      **LM Studio listens on `:1234`**.
-   - **"Vision Modell"** — pick the loaded vision model from the dropdown.
+   - **"Vision-Modell"** — pick the loaded vision model from the dropdown.
 
 4. **For the thinking block** (`hero.png`, `sidebar-streaming.png`, `thinking-block.png`): load
    a **reasoning model** (one that emits `reasoning_content`, or whose output contains inline
@@ -152,8 +152,8 @@ placeholders to resolve. Keep this table in sync whenever a doc adds or renames 
 - Thinking block summary: **"💭 denkt nach…"** (while streaming) / **"💭 Gedanken"** (done)
 - Copy button tooltip: **"Transkript kopieren"** (icon `copy`)
 - Per-card button: **"Notiz anlegen"** · footer button: **"Alle anlegen"**
-- Settings heading: **"Vision (Image → Markdown)"** with settings **"Vision Endpoint"**,
-  **"Vision Modell"**, **"Vision Prompt"**
+- Settings heading: **"Vision (Image → Markdown)"** with settings **"Vision-Endpunkt"**,
+  **"Vision-Modell"**, **"Vision-Prompt"**
 - Commands: **"Sidebar öffnen"**, **"Bilder der aktiven Notiz transkribieren"**
 - Editor context-menu item: **"Image → Markdown"**
 

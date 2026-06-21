@@ -22,3 +22,13 @@
 .img2md-copy.clickable-icon:hover { color: var(--text-normal); }
 .img2md-write { font-size: 12px; }
 .img2md-foot { flex: 0 0 auto; margin-top: 6px; }
+
+/* Settings-QoL */
+.img2md-prompt-textarea { width: 100%; min-height: 8rem; resize: vertical; }
+.img2md-status-dot { margin-left: 8px; color: var(--text-muted); }
+.img2md-status-dot.is-ok { color: var(--text-success); }
+.img2md-status-dot.is-error { color: var(--text-error); }
+.img2md-cap { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+.img2md-cap .svg-icon { width: var(--icon-s); height: var(--icon-s); }
+.img2md-cap.is-ok { color: var(--text-success); }
+.img2md-cap.is-error { color: var(--text-error); }

@@ -56,7 +56,7 @@ Markdown"** (a small scan-text icon). We will use it in Step 5.
 This is the one piece of configuration we must get right, and it is quick.
 
 1. Open **Settings** and find the heading **"Vision (Image → Markdown)"**.
-2. In **"Vision Endpoint"**, enter the address of your server. Since we are using LM
+2. In **"Vision-Endpunkt"**, enter the address of your server. Since we are using LM
    Studio, that is:
 
    ```
@@ -74,7 +74,7 @@ answers a wrong path with an empty success rather than a visible error — which
 like the transcription silently did nothing. So: base URL, no `/v1`. The plugin handles
 the rest.
 
-You can leave **"Vision Modell"** and **"Vision Prompt"** at their defaults for now.
+You can leave **"Vision-Modell"** and **"Vision-Prompt"** at their defaults for now.
 With the server running, the model field will offer your loaded model in a dropdown; if
 the server is offline it becomes a free-text field instead. Either way, the model that
 actually does the work is read back from the server's response, so you do not need to
@@ -161,7 +161,7 @@ In this tutorial you:
 - Started a **local vision server** (LM Studio with a vision model such as Qwen2-VL), and
   learned that LM Studio uses port `:1234` while the plugin default is `:8080`.
 - **Installed and enabled** Image to Markdown.
-- Set the **"Vision Endpoint"** correctly — base URL only, no trailing `/v1`.
+- Set the **"Vision-Endpunkt"** correctly — base URL only, no trailing `/v1`.
 - Opened a note with an embedded image and saw it **pre-selected** in the **"IMG → MD"**
   sidebar.
 - Clicked **"Transkribieren"** and watched the transcript **stream in live**, including a

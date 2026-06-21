@@ -74,14 +74,14 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Vision Endpoint** | OpenAI-compatible server hosting your vision model. | `http://localhost:8080` (the MLX default — note that LM Studio uses `:1234`) |
-| **Vision Modell** | The vision-capable model to use (e.g. Qwen2-VL, Llama-3.2-Vision). A dropdown filled from the endpoint's `/v1/models`; if the endpoint is offline it becomes a free-text field. | `""` (empty) — the model actually used is read from `response.model` |
-| **Vision Prompt** | The instruction sent to the vision model; freely editable text area. | "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, **Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
+| **Vision-Endpunkt** | OpenAI-compatible server hosting your vision model. | `http://localhost:8080` (the MLX default — note that LM Studio uses `:1234`) |
+| **Vision-Modell** | The vision-capable model to use (e.g. Qwen2-VL, Llama-3.2-Vision). A dropdown filled from the endpoint's `/v1/models`; if the endpoint is offline it becomes a free-text field. | `""` (empty) — the model actually used is read from `response.model` |
+| **Vision-Prompt** | The instruction sent to the vision model; freely editable text area. | "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, **Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 
 ![The "Vision (Image → Markdown)" settings tab](docs/images/settings.png)
-<!-- TODO(submission): the settings tab — Vision Endpoint, model dropdown and prompt — CORE-META-03 -->
+<!-- TODO(submission): the settings tab — Vision-Endpunkt, model dropdown and prompt — CORE-META-03 -->
 
 ## How it works
 
