@@ -85,8 +85,8 @@ describe("resolveVision (Merge meta + Name)", () => {
 describe("visionDisplay", () => {
   it("liefert Icon/Text/State je Confidence", () => {
     expect(visionDisplay("confirmed")).toEqual({ icon: "eye", text: "Vision", state: "ok" });
-    expect(visionDisplay("likely")).toEqual({ icon: "help-circle", text: "Vision unbestätigt", state: "likely" });
-    expect(visionDisplay("no")).toEqual({ icon: "alert-triangle", text: "Kein Vision", state: "error" });
+    expect(visionDisplay("likely")).toEqual({ icon: "help-circle", text: "Vision (unconfirmed)", state: "likely" });
+    expect(visionDisplay("no")).toEqual({ icon: "alert-triangle", text: "No vision", state: "error" });
   });
 });
 

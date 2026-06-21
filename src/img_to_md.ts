@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
 
@@ -115,24 +117,25 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
   // replaceEmbed ersetzt unten ohnehin ALLE Vorkommen des raw-Strings.
   const seen = new Set<string>();
   embeds = embeds.filter(e => { if (seen.has(e.link)) return false; seen.add(e.link); return true; });
-  if (!embeds.length) { io.notify("Keine (passenden) Bilder in dieser Notiz."); return { transcribed: 0, skipped: 0 }; }
+  if (!embeds.length) { io.notify(t("core.noMatchingImages")); return { transcribed: 0, skipped: 0 }; }
   let skipped = 0;
   const entries: { raw: string; link: string; content: string; model: string }[] = [];
   for (let i = 0; i < embeds.length; i++) {
     const e = embeds[i];
     const resolved = io.resolveImage(e.link, sourcePath);
-    if (!resolved) { io.notify(`Bild nicht gefunden: ${e.link}`); skipped++; continue; }
-    if (!SUPPORTED_EXTS.includes(resolved.ext.toLowerCase())) { io.notify(`Format .${resolved.ext} nicht unterstützt (HEIC? iOS auf „Maximal kompatibel"): ${e.link}`); skipped++; continue; }
-    io.notify(`Transkribiere Bild ${i + 1}/${embeds.length}…`);
+    if (!resolved) { io.notify(t("core.imageNotFound", e.link)); skipped++; continue; }
+    if (!SUPPORTED_EXTS.includes(resolved.ext.toLowerCase())) { io.notify(t("core.unsupportedFormat", resolved.ext, e.link)); skipped++; continue; }
+    io.notify(t("core.transcribing", i + 1, embeds.length));
     let res: { content: string; model: string };
     try {
       const dataUrl = await io.readImageDataUrl(resolved.path, resolved.ext);
       res = await io.transcribe(dataUrl);
-    } catch (err) { io.notify(`Transkription fehlgeschlagen (${e.link}): ${err instanceof Error ? err.message : String(err)}`); skipped++; continue; }
-    if (!res.content.trim()) { io.notify(`Leeres Transkript: ${e.link}`); skipped++; continue; }
+    } catch (err) { io.notify(t("core.transcribeFailed", e.link, err instanceof Error ? err.message : String(err))); skipped++; continue; }
+    if (!res.content.trim()) { io.notify(t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
     entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model });
   }
   const { paths } = await writeTranscripts(io, sourcePath, entries);
-  io.notify(`${paths.length} Bild(er) transkribiert${skipped ? `, ${skipped} übersprungen` : ""}.`);
+  const base = t(paths.length === 1 ? "core.transcribed.one" : "core.transcribed.other", paths.length);
+  io.notify(`${base}${skipped ? t("core.skippedSuffix", skipped) : ""}.`);
   return { transcribed: paths.length, skipped };
 }

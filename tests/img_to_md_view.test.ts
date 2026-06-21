@@ -108,10 +108,10 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(all(view.contentEl, "img2md-error")[0].textContent).toContain("500");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
   });
-  it("leeres Transkript → Fehler 'Leeres Transkript', kein 'Notiz anlegen'", async () => {
+  it("leeres Transkript → Fehler 'Empty transcript', kein 'Notiz anlegen'", async () => {
     const { view } = mkView({ transcribeStream: async () => ({ content: "   ", reasoning: "", model: "vm" }) });
     await view.onOpen(); await view.run();
-    expect(all(view.contentEl, "img2md-error")[0].textContent).toContain("Leeres Transkript");
+    expect(all(view.contentEl, "img2md-error")[0].textContent).toContain("Empty transcript");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
   });
   it("Run-Button wird während des Laufs zu 'Stop'", async () => {
