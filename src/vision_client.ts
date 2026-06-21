@@ -3,6 +3,21 @@ import { streamSSE } from "./sse";
 export class VisionClient {
   constructor(private endpoint: string, private model: string) {}
 
+  /** Verbindungs-Check gegen den OpenAI-kompatiblen Endpoint (GET /v1/models). */
+  async ping(): Promise<boolean> {
+    try { return (await fetch(`${this.endpoint}/v1/models`)).ok; } catch { return false; }
+  }
+
+  /** Verfügbare Modelle vom Endpoint (GET /v1/models). [] bei Fehler/Offline. */
+  async listModels(): Promise<string[]> {
+    try {
+      const r = await fetch(`${this.endpoint}/v1/models`);
+      if (!r.ok) return [];
+      const j = await r.json() as { data?: { id?: string }[] };
+      return (j.data ?? []).map(m => m.id).filter((x): x is string => typeof x === "string").sort();
+    } catch { return []; }
+  }
+
   /** Multimodale Nachricht (Text-Prompt + Bild als image_url-Data-URL). */
   private buildMessages(dataUrl: string, prompt: string) {
     return [{

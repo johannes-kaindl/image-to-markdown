@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { ImgToMdState, ImgItem } from "./img_to_md_state";
 
-export const VIEW_TYPE_IMGMD = "vault-rag-img";
+export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 
 export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
@@ -33,20 +33,20 @@ export class ImgToMdView extends ItemView {
   getIcon(): string { return "scan-text"; }
 
   async onOpen(): Promise<void> {
-    const c = this.contentEl; c.empty(); c.addClass("vault-rag-img-root");
-    this.statusEl = c.createDiv({ cls: "vault-rag-img-status" });
+    const c = this.contentEl; c.empty(); c.addClass("img2md-root");
+    this.statusEl = c.createDiv({ cls: "img2md-status" });
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
-    this.modelSel = c.createEl("select", { cls: "vault-rag-img-model dropdown" }) as HTMLSelectElement;
+    this.modelSel = c.createEl("select", { cls: "img2md-model dropdown" }) as HTMLSelectElement;
     this.modelSel.addEventListener("change", () => this.deps.setModel(this.modelSel?.value ?? ""));
-    const head = c.createDiv({ cls: "vault-rag-img-head" });
-    this.toggleBtn = head.createEl("button", { cls: "vault-rag-img-toggle", text: "Alle abwählen" });
+    const head = c.createDiv({ cls: "img2md-head" });
+    this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: "Alle abwählen" });
     this.toggleBtn.addEventListener("click", () => { this.state.toggleAll(); this.renderList(); });
-    this.runBtn = head.createEl("button", { cls: "vault-rag-img-run mod-cta", text: "Transkribieren" });
+    this.runBtn = head.createEl("button", { cls: "img2md-run mod-cta", text: "Transkribieren" });
     this.runBtn.addEventListener("click", () => this.onRunClick());
-    this.listEl = c.createDiv({ cls: "vault-rag-img-list" });
-    this.cardsEl = c.createDiv({ cls: "vault-rag-img-cards" });
-    const foot = c.createDiv({ cls: "vault-rag-img-foot" });
-    foot.createEl("button", { cls: "vault-rag-img-all", text: "Alle anlegen" }).addEventListener("click", () => void this.writeAll());
+    this.listEl = c.createDiv({ cls: "img2md-list" });
+    this.cardsEl = c.createDiv({ cls: "img2md-cards" });
+    const foot = c.createDiv({ cls: "img2md-foot" });
+    foot.createEl("button", { cls: "img2md-all", text: "Alle anlegen" }).addEventListener("click", () => void this.writeAll());
     await this.refreshStatus();
     await this.refreshModels();
     await this.rescan();
@@ -89,16 +89,16 @@ export class ImgToMdView extends ItemView {
   private renderList(): void {
     const el = this.listEl; if (!el) return; el.empty();
     this.toggleBtn?.setText(this.state.allSelected() ? "Alle abwählen" : "Alle auswählen");
-    if (!this.state.items.length) { el.createDiv({ cls: "vault-rag-img-empty", text: "Keine Bilder in dieser Notiz." }); return; }
+    if (!this.state.items.length) { el.createDiv({ cls: "img2md-empty", text: "Keine Bilder in dieser Notiz." }); return; }
     for (const item of this.state.items) {
-      const row = el.createDiv({ cls: "vault-rag-img-item" });
-      const cb = row.createEl("input", { cls: "vault-rag-img-check" }) as HTMLInputElement;
+      const row = el.createDiv({ cls: "img2md-item" });
+      const cb = row.createEl("input", { cls: "img2md-check" }) as HTMLInputElement;
       cb.type = "checkbox";
       cb.checked = this.state.isSelected(item.link);
       cb.disabled = !item.supported;
       cb.addEventListener("change", () => { this.state.toggle(item.link); this.renderList(); });
       const label = item.supported ? this.basename(item.link) : `${this.basename(item.link)} — nicht unterstützt`;
-      row.createEl("span", { cls: "vault-rag-img-name", text: label });
+      row.createEl("span", { cls: "img2md-name", text: label });
     }
   }
 
@@ -106,28 +106,28 @@ export class ImgToMdView extends ItemView {
     const el = this.cardsEl; if (!el) return; el.empty();
     for (let i = 0; i < this.state.cards.length; i++) {
       const card = this.state.cards[i];
-      const cardEl = el.createDiv({ cls: "vault-rag-img-card" });
-      cardEl.createDiv({ cls: "vault-rag-img-card-head", text: `Bild ${card.index}/${card.total} · ${this.basename(card.item.link)}` });
+      const cardEl = el.createDiv({ cls: "img2md-card" });
+      cardEl.createDiv({ cls: "img2md-card-head", text: `Bild ${card.index}/${card.total} · ${this.basename(card.item.link)}` });
       if (card.reasoning) {
         const live = card.status === "streaming" && card.text === "";
-        const det = cardEl.createEl("details", { cls: "vault-rag-img-reasoning" }) as HTMLDetailsElement;
+        const det = cardEl.createEl("details", { cls: "img2md-reasoning" }) as HTMLDetailsElement;
         det.open = live;
-        det.createEl("summary", { cls: "vault-rag-img-reasoning-sum", text: live ? "💭 denkt nach…" : "💭 Gedanken" });
-        det.createDiv({ cls: "vault-rag-img-reasoning-body", text: card.reasoning });
+        det.createEl("summary", { cls: "img2md-reasoning-sum", text: live ? "💭 denkt nach…" : "💭 Gedanken" });
+        det.createDiv({ cls: "img2md-reasoning-body", text: card.reasoning });
       }
-      if (card.text) cardEl.createDiv({ cls: "vault-rag-img-text", text: card.text });
-      if (card.status === "error") cardEl.createDiv({ cls: "vault-rag-img-error", text: card.error ?? "Fehler" });
+      if (card.text) cardEl.createDiv({ cls: "img2md-text", text: card.text });
+      if (card.status === "error") cardEl.createDiv({ cls: "img2md-error", text: card.error ?? "Fehler" });
       if (card.status === "written") {
-        const w = cardEl.createDiv({ cls: "vault-rag-img-written", text: `✓ angelegt: ${card.writtenPath}` });
+        const w = cardEl.createDiv({ cls: "img2md-written", text: `✓ angelegt: ${card.writtenPath}` });
         w.addEventListener("click", () => { if (card.writtenPath) this.deps.openPath(card.writtenPath); });
       }
       if (card.text) {
-        const actions = cardEl.createDiv({ cls: "vault-rag-img-card-actions" });
-        const copyBtn = actions.createEl("button", { cls: "vault-rag-img-copy clickable-icon", attr: { "aria-label": "Transkript kopieren" } });
+        const actions = cardEl.createDiv({ cls: "img2md-card-actions" });
+        const copyBtn = actions.createEl("button", { cls: "img2md-copy clickable-icon", attr: { "aria-label": "Transkript kopieren" } });
         setIcon(copyBtn, "copy");
         copyBtn.addEventListener("click", () => this.deps.copyText(card.text));
         if (card.status === "done") {
-          actions.createEl("button", { cls: "vault-rag-img-write", text: "Notiz anlegen" }).addEventListener("click", () => void this.writeOne(i));
+          actions.createEl("button", { cls: "img2md-write", text: "Notiz anlegen" }).addEventListener("click", () => void this.writeOne(i));
         }
       }
     }
@@ -194,6 +194,6 @@ export class ImgToMdView extends ItemView {
 
   async onClose(): Promise<void> {
     this.controller?.abort();
-    this.contentEl.removeClass("vault-rag-img-root");
+    this.contentEl.removeClass("img2md-root");
   }
 }
