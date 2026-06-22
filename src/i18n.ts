@@ -72,6 +72,8 @@ const EN: Dict = {
   "cap.confirmed": "Vision",
   "cap.likely": "Vision (unconfirmed)",
   "cap.none": "No vision",
+  "note.suffix.image": "(transcript)",
+  "note.suffix.pdf": "(PDF transcript)",
 };
 
 const DE: Dict = {
@@ -129,6 +131,8 @@ const DE: Dict = {
   "cap.confirmed": "Vision",
   "cap.likely": "Vision (unbestätigt)",
   "cap.none": "Keine Vision",
+  "note.suffix.image": "(Transkript)",
+  "note.suffix.pdf": "(PDF-Transkript)",
 };
 
 const STRINGS: Record<Lang, Dict> = { en: EN, de: DE };

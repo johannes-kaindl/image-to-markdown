@@ -74,11 +74,16 @@ export function uniqueNotePath(io: { noteExists(p: string): boolean }, dir: stri
 }
 
 function dirOf(path: string): string { const i = path.lastIndexOf("/"); return i >= 0 ? path.slice(0, i) : ""; }
-function basenameNoExt(path: string): string { const b = path.slice(path.lastIndexOf("/") + 1); const d = b.lastIndexOf("."); return d >= 0 ? b.slice(0, d) : b; }
+export function basenameNoExt(path: string): string { const b = path.slice(path.lastIndexOf("/") + 1); const d = b.lastIndexOf("."); return d >= 0 ? b.slice(0, d) : b; }
 
-/** Pfad für die Transkript-Notiz: neben der Quellnotiz, Basename des Bildes, kollisionsfrei. */
-export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string): string {
-  return uniqueNotePath(io, dirOf(sourcePath), basenameNoExt(imagePath));
+function transcriptSuffix(kind: "image" | "pdf"): string {
+  return t(kind === "pdf" ? "note.suffix.pdf" : "note.suffix.image");
+}
+
+/** Pfad für die Transkript-Notiz: neben der Quellnotiz, Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
+export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, kind: "image" | "pdf"): string {
+  const base = `${basenameNoExt(imagePath)} ${transcriptSuffix(kind)}`;
+  return uniqueNotePath(io, dirOf(sourcePath), base);
 }
 
 export interface ImgToMdIO {
@@ -109,7 +114,7 @@ export async function writeTranscripts(
     if (!transcript) continue;
     const resolved = io.resolveImage(e.link, sourcePath);
     const imagePath = resolved?.path ?? e.link;
-    const newPath = transcriptNotePath(io, sourcePath, imagePath);
+    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
     content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     paths.push(newPath);
