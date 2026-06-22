@@ -1,6 +1,19 @@
 import { streamSSE } from "./sse";
 import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
 
+/** Transport-Abstraktion: hält den reinen Kern obsidian-frei (PROF-OBS-03/04). Die Obsidian-Schicht
+ *  injiziert per setHttp() einen requestUrl-Adapter (src/http.ts); Tests injizieren einen Mock.
+ *  Nicht-streamende Calls laufen über http(); nur das Live-Streaming nutzt fetch (requestUrl streamt nicht). */
+export interface HttpResponse { ok: boolean; status: number; text: string }
+export type HttpFetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<HttpResponse>;
+
+let httpFn: HttpFetch | null = null;
+export function setHttp(fn: HttpFetch): void { httpFn = fn; }
+function http(): HttpFetch {
+  if (!httpFn) throw new Error("VisionClient: HTTP nicht konfiguriert (setHttp aufrufen)");
+  return httpFn;
+}
+
 /** Normalisiert eine Endpoint-Eingabe: trailing Slashes + ein trailing `/v1` strippen.
  *  So funktioniert sowohl `http://host:1234` als auch `http://host:1234/v1` — die Client-
  *  Methoden hängen `/v1/...` selbst an, ein doppeltes `/v1` würde sonst 200+Fehler-Body geben. */
@@ -16,15 +29,15 @@ export class VisionClient {
 
   /** Verbindungs-Check gegen den OpenAI-kompatiblen Endpoint (GET /v1/models). */
   async ping(): Promise<boolean> {
-    try { return (await fetch(`${this.endpoint}/v1/models`)).ok; } catch { return false; }
+    try { return (await http()(`${this.endpoint}/v1/models`)).ok; } catch { return false; }
   }
 
   /** Verfügbare Modelle vom Endpoint (GET /v1/models). [] bei Fehler/Offline. */
   async listModels(): Promise<string[]> {
     try {
-      const r = await fetch(`${this.endpoint}/v1/models`);
+      const r = await http()(`${this.endpoint}/v1/models`);
       if (!r.ok) return [];
-      const j = await r.json() as { data?: { id?: string }[] };
+      const j = JSON.parse(r.text) as { data?: { id?: string }[] };
       return (j.data ?? []).map(m => m.id).filter((x): x is string => typeof x === "string").sort();
     } catch { return []; }
   }
@@ -41,22 +54,21 @@ export class VisionClient {
   }
 
   /** Non-streaming /v1/chat/completions-Call. Modell autoritativ aus der Response. */
-  async transcribe(dataUrl: string, prompt: string, signal?: AbortSignal): Promise<{ content: string; model: string }> {
-    const res = await fetch(`${this.endpoint}/v1/chat/completions`, {
+  async transcribe(dataUrl: string, prompt: string): Promise<{ content: string; model: string }> {
+    const res = await http()(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: false }),
-      signal,
     });
     if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
-    const j = await res.json() as { model?: string; choices?: { message?: { content?: string } }[] };
+    const j = JSON.parse(res.text) as { model?: string; choices?: { message?: { content?: string } }[] };
     return { content: j.choices?.[0]?.message?.content ?? "", model: j.model ?? this.model };
   }
 
   /** Passive Vision-Erkennung: native Metadaten-Probe + Namens-Heuristik.
    *  this.endpoint ist bereits /v1-frei (normalizeEndpoint) → korrekte Basis-URL. */
   async visionConfidence(model: string): Promise<Confidence> {
-    return resolveVision(await fetchVisionCapability(this.endpoint, model), model);
+    return resolveVision(await fetchVisionCapability(http(), this.endpoint, model), model);
   }
 
   /** Aktiver Vision-Test: schickt das übergebene Test-Bild und prüft, ob die Antwort
@@ -67,12 +79,14 @@ export class VisionClient {
   }
 
   /** Streamende Variante für die Sidebar: liefert content+reasoning live, plus das Modell
-   *  aus dem ersten SSE-Chunk (Fallback: Konstruktor-Modell). */
+   *  aus dem ersten SSE-Chunk (Fallback: Konstruktor-Modell). Nutzt bewusst fetch — requestUrl
+   *  liefert nur die vollständige Antwort, kann also nicht token-weise streamen. */
   async transcribeStream(
     dataUrl: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal,
   ): Promise<{ content: string; reasoning: string; model: string }> {
+    // eslint-disable-next-line no-restricted-globals -- Live-SSE-Streaming braucht fetch (requestUrl streamt nicht)
     const res = await fetch(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

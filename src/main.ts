@@ -1,6 +1,7 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage } from "obsidian";
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab } from "./settings";
-import { VisionClient } from "./vision_client";
+import { VisionClient, setHttp } from "./vision_client";
+import { obsidianHttp } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS } from "./img_to_md";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
@@ -12,18 +13,14 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   private openPath = (p: string): void => {
     const f = this.app.vault.getAbstractFileByPath(p);
-    if (f instanceof TFile) this.app.workspace.getLeaf(false).openFile(f);
+    if (f instanceof TFile) void this.app.workspace.getLeaf(false).openFile(f);
   };
 
-  /** UI-Sprache: obsidian.getLanguage() (≥1.8), Fallback moment.locale(). */
-  private detectLang(): string | undefined {
-    try { const l = getLanguage?.(); if (l) return l; } catch { /* ältere Obsidian-Version */ }
-    return (window as unknown as { moment?: { locale?: () => string } }).moment?.locale?.();
-  }
-
   async onload() {
-    setLang(pickLang(this.detectLang()));
-    this.settings = Object.assign({}, defaultSettings(), await this.loadData());
+    setHttp(obsidianHttp);
+    setLang(pickLang(getLanguage()));
+    const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
+    this.settings = Object.assign({}, defaultSettings(), saved ?? {});
     this.visionClient = new VisionClient(this.settings.visionEndpoint, this.settings.visionModel);
 
     this.addSettingTab(new ImageToMarkdownSettingTab(this.app, this));
@@ -118,7 +115,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   async activateImgMdView() {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_IMGMD);
-    if (existing.length) { this.app.workspace.revealLeaf(existing[0]); return; }
+    if (existing.length) { await this.app.workspace.revealLeaf(existing[0]); return; }
     const leaf = this.app.workspace.getRightLeaf(false);
     await leaf?.setViewState({ type: VIEW_TYPE_IMGMD, active: true });
   }

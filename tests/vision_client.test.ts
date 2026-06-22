@@ -1,23 +1,30 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { VisionClient } from "../src/vision_client";
+import { VisionClient, setHttp, type HttpResponse } from "../src/vision_client";
 
-function streamRes(chunks: string[], ok = true, status = 200): any {
+// Mock-Transport für nicht-streamende Calls (ping/listModels/transcribe/visionConfidence/testVision).
+function mockHttp(impl: (url: string, init?: { method?: string; body?: string }) => HttpResponse): { url: string; body?: string }[] {
+  const calls: { url: string; body?: string }[] = [];
+  setHttp((url, init) => { calls.push({ url, body: init?.body }); return Promise.resolve(impl(url, init)); });
+  return calls;
+}
+const ok = (obj: unknown): HttpResponse => ({ ok: true, status: 200, text: JSON.stringify(obj) });
+
+// Streaming nutzt weiterhin fetch (requestUrl streamt nicht) → wird hier gestubbt.
+function streamRes(chunks: string[], okFlag = true, status = 200): any {
   let i = 0;
-  return { ok, status, body: { getReader: () => ({
+  return { ok: okFlag, status, body: { getReader: () => ({
     read: async () => i < chunks.length
       ? { done: false, value: new TextEncoder().encode(chunks[i++]) }
       : { done: true, value: undefined },
   }) } };
 }
 
-describe("VisionClient", () => {
-  afterEach(() => vi.unstubAllGlobals());
+describe("VisionClient (non-streaming, injizierter http)", () => {
   it("transcribe schickt text+image_url, non-streaming, und parst content", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: "# Titel" } }] }) });
-    vi.stubGlobal("fetch", fetchMock);
+    const calls = mockHttp(() => ok({ choices: [{ message: { content: "# Titel" } }] }));
     const out = await new VisionClient("http://x", "vm").transcribe("data:image/jpeg;base64,AAAA", "Transkribiere");
     expect(out).toEqual({ content: "# Titel", model: "vm" });
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(calls[0].body!) as { model: string; stream: boolean; messages: { content: unknown }[] };
     expect(body.model).toBe("vm");
     expect(body.stream).toBe(false);
     expect(body.messages[0].content).toEqual([
@@ -26,20 +33,20 @@ describe("VisionClient", () => {
     ]);
   });
   it("transcribe wirft bei HTTP-Fehler", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    mockHttp(() => ({ ok: false, status: 500, text: "" }));
     await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow("500");
   });
   it("transcribe liefert '' bei fehlendem content", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [] }) }));
+    mockHttp(() => ok({ choices: [] }));
     expect(await new VisionClient("http://x", "vm").transcribe("d", "p")).toEqual({ content: "", model: "vm" });
   });
   it("transcribe nimmt das Modell aus der Response (autoritativ)", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ model: "qwen2-vl:7b", choices: [{ message: { content: "x" } }] }) }));
+    mockHttp(() => ok({ model: "qwen2-vl:7b", choices: [{ message: { content: "x" } }] }));
     expect(await new VisionClient("http://x", "").transcribe("d", "p")).toEqual({ content: "x", model: "qwen2-vl:7b" });
   });
 });
 
-describe("VisionClient.transcribeStream", () => {
+describe("VisionClient.transcribeStream (fetch)", () => {
   afterEach(() => vi.unstubAllGlobals());
   it("streamt content-Deltas und liefert {content,reasoning,model}", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(streamRes([
@@ -62,7 +69,7 @@ describe("VisionClient.transcribeStream", () => {
     const fetchMock = vi.fn().mockResolvedValue(streamRes(['data: [DONE]\n\n']));
     vi.stubGlobal("fetch", fetchMock);
     await new VisionClient("http://x", "vm").transcribeStream("data:image/png;base64,AA", "Transkribiere", () => {}, () => {});
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as { model: string; stream: boolean; messages: { content: unknown }[] };
     expect(body.stream).toBe(true);
     expect(body.model).toBe("vm");
     expect(body.messages[0].content).toEqual([
@@ -77,63 +84,57 @@ describe("VisionClient.transcribeStream", () => {
 });
 
 describe("VisionClient.visionConfidence", () => {
-  afterEach(() => vi.unstubAllGlobals());
   it("liefert 'confirmed' aus Ollama-Metadaten", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ capabilities: ["vision"] }) }));
+    mockHttp(() => ok({ capabilities: ["vision"] }));
     expect(await new VisionClient("http://h:1234", "").visionConfidence("m")).toBe("confirmed");
   });
   it("fällt ohne Metadaten auf die Namens-Heuristik zurück", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    mockHttp(() => ({ ok: false, status: 404, text: "" }));
     expect(await new VisionClient("http://h:1234", "").visionConfidence("qwen2-vl")).toBe("likely");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
     expect(await new VisionClient("http://h:1234", "").visionConfidence("qwen3:8b")).toBe("no");
   });
 });
 
 describe("VisionClient.testVision", () => {
-  afterEach(() => vi.unstubAllGlobals());
   it("true wenn die Antwort das Token enthält", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: "VX7" } }] }) }));
+    mockHttp(() => ok({ choices: [{ message: { content: "VX7" } }] }));
     expect(await new VisionClient("http://h", "m").testVision("data:image/png;base64,AA")).toBe(true);
   });
   it("false wenn das Token fehlt", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: "eine Katze" } }] }) }));
+    mockHttp(() => ok({ choices: [{ message: { content: "eine Katze" } }] }));
     expect(await new VisionClient("http://h", "m").testVision("data:image/png;base64,AA")).toBe(false);
   });
-  it("wirft bei HTTP-/Netzfehler (→ 'Endpoint nicht erreichbar')", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+  it("wirft bei HTTP-/Netzfehler", async () => {
+    mockHttp(() => ({ ok: false, status: 500, text: "" }));
     await expect(new VisionClient("http://h", "m").testVision("d")).rejects.toThrow("500");
   });
 });
 
 describe("VisionClient.ping / listModels", () => {
-  afterEach(() => vi.unstubAllGlobals());
   it("ping() ruft /v1/models und liefert ok", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal("fetch", fetchMock);
+    const calls = mockHttp(() => ({ ok: true, status: 200, text: "" }));
     expect(await new VisionClient("http://x:8080", "vm").ping()).toBe(true);
-    expect(fetchMock.mock.calls[0][0]).toBe("http://x:8080/v1/models");
+    expect(calls[0].url).toBe("http://x:8080/v1/models");
   });
   it("normalisiert einen Endpoint mit /v1-Suffix (kein doppeltes /v1)", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
-    vi.stubGlobal("fetch", fetchMock);
+    const calls = mockHttp(() => ok({ data: [] }));
     await new VisionClient("http://h:1234/v1", "m").ping();
     await new VisionClient("http://h:1234/v1/", "m").listModels();
-    expect(fetchMock.mock.calls[0][0]).toBe("http://h:1234/v1/models");
-    expect(fetchMock.mock.calls[1][0]).toBe("http://h:1234/v1/models");
+    expect(calls[0].url).toBe("http://h:1234/v1/models");
+    expect(calls[1].url).toBe("http://h:1234/v1/models");
   });
   it("ping() liefert false bei Netzfehler", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    setHttp(() => Promise.reject(new Error("offline")));
     expect(await new VisionClient("http://x", "vm").ping()).toBe(false);
   });
   it("listModels() liefert sortierte ids", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [{ id: "b" }, { id: "a" }] }) }));
+    mockHttp(() => ok({ data: [{ id: "b" }, { id: "a" }] }));
     expect(await new VisionClient("http://x", "vm").listModels()).toEqual(["a", "b"]);
   });
   it("listModels() liefert [] bei Fehler/Offline", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    mockHttp(() => ({ ok: false, status: 500, text: "" }));
     expect(await new VisionClient("http://x", "vm").listModels()).toEqual([]);
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("x")));
+    setHttp(() => Promise.reject(new Error("x")));
     expect(await new VisionClient("http://x", "vm").listModels()).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@
 // Reiner Kern: keine obsidian-/DOM-Imports (in Node testbar, PROF-OBS-03/04).
 
 import { t } from "./i18n";
+import type { HttpFetch } from "./vision_client";
 
 export type Confidence = "no" | "likely" | "confirmed";
 
@@ -41,7 +42,7 @@ export function parseOllamaShow(json: unknown): Confidence | null {
 }
 
 function findModel(json: unknown, model: string): Record<string, unknown> | null {
-  const data = (json as { data?: unknown })?.data;
+  const data = (json as { data?: unknown[] })?.data;
   if (!Array.isArray(data)) return null;
   const hit = data.find(x => (x as { id?: unknown })?.id === model);
   return (hit as Record<string, unknown>) ?? null;
@@ -60,21 +61,22 @@ export function parseLmStudioV0(json: unknown, model: string): Confidence | null
   return m.type === "vlm" ? "confirmed" : "no";
 }
 
-/** Probiert native Capability-Endpoints gegen eine Basis-URL (OHNE /v1). */
-export async function fetchVisionCapability(baseUrl: string, model: string): Promise<Confidence | null> {
+/** Probiert native Capability-Endpoints gegen eine Basis-URL (OHNE /v1). http wird injiziert
+ *  (Obsidian: requestUrl-Adapter; Tests: Mock) → reiner Kern bleibt obsidian-frei. */
+export async function fetchVisionCapability(http: HttpFetch, baseUrl: string, model: string): Promise<Confidence | null> {
   try {
-    const r = await fetch(`${baseUrl}/api/show`, {
+    const r = await http(`${baseUrl}/api/show`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }),
     });
-    if (r.ok) { const c = parseOllamaShow(await r.json()); if (c) return c; }
+    if (r.ok) { const c = parseOllamaShow(JSON.parse(r.text) as unknown); if (c) return c; }
   } catch { /* weiter */ }
   try {
-    const r = await fetch(`${baseUrl}/api/v1/models`);
-    if (r.ok) { const c = parseLmStudioV1(await r.json(), model); if (c) return c; }
+    const r = await http(`${baseUrl}/api/v1/models`);
+    if (r.ok) { const c = parseLmStudioV1(JSON.parse(r.text) as unknown, model); if (c) return c; }
   } catch { /* weiter */ }
   try {
-    const r = await fetch(`${baseUrl}/api/v0/models`);
-    if (r.ok) { const c = parseLmStudioV0(await r.json(), model); if (c) return c; }
+    const r = await http(`${baseUrl}/api/v0/models`);
+    if (r.ok) { const c = parseLmStudioV0(JSON.parse(r.text) as unknown, model); if (c) return c; }
   } catch { /* weiter */ }
   return null;
 }
