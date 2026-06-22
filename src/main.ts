@@ -1,7 +1,7 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage } from "obsidian";
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab } from "./settings";
-import { VisionClient, setHttp } from "./vision_client";
-import { obsidianHttp } from "./http";
+import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
+import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS } from "./img_to_md";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
@@ -18,6 +18,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   async onload() {
     setHttp(obsidianHttp);
+    setStreamFetch(obsidianStreamFetch);
     setLang(pickLang(getLanguage()));
     const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
     this.settings = Object.assign({}, defaultSettings(), saved ?? {});

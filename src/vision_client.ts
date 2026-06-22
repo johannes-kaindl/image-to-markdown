@@ -6,9 +6,14 @@ import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PR
  *  Nicht-streamende Calls laufen über http(); nur das Live-Streaming nutzt fetch (requestUrl streamt nicht). */
 export interface HttpResponse { ok: boolean; status: number; text: string }
 export type HttpFetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<HttpResponse>;
+/** Streamender Transport — liefert eine fetch-Response (für streamSSE). Wird aus der Obsidian-
+ *  Schicht über activeWindow.fetch injiziert; der Kern referenziert nie das globale fetch. */
+export type StreamFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 let httpFn: HttpFetch | null = null;
+let streamFn: StreamFetch | null = null;
 export function setHttp(fn: HttpFetch): void { httpFn = fn; }
+export function setStreamFetch(fn: StreamFetch): void { streamFn = fn; }
 function http(): HttpFetch {
   if (!httpFn) throw new Error("VisionClient: HTTP nicht konfiguriert (setHttp aufrufen)");
   return httpFn;
@@ -86,8 +91,8 @@ export class VisionClient {
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal,
   ): Promise<{ content: string; reasoning: string; model: string }> {
-    // eslint-disable-next-line no-restricted-globals -- Live-SSE-Streaming braucht fetch (requestUrl streamt nicht)
-    const res = await fetch(`${this.endpoint}/v1/chat/completions`, {
+    if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
+    const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: true }),
