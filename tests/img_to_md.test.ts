@@ -6,7 +6,7 @@ describe("findImageEmbeds", () => {
     const c = "text\n![[foto.jpg]]\n![[notiz]]\n![alt](bilder/x.png)\n![web](https://e/x.png)";
     const r = findImageEmbeds(c);
     expect(r.map(e => e.link)).toEqual(["foto.jpg", "bilder/x.png"]);
-    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg" });
+    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg", kind: "image" });
   });
   it("ignoriert # und | im Wikilink", () => {
     expect(findImageEmbeds("![[foto.png|200]]")[0].link).toBe("foto.png");
@@ -14,6 +14,18 @@ describe("findImageEmbeds", () => {
   it("erkennt heic (für Skip-Warnung)", () => {
     expect(findImageEmbeds("![[IMG.heic]]")[0].ext).toBe("heic");
     expect(SUPPORTED_EXTS.includes("heic")).toBe(false);
+  });
+  it("erkennt PDF-Embeds als kind pdf (ohne #page → page undefined)", () => {
+    expect(findImageEmbeds("![[doc.pdf]]")[0]).toEqual({ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", kind: "pdf", page: undefined });
+  });
+  it("liest #page=N aus dem PDF-Wikilink", () => {
+    expect(findImageEmbeds("![[doc.pdf#page=3]]")[0]).toMatchObject({ link: "doc.pdf", kind: "pdf", page: 3 });
+  });
+  it("mischt Bild und PDF in Dokument-Reihenfolge", () => {
+    expect(findImageEmbeds("![[a.png]] ![[doc.pdf]]").map(e => e.kind)).toEqual(["image", "pdf"]);
+  });
+  it("erkennt PDF auch als Markdown-Embed", () => {
+    expect(findImageEmbeds("![x](files/doc.pdf)")[0]).toMatchObject({ link: "files/doc.pdf", kind: "pdf" });
   });
 });
 
@@ -155,5 +167,12 @@ describe("runImgToMd", () => {
     expect(r.transcribed).toBe(1);
     expect(Object.keys(created)).toEqual(["foto.md"]);
     expect(notes.get("q.md")).toBe("![[foto]]\ntext\n![[foto]]");
+  });
+  it("PDF-Embed → Hinweis auf Sidebar, kein Schreiben", async () => {
+    const { io, created, notices } = fakeIO({ notes: [["q.md", "![[doc.pdf]]"]], resolveImage: (l: string) => ({ path: l, ext: "pdf" }) });
+    const r = await runImgToMd(io, "q.md");
+    expect(r).toEqual({ transcribed: 0, skipped: 1 });
+    expect(Object.keys(created)).toEqual([]);
+    expect(notices.some(n => n.includes("sidebar"))).toBe(true);
   });
 });
