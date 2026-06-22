@@ -26,7 +26,7 @@ Everything is **non-destructive and idempotent**: there is exactly one transcrip
 ## Requirements
 
 - **Obsidian 1.8.7+** (desktop or mobile).
-- **An OpenAI-compatible local server running a vision-capable model** — for example [LM Studio](https://lmstudio.ai), [Ollama](https://ollama.com), or an MLX server. The endpoint and model are configured in the plugin settings. Nothing leaves your machine: offline-first, no cloud, no VPN required.
+- **An OpenAI-compatible local server running a vision-capable model** (e.g. [LM Studio](https://lmstudio.ai)). New to local LLMs? The **[local LLM setup guide](https://uplink.jkaindl.de/llm-setup)** walks you through server, model and mobile access end to end. The endpoint and model are configured in the plugin settings. Nothing leaves your machine: offline-first, no cloud, no VPN required.
 
 ## Install
 
