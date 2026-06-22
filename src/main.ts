@@ -7,6 +7,7 @@ import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view"
 import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
 import { pdfSmokeTest } from "./pdf_render";
+import { writePdfTranscript } from "./pdf_to_md";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -103,6 +104,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
       writeTranscripts: async (sourcePath, entries) => {
         const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model })));
         return paths;
+      },
+      writePdf: async (sourcePath, raw, link, pages) => {
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages);
+        return path;
       },
       ping: () => new VisionClient(visionEndpoint(), "").ping(),
       listModels: () => new VisionClient(visionEndpoint(), "").listModels(),

@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { ImgToMdState, ImgItem } from "./img_to_md_state";
+import { ImgToMdState, ImgItem, partitionDoneCards } from "./img_to_md_state";
 import { t } from "./i18n";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
@@ -7,8 +7,9 @@ export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
   scan: (sourcePath: string) => Promise<ImgItem[]>;
-  transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ content: string; reasoning: string; model: string }>;
+  transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
   writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string }[]) => Promise<string[]>;
+  writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[]) => Promise<string | null>;
   ping: () => Promise<boolean>;
   listModels: () => Promise<string[]>;
   getModel: () => string;
@@ -98,8 +99,24 @@ export class ImgToMdView extends ItemView {
       cb.checked = this.state.isSelected(item.link);
       cb.disabled = !item.supported;
       cb.addEventListener("change", () => { this.state.toggle(item.link); this.renderList(); });
-      const label = item.supported ? this.basename(item.link) : t("view.unsupportedSuffix", this.basename(item.link));
-      row.createEl("span", { cls: "img2md-name", text: label });
+      if (item.kind === "pdf") {
+        row.createEl("span", { cls: "img2md-name", text: t("view.pdfPages", this.basename(item.link), item.pageCount ?? 0) });
+        const r = item.range ?? { from: 1, to: item.pageCount ?? 1 };
+        const from = row.createEl("input", { cls: "img2md-pdf-from" }); from.type = "number"; from.value = String(r.from);
+        from.setAttribute("aria-label", t("view.pdfRangeFrom"));
+        const to = row.createEl("input", { cls: "img2md-pdf-to" }); to.type = "number"; to.value = String(r.to);
+        to.setAttribute("aria-label", t("view.pdfRangeTo"));
+        const clamp = () => {
+          const max = item.pageCount ?? 1;
+          const f = Math.max(1, Math.min(max, Math.floor(Number(from.value) || 1)));
+          const tt = Math.max(f, Math.min(max, Math.floor(Number(to.value) || max)));
+          item.range = { from: f, to: tt }; from.value = String(f); to.value = String(tt);
+        };
+        from.addEventListener("change", clamp); to.addEventListener("change", clamp);
+      } else {
+        const label = item.supported ? this.basename(item.link) : t("view.unsupportedSuffix", this.basename(item.link));
+        row.createEl("span", { cls: "img2md-name", text: label });
+      }
     }
   }
 
@@ -108,7 +125,10 @@ export class ImgToMdView extends ItemView {
     for (let i = 0; i < this.state.cards.length; i++) {
       const card = this.state.cards[i];
       const cardEl = el.createDiv({ cls: "img2md-card" });
-      cardEl.createDiv({ cls: "img2md-card-head", text: t("view.cardHead", card.index, card.total, this.basename(card.item.link)) });
+      const head = card.page != null
+        ? t("view.cardHeadPage", this.basename(card.item.link), card.page, card.total)
+        : t("view.cardHead", card.index, card.total, this.basename(card.item.link));
+      cardEl.createDiv({ cls: "img2md-card-head", text: head });
       if (card.reasoning) {
         const live = card.status === "streaming" && card.text === "";
         const det = cardEl.createEl("details", { cls: "img2md-reasoning" });
@@ -155,7 +175,7 @@ export class ImgToMdView extends ItemView {
           path, cards[i].item,
           (t) => { this.state.appendContent(i, t); this.renderCards(); },
           (t) => { this.state.appendReasoning(i, t); this.renderCards(); },
-          signal,
+          signal, cards[i].page,
         );
         cards[i].model = r.model;
         this.state.setDone(i);
@@ -175,8 +195,16 @@ export class ImgToMdView extends ItemView {
     const path = this.deps.getActivePath();
     const card = this.state.cards[i];
     if (!path || !card || card.status !== "done") return;
-    const [created] = await this.deps.writeTranscripts(path, [{ item: card.item, content: card.text.trim(), model: card.model }]);
-    if (created) this.state.markWritten(i, created);
+    if (card.item.kind === "pdf") {
+      const g = partitionDoneCards(this.state.cards).pdfs.find(x => x.raw === card.item.raw);
+      if (g) {
+        const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })));
+        if (created) g.cardIndices.forEach(j => this.state.markWritten(j, created));
+      }
+    } else {
+      const [created] = await this.deps.writeTranscripts(path, [{ item: card.item, content: card.text.trim(), model: card.model }]);
+      if (created) this.state.markWritten(i, created);
+    }
     this.renderCards();
     await this.rescan();
   }
@@ -184,11 +212,16 @@ export class ImgToMdView extends ItemView {
   async writeAll(): Promise<void> {
     const path = this.deps.getActivePath();
     if (!path) return;
-    const idx = this.state.doneCardIndices();
-    if (!idx.length) return;
-    const entries = idx.map(i => ({ item: this.state.cards[i].item, content: this.state.cards[i].text.trim(), model: this.state.cards[i].model }));
-    const paths = await this.deps.writeTranscripts(path, entries);
-    idx.forEach((i, k) => { if (paths[k]) this.state.markWritten(i, paths[k]); });
+    const part = partitionDoneCards(this.state.cards);
+    if (part.images.length) {
+      const entries = part.images.map(x => ({ item: x.card.item, content: x.card.text.trim(), model: x.card.model }));
+      const paths = await this.deps.writeTranscripts(path, entries);
+      part.images.forEach((x, k) => { if (paths[k]) this.state.markWritten(x.cardIndex, paths[k]); });
+    }
+    for (const g of part.pdfs) {
+      const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })));
+      if (created) g.cardIndices.forEach(i => this.state.markWritten(i, created));
+    }
     this.renderCards();
     await this.rescan();
   }

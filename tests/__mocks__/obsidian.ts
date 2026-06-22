@@ -7,6 +7,7 @@ export function makeFakeEl(): any {
     setText: (t: string) => { el.textContent = t; }, addClass: () => {}, removeClass: () => {},
     _listeners: {} as Record<string, Function[]>,
     addEventListener: (event: string, cb: Function) => { if (!el._listeners[event]) el._listeners[event] = []; el._listeners[event].push(cb); },
+    setAttribute: (_name: string, _val: string) => {},
     click: () => { (el._listeners["click"] ?? []).forEach((cb: Function) => cb()); },
   };
   return el;

@@ -22,6 +22,7 @@ function mkView(over: any = {}) {
     scan: over.scan ?? (async () => ITEMS),
     transcribeStream: over.transcribeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("Hal"); onContent("lo"); return { content: "Hallo", reasoning: "", model: "vm" }; }),
     writeTranscripts: over.writeTranscripts ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_: any, i: number) => `note-${i}.md`); }),
+    writePdf: over.writePdf ?? (async (_sp: string, _raw: string, _link: string, _pages: any[]) => { calls.written.push(_pages); return "doc (PDF transcript).md"; }),
     ping: over.ping ?? (async () => true),
     listModels: over.listModels ?? (async () => []),
     getModel: over.getModel ?? (() => "vm"),
@@ -179,5 +180,36 @@ describe("ImgToMdView — Notiz anlegen", () => {
     await view.run();
     await view.writeOne(0);       // scan #2 (rescan nach Schreiben)
     expect(scan.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+const PDF_ITEMS: ImgItem[] = [
+  { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } },
+];
+
+describe("ImgToMdView — PDF", () => {
+  it("listet PDF mit Seitenzahl + Bereichsfeldern", async () => {
+    const { view } = mkView({ scan: async () => PDF_ITEMS });
+    await view.onOpen();
+    expect(all(view.contentEl, "img2md-name")[0].textContent).toContain("2");
+    expect(all(view.contentEl, "img2md-pdf-from").length).toBe(1);
+    expect(all(view.contentEl, "img2md-pdf-to").length).toBe(1);
+  });
+  it("run erzeugt eine Karte je Seite mit Seiten-Kopf", async () => {
+    const { view } = mkView({ scan: async () => PDF_ITEMS });
+    await view.onOpen(); await view.run();
+    const cards = all(view.contentEl, "img2md-card");
+    expect(cards.length).toBe(2);
+    expect(all(view.contentEl, "img2md-card-head")[0].textContent).toContain("page 1/2");
+  });
+  it("Alle anlegen ruft writePdf einmal mit beiden Seiten", async () => {
+    const { view, calls } = mkView({ scan: async () => PDF_ITEMS });
+    await view.onOpen(); await view.run();
+    all(view.contentEl, "img2md-all")[0].click();
+    await Promise.resolve(); await Promise.resolve();
+    expect(calls.written.length).toBe(1);
+    expect(calls.written[0].map((p: any) => p.page)).toEqual([1, 2]);
+    // beide Seiten-Karten als „angelegt" markiert (eine Notiz):
+    expect(all(view.contentEl, "img2md-written").length).toBe(2);
   });
 });
