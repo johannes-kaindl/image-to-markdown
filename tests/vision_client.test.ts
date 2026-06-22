@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { VisionClient, setHttp, type HttpResponse } from "../src/vision_client";
+import { describe, it, expect } from "vitest";
+import { VisionClient, setHttp, setStreamFetch, type HttpResponse } from "../src/vision_client";
 
 // Mock-Transport für nicht-streamende Calls (ping/listModels/transcribe/visionConfidence/testVision).
 function mockHttp(impl: (url: string, init?: { method?: string; body?: string }) => HttpResponse): { url: string; body?: string }[] {
@@ -46,10 +46,9 @@ describe("VisionClient (non-streaming, injizierter http)", () => {
   });
 });
 
-describe("VisionClient.transcribeStream (fetch)", () => {
-  afterEach(() => vi.unstubAllGlobals());
+describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
   it("streamt content-Deltas und liefert {content,reasoning,model}", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(streamRes([
+    setStreamFetch(() => Promise.resolve(streamRes([
       'data: {"model":"qwen2-vl","choices":[{"delta":{"content":"# Ti"}}]}\n\n',
       'data: {"choices":[{"delta":{"content":"tel"}}]}\n\ndata: [DONE]\n\n',
     ])));
@@ -59,17 +58,17 @@ describe("VisionClient.transcribeStream (fetch)", () => {
     expect(r).toEqual({ content: "# Titel", reasoning: "", model: "qwen2-vl" });
   });
   it("Fallback auf Konstruktor-Modell ohne model im Stream", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(streamRes([
+    setStreamFetch(() => Promise.resolve(streamRes([
       'data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n',
     ])));
     const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
     expect(r.model).toBe("vm");
   });
   it("schickt multimodalen Body mit stream:true", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(streamRes(['data: [DONE]\n\n']));
-    vi.stubGlobal("fetch", fetchMock);
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_url, init) => { calls.push({ body: init?.body as string | undefined }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
     await new VisionClient("http://x", "vm").transcribeStream("data:image/png;base64,AA", "Transkribiere", () => {}, () => {});
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body) as { model: string; stream: boolean; messages: { content: unknown }[] };
+    const body = JSON.parse(calls[0].body!) as { model: string; stream: boolean; messages: { content: unknown }[] };
     expect(body.stream).toBe(true);
     expect(body.model).toBe("vm");
     expect(body.messages[0].content).toEqual([
@@ -78,7 +77,7 @@ describe("VisionClient.transcribeStream (fetch)", () => {
     ]);
   });
   it("wirft bei HTTP-Fehler", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(streamRes([], false, 500)));
+    setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
     await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow("500");
   });
 });

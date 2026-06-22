@@ -32,7 +32,7 @@ Everything is **non-destructive and idempotent**: there is exactly one transcrip
 
 ### Community Plugins
 
-**Coming soon.** Image to Markdown is being prepared for the Obsidian community plugin directory.
+Once it is listed in the directory, install it from **Settings → Community plugins → Browse** by searching for **Image to Markdown**. Until then, use the Manual or BRAT method below.
 
 ### Manual
 

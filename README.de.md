@@ -53,8 +53,7 @@ Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 
 ### Community Plugins
 
-**Coming soon.** `image-to-markdown` wird für das Obsidian-Community-Plugin-Directory
-vorbereitet.
+Sobald das Plugin im Directory gelistet ist, über **Einstellungen → Community-Plugins → Durchsuchen** nach **Image to Markdown** suchen und installieren. Bis dahin den Weg „Manuell" oder „BRAT" unten nutzen.
 
 ### Manuell
 

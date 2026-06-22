@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.1.2] — 2026-06-22
+
+### Behoben
+
+- Live-Streaming nutzt jetzt `activeWindow.fetch` (injizierter Stream-Transport) statt des
+  globalen `fetch` — erfüllt die Obsidian-Lint-Regel `no-restricted-globals` ohne `eslint-disable`
+  (das der Community-Review nicht erlaubt). Verhalten unverändert.
+- README: „Coming soon"-Platzhalter im Community-Plugins-Abschnitt durch echte Install-Anleitung ersetzt.
+
 ## [0.1.1] — 2026-06-22
 
 Submission-Readiness für die Obsidian-Community-Registry (Lint-/API-Konformität).
