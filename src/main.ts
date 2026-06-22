@@ -90,7 +90,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const items: ImgItem[] = [];
         for (const e of findImageEmbeds(content)) {
           if (seen.has(e.link)) continue; seen.add(e.link);
-          items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()) });
+          items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image" });
         }
         return items;
       },

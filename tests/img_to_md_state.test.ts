@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ImgToMdState, ImgItem } from "../src/img_to_md_state";
+import { ImgToMdState, ImgItem, partitionDoneCards } from "../src/img_to_md_state";
 
 const items: ImgItem[] = [
-  { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true },
-  { raw: "![[b.jpg]]", link: "b.jpg", ext: "jpg", supported: true },
-  { raw: "![[c.heic]]", link: "c.heic", ext: "heic", supported: false },
+  { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
+  { raw: "![[b.jpg]]", link: "b.jpg", ext: "jpg", supported: true, kind: "image" },
+  { raw: "![[c.heic]]", link: "c.heic", ext: "heic", supported: false, kind: "image" },
 ];
 
 describe("ImgToMdState — Auswahl", () => {
@@ -78,5 +78,37 @@ describe("ImgToMdState — Karten", () => {
     const s = new ImgToMdState(); s.setItems(items); s.startCards();
     s.clearCards();
     expect(s.cards).toEqual([]);
+  });
+});
+
+describe("ImgToMdState — PDF-Karten", () => {
+  const pdf: ImgItem = { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 3, range: { from: 1, to: 3 } };
+
+  it("startCards expandiert ein PDF zu einer Karte je Seite im Bereich", () => {
+    const s = new ImgToMdState(); s.setItems([pdf]);
+    const cards = s.startCards();
+    expect(cards.length).toBe(3);
+    expect(cards.map(c => c.page)).toEqual([1, 2, 3]);
+    expect(cards.map(c => c.index)).toEqual([1, 2, 3]);
+    expect(cards[0].total).toBe(3);
+  });
+
+  it("Teilbereich expandiert nur die gewählten Seiten", () => {
+    const s = new ImgToMdState();
+    s.setItems([{ ...pdf, range: { from: 2, to: 3 } }]);
+    expect(s.startCards().map(c => c.page)).toEqual([2, 3]);
+  });
+
+  it("partitionDoneCards gruppiert PDF-Seiten nach link, Bilder einzeln", () => {
+    const s = new ImgToMdState();
+    s.setItems([items[0], pdf]);   // a.png + doc.pdf(3 Seiten) → 4 Karten
+    s.startCards();
+    s.cards.forEach((_, i) => { s.appendContent(i, `t${i}`); s.setDone(i); });
+    const part = partitionDoneCards(s.cards);
+    expect(part.images.map(x => x.card.item.link)).toEqual(["a.png"]);
+    expect(part.pdfs.length).toBe(1);
+    expect(part.pdfs[0].link).toBe("doc.pdf");
+    expect(part.pdfs[0].pages.map(p => p.page)).toEqual([1, 2, 3]);
+    expect(part.pdfs[0].cardIndices.length).toBe(3);
   });
 });

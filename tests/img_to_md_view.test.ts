@@ -11,8 +11,8 @@ function all(el: any, cls: string): any[] {
 }
 
 const ITEMS: ImgItem[] = [
-  { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true },
-  { raw: "![[b.heic]]", link: "b.heic", ext: "heic", supported: false },
+  { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
+  { raw: "![[b.heic]]", link: "b.heic", ext: "heic", supported: false, kind: "image" },
 ];
 
 function mkView(over: any = {}) {
@@ -161,8 +161,8 @@ describe("ImgToMdView — Notiz anlegen", () => {
   });
   it("'Alle anlegen' schreibt alle fertigen Karten in einem Batch", async () => {
     const twoItems: ImgItem[] = [
-      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true },
-      { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true },
+      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
+      { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image" },
     ];
     const { view, calls } = mkView({ scan: async () => twoItems, writeTranscripts: async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_: any, i: number) => `n-${i}.md`); } });
     await view.onOpen(); await view.run();
