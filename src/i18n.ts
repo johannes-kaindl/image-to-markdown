@@ -38,6 +38,10 @@ const EN: Dict = {
   "settings.loadModels": "Load models",
   "settings.prompt.name": "Vision prompt",
   "settings.prompt.desc": "Instruction for the vision model. The image content is sent along.",
+  "settings.pdfMaxPages.name": "PDF max. pages per run",
+  "settings.pdfMaxPages.desc": "Safety cap — larger PDFs must be narrowed via the page range.",
+  "settings.pdfRenderScale.name": "PDF render scale",
+  "settings.pdfRenderScale.desc": "Higher = sharper OCR but more memory (2.0 ≈ 144 dpi).",
   "prompt.default":
     "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, " +
     "**emphasis**, lists and tables. Output only the Markdown, no comments.",
@@ -98,6 +102,10 @@ const DE: Dict = {
   "settings.loadModels": "Modelle laden",
   "settings.prompt.name": "Vision-Prompt",
   "settings.prompt.desc": "Anweisung an das Vision-Modell. Der Bild-Inhalt wird mitgeschickt.",
+  "settings.pdfMaxPages.name": "PDF max. Seiten pro Lauf",
+  "settings.pdfMaxPages.desc": "Schutzgrenze — größere PDFs über den Seitenbereich einschränken.",
+  "settings.pdfRenderScale.name": "PDF-Render-Auflösung",
+  "settings.pdfRenderScale.desc": "Höher = schärfere OCR, aber mehr Speicher (2.0 ≈ 144 dpi).",
   "prompt.default":
     "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, " +
     "**Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare.",

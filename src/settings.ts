@@ -8,6 +8,8 @@ export interface ImageToMarkdownSettings {
   visionEndpoint: string;
   visionModel: string;
   visionPrompt: string;
+  pdfMaxPages: number;
+  pdfRenderScale: number;
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -16,6 +18,8 @@ export function defaultSettings(): ImageToMarkdownSettings {
     visionEndpoint: "http://localhost:8080",
     visionModel: "",
     visionPrompt: defaultVisionPrompt(),
+    pdfMaxPages: 25,
+    pdfRenderScale: 2.0,
   };
 }
 
@@ -138,5 +142,21 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         ta.inputEl.rows = 8;
         ta.inputEl.addClass("img2md-prompt-textarea");
       });
+
+    // ── PDF Max Pages ──
+    new Setting(containerEl)
+      .setName(t("settings.pdfMaxPages.name")).setDesc(t("settings.pdfMaxPages.desc"))
+      .addText(tx => tx.setValue(String(this.plugin.settings.pdfMaxPages))
+        .onChange(async (v: string) => {
+          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfMaxPages = Math.floor(n); await this.plugin.saveSettings(); }
+        }));
+
+    // ── PDF Render Scale ──
+    new Setting(containerEl)
+      .setName(t("settings.pdfRenderScale.name")).setDesc(t("settings.pdfRenderScale.desc"))
+      .addText(tx => tx.setValue(String(this.plugin.settings.pdfRenderScale))
+        .onChange(async (v: string) => {
+          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfRenderScale = n; await this.plugin.saveSettings(); }
+        }));
   }
 }
