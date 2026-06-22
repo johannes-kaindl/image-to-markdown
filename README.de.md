@@ -21,9 +21,6 @@ Duplikate. Nichts verlässt die Maschine: keine Cloud, keine Telemetrie, kein VP
 > vault-rag 0.2.0 ausgegliedert, weil Bild-Transkription kein RAG ist (geteilt wurde nur der
 > SSE-Transport).
 
-![Image to Markdown](docs/images/hero.png)
-<!-- TODO(submission): Hero — aktive Notiz mit eingebetteten Bildern links, die „IMG → MD"-Sidebar streamt rechts die Transkripte — CORE-META-03 -->
-
 ## Funktionen
 
 - **Sidebar-View.** Das Ribbon-Icon `scan-text` (Label „Image → Markdown") öffnet die Sidebar
@@ -44,12 +41,9 @@ Duplikate. Nichts verlässt die Maschine: keine Cloud, keine Telemetrie, kein VP
 Sichtbares Thinking: `reasoning_content` aus dem Stream plus inline `<think>`-Tags landen im
 Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 
-![Die „IMG → MD"-Sidebar streamt ein Transkript](docs/images/sidebar-streaming.png)
-<!-- TODO(submission): Sidebar mitten im Stream — eine Karte füllt sich mit Markdown, Gedanken-Block aufgeklappt, Kopier-Button und „Notiz anlegen" sichtbar — CORE-META-03 -->
-
 ## Voraussetzungen
 
-- Obsidian 1.4+ (Desktop oder Mobile).
+- Obsidian 1.8.7+ (Desktop oder Mobile).
 - Ein OpenAI-kompatibler lokaler Server mit einem **vision-fähigen** Modell — z.B.
   [LM Studio](https://lmstudio.ai), [Ollama](https://ollama.com) oder ein MLX-Server. In den
   Einstellungen konfigurierbar; nichts verlässt die Maschine (offline-first, keine Cloud, kein
@@ -128,9 +122,6 @@ akzeptiert).
 Der Settings-Tab zeigt außerdem einen **Verbindungs-Status** mit „**Verbindung testen**" sowie
 eine **„Vision-Fähigkeit"**-Zeile mit „**Vision testen**"-Button, der aktiv prüft, ob das gewählte
 Modell wirklich Bilder lesen kann — Details im [Handbuch](docs/manual/reference.md#vision-capability-detection).
-
-![Settings-Tab „Vision (Image → Markdown)"](docs/images/settings.png)
-<!-- TODO(submission): Settings-Tab mit Endpoint, Modell-Dropdown und Prompt — CORE-META-03 -->
 
 ## Funktionsweise
 

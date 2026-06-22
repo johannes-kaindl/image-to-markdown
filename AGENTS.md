@@ -27,7 +27,7 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
 `capabilities.ts`, `i18n.ts`, `sse.ts`, `think_splitter.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
-`settings.ts`, `img_to_md_view.ts` importieren `obsidian`. Die View bekommt alle Abhängigkeiten
+`settings.ts`, `img_to_md_view.ts`, `http.ts` importieren `obsidian`. Die View bekommt alle Abhängigkeiten
 über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
 ### Modul-Layout (`src/`)
@@ -39,6 +39,9 @@ img_to_md_state.ts  ImgToMdState — Bild-Auswahl + Ergebnis-Karten (kein DOM/I/
 img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten.
 vision_client.ts    VisionClient → OpenAI-kompatibler /v1/chat/completions (transcribe +
                     transcribeStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint.
+                    Transport injiziert (HttpFetch/setHttp): non-streaming via requestUrl-Adapter,
+                    Streaming via fetch (requestUrl streamt nicht). Reiner Kern, obsidian-frei.
+http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert.
 capabilities.ts     Vision-Capability-Detektion (vision-only, Fork aus vault-rag): guessVision (Namens-
                     Heuristik) · parse* (Ollama/LM Studio v0/v1) · fetchVisionCapability · resolveVision ·
                     visionDisplay · isVisionConfirmed. Reiner Kern, DOM-frei.
@@ -49,7 +52,7 @@ i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t(
 settings.ts         ImageToMarkdownSettings · defaultSettings() (Prompt sprachabhängig) · SettingTab: Endpoint (Status-Dot +
                     „Verbindung testen") · Modell + „Vision-Fähigkeit" (visionConfidence + aktiver
                     „Vision testen") · Prompt (große Textarea) · makeVisionTestImage (Canvas, DOM-Schicht).
-main.ts             Plugin-Entry: Sprach-Detektion (setLang beim onload), View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient.
+main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setLang) beim onload, View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient.
 ```
 
 **Geteilter Transport ist kopiert, nicht geteilt:** `sse.ts`/`think_splitter.ts` existieren identisch
@@ -62,6 +65,7 @@ npm install                       # Deps
 npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
 npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
+npm run lint                      # eslint src (reproduziert die Obsidian-Community-Review-Checks)
 npm test                          # vitest run (111 Tests)
 npx vitest run tests/<datei>      # eine Test-Datei
 npm run typecheck                 # tsc --noEmit (separat von vitest)
@@ -104,7 +108,7 @@ Stand 2026-06-21 — **Release 0.1.0**. Verbleibende bewusste, begründete Abwei
 
 - **CORE-META-02/03** — Badge-Zeile/Hero-Bild + Feature-Screenshots noch nicht final. *Grund:* Screenshots brauchen das laufende Plugin (Jay-Handover); mit/nach 0.1.0.
 - **CORE-META-07** — `LICENSE` (AGPL-3.0) + `LICENSE-DOCS` (CC BY-SA 4.0) vorhanden; separate `LICENSING.md`/`CLA.md` (Dual-License-Option) noch nicht. *Grund:* rechtliche Entscheidung, bei Bedarf — CONTRIBUTING nennt „commercial dual-license on request".
-- **PROF-TS-01** — `typecheck` + `version-bump` vorhanden; `lint` (eslint-Setup) noch offen. *Grund:* eslint-Einführung separat (kein Pre-Release-Risiko aufmachen).
+- **PROF-OBS-06** — Settings-Tab nutzt noch `display()` (deklarative `getSettingDefinitions`-API ist 1.13-Enhancement). *Grund:* Recommendation, kein Blocker; eigener Zyklus.
 - **PROF-TS-04** — kein `tsconfig.build.json`-Split (ein `tsconfig.json` + `vitest.config.ts` reicht). *Grund:* klein genug.
 
 Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Diátaxis-Manual `docs/manual/`), CORE-META-06 (`CONTRIBUTING.md`/`SECURITY.md`), CORE-META-09 (`README.de.md`), PROF-OBS-02 (`npm run deploy`), PROF-OBS-07 (UI-Lokalisierung EN/DE). Codeberg-`origin` + GitHub-Push-Mirror aktiv (CORE-GIT-01).

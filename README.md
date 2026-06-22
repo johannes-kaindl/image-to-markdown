@@ -11,9 +11,6 @@
 
 Image to Markdown turns the embedded images of an Obsidian note — scans, screenshots, photographed pages — into editable Markdown using an OpenAI-compatible vision model that runs on your own machine. Nothing leaves your computer, and your source note is never overwritten: each image gets its own transcript note, and the original embed is simply replaced by an embed of that new note.
 
-![Image to Markdown](docs/images/hero.png)
-<!-- TODO(submission): hero shot — active note with embedded images on the left, the "IMG → MD" sidebar streaming transcripts on the right — CORE-META-03 -->
-
 ## Features
 
 - **Sidebar view.** A ribbon icon (`scan-text`, label "Image → Markdown") opens the "IMG → MD" view. It lists every embedded image of the active note as a checkbox list — all preselected, with unsupported formats disabled. The **"Transcribe"** button streams the vision model's answer **live** into one card per image, including an expandable thinking block for reasoning models and a copy button. Each card has a **"Create note"** button, plus **"Create all"**. Cards are read-only and show the raw Markdown pre-wrapped. After a transcript is written, the handled image drops out of the list on the next scan.
@@ -26,12 +23,9 @@ Reasoning models that emit `reasoning_content` in the stream, or inline `<think>
 
 Everything is **non-destructive and idempotent**: there is exactly one transcript note per image, the image embed in the source note is replaced by an embed of the new note, and running the transcription again creates no duplicates.
 
-![The "IMG → MD" sidebar streaming a transcript](docs/images/sidebar-streaming.png)
-<!-- TODO(submission): the "IMG → MD" sidebar mid-stream — a card filling with live Markdown, the thinking block expanded, copy button and "Notiz anlegen" visible — CORE-META-03 -->
-
 ## Requirements
 
-- **Obsidian 1.4+** (desktop or mobile).
+- **Obsidian 1.8.7+** (desktop or mobile).
 - **An OpenAI-compatible local server running a vision-capable model** — for example [LM Studio](https://lmstudio.ai), [Ollama](https://ollama.com), or an MLX server. The endpoint and model are configured in the plugin settings. Nothing leaves your machine: offline-first, no cloud, no VPN required.
 
 ## Install
@@ -75,16 +69,13 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Vision-Endpunkt** | OpenAI-compatible server hosting your vision model. | `http://localhost:8080` (the MLX default — note that LM Studio uses `:1234`) |
-| **Vision-Modell** | The vision-capable model to use (e.g. Qwen2-VL, Llama-3.2-Vision). A dropdown filled from the endpoint's `/v1/models`; if the endpoint is offline it becomes a free-text field. | `""` (empty) — the model actually used is read from `response.model` |
-| **Vision-Prompt** | The instruction sent to the vision model; freely editable text area. | "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, **Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
+| **Vision endpoint** | OpenAI-compatible server hosting your vision model. | `http://localhost:8080` (the MLX default — note that LM Studio uses `:1234`) |
+| **Vision model** | The vision-capable model to use (e.g. Qwen2-VL, Llama-3.2-Vision). A dropdown filled from the endpoint's `/v1/models`; if the endpoint is offline it becomes a free-text field. | `""` (empty) — the model actually used is read from `response.model` |
+| **Vision prompt** | The instruction sent to the vision model; freely editable text area. The shipped default is localized (English or German, following Obsidian). | "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, **emphasis**, lists and tables. Output only the Markdown, no comments." |
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 
 Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](docs/manual/reference.md#vision-capability-detection).
-
-![The "Vision (Image → Markdown)" settings tab](docs/images/settings.png)
-<!-- TODO(submission): the settings tab — Vision-Endpunkt, model dropdown and prompt — CORE-META-03 -->
 
 ## How it works
 
