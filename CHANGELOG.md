@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.1.3] — 2026-06-22
+
+### Hinzugefügt
+
+- GitHub-Actions-Release-Pipeline (`.github/workflows/release.yml`): baut das Plugin bei einem
+  SemVer-Tag, erzeugt **Build-Provenance-Attestations** für `main.js`/`manifest.json`/`styles.css`
+  und veröffentlicht das GitHub-Release. Läuft auf der GitHub-Mirror-Seite (BRAT/Registry).
+
 ## [0.1.2] — 2026-06-22
 
 ### Behoben
