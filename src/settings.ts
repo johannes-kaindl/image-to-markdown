@@ -148,7 +148,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       .setName(t("settings.pdfMaxPages.name")).setDesc(t("settings.pdfMaxPages.desc"))
       .addText(tx => tx.setValue(String(this.plugin.settings.pdfMaxPages))
         .onChange(async (v: string) => {
-          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfMaxPages = Math.floor(n); await this.plugin.saveSettings(); }
+          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfMaxPages = Math.min(Math.floor(n), 500); await this.plugin.saveSettings(); }
         }));
 
     // ── PDF Render Scale ──
@@ -156,7 +156,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       .setName(t("settings.pdfRenderScale.name")).setDesc(t("settings.pdfRenderScale.desc"))
       .addText(tx => tx.setValue(String(this.plugin.settings.pdfRenderScale))
         .onChange(async (v: string) => {
-          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfRenderScale = n; await this.plugin.saveSettings(); }
+          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfRenderScale = Math.min(n, 4.0); await this.plugin.saveSettings(); }
         }));
   }
 }

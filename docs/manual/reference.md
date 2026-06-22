@@ -1,6 +1,6 @@
 # Reference
 
-Dry, exhaustive reference for **Image to Markdown** (plugin id `image-to-markdown`, version 0.1.3, minimum Obsidian 1.8.7, Desktop and Mobile). For the source-level architecture and module layout, see [AGENTS.md](../../AGENTS.md).
+Dry, exhaustive reference for **Image to Markdown** (plugin id `image-to-markdown`, version 0.2.0, minimum Obsidian 1.8.7, Desktop and Mobile). For the source-level architecture and module layout, see [AGENTS.md](../../AGENTS.md).
 
 The plugin's user-facing strings follow Obsidian's display language: **English is canonical**, with a **German** translation. This reference quotes the English strings verbatim, with the German equivalent in parentheses where it helps. A small set of brand and control strings ("Image → Markdown", "IMG → MD", "Stop") is intentionally left unlocalized. See [UI language & localization](#ui-language--localization) for how the language is detected and what is and is not translated.
 
@@ -25,6 +25,8 @@ Registered under Obsidian's command palette (`Cmd/Ctrl-P`). The displayed comman
 
 The sidebar view lists every embedded image of the active note as a checkbox list (all pre-selected; unsupported formats disabled). The "Transcribe" ("Transkribieren") button streams the vision response live into one card per image — with a collapsible thinking block for reasoning models and a copy button. While a run is in progress the button becomes "Stop" (unlocalized). Each card has a "Create note" ("Notiz anlegen") button; there is also a "Create all" ("Alle anlegen") button. Cards are read-only and render the raw Markdown as pre-wrapped text. After a transcript note is written, the handled image drops out of the list on the next re-scan.
 
+PDFs embedded in a note are transcribed page-by-page via the sidebar (one transcript note per PDF).
+
 ## Settings
 
 Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading word follows Obsidian's language ("Vision" in both English and German here), while the bracketed "Image → Markdown" is the unlocalized plugin name.
@@ -34,6 +36,8 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading wor
 | "Vision endpoint" ("Vision-Endpunkt") | OpenAI-compatible server hosting a vision model. Enter the base URL. | `http://localhost:8080` |
 | "Vision model" ("Vision-Modell") | Vision-capable model (examples: Qwen2-VL, Llama-3.2-Vision). Dropdown populated from the endpoint's `/v1/models`; falls back to a free-text field when the endpoint is offline. | `""` (empty) |
 | "Vision prompt" ("Vision-Prompt") | Instruction sent to the vision model (large free-text area). The shipped default is itself localized — see note below. | English: "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, \*\*emphasis\*\*, lists and tables. Output only the Markdown, no comments." German: "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, \*\*Hervorhebungen\*\*, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
+| "PDF max. pages per run" ("PDF max. Seiten pro Lauf") | Safety cap — PDFs with more pages than this limit must be narrowed via the page range selector in the sidebar. | `25` |
+| "PDF render scale" ("PDF-Render-Auflösung") | Controls the render resolution for PDF pages before they are sent to the vision model. `2.0` ≈ 144 dpi; higher values produce sharper images but use more memory. On mobile the scale is automatically capped at `1.5` regardless of this setting. | `2.0` |
 
 Notes:
 

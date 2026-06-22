@@ -20,7 +20,6 @@ type Dict = Record<string, string>;
 const EN: Dict = {
   "cmd.openSidebar": "Open sidebar",
   "cmd.transcribeActive": "Transcribe images in the active note",
-  "cmd.pdfSmoke": "PDF render self-test",
   "notice.noActiveNote": "No active note.",
   "notice.copied": "Copied",
   "settings.heading": "Vision (Image → Markdown)",
@@ -52,7 +51,7 @@ const EN: Dict = {
   "view.checking": "Vision LLM: checking…",
   "view.connected": "● Vision LLM connected",
   "view.offline": "○ Vision LLM offline — check the settings",
-  "view.noImages": "No images in this note.",
+  "view.noImages": "No transcribable content in this note.",
   "view.unsupportedSuffix": "{0} — unsupported",
   "view.cardHead": "Image {0}/{1} · {2}",
   "view.thinking": "💭 thinking…",
@@ -89,7 +88,6 @@ const EN: Dict = {
 const DE: Dict = {
   "cmd.openSidebar": "Sidebar öffnen",
   "cmd.transcribeActive": "Bilder der aktiven Notiz transkribieren",
-  "cmd.pdfSmoke": "PDF-Render-Selbsttest",
   "notice.noActiveNote": "Keine aktive Notiz.",
   "notice.copied": "Kopiert",
   "settings.heading": "Vision (Image → Markdown)",
@@ -121,7 +119,7 @@ const DE: Dict = {
   "view.checking": "Vision-LLM: prüfe…",
   "view.connected": "● Vision-LLM verbunden",
   "view.offline": "○ Vision-LLM offline — in den Settings prüfen",
-  "view.noImages": "Keine Bilder in dieser Notiz.",
+  "view.noImages": "Keine transkribierbaren Inhalte in dieser Notiz.",
   "view.unsupportedSuffix": "{0} — nicht unterstützt",
   "view.cardHead": "Bild {0}/{1} · {2}",
   "view.thinking": "💭 denkt nach…",

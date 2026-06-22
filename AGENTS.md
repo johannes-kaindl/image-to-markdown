@@ -105,7 +105,7 @@ npm run version-bump 0.2.0        # Version synct package.json/manifest.json/ver
   Vor einem Upgrade die Worker-Blob-Strategie re-validieren. Der Worker wird via
   `scripts/build-pdf-worker.mjs` (separater esbuild-Lauf, vor dem Haupt-Build) gebündelt und als
   eingebetteter String in `pdf-worker-src.generated.ts` gespeichert — diese Datei wird im Haupt-Build
-  mitgebundelt. `pdfjs-dist` ist `devDependency` (nicht im Plugin-Bundle, nur der Worker-Output landet in `main.js`).
+  mitgebundelt. `pdfjs-dist` ist eine **runtime-`dependency`** (nicht `devDependency`): `src/pdf_render.ts` importiert `pdfjs-dist/legacy/build/pdf.mjs`, sodass sowohl das pdf.js-Hauptmodul als auch der Worker in `main.js` gebündelt werden — das ist der Hauptgrund für das größere Bundle (~2,2 MB).
 - **`data.json`** ist die von Obsidian persistierte Plugin-Konfig — git-ignored, nicht committen.
 - **`main.js`** ist Build-Artefakt (gitignored) — nie von Hand editieren.
 - **Endpoint mit `/v1`-Suffix:** `normalizeEndpoint()` strippt ein trailing `/v1`, sonst baute der
