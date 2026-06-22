@@ -95,6 +95,10 @@ npm run version-bump 0.2.0        # Version synct package.json/manifest.json/ver
 - **Vision-Endpoint-Default `:8080`** (MLX) ≠ LM Studio `:1234`.
 - **Nicht in-place** (anders als vault-rag): nach Build `main.js`/`manifest.json`/`styles.css` ins
   Vault-Plugin-Verzeichnis kopieren, dann reloaden.
+- **Release-CI ist GitHub-only:** `.github/workflows/release.yml` läuft auf dem **GitHub-Mirror**
+  (Codeberg/Forgejo ignoriert `.github/`). SemVer-Tag pushen → Mirror trägt ihn zu GitHub → Pipeline
+  baut + attestiert (`actions/attest-build-provenance`) + legt das GitHub-Release an. Das **Codeberg**-Release
+  (kanonisch) bleibt manuell via Forgejo-API (siehe Memory `codeberg-release-gotcha`).
 
 ## Memory
 
