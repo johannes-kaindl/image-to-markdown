@@ -74,6 +74,7 @@ const EN: Dict = {
   "cap.none": "No vision",
   "note.suffix.image": "(transcript)",
   "note.suffix.pdf": "(PDF transcript)",
+  "pdf.pageHeading": "Page {0}",
 };
 
 const DE: Dict = {
@@ -133,6 +134,7 @@ const DE: Dict = {
   "cap.none": "Keine Vision",
   "note.suffix.image": "(Transkript)",
   "note.suffix.pdf": "(PDF-Transkript)",
+  "pdf.pageHeading": "Seite {0}",
 };
 
 const STRINGS: Record<Lang, Dict> = { en: EN, de: DE };
