@@ -20,6 +20,7 @@ type Dict = Record<string, string>;
 const EN: Dict = {
   "cmd.openSidebar": "Open sidebar",
   "cmd.transcribeActive": "Transcribe images in the active note",
+  "cmd.pdfSmoke": "PDF render self-test",
   "notice.noActiveNote": "No active note.",
   "notice.copied": "Copied",
   "settings.heading": "Vision (Image → Markdown)",
@@ -75,6 +76,7 @@ const EN: Dict = {
 const DE: Dict = {
   "cmd.openSidebar": "Sidebar öffnen",
   "cmd.transcribeActive": "Bilder der aktiven Notiz transkribieren",
+  "cmd.pdfSmoke": "PDF-Render-Selbsttest",
   "notice.noActiveNote": "Keine aktive Notiz.",
   "notice.copied": "Kopiert",
   "settings.heading": "Vision (Image → Markdown)",

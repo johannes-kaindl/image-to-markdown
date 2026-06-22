@@ -6,6 +6,7 @@ import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXT
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
+import { pdfSmokeTest } from "./pdf_render";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -32,6 +33,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
       const f = this.app.workspace.getActiveFile();
       if (!f) { new Notice(t("notice.noActiveNote")); return; }
       void runImgToMd(this.makeImgIO(), f.path);
+    } });
+    this.addCommand({ id: "pdf-render-selftest", name: t("cmd.pdfSmoke"), callback: async () => {
+      try { new Notice(`PDF-Render: ${(await pdfSmokeTest()) ? "OK" : "FEHLER"}`); }
+      catch (e) { new Notice(`PDF-Render-Fehler: ${e instanceof Error ? e.message : String(e)}`); }
     } });
     this.registerEvent(this.app.workspace.on("editor-menu", (menu: Menu, editor: Editor) => {
       const cur = editor.getCursor();
