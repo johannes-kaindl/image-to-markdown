@@ -14,10 +14,11 @@ Image to Markdown turns the embedded images of an Obsidian note — scans, scree
 ## Features
 
 - **Sidebar view.** A ribbon icon (`scan-text`, label "Image → Markdown") opens the "IMG → MD" view. It lists every embedded image of the active note as a checkbox list — all preselected, with unsupported formats disabled. The **"Transcribe"** button streams the vision model's answer **live** into one card per image, including an expandable thinking block for reasoning models and a copy button. Each card has a **"Create note"** button, plus **"Create all"**. Cards are read-only and show the raw Markdown pre-wrapped. After a transcript is written, the handled image drops out of the list on the next scan.
+- **PDF transcription (sidebar).** Embedded PDFs appear in the same sidebar alongside images. Select the page range you want (default: all pages), then click **"Transcribe"** — each page is rendered via the bundled pdf.js and transcribed page-by-page. One transcript note is created per PDF and the PDF embed is replaced, exactly like an image. Page limits (`pdfMaxPages`) and a mobile-friendly render scale (`pdfRenderScale`) keep memory usage in check. No external CDN — pdf.js is bundled fully offline.
 - **Bilingual UI (English / Deutsch)** — every user-facing string follows Obsidian's language setting; English is canonical, German is provided automatically. The language is detected once when the plugin loads (reload to switch).
 - **Command "Transcribe images in the active note"** (id `transcribe-active-note`) — batch transcription without opening the sidebar.
 - **Command "Open sidebar"** (id `open-sidebar`) — opens the sidebar view.
-- **Editor context-menu entry "Image → Markdown"** (icon `scan-text`) — transcribes only the image under the cursor.
+- **Editor context-menu entry "Image → Markdown"** (icon `scan-text`) — transcribes only the image under the cursor. (PDFs are not supported via context menu — use the sidebar.)
 
 Reasoning models that emit `reasoning_content` in the stream, or inline `<think>` tags, get their thoughts collected into the expandable thinking block. Reasoning is ephemeral — it is shown to you but **never** added to the LLM history.
 
@@ -80,6 +81,8 @@ Next to the input fields the settings tab shows a **connection status** indicato
 ## How it works
 
 For each selected image, the plugin builds a multimodal chat-completions request — the image lives in the `content` array — to the configured OpenAI-compatible vision endpoint, and streams the Markdown back over SSE (`content` plus `reasoning_content`). It then writes one transcript note per image with a `transcribed_by` frontmatter field (the model name taken from `response.model`, because some servers such as LM Studio ignore the request's `model` field and use the loaded model instead) and replaces the image embed in the source note with an embed of the new note. The result is non-destructive and idempotent.
+
+For PDFs, each page is rendered to a canvas by the bundled pdf.js (offline, no CDN; worker embedded as a Blob URL), converted to a PNG data URL, and sent to the same vision endpoint as a regular image. Pages stream as individual cards in the sidebar, and one transcript note is produced for the whole PDF.
 
 The architecture and module layout are documented in [AGENTS.md](AGENTS.md).
 

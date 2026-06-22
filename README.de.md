@@ -30,6 +30,12 @@ Duplikate. Nichts verlässt die Maschine: keine Cloud, keine Telemetrie, kein VP
   Gedanken-/Thinking-Block bei Reasoning-Modellen und einem Kopier-Button. Pro Karte gibt es
   „Notiz anlegen", außerdem „Alle anlegen". Karten sind read-only; rohes Markdown im
   pre-wrap. Nach dem Schreiben fällt das behandelte Bild beim Re-Scan aus der Liste.
+- **PDF-Transkription (Sidebar).** Eingebettete PDFs erscheinen in derselben Sidebar wie Bilder.
+  Den gewünschten Seitenbereich wählen (Default: alle Seiten), dann „Transkribieren" klicken —
+  jede Seite wird über das gebündelte pdf.js gerendert und seitenweise transkribiert. Pro PDF
+  entsteht eine Transkript-Notiz, der PDF-Embed wird ersetzt (genau wie bei Bildern). Limits:
+  `pdfMaxPages` (konfigurierbar) und `pdfRenderScale` (mobil kleiner, OOM-Schutz). Kein CDN —
+  pdf.js ist vollständig offline gebündelt.
 - **Zweisprachige Oberfläche (Deutsch / English)** — alle nutzersichtbaren Texte folgen der
   Sprach-Einstellung von Obsidian; Englisch ist kanonisch, Deutsch wird automatisch geliefert.
   Die Sprache wird einmalig beim Laden des Plugins erkannt (zum Wechseln neu laden).
@@ -37,6 +43,7 @@ Duplikate. Nichts verlässt die Maschine: keine Cloud, keine Telemetrie, kein VP
   Batch-Transkription ohne Sidebar.
 - **Command** „Sidebar öffnen" (`open-sidebar`) — öffnet die Sidebar.
 - **Editor-Kontextmenü** „Image → Markdown" (Icon `scan-text`) — nur das Bild unter dem Cursor.
+  (PDFs werden über das Kontextmenü nicht unterstützt — Sidebar verwenden.)
 
 Sichtbares Thinking: `reasoning_content` aus dem Stream plus inline `<think>`-Tags landen im
 Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.

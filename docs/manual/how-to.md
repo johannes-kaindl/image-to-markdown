@@ -21,6 +21,7 @@ the setup notes in the [README](../../README.md).
 6. [Handle iPhone / HEIC images](#handle-iphone--heic-images)
 7. [Pick or pin a specific model](#pick-or-pin-a-specific-model)
 8. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
+9. [Transcribe a PDF](#transcribe-a-pdf)
 
 ---
 
@@ -221,6 +222,40 @@ Good to know:
 - The active **"Vision testen"** button is the reliable check when your endpoint
   exposes no capability metadata (a plain `/v1` server) — it actually runs the
   model on an image.
+
+---
+
+---
+
+## Transcribe a PDF
+
+Use this when a note contains an embedded PDF and you want a Markdown transcript of its text,
+page by page, as a single transcript note.
+
+> **Note:** PDFs are handled exclusively through the sidebar. The editor context menu and the
+> "Transcribe images" batch command do not process PDFs — open the sidebar first.
+
+1. Open the note that embeds the PDF you want to transcribe.
+2. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to open
+   the **"IMG → MD"** sidebar. The PDF appears in the list alongside any images — it shows the
+   total page count.
+3. *(Optional)* Adjust the **page range** if you only need a subset of pages. The default covers
+   all pages. On mobile, keep the range short to stay within memory limits.
+4. Make sure the PDF checkbox is selected and click **"Transcribe"** ("Transkribieren"). The
+   sidebar streams one card per page as the vision model works through them.
+5. Click **"Create note"** ("Notiz anlegen") on the finished card, or **"Create all"** ("Alle
+   anlegen") if you transcribed both images and a PDF in the same run. One transcript note is
+   written for the whole PDF, and the PDF embed in the source note is replaced by an embed of
+   the new note.
+
+The transcript note is non-destructive and idempotent: running it again on an already-transcribed
+PDF creates no duplicate.
+
+**Page limits:** the plugin enforces a configurable `pdfMaxPages` cap (see Settings). If your PDF
+is very large, raise the cap in **Settings → Image to Markdown** or split the run into smaller
+page ranges. On mobile the render scale is automatically reduced (`pdfRenderScale`) to keep
+memory usage low — very large pages may still be limited; if a page fails to render it is skipped
+with a notice.
 
 ---
 
