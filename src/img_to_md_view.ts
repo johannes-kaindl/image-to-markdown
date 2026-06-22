@@ -37,7 +37,7 @@ export class ImgToMdView extends ItemView {
     const c = this.contentEl; c.empty(); c.addClass("img2md-root");
     this.statusEl = c.createDiv({ cls: "img2md-status" });
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
-    this.modelSel = c.createEl("select", { cls: "img2md-model dropdown" }) as HTMLSelectElement;
+    this.modelSel = c.createEl("select", { cls: "img2md-model dropdown" });
     this.modelSel.addEventListener("change", () => this.deps.setModel(this.modelSel?.value ?? ""));
     const head = c.createDiv({ cls: "img2md-head" });
     this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: t("view.deselectAll") });
@@ -66,7 +66,7 @@ export class ImgToMdView extends ItemView {
     const models = await this.deps.listModels();
     sel.empty();
     const list = models.includes(cur) ? models : [cur, ...models];
-    for (const m of list) { const o = sel.createEl("option", { text: m }) as HTMLOptionElement; o.value = m; }
+    for (const m of list) { const o = sel.createEl("option", { text: m }); o.value = m; }
     sel.value = cur;
   }
 
@@ -93,7 +93,7 @@ export class ImgToMdView extends ItemView {
     if (!this.state.items.length) { el.createDiv({ cls: "img2md-empty", text: t("view.noImages") }); return; }
     for (const item of this.state.items) {
       const row = el.createDiv({ cls: "img2md-item" });
-      const cb = row.createEl("input", { cls: "img2md-check" }) as HTMLInputElement;
+      const cb = row.createEl("input", { cls: "img2md-check" });
       cb.type = "checkbox";
       cb.checked = this.state.isSelected(item.link);
       cb.disabled = !item.supported;
@@ -111,7 +111,7 @@ export class ImgToMdView extends ItemView {
       cardEl.createDiv({ cls: "img2md-card-head", text: t("view.cardHead", card.index, card.total, this.basename(card.item.link)) });
       if (card.reasoning) {
         const live = card.status === "streaming" && card.text === "";
-        const det = cardEl.createEl("details", { cls: "img2md-reasoning" }) as HTMLDetailsElement;
+        const det = cardEl.createEl("details", { cls: "img2md-reasoning" });
         det.open = live;
         det.createEl("summary", { cls: "img2md-reasoning-sum", text: live ? t("view.thinking") : t("view.thoughts") });
         det.createDiv({ cls: "img2md-reasoning-body", text: card.reasoning });

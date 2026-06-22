@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   guessVision, parseOllamaShow, parseLmStudioV1, parseLmStudioV0,
   fetchVisionCapability, resolveVision, visionDisplay, isVisionConfirmed,
@@ -44,28 +44,25 @@ describe("L1-Metadaten-Parser (vision-only)", () => {
 });
 
 describe("fetchVisionCapability (Probe-Reihenfolge)", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  const ok = (obj: unknown) => ({ ok: true, status: 200, text: JSON.stringify(obj) });
+  const off = { ok: false, status: 404, text: "" };
   it("nimmt Ollama /api/show wenn vorhanden", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ capabilities: ["vision"] }) });
-    vi.stubGlobal("fetch", fetchMock);
-    expect(await fetchVisionCapability("http://h:1234", "m")).toBe("confirmed");
-    expect(fetchMock.mock.calls[0][0]).toBe("http://h:1234/api/show");
+    const calls: string[] = [];
+    const http = (url: string) => { calls.push(url); return Promise.resolve(ok({ capabilities: ["vision"] })); };
+    expect(await fetchVisionCapability(http, "http://h:1234", "m")).toBe("confirmed");
+    expect(calls[0]).toBe("http://h:1234/api/show");
   });
   it("fällt auf LM Studio /api/v1/models zurück", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ id: "m", capabilities: { vision: true } }] }) });
-    vi.stubGlobal("fetch", fetchMock);
-    expect(await fetchVisionCapability("http://h:1234", "m")).toBe("confirmed");
-    expect(fetchMock.mock.calls[1][0]).toBe("http://h:1234/api/v1/models");
+    const calls: string[] = [];
+    const http = (url: string) => { calls.push(url); return Promise.resolve(calls.length === 1 ? off : ok({ data: [{ id: "m", capabilities: { vision: true } }] })); };
+    expect(await fetchVisionCapability(http, "http://h:1234", "m")).toBe("confirmed");
+    expect(calls[1]).toBe("http://h:1234/api/v1/models");
   });
   it("liefert null wenn keine Metadaten-Quelle antwortet", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
-    expect(await fetchVisionCapability("http://h:1234", "m")).toBeNull();
+    expect(await fetchVisionCapability(() => Promise.resolve(off), "http://h:1234", "m")).toBeNull();
   });
   it("überlebt Netzfehler (alle throw) → null", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
-    expect(await fetchVisionCapability("http://h:1234", "m")).toBeNull();
+    expect(await fetchVisionCapability(() => Promise.reject(new Error("offline")), "http://h:1234", "m")).toBeNull();
   });
 });
 

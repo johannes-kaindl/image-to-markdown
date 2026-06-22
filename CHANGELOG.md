@@ -4,6 +4,26 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.1.1] — 2026-06-22
+
+Submission-Readiness für die Obsidian-Community-Registry (Lint-/API-Konformität).
+
+### Geändert
+
+- `minAppVersion` auf **1.8.7** angehoben (offizielle `getLanguage()`-API statt 1.4.0 mit Fallback).
+- Nicht-streamende Netzwerk-Calls laufen über Obsidians `requestUrl` (per Dependency-Injection;
+  der reine Kern bleibt obsidian-frei). Das Live-Streaming nutzt weiterhin `fetch` — `requestUrl`
+  liefert nur die vollständige Antwort und kann nicht token-weise streamen.
+
+### Behoben
+
+- Obsidian-Plugin-Lint sauber: keine `no-unsupported-api`-Verstöße mehr, `activeDocument` statt
+  `document`, keine floating Promises / unsicheren `any`-Zuweisungen / unnötigen Type-Assertions.
+
+### Entwicklung
+
+- `eslint` + `eslint-plugin-obsidianmd` + `npm run lint` — reproduziert die Community-Review-Checks lokal.
+
 ## [0.1.0] — 2026-06-21
 
 Erstes Release. Ausgegliedert aus [vault-rag](https://codeberg.org/jkaindl/vault-rag) 0.2.0.

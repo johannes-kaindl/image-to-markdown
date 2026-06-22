@@ -54,7 +54,7 @@ export class ImgToMdState {
     const sel = this.selectedItems();
     this.cards = sel.map((item, k) => ({
       item, index: k + 1, total: sel.length,
-      text: "", reasoning: "", model: "", status: "streaming" as CardStatus,
+      text: "", reasoning: "", model: "", status: "streaming",
     }));
     return this.cards;
   }

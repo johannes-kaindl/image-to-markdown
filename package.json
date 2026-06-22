@@ -1,22 +1,35 @@
 {
   "name": "image-to-markdown",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Transcribe the images in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
-  "keywords": ["obsidian", "obsidian-plugin", "vision", "ocr", "image-to-markdown", "transcription", "local-first", "offline"],
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "vision",
+    "ocr",
+    "image-to-markdown",
+    "transcription",
+    "local-first",
+    "offline"
+  ],
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
     "test": "vitest run",
+    "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "version-bump": "node scripts/version-bump.mjs",
     "deploy": "npm run build && cp main.js manifest.json styles.css \"${OBSIDIAN_PLUGIN_DIR:?Setze OBSIDIAN_PLUGIN_DIR auf dein Vault-Plugin-Verzeichnis}\"/"
   },
   "devDependencies": {
-    "obsidian": "^1.5.0",
     "esbuild": "^0.21.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-obsidianmd": "^0.3.0",
+    "happy-dom": "^14.0.0",
+    "obsidian": "^1.5.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.6.0",
-    "happy-dom": "^14.0.0"
+    "typescript-eslint": "^8.61.1",
+    "vitest": "^1.6.0"
   }
 }
