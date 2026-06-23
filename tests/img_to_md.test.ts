@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter } from "../src/img_to_md";
+
+describe("stripFrontmatter", () => {
+  it("entfernt führenden YAML-Block", () => {
+    expect(stripFrontmatter("---\nsource_pdf: \"[[x.pdf]]\"\n---\nBody [[y.png]]")).toBe("Body [[y.png]]");
+  });
+  it("lässt Inhalt ohne Frontmatter unverändert", () => {
+    expect(stripFrontmatter("kein FM [[a.png]]")).toBe("kein FM [[a.png]]");
+  });
+  it("greift nur am Anfang (--- mitten im Text bleibt)", () => {
+    expect(stripFrontmatter("text\n---\na: 1\n---\n")).toBe("text\n---\na: 1\n---\n");
+  });
+});
 
 describe("findImageEmbeds", () => {
   it("findet wikilink- und markdown-Bild-Embeds, filtert Extensions", () => {

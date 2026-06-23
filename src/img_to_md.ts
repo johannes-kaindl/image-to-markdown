@@ -18,6 +18,13 @@ function pageOf(rawTarget: string): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
+/** Entfernt einen führenden YAML-Frontmatter-Block (---\n…\n---). Ohne Frontmatter unverändert.
+ *  Schützt den Link-Scan davor, source_pdf/source_note-Wikilinks als Quelle zu erkennen. */
+export function stripFrontmatter(content: string): string {
+  const m = /^---\n[\s\S]*?\n---\n?/.exec(content);
+  return m ? content.slice(m[0].length) : content;
+}
+
 /** Findet eingebettete Bilder: ![[link.ext]] (Wikilink) und ![alt](pfad) (Markdown, externe http(s) aus). */
 export function findImageEmbeds(content: string): ImageEmbed[] {
   const out: ImageEmbed[] = [];
