@@ -6,5 +6,6 @@ describe("defaultSettings", () => {
     const s = defaultSettings();
     expect(s.pdfMaxPages).toBe(25);
     expect(s.pdfRenderScale).toBe(2.0);
+    expect(s.pdfPageSeparator).toBe("comment");
   });
 });

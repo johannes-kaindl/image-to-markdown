@@ -123,7 +123,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         return paths;
       },
       writePdf: async (sourcePath, raw, link, pages) => {
-        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages);
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator);
         return path;
       },
       ping: () => new VisionClient(visionEndpoint(), "").ping(),

@@ -40,7 +40,14 @@ const EN: Dict = {
   "settings.pdfMaxPages.name": "PDF max. pages per run",
   "settings.pdfMaxPages.desc": "Safety cap — larger PDFs must be narrowed via the page range.",
   "settings.pdfRenderScale.name": "PDF render scale",
-  "settings.pdfRenderScale.desc": "Higher = sharper OCR but more memory (2.0 ≈ 144 dpi).",
+  "settings.pdfRenderScale.desc": "Low = faster, less memory; high = sharper page images & better OCR on small text (2.0 ≈ 144 dpi).",
+  "settings.pdfPageSep.name": "PDF page separator",
+  "settings.pdfPageSep.desc": "How pages are separated in the merged transcript note.",
+  "settings.pdfPageSep.comment": "Obsidian comment %% Page N %% (hidden in reading view)",
+  "settings.pdfPageSep.heading": "Heading ## Page N",
+  "settings.pdfPageSep.rule": "Horizontal rule ---",
+  "settings.pdfPageSep.pagebreak": "Page break (HTML, for export)",
+  "settings.pdfPageSep.none": "None (seamless text)",
   "prompt.default":
     "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, " +
     "**emphasis**, lists and tables. Output only the Markdown, no comments.",
@@ -110,7 +117,14 @@ const DE: Dict = {
   "settings.pdfMaxPages.name": "PDF max. Seiten pro Lauf",
   "settings.pdfMaxPages.desc": "Schutzgrenze — größere PDFs über den Seitenbereich einschränken.",
   "settings.pdfRenderScale.name": "PDF-Render-Auflösung",
-  "settings.pdfRenderScale.desc": "Höher = schärfere OCR, aber mehr Speicher (2.0 ≈ 144 dpi).",
+  "settings.pdfRenderScale.desc": "Niedrig = schneller, weniger Speicher; hoch = schärfere Seitenbilder & bessere OCR bei kleinem Text (2.0 ≈ 144 dpi).",
+  "settings.pdfPageSep.name": "PDF-Seitentrenner",
+  "settings.pdfPageSep.desc": "Wie Seiten in der zusammengeführten Transkript-Notiz getrennt werden.",
+  "settings.pdfPageSep.comment": "Obsidian-Kommentar %% Seite N %% (im Lesemodus unsichtbar)",
+  "settings.pdfPageSep.heading": "Überschrift ## Seite N",
+  "settings.pdfPageSep.rule": "Trennlinie ---",
+  "settings.pdfPageSep.pagebreak": "Seitenumbruch (HTML, für Export)",
+  "settings.pdfPageSep.none": "Keiner (nahtloser Text)",
   "prompt.default":
     "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, " +
     "**Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare.",

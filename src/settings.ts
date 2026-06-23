@@ -3,6 +3,7 @@ import type ImageToMarkdownPlugin from "./main";
 import { VisionClient } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
 import { t, defaultVisionPrompt } from "./i18n";
+import type { PdfPageSeparator } from "./pdf_to_md";
 
 export interface ImageToMarkdownSettings {
   visionEndpoint: string;
@@ -10,6 +11,7 @@ export interface ImageToMarkdownSettings {
   visionPrompt: string;
   pdfMaxPages: number;
   pdfRenderScale: number;
+  pdfPageSeparator: PdfPageSeparator;
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -20,6 +22,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     visionPrompt: defaultVisionPrompt(),
     pdfMaxPages: 25,
     pdfRenderScale: 2.0,
+    pdfPageSeparator: "comment",
   };
 }
 
@@ -158,5 +161,18 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         .onChange(async (v: string) => {
           const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfRenderScale = Math.min(n, 4.0); await this.plugin.saveSettings(); }
         }));
+
+    // ── PDF Page Separator ──
+    new Setting(containerEl)
+      .setName(t("settings.pdfPageSep.name")).setDesc(t("settings.pdfPageSep.desc"))
+      .addDropdown(d => {
+        d.addOption("comment", t("settings.pdfPageSep.comment"));
+        d.addOption("heading", t("settings.pdfPageSep.heading"));
+        d.addOption("rule", t("settings.pdfPageSep.rule"));
+        d.addOption("pagebreak", t("settings.pdfPageSep.pagebreak"));
+        d.addOption("none", t("settings.pdfPageSep.none"));
+        d.setValue(this.plugin.settings.pdfPageSeparator);
+        d.onChange(async (v: string) => { this.plugin.settings.pdfPageSeparator = v as PdfPageSeparator; await this.plugin.saveSettings(); });
+      });
   }
 }
