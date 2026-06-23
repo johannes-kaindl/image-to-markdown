@@ -62,6 +62,7 @@ Alongside the settings listed above, the tab shows:
 - A **connection status dot** next to the "Vision endpoint" field (auto-pinged when the tab opens) plus a **"Test connection"** ("Verbindung testen") button — both call the endpoint's `/v1/models` and report connected / offline (`● verbunden` / `○ offline` in German).
 - A **"Vision capability"** ("Vision-Fähigkeit") row for the selected model, plus a **"Test vision"** ("Vision testen") button — see [Vision capability detection](#vision-capability-detection).
 - A **"Load models"** ("Modelle laden") button that appears when the endpoint is offline, to refresh the model dropdown once the server is up.
+- A **"Refresh models"** ("Modelle aktualisieren") icon button (`refresh-cw`) next to the "Vision model" dropdown — re-fetches `/v1/models` at any time. If the previously selected model is no longer in the list (e.g. because an external process swapped the loaded model), the selection is automatically aligned to the first available model. The same icon also appears next to the model dropdown in the **sidebar**. After every transcription run the sidebar additionally performs an automatic post-sync: if `response.model` differs from the current selection, the selection is updated and a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …") is shown in the status line.
 
 ## Vision capability detection
 

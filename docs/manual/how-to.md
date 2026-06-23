@@ -216,6 +216,14 @@ Good to know:
   in the `transcribed_by` frontmatter of each transcript note, taken from
   `response.model` — so the note always reflects the real model, not just what
   you selected.
+- If an external process swaps the model your backend has loaded, click the
+  **"Refresh models"** ("Modelle aktualisieren") icon (`refresh-cw`) next to
+  the model dropdown — in both the sidebar and Settings — to re-fetch the model
+  list. If the previously selected model is no longer loaded, the selection is
+  automatically aligned to the first available model. After each transcription
+  run, the sidebar also performs an automatic post-sync: if `response.model`
+  differs from the current selection, the selection follows the real model and
+  a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …") is shown.
 
 ---
 

@@ -217,6 +217,46 @@ const PDF_ITEMS: ImgItem[] = [
   { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } },
 ];
 
+describe("ImgToMdView — Modell-Refresh", () => {
+  it("Refresh-Icon ruft listModels erneut", async () => {
+    let calls = 0;
+    const { view } = mkView({ listModels: async () => { calls++; return ["vm"]; }, getModel: () => "vm" });
+    await view.onOpen();
+    const before = calls;
+    const btn = all(view.contentEl, "img2md-model-refresh");
+    expect(btn.length).toBe(1);
+    btn[0].click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(calls).toBe(before + 1);
+  });
+  it("refreshModels gleicht eine nicht mehr geladene Auswahl an ein geladenes Modell an", async () => {
+    const setModel = vi.fn();
+    const { view } = mkView({ getModel: () => "gone-model", setModel, listModels: async () => ["loaded-model"] });
+    await view.onOpen();
+    expect(setModel).toHaveBeenCalledWith("loaded-model");
+  });
+  it("run() gleicht die Auswahl an das real verwendete Modell an (Post-Sync)", async () => {
+    const setModel = vi.fn();
+    const { view } = mkView({
+      getModel: () => "vm", setModel, listModels: async () => ["vm"],
+      transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "other-model" }; },
+    });
+    await view.onOpen();
+    await view.run();
+    expect(setModel).toHaveBeenCalledWith("other-model");
+  });
+  it("run() ohne Abweichung ruft setModel nicht (kein unnötiges Reconnect)", async () => {
+    const setModel = vi.fn();
+    const { view } = mkView({
+      getModel: () => "vm", setModel, listModels: async () => ["vm"],
+      transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "vm" }; },
+    });
+    await view.onOpen();
+    await view.run();
+    expect(setModel).not.toHaveBeenCalled();
+  });
+});
+
 describe("ImgToMdView — PDF", () => {
   it("listet PDF mit Titel + Seite/bis-Labels + Bereichsfeldern", async () => {
     const { view } = mkView({ scan: async () => PDF_ITEMS });

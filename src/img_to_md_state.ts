@@ -93,6 +93,12 @@ export class ImgToMdState {
   clearCards(): void { this.cards = []; }
 }
 
+/** Das tatsächlich verwendete Modell aus den Ergebnis-Karten: erstes nicht-leeres card.model.
+ *  "" wenn keine Karte ein Modell meldet. Alle Karten eines Laufs stammen vom selben Backend. */
+export function actualModel(cards: ImgCard[]): string {
+  return cards.find(c => c.model)?.model ?? "";
+}
+
 /** Gruppiert done-Karten: Bilder einzeln, PDF-Seiten nach embed-link (raw). Behält Karten-Indizes. */
 export function partitionDoneCards(cards: ImgCard[]): {
   images: { card: ImgCard; cardIndex: number }[];

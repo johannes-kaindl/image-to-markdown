@@ -8,6 +8,11 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- **Modell-Transparenz:** ein Refresh-Icon neben beiden Modell-Auswahlen (Sidebar + Einstellungen)
+  lädt die Modell-Liste neu — nützlich, wenn ein externer Prozess das geladene Modell des lokalen
+  Backends (MLX/LM Studio) gewechselt hat. Nach jeder Transkription gleicht die Sidebar die Auswahl
+  automatisch an das tatsächlich verwendete Modell (`response.model`) an.
+
 - **Verlinkte Quellen:** reine Links auf Bilder/PDFs (`[[x.pdf]]`, `[text](x.pdf)` ohne `!`) werden
   jetzt ebenfalls als Quelle erkannt und transkribiert; der Link im Text bleibt dabei unverändert
   (im Gegensatz zu Embeds, die durch das Transkript ersetzt werden). Sidebar markiert solche Einträge
