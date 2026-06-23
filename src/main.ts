@@ -3,6 +3,7 @@ import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab } f
 import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS } from "./img_to_md";
+import { findExistingTranscript, BacklinkLookup } from "./backlinks";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
@@ -76,6 +77,18 @@ export default class ImageToMarkdownPlugin extends Plugin {
     };
   }
 
+  private backlinkLookup(): BacklinkLookup {
+    return {
+      resolvedLinks: this.app.metadataCache.resolvedLinks,
+      frontmatterLinks: (notePath) => {
+        const f = this.app.vault.getAbstractFileByPath(notePath);
+        const cache = f instanceof TFile ? this.app.metadataCache.getFileCache(f) : null;
+        return (cache?.frontmatterLinks ?? []).map(fl => ({ key: fl.key, link: fl.link }));
+      },
+      resolveLink: (link, fromPath) => this.app.metadataCache.getFirstLinkpathDest(link, fromPath)?.path ?? null,
+    };
+  }
+
   private makeImgViewDeps(): ImgToMdViewDeps {
     const visionEndpoint = () => this.settings.visionEndpoint;
     return {
@@ -85,19 +98,21 @@ export default class ImageToMarkdownPlugin extends Plugin {
         try { content = await this.app.vault.adapter.read(sourcePath); } catch { return []; }
         const seen = new Set<string>();
         const items: ImgItem[] = [];
+        const lookup = this.backlinkLookup();
         for (const e of findImageEmbeds(content)) {
           if (seen.has(e.link)) continue; seen.add(e.link);
+          const resolved = this.app.metadataCache.getFirstLinkpathDest(e.link, sourcePath);
+          const existingTranscriptPath = resolved ? (findExistingTranscript(lookup, resolved.path) ?? undefined) : undefined;
           if (e.kind === "pdf") {
-            const resolved = this.app.metadataCache.getFirstLinkpathDest(e.link, sourcePath);
             let pageCount = 0;
             if (resolved) {
               try { pageCount = await pdfPageCount(await this.app.vault.adapter.readBinary(resolved.path)); } catch { pageCount = 0; }
             }
             const supported = pageCount > 0;
             const cappedTo = Math.min(pageCount, this.settings.pdfMaxPages);
-            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported, kind: "pdf", pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 } });
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported, kind: "pdf", pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 }, existingTranscriptPath });
           } else {
-            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image" });
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image", existingTranscriptPath });
           }
         }
         return items;
@@ -119,11 +134,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
         return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
       },
       writeTranscripts: async (sourcePath, entries) => {
-        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model })));
+        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath })));
         return paths;
       },
-      writePdf: async (sourcePath, raw, link, pages) => {
-        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator);
+      writePdf: async (sourcePath, raw, link, pages, overwritePath) => {
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath);
         return path;
       },
       ping: () => new VisionClient(visionEndpoint(), "").ping(),
