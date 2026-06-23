@@ -116,7 +116,9 @@ export interface ImgToMdIO {
 
 /** Schreibt mehrere Transkripte gebündelt: Quelle EINMAL lesen, pro Eintrag Notiz anlegen
  *  + Embed ersetzen (akkumuliert), Quelle EINMAL schreiben. Leere Transkripte werden
- *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race. */
+ *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race.
+ *  Override: ist `overwritePath` gesetzt, wird stattdessen die bestehende Notiz via
+ *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet). */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
   entries: { raw: string; link: string; content: string; model: string; overwritePath?: string }[],
