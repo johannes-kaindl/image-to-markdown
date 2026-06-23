@@ -3,7 +3,7 @@
   "name": "Image to Markdown",
   "version": "0.3.0",
   "minAppVersion": "1.8.7",
-  "description": "Transcribe the images in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
+  "description": "Transcribe images and PDFs in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
   "author": "Johannes Kaindl",
   "authorUrl": "https://codeberg.org/jkaindl",
   "helpUrl": "https://codeberg.org/jkaindl/image-to-markdown",
