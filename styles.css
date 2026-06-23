@@ -1,7 +1,7 @@
 /* Image to Markdown — Sidebar-Styles */
 .img2md-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 .img2md-status { font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 2px 0; margin-bottom: 6px; flex: 0 0 auto; }
-.img2md-model { width: 100%; margin-bottom: 6px; flex: 0 0 auto; font-size: 12px; }
+.img2md-model { width: 100%; flex: 0 0 auto; font-size: 12px; }
 .img2md-head { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; margin-bottom: 6px; }
 .img2md-toggle { font-size: 12px; }
 .img2md-list { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; max-height: 30vh; overflow-y: auto; margin-bottom: 6px; }
@@ -27,7 +27,7 @@
 .img2md-exists { color: var(--text-accent); font-size: 11px; margin-left: 4px; }
 .img2md-exists-open { color: var(--text-accent); font-size: 11px; margin-left: 4px; cursor: pointer; text-decoration: underline; }
 .img2md-linked { font-size: var(--font-ui-smaller); color: var(--text-muted); margin-left: 0.4em; }
-.img2md-model-row { display: flex; align-items: center; gap: 0.4em; }
+.img2md-model-row { display: flex; align-items: center; gap: 0.4em; margin-bottom: 6px; }
 .img2md-model-row .img2md-model { flex: 1; }
 .img2md-foot { flex: 0 0 auto; margin-top: 6px; }
 

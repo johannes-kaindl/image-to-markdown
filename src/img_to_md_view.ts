@@ -214,7 +214,9 @@ export class ImgToMdView extends ItemView {
     if (actual && actual !== this.deps.getModel()) {
       this.deps.setModel(actual);
       await this.refreshModels();
-      this.statusEl?.setText(t("view.modelChanged", actual));
+      // refreshModels kann im atypischen Fall (actual nicht in /v1/models) selbst auf ein anderes Modell
+      // angleichen und den Hinweis setzen; den eigenen Hinweis nur überschreiben, wenn actual gewonnen hat.
+      if (this.deps.getModel() === actual) this.statusEl?.setText(t("view.modelChanged", actual));
     }
     this.renderCards();
   }

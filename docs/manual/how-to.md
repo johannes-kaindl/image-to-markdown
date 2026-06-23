@@ -223,7 +223,7 @@ Good to know:
   automatically aligned to the first available model. After each transcription
   run, the sidebar also performs an automatic post-sync: if `response.model`
   differs from the current selection, the selection follows the real model and
-  a notice "Model changed to {0}" ("Modell gewechselt zu {0}") is shown.
+  a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …") is shown.
 
 ---
 
