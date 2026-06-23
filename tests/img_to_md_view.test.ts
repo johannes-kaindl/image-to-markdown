@@ -187,6 +187,20 @@ const ITEMS_EXISTS: ImgItem[] = [
   { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "b (transcript).md" },
 ];
 
+describe("ImgToMdView — linked-Badge", () => {
+  it("rendert 'linked'-Badge nur für reine Links (embed:false)", async () => {
+    const items: ImgItem[] = [
+      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image", embed: true },
+      { raw: "[[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", embed: false },
+    ];
+    const { view } = mkView({ scan: async () => items });
+    await view.onOpen();
+    const badges = all(view.contentEl, "img2md-linked");
+    expect(badges.length).toBe(1);
+    expect(badges[0].textContent).toContain("linked");
+  });
+});
+
 describe("ImgToMdView — vorhandenes Transkript", () => {
   it("zeigt Badge + öffnen-Link, Checkbox default aus", async () => {
     const { view, calls } = mkView({ scan: async () => ITEMS_EXISTS });

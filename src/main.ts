@@ -137,8 +137,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed })));
         return paths;
       },
-      writePdf: async (sourcePath, raw, link, pages, overwritePath) => {
-        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath);
+      writePdf: async (sourcePath, raw, link, pages, overwritePath, embed) => {
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed);
         return path;
       },
       ping: () => new VisionClient(visionEndpoint(), "").ping(),
