@@ -1,6 +1,6 @@
 {
   "name": "image-to-markdown",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Transcribe the images in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
   "keywords": [
     "obsidian",
@@ -14,8 +14,9 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "node esbuild.config.mjs production",
-    "dev": "node esbuild.config.mjs",
+    "build:worker": "node scripts/build-pdf-worker.mjs",
+    "build": "npm run build:worker && node esbuild.config.mjs production",
+    "dev": "npm run build:worker && node esbuild.config.mjs",
     "test": "vitest run",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
@@ -31,5 +32,8 @@
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.61.1",
     "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
   }
 }

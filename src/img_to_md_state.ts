@@ -1,6 +1,14 @@
 import { t } from "./i18n";
 
-export interface ImgItem { raw: string; link: string; ext: string; supported: boolean }
+export interface ImgItem {
+  raw: string;
+  link: string;
+  ext: string;
+  supported: boolean;
+  kind: "image" | "pdf";
+  pageCount?: number;
+  range?: { from: number; to: number };
+}
 
 export type CardStatus = "streaming" | "done" | "error" | "written";
 
@@ -12,6 +20,7 @@ export interface ImgCard {
   reasoning: string;
   model: string;
   status: CardStatus;
+  page?: number;
   error?: string;
   writtenPath?: string;
 }
@@ -52,8 +61,16 @@ export class ImgToMdState {
 
   startCards(): ImgCard[] {
     const sel = this.selectedItems();
-    this.cards = sel.map((item, k) => ({
-      item, index: k + 1, total: sel.length,
+    const units: { item: ImgItem; page?: number }[] = [];
+    for (const item of sel) {
+      if (item.kind === "pdf" && item.range) {
+        for (let p = item.range.from; p <= item.range.to; p++) units.push({ item, page: p });
+      } else {
+        units.push({ item });
+      }
+    }
+    this.cards = units.map((u, k) => ({
+      item: u.item, page: u.page, index: k + 1, total: units.length,
       text: "", reasoning: "", model: "", status: "streaming",
     }));
     return this.cards;
@@ -72,4 +89,25 @@ export class ImgToMdState {
   markWritten(i: number, path: string): void { const c = this.cards[i]; if (c) { c.status = "written"; c.writtenPath = path; } }
   doneCardIndices(): number[] { return this.cards.map((c, i) => ({ c, i })).filter(x => x.c.status === "done").map(x => x.i); }
   clearCards(): void { this.cards = []; }
+}
+
+/** Gruppiert done-Karten: Bilder einzeln, PDF-Seiten nach embed-link (raw). Behält Karten-Indizes. */
+export function partitionDoneCards(cards: ImgCard[]): {
+  images: { card: ImgCard; cardIndex: number }[];
+  pdfs: { raw: string; link: string; item: ImgItem; cardIndices: number[]; pages: { page: number; content: string; model: string }[] }[];
+} {
+  const images: { card: ImgCard; cardIndex: number }[] = [];
+  const pdfMap = new Map<string, { raw: string; link: string; item: ImgItem; cardIndices: number[]; pages: { page: number; content: string; model: string }[] }>();
+  cards.forEach((card, cardIndex) => {
+    if (card.status !== "done") return;
+    if (card.item.kind === "pdf") {
+      let g = pdfMap.get(card.item.raw);
+      if (!g) { g = { raw: card.item.raw, link: card.item.link, item: card.item, cardIndices: [], pages: [] }; pdfMap.set(card.item.raw, g); }
+      g.cardIndices.push(cardIndex);
+      g.pages.push({ page: card.page ?? 1, content: card.text, model: card.model });
+    } else {
+      images.push({ card, cardIndex });
+    }
+  });
+  return { images, pdfs: [...pdfMap.values()] };
 }

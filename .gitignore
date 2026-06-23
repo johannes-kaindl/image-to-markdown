@@ -3,3 +3,4 @@ main.js
 data.json
 .claude/
 .DS_Store
+src/pdf-worker-src.generated.ts

@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.2.0] — 2026-06-22
+
+### Hinzugefügt
+
+- **PDF-Embed-Transkription:** eingebettete PDFs werden seitenweise über die Sidebar transkribiert.
+  Seitenbereich wählbar (Default: alle), eine Transkript-Notiz pro PDF, PDF-Embed wird ersetzt.
+  Limits: `pdfMaxPages` (konfigurierbar) und `pdfRenderScale` (mobil kleiner, schützt vor OOM).
+  Umgesetzt über einen gebündelten pdf.js-Worker (Blob-URL, kein CDN, komplett offline).
+
 ## [0.1.3] — 2026-06-22
 
 ### Hinzugefügt

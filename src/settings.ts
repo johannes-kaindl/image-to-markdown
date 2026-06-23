@@ -3,11 +3,15 @@ import type ImageToMarkdownPlugin from "./main";
 import { VisionClient } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
 import { t, defaultVisionPrompt } from "./i18n";
+import type { PdfPageSeparator } from "./pdf_to_md";
 
 export interface ImageToMarkdownSettings {
   visionEndpoint: string;
   visionModel: string;
   visionPrompt: string;
+  pdfMaxPages: number;
+  pdfRenderScale: number;
+  pdfPageSeparator: PdfPageSeparator;
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -16,6 +20,9 @@ export function defaultSettings(): ImageToMarkdownSettings {
     visionEndpoint: "http://localhost:8080",
     visionModel: "",
     visionPrompt: defaultVisionPrompt(),
+    pdfMaxPages: 25,
+    pdfRenderScale: 2.0,
+    pdfPageSeparator: "comment",
   };
 }
 
@@ -137,6 +144,35 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           .onChange(async (v: string) => { this.plugin.settings.visionPrompt = v; await this.plugin.saveSettings(); });
         ta.inputEl.rows = 8;
         ta.inputEl.addClass("img2md-prompt-textarea");
+      });
+
+    // ── PDF Max Pages ──
+    new Setting(containerEl)
+      .setName(t("settings.pdfMaxPages.name")).setDesc(t("settings.pdfMaxPages.desc"))
+      .addText(tx => tx.setValue(String(this.plugin.settings.pdfMaxPages))
+        .onChange(async (v: string) => {
+          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfMaxPages = Math.min(Math.floor(n), 500); await this.plugin.saveSettings(); }
+        }));
+
+    // ── PDF Render Scale ──
+    new Setting(containerEl)
+      .setName(t("settings.pdfRenderScale.name")).setDesc(t("settings.pdfRenderScale.desc"))
+      .addText(tx => tx.setValue(String(this.plugin.settings.pdfRenderScale))
+        .onChange(async (v: string) => {
+          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfRenderScale = Math.min(n, 4.0); await this.plugin.saveSettings(); }
+        }));
+
+    // ── PDF Page Separator ──
+    new Setting(containerEl)
+      .setName(t("settings.pdfPageSep.name")).setDesc(t("settings.pdfPageSep.desc"))
+      .addDropdown(d => {
+        d.addOption("comment", t("settings.pdfPageSep.comment"));
+        d.addOption("heading", t("settings.pdfPageSep.heading"));
+        d.addOption("rule", t("settings.pdfPageSep.rule"));
+        d.addOption("pagebreak", t("settings.pdfPageSep.pagebreak"));
+        d.addOption("none", t("settings.pdfPageSep.none"));
+        d.setValue(this.plugin.settings.pdfPageSeparator);
+        d.onChange(async (v: string) => { this.plugin.settings.pdfPageSeparator = v as PdfPageSeparator; await this.plugin.saveSettings(); });
       });
   }
 }

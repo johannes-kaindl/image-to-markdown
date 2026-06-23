@@ -2,13 +2,20 @@ import { t } from "./i18n";
 
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
+export const PDF_EXT = "pdf";
 
-export interface ImageEmbed { raw: string; link: string; ext: string }
+export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number }
 
 function extOf(link: string): string {
   const clean = link.split("#")[0].split("|")[0].trim();
   const dot = clean.lastIndexOf(".");
   return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
+}
+
+/** #page=N aus dem rohen Linkziel (vor dem #-Strip) lesen. */
+function pageOf(rawTarget: string): number | undefined {
+  const m = /#page=(\d+)/i.exec(rawTarget);
+  return m ? Number(m[1]) : undefined;
 }
 
 /** Findet eingebettete Bilder: ![[link.ext]] (Wikilink) und ![alt](pfad) (Markdown, externe http(s) aus). */
@@ -17,16 +24,20 @@ export function findImageEmbeds(content: string): ImageEmbed[] {
   let m: RegExpExecArray | null;
   const wiki = /!\[\[([^\]]+?)\]\]/g;
   while ((m = wiki.exec(content)) !== null) {
-    const link = m[1].split("#")[0].split("|")[0].trim();
+    const inner = m[1];
+    const link = inner.split("#")[0].split("|")[0].trim();
     const ext = extOf(link);
-    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext });
+    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image" });
+    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(inner) });
   }
   const md = /!\[[^\]]*\]\(([^)]+?)\)/g;
   while ((m = md.exec(content)) !== null) {
-    const link = m[1].trim();
-    if (/^https?:\/\//i.test(link)) continue;
+    const target = m[1].trim();
+    if (/^https?:\/\//i.test(target)) continue;
+    const link = target.split("#")[0].trim();
     const ext = extOf(link);
-    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext });
+    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image" });
+    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(target) });
   }
   return out;
 }
@@ -63,11 +74,16 @@ export function uniqueNotePath(io: { noteExists(p: string): boolean }, dir: stri
 }
 
 function dirOf(path: string): string { const i = path.lastIndexOf("/"); return i >= 0 ? path.slice(0, i) : ""; }
-function basenameNoExt(path: string): string { const b = path.slice(path.lastIndexOf("/") + 1); const d = b.lastIndexOf("."); return d >= 0 ? b.slice(0, d) : b; }
+export function basenameNoExt(path: string): string { const b = path.slice(path.lastIndexOf("/") + 1); const d = b.lastIndexOf("."); return d >= 0 ? b.slice(0, d) : b; }
 
-/** Pfad für die Transkript-Notiz: neben der Quellnotiz, Basename des Bildes, kollisionsfrei. */
-export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string): string {
-  return uniqueNotePath(io, dirOf(sourcePath), basenameNoExt(imagePath));
+function transcriptSuffix(kind: "image" | "pdf"): string {
+  return t(kind === "pdf" ? "note.suffix.pdf" : "note.suffix.image");
+}
+
+/** Pfad für die Transkript-Notiz: neben der Quellnotiz, Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
+export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, kind: "image" | "pdf"): string {
+  const base = `${basenameNoExt(imagePath)} ${transcriptSuffix(kind)}`;
+  return uniqueNotePath(io, dirOf(sourcePath), base);
 }
 
 export interface ImgToMdIO {
@@ -98,7 +114,7 @@ export async function writeTranscripts(
     if (!transcript) continue;
     const resolved = io.resolveImage(e.link, sourcePath);
     const imagePath = resolved?.path ?? e.link;
-    const newPath = transcriptNotePath(io, sourcePath, imagePath);
+    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
     content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     paths.push(newPath);
@@ -124,6 +140,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
     const e = embeds[i];
     const resolved = io.resolveImage(e.link, sourcePath);
     if (!resolved) { io.notify(t("core.imageNotFound", e.link)); skipped++; continue; }
+    if (e.kind === "pdf") { io.notify(t("core.pdfUseSidebar", e.link)); skipped++; continue; }
     if (!SUPPORTED_EXTS.includes(resolved.ext.toLowerCase())) { io.notify(t("core.unsupportedFormat", resolved.ext, e.link)); skipped++; continue; }
     io.notify(t("core.transcribing", i + 1, embeds.length));
     let res: { content: string; model: string };

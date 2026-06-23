@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage } from "obsidian";
+import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab } from "./settings";
 import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
@@ -6,6 +6,8 @@ import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXT
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
+import { pdfPageCount, renderPdfPage } from "./pdf_render";
+import { writePdfTranscript } from "./pdf_to_md";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -85,19 +87,44 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const items: ImgItem[] = [];
         for (const e of findImageEmbeds(content)) {
           if (seen.has(e.link)) continue; seen.add(e.link);
-          items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()) });
+          if (e.kind === "pdf") {
+            const resolved = this.app.metadataCache.getFirstLinkpathDest(e.link, sourcePath);
+            let pageCount = 0;
+            if (resolved) {
+              try { pageCount = await pdfPageCount(await this.app.vault.adapter.readBinary(resolved.path)); } catch { pageCount = 0; }
+            }
+            const supported = pageCount > 0;
+            const cappedTo = Math.min(pageCount, this.settings.pdfMaxPages);
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported, kind: "pdf", pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 } });
+          } else {
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image" });
+          }
         }
         return items;
       },
-      transcribeStream: async (sourcePath, item, onContent, onReasoning, signal) => {
+      transcribeStream: async (sourcePath, item, onContent, onReasoning, signal, page) => {
         const resolved = this.app.metadataCache.getFirstLinkpathDest(item.link, sourcePath);
         if (!resolved) throw new Error(t("core.imageNotFound", item.link));
-        const dataUrl = `data:image/${this.mimeOf(resolved.extension)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(resolved.path))}`;
+        let dataUrl: string;
+        if (item.kind === "pdf") {
+          if ((item.range?.to ?? 1) - (item.range?.from ?? 1) + 1 > this.settings.pdfMaxPages) {
+            throw new Error(t("core.pdfTooManyPages", item.pageCount ?? 0, this.settings.pdfMaxPages));
+          }
+          const scale = Platform.isMobile ? Math.min(this.settings.pdfRenderScale, 1.5) : this.settings.pdfRenderScale;
+          const bytes = await this.app.vault.adapter.readBinary(resolved.path);
+          dataUrl = await renderPdfPage(bytes, page ?? 1, scale);
+        } else {
+          dataUrl = `data:image/${this.mimeOf(resolved.extension)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(resolved.path))}`;
+        }
         return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
       },
       writeTranscripts: async (sourcePath, entries) => {
         const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model })));
         return paths;
+      },
+      writePdf: async (sourcePath, raw, link, pages) => {
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator);
+        return path;
       },
       ping: () => new VisionClient(visionEndpoint(), "").ping(),
       listModels: () => new VisionClient(visionEndpoint(), "").listModels(),

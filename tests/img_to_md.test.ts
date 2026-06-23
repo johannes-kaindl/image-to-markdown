@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt } from "../src/img_to_md";
 
 describe("findImageEmbeds", () => {
   it("findet wikilink- und markdown-Bild-Embeds, filtert Extensions", () => {
     const c = "text\n![[foto.jpg]]\n![[notiz]]\n![alt](bilder/x.png)\n![web](https://e/x.png)";
     const r = findImageEmbeds(c);
     expect(r.map(e => e.link)).toEqual(["foto.jpg", "bilder/x.png"]);
-    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg" });
+    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg", kind: "image" });
   });
   it("ignoriert # und | im Wikilink", () => {
     expect(findImageEmbeds("![[foto.png|200]]")[0].link).toBe("foto.png");
@@ -14,6 +14,18 @@ describe("findImageEmbeds", () => {
   it("erkennt heic (für Skip-Warnung)", () => {
     expect(findImageEmbeds("![[IMG.heic]]")[0].ext).toBe("heic");
     expect(SUPPORTED_EXTS.includes("heic")).toBe(false);
+  });
+  it("erkennt PDF-Embeds als kind pdf (ohne #page → page undefined)", () => {
+    expect(findImageEmbeds("![[doc.pdf]]")[0]).toEqual({ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", kind: "pdf", page: undefined });
+  });
+  it("liest #page=N aus dem PDF-Wikilink", () => {
+    expect(findImageEmbeds("![[doc.pdf#page=3]]")[0]).toMatchObject({ link: "doc.pdf", kind: "pdf", page: 3 });
+  });
+  it("mischt Bild und PDF in Dokument-Reihenfolge", () => {
+    expect(findImageEmbeds("![[a.png]] ![[doc.pdf]]").map(e => e.kind)).toEqual(["image", "pdf"]);
+  });
+  it("erkennt PDF auch als Markdown-Embed", () => {
+    expect(findImageEmbeds("![x](files/doc.pdf)")[0]).toMatchObject({ link: "files/doc.pdf", kind: "pdf" });
   });
 });
 
@@ -51,11 +63,11 @@ describe("uniqueNotePath", () => {
 });
 
 describe("transcriptNotePath", () => {
-  it("legt neben die Quellnotiz, Basename des Bildes, Kollisions-Suffix", () => {
-    const exists = new Set(["dir/foto.md"]);
+  it("legt neben die Quellnotiz, Basename + lokalisierter Suffix, Kollisions-Zähler", () => {
+    const exists = new Set(["dir/foto (transcript).md"]);
     const io = { noteExists: (p: string) => exists.has(p) };
-    expect(transcriptNotePath(io, "dir/quelle.md", "dir/img/foto.png")).toBe("dir/foto-2.md");
-    expect(transcriptNotePath(io, "quelle.md", "foto.png")).toBe("foto.md");
+    expect(transcriptNotePath(io, "dir/quelle.md", "dir/img/foto.png", "image")).toBe("dir/foto (transcript)-2.md");
+    expect(transcriptNotePath(io, "quelle.md", "foto.png", "image")).toBe("foto (transcript).md");
   });
 });
 
@@ -84,10 +96,10 @@ describe("writeTranscripts", () => {
       { raw: "![[foto.jpg]]", link: "foto.jpg", content: "# A", model: "vm" },
       { raw: "![[bild.png]]", link: "bild.png", content: "# B", model: "vm" },
     ]);
-    expect(r.paths).toEqual(["foto.md", "bild.md"]);
-    expect(created["foto.md"]).toContain("# A");
-    expect(created["foto.md"]).toContain('transcribed_by: "vm"');
-    expect(notes.get("q.md")).toBe("a ![[foto]] b ![[bild]]");
+    expect(r.paths).toEqual(["foto (transcript).md", "bild (transcript).md"]);
+    expect(created["foto (transcript).md"]).toContain("# A");
+    expect(created["foto (transcript).md"]).toContain('transcribed_by: "vm"');
+    expect(notes.get("q.md")).toBe("a ![[foto (transcript)]] b ![[bild (transcript)]]");
   });
   it("leeres Transkript → diese Notiz wird übersprungen", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]] });
@@ -102,7 +114,7 @@ describe("writeTranscripts", () => {
       { raw: "![[a/foto.jpg]]", link: "a/foto.jpg", content: "A", model: "m" },
       { raw: "![[b/foto.jpg]]", link: "b/foto.jpg", content: "B", model: "m" },
     ]);
-    expect(r.paths).toEqual(["foto.md", "foto-2.md"]);
+    expect(r.paths).toEqual(["foto (transcript).md", "foto (transcript)-2.md"]);
   });
 });
 
@@ -111,9 +123,9 @@ describe("runImgToMd", () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "vor\n![[foto.jpg]]\nnach"]] });
     const r = await runImgToMd(io, "q.md");
     expect(r).toEqual({ transcribed: 1, skipped: 0 });
-    expect(created["foto.md"]).toContain("# Transkript");
-    expect(created["foto.md"]).toContain('transcribed_by: "vmodel"');
-    expect(notes.get("q.md")).toBe("vor\n![[foto]]\nnach");
+    expect(created["foto (transcript).md"]).toContain("# Transkript");
+    expect(created["foto (transcript).md"]).toContain('transcribed_by: "vmodel"');
+    expect(notes.get("q.md")).toBe("vor\n![[foto (transcript)]]\nnach");
   });
   it("keine Bilder → Notice, kein Schreiben", async () => {
     const { io, created } = fakeIO({ notes: [["q.md", "nur text"]] });
@@ -142,18 +154,25 @@ describe("runImgToMd", () => {
   it("onlyRaw verarbeitet nur das eine Embed", async () => {
     const { io, created } = fakeIO({ notes: [["q.md", "![[a.jpg]]\n![[b.jpg]]"]] });
     await runImgToMd(io, "q.md", { onlyRaw: "![[b.jpg]]" });
-    expect(Object.keys(created)).toEqual(["b.md"]);
+    expect(Object.keys(created)).toEqual(["b (transcript).md"]);
   });
   it("Namens-Kollision → Zähler", async () => {
-    const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"], ["foto.md", "alt"]] });
+    const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"], ["foto (transcript).md", "alt"]] });
     await runImgToMd(io, "q.md");
-    expect(created["foto-2.md"]).toBeTruthy();
+    expect(created["foto (transcript)-2.md"]).toBeTruthy();
   });
   it("Duplikat-Embeds desselben Bildes → eine Transkription, alle Vorkommen ersetzt", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "![[foto.jpg]]\ntext\n![[foto.jpg]]"]] });
     const r = await runImgToMd(io, "q.md");
     expect(r.transcribed).toBe(1);
-    expect(Object.keys(created)).toEqual(["foto.md"]);
-    expect(notes.get("q.md")).toBe("![[foto]]\ntext\n![[foto]]");
+    expect(Object.keys(created)).toEqual(["foto (transcript).md"]);
+    expect(notes.get("q.md")).toBe("![[foto (transcript)]]\ntext\n![[foto (transcript)]]");
+  });
+  it("PDF-Embed → Hinweis auf Sidebar, kein Schreiben", async () => {
+    const { io, created, notices } = fakeIO({ notes: [["q.md", "![[doc.pdf]]"]], resolveImage: (l: string) => ({ path: l, ext: "pdf" }) });
+    const r = await runImgToMd(io, "q.md");
+    expect(r).toEqual({ transcribed: 0, skipped: 1 });
+    expect(Object.keys(created)).toEqual([]);
+    expect(notices.some(n => n.includes("sidebar"))).toBe(true);
   });
 });

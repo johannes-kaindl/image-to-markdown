@@ -26,8 +26,8 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`capabilities.ts`, `i18n.ts`, `sse.ts`, `think_splitter.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
-`settings.ts`, `img_to_md_view.ts`, `http.ts` importieren `obsidian`. Die View bekommt alle Abhängigkeiten
+`capabilities.ts`, `i18n.ts`, `sse.ts`, `think_splitter.ts`, `pdf_to_md.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
+`settings.ts`, `img_to_md_view.ts`, `http.ts`, `pdf_render.ts` importieren `obsidian` (bzw. DOM/Canvas). Die View bekommt alle Abhängigkeiten
 über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
 ### Modul-Layout (`src/`)
@@ -36,7 +36,14 @@ Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision
 img_to_md.ts        reiner Kern: findImageEmbeds · buildTranscriptNote · replaceEmbed ·
                     writeTranscripts (batched, read-once/write-once) · runImgToMd · ImgToMdIO.
 img_to_md_state.ts  ImgToMdState — Bild-Auswahl + Ergebnis-Karten (kein DOM/I/O).
-img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten.
+img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten,
+                    PDF-Seitenbereichs-Auswahl.
+pdf_render.ts       Obsidian/DOM-Schicht für pdf.js: lädt PDF per Vault-Adapter, rendert Seiten auf
+                    OffscreenCanvas/Canvas → PNG-Data-URL. Importiert den gebündelten pdf.js-Worker
+                    (Blob-URL aus pdf-worker-src.generated.ts). Enthält pdfSmokeTest (Dev-Util).
+pdf_to_md.ts        Reiner Kern: seitenweise PDF-Transkription — nimmt RenderPage-Callback + VisionClient,
+                    streamt Karten je Seite, schreibt eine Transkript-Notiz pro PDF, ersetzt den
+                    PDF-Embed. Obsidian-frei, vollständig unit-testbar.
 vision_client.ts    VisionClient → OpenAI-kompatibler /v1/chat/completions (transcribe +
                     transcribeStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint.
                     Transport injiziert (HttpFetch/setHttp): non-streaming via requestUrl-Adapter,
@@ -51,9 +58,18 @@ i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t(
                     {0}-Interpolation) · pickLang · setLang/getLang · defaultVisionPrompt. EN kanonisch.
 settings.ts         ImageToMarkdownSettings · defaultSettings() (Prompt sprachabhängig) · SettingTab: Endpoint (Status-Dot +
                     „Verbindung testen") · Modell + „Vision-Fähigkeit" (visionConfidence + aktiver
-                    „Vision testen") · Prompt (große Textarea) · makeVisionTestImage (Canvas, DOM-Schicht).
+                    „Vision testen") · Prompt (große Textarea) · PDF-Einstellungen (pdfMaxPages,
+                    pdfRenderScale) · makeVisionTestImage (Canvas, DOM-Schicht).
 main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setLang) beim onload, View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient.
+pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
+                    gebündelten pdf.js-Worker als eingebetteten String (Blob-URL-Quelle). Nicht
+                    manuell editieren; wird bei `npm run build` neu erzeugt.
 ```
+
+**pdf.js-Worker-Build:** `scripts/build-pdf-worker.mjs` bündelt `pdfjs-dist/build/pdf.worker.mjs`
+via esbuild zu einem Single-File-Bundle, das als Template-Literal in
+`pdf-worker-src.generated.ts` eingebettet wird. Zur Laufzeit erzeugt `pdf_render.ts` daraus
+eine Blob-URL — kein CDN, kein Netz, kein Import-Assertion-Trick.
 
 **Geteilter Transport ist kopiert, nicht geteilt:** `sse.ts`/`think_splitter.ts` existieren identisch
 in vault-rag und hier. Ein npm-Shared-Package wäre für ~5 KB stabilen Code Overengineering (YAGNI).
@@ -84,6 +100,12 @@ npm run version-bump 0.2.0        # Version synct package.json/manifest.json/ver
 
 ## Gotchas
 
+- **pdf.js-Worker-Bundling:** `pdfjs-dist` ist auf **4.10.38** gepinnt. v5/v6 externalisieren den
+  WASM-Kern und brechen das Single-File-Bundle (Blob-URL-Strategie funktioniert dann nicht mehr).
+  Vor einem Upgrade die Worker-Blob-Strategie re-validieren. Der Worker wird via
+  `scripts/build-pdf-worker.mjs` (separater esbuild-Lauf, vor dem Haupt-Build) gebündelt und als
+  eingebetteter String in `pdf-worker-src.generated.ts` gespeichert — diese Datei wird im Haupt-Build
+  mitgebundelt. `pdfjs-dist` ist eine **runtime-`dependency`** (nicht `devDependency`): `src/pdf_render.ts` importiert `pdfjs-dist/legacy/build/pdf.mjs`, sodass sowohl das pdf.js-Hauptmodul als auch der Worker in `main.js` gebündelt werden — das ist der Hauptgrund für das größere Bundle (~2,2 MB).
 - **`data.json`** ist die von Obsidian persistierte Plugin-Konfig — git-ignored, nicht committen.
 - **`main.js`** ist Build-Artefakt (gitignored) — nie von Hand editieren.
 - **Endpoint mit `/v1`-Suffix:** `normalizeEndpoint()` strippt ein trailing `/v1`, sonst baute der
