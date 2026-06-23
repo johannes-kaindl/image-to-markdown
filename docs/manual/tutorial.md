@@ -11,7 +11,7 @@ have felt how the pieces fit, the [How-to guides](how-to.md) and the
 
 What you need before we start:
 
-- Obsidian 1.4 or newer (Desktop or Mobile).
+- Obsidian 1.8.7 or newer (Desktop or Mobile).
 - A few minutes and one note with an embedded image of some text — a scanned page, a
   whiteboard photo, a screenshot of a document. Anything readable.
 
@@ -152,8 +152,13 @@ Here is what just happened, and why it is safe:
 
 Crucially, this is **non-destructive**: your original text was never overwritten, only
 the one image embed was swapped for the new note's embed. And it is **idempotent** — if
-you run the plugin again, that image is already handled, so it simply drops out of the
-list on the next scan and you get no duplicate notes.
+you open the sidebar again, that image is recognised as already handled: instead of being
+ticked for transcription, its row now shows **"✓ transcript exists"** ("✓ Transkript
+vorhanden") with an **"open"** ("öffnen") link that jumps straight to the transcript note
+you just made. Its checkbox is left unticked, so a second run produces no duplicate. (If
+you ever *did* want to redo it, re-ticking that checkbox re-transcribes and overwrites the
+existing note — hover the row and you will see the hint **"re-transcribing overwrites it"**
+("erneut transkribieren überschreibt").)
 
 Open your original note again and look: the scanned page is now living text. You have
 done it.
@@ -183,7 +188,7 @@ sidebar, transcribe, create the note.
 
 - For task-focused recipes — transcribing a whole note at once, using the editor
   context-menu entry **"Image → Markdown"** on a single image under the cursor, or
-  running the batch command **"Transcribe the images of the active note"** ("Bilder der
+  running the batch command **"Transcribe images in the active note"** ("Bilder der
   aktiven Notiz transkribieren") without the sidebar — see the [How-to guides](how-to.md).
 - For the exact list of settings, defaults, supported formats, and commands, see the
   [Reference](reference.md).

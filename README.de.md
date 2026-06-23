@@ -33,14 +33,16 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
   Den gewünschten Seitenbereich wählen (Default: alle Seiten), dann „Transkribieren" klicken —
   jede Seite wird über das gebündelte pdf.js gerendert und seitenweise transkribiert. Pro PDF
   entsteht eine Transkript-Notiz, der PDF-Embed wird ersetzt (genau wie bei Bildern). Limits:
-  `pdfMaxPages` (konfigurierbar) und `pdfRenderScale` (mobil kleiner, OOM-Schutz). Kein CDN —
+  `pdfMaxPages` (konfigurierbar) und `pdfRenderScale` (Slider 1.0–4.0, mobil kleiner, OOM-Schutz);
+  der Seitentrenner der zusammengeführten Notiz (`pdfPageSeparator`) ist konfigurierbar. Kein CDN —
   pdf.js ist vollständig offline gebündelt.
 - **Backlink-basierte Idempotenz.** Bereits transkribierte Quellen werden automatisch erkannt:
   Hat eine Notiz ein `source_pdf`- oder `source_image`-Frontmatter-Feld, das auf die Quelldatei
-  auflöst, zeigt die Sidebar „vorhanden → öffnen" statt erneut zu transkribieren. Per Checkbox
-  **„Erneut transkribieren (überschreiben)"** lässt sich eine neue Transkription erzwingen; die
-  bestehende Notiz wird überschrieben, das vollständige Frontmatter (bis auf `transcribed_by`/`pages`)
-  bleibt erhalten.
+  auflöst, zeigt die Sidebar **„✓ Transkript vorhanden"** mit einem **„öffnen"**-Link statt erneut
+  zu transkribieren. Solche Einträge sind zunächst abgewählt; die Zeilen-Checkbox erneut anhaken und
+  transkribieren erzwingt eine neue Transkription (der Tooltip der Zeile lautet „erneut transkribieren
+  überschreibt") — die bestehende Notiz wird überschrieben, das vollständige Frontmatter (bis auf
+  `transcribed_by`/`pages`) bleibt erhalten.
 - **Zweisprachige Oberfläche (Deutsch / English)** — alle nutzersichtbaren Texte folgen der
   Sprach-Einstellung von Obsidian; Englisch ist kanonisch, Deutsch wird automatisch geliefert.
   Die Sprache wird einmalig beim Laden des Plugins erkannt (zum Wechseln neu laden).
@@ -119,6 +121,9 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 | **Vision-Endpunkt** | `http://localhost:8080` | OpenAI-kompatibler Server mit Vision-Modell. Das ist der MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
 | **Vision-Modell** | (leer) | Vision-fähiges Modell (z.B. Qwen2-VL, Llama-3.2-Vision). Dropdown, gefüllt aus `/v1/models` des Endpoints; ist der Endpoint offline, wird es zum Freitextfeld. Das tatsächlich genutzte Modell wird aus `response.model` gelesen. |
 | **Vision-Prompt** | Markdown-Transkription (siehe unten) | Anweisung an das Vision-Modell, frei editierbar (Text-Area). |
+| **PDF max. Seiten pro Lauf** | `25` | Schutzgrenze für die Zahl transkribierter PDF-Seiten pro Lauf — größere PDFs über den Seitenbereich einschränken. Harte Obergrenze 500. |
+| **PDF-Render-Auflösung** | `2.0` | Render-Auflösung der PDF-Seiten vor der OCR (Slider 1.0–4.0, Schritt 0.5). Niedrig = schneller, weniger Speicher; hoch = schärfere Seitenbilder & bessere OCR bei kleinem Text (2.0 ≈ 144 dpi). Mobil auf 1.5 begrenzt (OOM-Schutz). |
+| **PDF-Seitentrenner** | Obsidian-Kommentar `%% Seite N %%` | Wie Seiten in der zusammengeführten Transkript-Notiz getrennt werden. Fünf Optionen: Obsidian-Kommentar `%% Seite N %%` (im Lesemodus unsichtbar), Überschrift `## Seite N`, Trennlinie `---`, Seitenumbruch (HTML, für Export) oder keiner (nahtloser Text). |
 
 Default-Prompt:
 

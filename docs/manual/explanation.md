@@ -64,10 +64,55 @@ The cards shown in the sidebar are themselves read-only and present the raw Mark
 verbatim, reinforcing the same principle: the plugin shows you what it produced and lets
 *you* decide when it becomes a note.
 
+How the plugin *recognises* an existing transcript is itself a deliberate design choice.
+The naïve approach — "does any note embed this image?" — would be wrong, because an unrelated
+note might legitimately embed the same image without being its transcript. So the plugin uses
+Obsidian's backlink index only as a fast first pass, then **filters by front matter**: a note
+counts as the transcript for a source *only* if its `source_image` / `source_pdf` front-matter
+field resolves back to that exact source. That front-matter filter is the load-bearing part.
+A bare body embed deliberately does **not** qualify; the explicit, machine-checkable link in the
+front matter is what makes "this is the transcript of that image" a fact the plugin can trust
+rather than a guess. It is the difference between recognising a transcript by what it *claims
+about itself* and guessing from incidental layout.
+
+That recognition then powers a second 0.3.0 decision: **override is opt-in, and it preserves the
+front matter**. When a transcript already exists, its sidebar row starts *unchecked* — the safe
+default is to leave finished work alone. If you deliberately re-select it and transcribe again,
+the plugin overwrites that one note in place instead of spawning a duplicate, and it rewrites only
+`transcribed_by` (plus `pages` for a PDF) and the body. The provenance fields — `source_image` /
+`source_pdf`, `source_note`, `created` — are carried through untouched. This keeps the
+non-destructive promise intact even on the path that *does* replace content: the only thing that
+can change is the transcript you explicitly asked to redo, and even then its identity and origin
+survive. Re-running to try a better model is a normal, low-stakes act, not a destructive one.
+
 Taken together, non-destructive plus idempotent means the cost of experimenting is low.
 You can transcribe, look at the result, change the prompt or the model, and run again,
 knowing that the worst case is a transcript note you choose not to keep — never a damaged
 source note.
+
+## Why PDFs render locally
+
+A PDF is not something a vision model reads directly — it has to become an image first. The plugin
+does that rasterisation **on your machine**, in the client, using a bundled
+[pdf.js](https://mozilla.github.io/pdf.js/) worker. Each page is rendered to a PNG and then handed
+to the same transcription path an ordinary image takes; from the model's point of view a PDF page
+*is* an image. There is one transcript note per PDF, with its pages merged in order.
+
+The detail worth dwelling on is the word *bundled*. The pdf.js worker ships **inside the plugin**
+and is loaded from a `Blob` URL — it is never fetched from a CDN at runtime. That is not an
+accident; it is the same offline stance the rest of the plugin takes, applied to PDF rendering.
+A plugin that promises "your data goes only to the endpoint you run" would quietly break that
+promise if it reached out to a content-delivery network to fetch its own machinery the first time
+you opened a PDF. Bundling the worker keeps the offline guarantee whole: open a PDF on a machine
+with no internet at all, and it still rasterises.
+
+Rendering locally does cost memory, which is why **render scale** is a setting rather than a fixed
+value. A higher scale produces a sharper page image and better OCR on small text, but a large page
+at high scale is a large canvas in memory. On the desktop that trade is yours to make; on mobile,
+where memory is tighter and an oversized canvas can crash the app, the plugin **clamps the scale**
+to a safe ceiling regardless of your setting. The default sits at a deliberately middling resolution
+— enough for clean text, cheap enough to run page after page — and the slider lets you spend more
+memory for sharpness only when a particular document needs it.
 
 ## Why a separate plugin from vault-rag
 
@@ -101,8 +146,8 @@ DRY does.
 ## Why streaming with visible thinking
 
 When you press the transcribe button, the model's answer streams **live** into a card,
-one card per image, rather than appearing all at once when the page is finished. There are
-two reasons this is more than a cosmetic flourish.
+one card per image — and, for a PDF, one card per page — rather than appearing all at once
+when the page is finished. There are two reasons this is more than a cosmetic flourish.
 
 The first is **feedback**. Transcribing a dense page can take a while, and a vision model that
 is working is indistinguishable from a vision model that has stalled — unless you can watch it

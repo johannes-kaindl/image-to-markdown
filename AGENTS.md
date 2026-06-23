@@ -37,7 +37,9 @@ img_to_md.ts        reiner Kern: findImageEmbeds · buildTranscriptNote · repla
                     writeTranscripts (batched, read-once/write-once) · runImgToMd · ImgToMdIO.
 img_to_md_state.ts  ImgToMdState — Bild-Auswahl + Ergebnis-Karten (kein DOM/I/O).
 img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten,
-                    PDF-Seitenbereichs-Auswahl.
+                    PDF-Seitenbereichs-Auswahl. Idempotenz-Anzeige je Liste-Zeile: bei vorhandenem
+                    Transkript „✓ transcript exists" + „open"-Link (springt zur Notiz), Zeilen-Titel
+                    „re-transcribing overwrites it" — erneut transkribieren überschreibt (kein Block).
 pdf_render.ts       Obsidian/DOM-Schicht für pdf.js: lädt PDF per Vault-Adapter, rendert Seiten auf
                     OffscreenCanvas/Canvas → PNG-Data-URL. Importiert den gebündelten pdf.js-Worker
                     (Blob-URL aus pdf-worker-src.generated.ts). Enthält pdfSmokeTest (Dev-Util).
@@ -64,7 +66,7 @@ i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t(
 settings.ts         ImageToMarkdownSettings · defaultSettings() (Prompt sprachabhängig) · SettingTab: Endpoint (Status-Dot +
                     „Verbindung testen") · Modell + „Vision-Fähigkeit" (visionConfidence + aktiver
                     „Vision testen") · Prompt (große Textarea) · PDF-Einstellungen (pdfMaxPages,
-                    pdfRenderScale) · makeVisionTestImage (Canvas, DOM-Schicht).
+                    pdfRenderScale, pdfPageSeparator) · makeVisionTestImage (Canvas, DOM-Schicht).
 main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setLang) beim onload, View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient.
 pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
                     gebündelten pdf.js-Worker als eingebetteten String (Blob-URL-Quelle). Nicht
@@ -135,11 +137,12 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
 
 ## Abweichungen von der Leitkonvention
 
-Stand 2026-06-21 — **Release 0.1.0**. Verbleibende bewusste, begründete Abweichungen (comply-or-explain):
+Stand 2026-06-23 — **Release 0.3.0**. Verbleibende bewusste, begründete Abweichungen (comply-or-explain):
 
-- **CORE-META-02/03** — Badge-Zeile/Hero-Bild + Feature-Screenshots noch nicht final. *Grund:* Screenshots brauchen das laufende Plugin (Jay-Handover); mit/nach 0.1.0.
 - **CORE-META-07** — `LICENSE` (AGPL-3.0) + `LICENSE-DOCS` (CC BY-SA 4.0) vorhanden; separate `LICENSING.md`/`CLA.md` (Dual-License-Option) noch nicht. *Grund:* rechtliche Entscheidung, bei Bedarf — CONTRIBUTING nennt „commercial dual-license on request".
 - **PROF-OBS-06** — Settings-Tab nutzt noch `display()` (deklarative `getSettingDefinitions`-API ist 1.13-Enhancement). *Grund:* Recommendation, kein Blocker; eigener Zyklus.
 - **PROF-TS-04** — kein `tsconfig.build.json`-Split (ein `tsconfig.json` + `vitest.config.ts` reicht). *Grund:* klein genug.
 
 Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Diátaxis-Manual `docs/manual/`), CORE-META-06 (`CONTRIBUTING.md`/`SECURITY.md`), CORE-META-09 (`README.de.md`), PROF-OBS-02 (`npm run deploy`), PROF-OBS-07 (UI-Lokalisierung EN/DE). Codeberg-`origin` + GitHub-Push-Mirror aktiv (CORE-GIT-01).
+
+Erfüllt mit 0.3.0 (2026-06-23): CORE-META-02/03 (Badge-Zeile/Hero + Feature-Screenshots) — README mit Badge 1.8.7, Aufnahme-Vertrag (Screenshots) auf aktuellen Stand (PDF-/Idempotenz-Shots, EN-UI, Slider).

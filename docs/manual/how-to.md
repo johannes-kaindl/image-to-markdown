@@ -15,13 +15,14 @@ the setup notes in the [README](../../README.md).
 
 1. [Transcribe a single image from the editor context menu](#transcribe-a-single-image-from-the-editor-context-menu)
 2. [Batch-transcribe all images of a note without the sidebar](#batch-transcribe-all-images-of-a-note-without-the-sidebar)
-3. [Read the model's thinking](#read-the-models-thinking)
-4. [Change the transcription prompt](#change-the-transcription-prompt)
-5. [Point at LM Studio instead of MLX](#point-at-lm-studio-instead-of-mlx)
-6. [Handle iPhone / HEIC images](#handle-iphone--heic-images)
-7. [Pick or pin a specific model](#pick-or-pin-a-specific-model)
-8. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
-9. [Transcribe a PDF](#transcribe-a-pdf)
+3. [Reuse an existing transcript instead of re-transcribing](#reuse-an-existing-transcript-instead-of-re-transcribing)
+4. [Read the model's thinking](#read-the-models-thinking)
+5. [Change the transcription prompt](#change-the-transcription-prompt)
+6. [Point at LM Studio instead of MLX](#point-at-lm-studio-instead-of-mlx)
+7. [Handle iPhone / HEIC images](#handle-iphone--heic-images)
+8. [Pick or pin a specific model](#pick-or-pin-a-specific-model)
+9. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
+10. [Transcribe a PDF](#transcribe-a-pdf)
 
 ---
 
@@ -52,8 +53,8 @@ one go and you don't need the live streaming view.
 
 1. Open the note whose images you want to transcribe.
 2. Open the command palette and run the command
-   **"Bilder der aktiven Notiz transkribieren"** (Transcribe the images of the
-   active note).
+   **"Transcribe images in the active note"** ("Bilder der aktiven Notiz
+   transkribieren").
 
 Every supported image is transcribed, one transcript note is written per image,
 and each image embed is replaced by an embed of its transcript note.
@@ -64,6 +65,26 @@ again.
 
 > Tip: there is also a command **"Sidebar öffnen"** (Open sidebar) if you would
 > rather pick images individually and watch the transcription stream live.
+
+---
+
+## Reuse an existing transcript instead of re-transcribing
+
+Transcription is idempotent: once a source has a transcript note, the plugin
+recognises it and will not silently re-do the work or create a duplicate.
+
+In the sidebar, an already-transcribed source is shown with its row marked
+**"✓ transcript exists"** ("✓ Transkript vorhanden") followed by an **"open"**
+("öffnen") link. Clicking that link jumps straight to the existing transcript
+note — it does not transcribe anything. Such rows are left **unticked** by
+default, so a plain **"Transcribe"** run skips them.
+
+**To overwrite an existing transcript**, re-tick that row's checkbox and run
+**"Transcribe"** again. The note is then rewritten: only the body and the
+`transcribed_by` entry (plus `pages` for a PDF) are replaced — any other
+frontmatter you added to the transcript note is preserved. Hovering the row
+shows the hint **"re-transcribing overwrites it"** ("erneut transkribieren
+überschreibt") as a reminder.
 
 ---
 
@@ -237,10 +258,11 @@ page by page, as a single transcript note.
 
 1. Open the note that embeds the PDF you want to transcribe.
 2. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to open
-   the **"IMG → MD"** sidebar. The PDF appears in the list alongside any images — it shows the
-   total page count.
-3. *(Optional)* Adjust the **page range** if you only need a subset of pages. The default covers
-   all pages. On mobile, keep the range short to stay within memory limits.
+   the **"IMG → MD"** sidebar. The PDF appears in the list alongside any images, with a page-range
+   widget — **"Page" [from] "to" [to]** ("Seite" [von] "bis" [bis]) — built from two number
+   fields. (The total page count itself is shown in the row's tooltip on hover.)
+3. *(Optional)* Adjust the **page range** in those two fields if you only need a subset of pages.
+   The default covers all pages. On mobile, keep the range short to stay within memory limits.
 4. Make sure the PDF checkbox is selected and click **"Transcribe"** ("Transkribieren"). The
    sidebar streams one card per page as the vision model works through them.
 5. Click **"Create note"** ("Notiz anlegen") on the finished card, or **"Create all"** ("Alle
@@ -256,6 +278,19 @@ is very large, raise the cap in **Settings → Image to Markdown** or split the 
 page ranges. On mobile the render scale is automatically reduced (`pdfRenderScale`) to keep
 memory usage low — very large pages may still be limited; if a page fails to render it is skipped
 with a notice.
+
+**Page layout in the transcript:** the **"PDF page separator"** ("PDF-Seitentrenner") setting
+controls how the per-page transcripts are joined into the single note. Choose between five
+options (default is the first):
+
+- **"Obsidian comment %% Page N %% (hidden in reading view)"** — an Obsidian comment marking each
+  page, invisible in reading view. *(Default.)*
+- **"Heading ## Page N"** — a visible level-2 heading per page.
+- **"Horizontal rule ---"** — a horizontal rule between pages.
+- **"Page break (HTML, for export)"** — an HTML page break, useful when you later export the note.
+- **"None (seamless text)"** — no separator; the pages run together as continuous text.
+
+Pick the one that suits how you want to read or export the merged PDF transcript.
 
 ---
 
