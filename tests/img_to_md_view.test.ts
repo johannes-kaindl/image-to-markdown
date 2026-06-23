@@ -183,6 +183,21 @@ describe("ImgToMdView — Notiz anlegen", () => {
   });
 });
 
+const ITEMS_EXISTS: ImgItem[] = [
+  { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "b (transcript).md" },
+];
+
+describe("ImgToMdView — vorhandenes Transkript", () => {
+  it("zeigt Badge + öffnen-Link, Checkbox default aus", async () => {
+    const { view, calls } = mkView({ scan: async () => ITEMS_EXISTS });
+    await view.onOpen();
+    expect(all(view.contentEl, "img2md-exists").length).toBe(1);
+    expect(all(view.contentEl, "img2md-check")[0].checked).toBe(false);
+    all(view.contentEl, "img2md-exists-open")[0].click();
+    expect(calls.opened).toEqual(["b (transcript).md"]);
+  });
+});
+
 const PDF_ITEMS: ImgItem[] = [
   { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } },
 ];

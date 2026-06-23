@@ -24,6 +24,8 @@
 .img2md-copy.clickable-icon { color: var(--text-faint); padding: 2px 4px; height: auto; width: auto; }
 .img2md-copy.clickable-icon:hover { color: var(--text-normal); }
 .img2md-write { font-size: 12px; }
+.img2md-exists { color: var(--text-accent); font-size: 11px; margin-left: 4px; }
+.img2md-exists-open { color: var(--text-accent); font-size: 11px; margin-left: 4px; cursor: pointer; text-decoration: underline; }
 .img2md-foot { flex: 0 0 auto; margin-top: 6px; }
 
 /* Settings-QoL */
