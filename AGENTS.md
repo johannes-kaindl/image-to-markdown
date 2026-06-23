@@ -26,7 +26,7 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`capabilities.ts`, `i18n.ts`, `sse.ts`, `think_splitter.ts`, `pdf_to_md.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
+`capabilities.ts`, `i18n.ts`, `sse.ts`, `think_splitter.ts`, `pdf_to_md.ts`, `backlinks.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
 `settings.ts`, `img_to_md_view.ts`, `http.ts`, `pdf_render.ts` importieren `obsidian` (bzw. DOM/Canvas). Die View bekommt alle Abhängigkeiten
 über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
@@ -44,6 +44,11 @@ pdf_render.ts       Obsidian/DOM-Schicht für pdf.js: lädt PDF per Vault-Adapte
 pdf_to_md.ts        Reiner Kern: seitenweise PDF-Transkription — nimmt RenderPage-Callback + VisionClient,
                     streamt Karten je Seite, schreibt eine Transkript-Notiz pro PDF, ersetzt den
                     PDF-Embed. Obsidian-frei, vollständig unit-testbar.
+backlinks.ts        Reiner Kern: Backlink-Idempotenz-Lookup — `findExistingTranscript` (prüft
+                    `resolvedLinks` + `frontmatterLinks` mit `source_pdf`/`source_image`-Filter;
+                    der Frontmatter-Filter ist load-bearing: Body-Embeds allein reichen nicht).
+                    Interface `BacklinkLookup` (von der Obsidian-Schicht injiziert, obsidian-frei
+                    testbar). Verwendet von `img_to_md_state.ts` via Scan.
 vision_client.ts    VisionClient → OpenAI-kompatibler /v1/chat/completions (transcribe +
                     transcribeStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint.
                     Transport injiziert (HttpFetch/setHttp): non-streaming via requestUrl-Adapter,
@@ -82,10 +87,10 @@ npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
 npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
 npm run lint                      # eslint src (reproduziert die Obsidian-Community-Review-Checks)
-npm test                          # vitest run (111 Tests)
+npm test                          # vitest run (145 Tests)
 npx vitest run tests/<datei>      # eine Test-Datei
 npm run typecheck                 # tsc --noEmit (separat von vitest)
-npm run version-bump 0.2.0        # Version synct package.json/manifest.json/versions.json
+npm run version-bump 0.3.0        # Version synct package.json/manifest.json/versions.json
 ```
 
 ## Conventions

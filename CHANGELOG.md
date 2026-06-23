@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.3.0] — 2026-06-23
+
+### Hinzugefügt
+
+- **Backlink-Idempotenz:** Die Sidebar erkennt eine bereits existierende Transkript-Notiz für
+  eine Quelle (via Backlink-Index + `source_pdf`/`source_image`-Frontmatter-Filter) und zeigt
+  „vorhanden → öffnen" an, statt erneut zu transkribieren.
+  Nur Notizen, deren Frontmatter per `source_pdf` / `source_image` auf die Quelldatei verweist,
+  zählen — ein bloßer Body-Embed (z.B. `![[datei.pdf]]`) genügt nicht (Frontmatter-Filter load-bearing).
+- **Override-Option:** Per Checkbox in der Sidebar lässt sich eine erneute Transkription erzwingen;
+  das Plugin überschreibt dann die bestehende Transkript-Notiz und erhält dabei das komplette
+  existierende Frontmatter (nur `transcribed_by`/`pages` + Body werden ersetzt).
+
 ## [0.2.0] — 2026-06-22
 
 ### Hinzugefügt
