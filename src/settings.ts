@@ -87,6 +87,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
 
     // ── Modell ──
     const modelSetting = new Setting(containerEl).setName(t("settings.model.name")).setDesc(t("settings.model.desc"));
+    modelSetting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => this.display()));
 
     // ── Vision-Fähigkeit (Icon + Text) + aktiver Test ──
     const capSetting = new Setting(containerEl).setName(t("settings.capability.name"));
