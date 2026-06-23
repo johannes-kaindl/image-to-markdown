@@ -21,7 +21,7 @@ function pageOf(rawTarget: string): number | undefined {
 /** Entfernt einen führenden YAML-Frontmatter-Block (---\n…\n---). Ohne Frontmatter unverändert.
  *  Schützt den Link-Scan davor, source_pdf/source_note-Wikilinks als Quelle zu erkennen. */
 export function stripFrontmatter(content: string): string {
-  const m = /^---\n[\s\S]*?\n---\n?/.exec(content);
+  const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(content);
   return m ? content.slice(m[0].length) : content;
 }
 
@@ -158,11 +158,13 @@ export async function writeTranscripts(
   return { paths };
 }
 
-/** Transkribiert die Bilder einer Notiz nach Markdown, legt je Bild eine Notiz an und
- *  ersetzt den Bild-Link durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent. */
+/** Transkribiert die EMBEDS einer Notiz nach Markdown (Command/Kontextmenü-Pfad), legt je Bild eine
+ *  Notiz an und ersetzt den Bild-Embed durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
+ *  Reine Links (embed:false) werden hier bewusst übersprungen — sie sind ein Sidebar-Feature mit
+ *  Backlink-Idempotenz (Etappe 1); ohne diesen Schutz würde der Command Re-Transkriptions-Dubletten erzeugen. */
 export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onlyRaw?: string }): Promise<{ transcribed: number; skipped: number }> {
   const content = await io.readNote(sourcePath);
-  let embeds = findImageEmbeds(content);
+  let embeds = findImageEmbeds(content).filter(e => e.embed);
   if (opts?.onlyRaw) embeds = embeds.filter(e => e.raw === opts.onlyRaw);
   // Pro Bild-Datei nur einmal: dasselbe Bild mehrfach eingebettet → eine Notiz;
   // replaceEmbed ersetzt unten ohnehin ALLE Vorkommen des raw-Strings.

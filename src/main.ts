@@ -39,7 +39,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("editor-menu", (menu: Menu, editor: Editor) => {
       const cur = editor.getCursor();
       const line = editor.getLine(cur.line);
-      const embeds = findImageEmbeds(line);
+      const embeds = findImageEmbeds(line).filter(e => e.embed);   // Kontextmenü nur über Embeds (reine Links = Sidebar)
       const f = this.app.workspace.getActiveFile();
       if (!embeds.length || !f) return;
       // Bild unter dem Cursor wählen (sonst das erste der Zeile)

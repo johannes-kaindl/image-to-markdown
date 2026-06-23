@@ -11,6 +11,9 @@ describe("stripFrontmatter", () => {
   it("greift nur am Anfang (--- mitten im Text bleibt)", () => {
     expect(stripFrontmatter("text\n---\na: 1\n---\n")).toBe("text\n---\na: 1\n---\n");
   });
+  it("entfernt auch CRLF-Frontmatter (Loop-Schutz robust)", () => {
+    expect(stripFrontmatter("---\r\nsource_pdf: \"[[x.pdf]]\"\r\n---\r\nBody")).toBe("Body");
+  });
 });
 
 describe("findImageEmbeds", () => {
@@ -186,6 +189,14 @@ describe("runImgToMd", () => {
     const r = await runImgToMd(io, "q.md");
     expect(r.transcribed).toBe(0);
     expect(Object.keys(created)).toEqual([]);
+  });
+  it("transkribiert nur Embeds, überspringt reine Links (Command/Kontextmenü ohne Idempotenz-Schutz)", async () => {
+    const { io, created, notes } = fakeIO({ notes: [["q.md", "![[a.png]] siehe [[b.png]]"]] });
+    const r = await runImgToMd(io, "q.md");
+    expect(r.transcribed).toBe(1);
+    expect(created["a (transcript).md"]).toBeDefined();
+    expect(created["b (transcript).md"]).toBeUndefined();
+    expect(notes.get("q.md")).toBe("![[a (transcript)]] siehe [[b.png]]");   // Embed ersetzt, reiner Link bleibt
   });
   it("nicht unterstütztes Format → skip", async () => {
     const { io, created, notices } = fakeIO({ notes: [["q.md", "![[IMG.heic]]"]] });

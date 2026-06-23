@@ -192,11 +192,12 @@ describe("ImgToMdView — linked-Badge", () => {
     const items: ImgItem[] = [
       { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image", embed: true },
       { raw: "[[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", embed: false },
+      { raw: "[[c.pdf]]", link: "c.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 }, embed: false },
     ];
     const { view } = mkView({ scan: async () => items });
     await view.onOpen();
     const badges = all(view.contentEl, "img2md-linked");
-    expect(badges.length).toBe(1);
+    expect(badges.length).toBe(2);   // reiner Bild-Link + reiner PDF-Link, nicht der Embed
     expect(badges[0].textContent).toContain("linked");
   });
 });
