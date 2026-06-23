@@ -8,6 +8,7 @@ export interface ImgItem {
   kind: "image" | "pdf";
   pageCount?: number;
   range?: { from: number; to: number };
+  existingTranscriptPath?: string;
 }
 
 export type CardStatus = "streaming" | "done" | "error" | "written";
@@ -34,7 +35,7 @@ export class ImgToMdState {
 
   setItems(items: ImgItem[]): void {
     this.items = items;
-    this.selected = new Set(items.filter(i => i.supported).map(i => i.link));
+    this.selected = new Set(items.filter(i => i.supported && !i.existingTranscriptPath).map(i => i.link));
   }
 
   isSelected(link: string): boolean { return this.selected.has(link); }
