@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { ImgToMdState, ImgItem, partitionDoneCards } from "./img_to_md_state";
+import { ImgToMdState, ImgItem, partitionDoneCards, actualModel } from "./img_to_md_state";
 import { t } from "./i18n";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
@@ -209,6 +209,13 @@ export class ImgToMdView extends ItemView {
     for (let i = 0; i < cards.length; i++) if (cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
     this.running = false; this.runBtn?.setText(t("view.transcribe"));
     this.controller = null;
+    // Post-Sync: das real verwendete Modell (response.model) → Auswahl angleichen
+    const actual = actualModel(this.state.cards);
+    if (actual && actual !== this.deps.getModel()) {
+      this.deps.setModel(actual);
+      await this.refreshModels();
+      this.statusEl?.setText(t("view.modelChanged", actual));
+    }
     this.renderCards();
   }
   async writeOne(i: number): Promise<void> {

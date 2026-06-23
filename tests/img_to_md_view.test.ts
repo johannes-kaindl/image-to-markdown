@@ -235,6 +235,26 @@ describe("ImgToMdView — Modell-Refresh", () => {
     await view.onOpen();
     expect(setModel).toHaveBeenCalledWith("loaded-model");
   });
+  it("run() gleicht die Auswahl an das real verwendete Modell an (Post-Sync)", async () => {
+    const setModel = vi.fn();
+    const { view } = mkView({
+      getModel: () => "vm", setModel, listModels: async () => ["vm"],
+      transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "other-model" }; },
+    });
+    await view.onOpen();
+    await view.run();
+    expect(setModel).toHaveBeenCalledWith("other-model");
+  });
+  it("run() ohne Abweichung ruft setModel nicht (kein unnötiges Reconnect)", async () => {
+    const setModel = vi.fn();
+    const { view } = mkView({
+      getModel: () => "vm", setModel, listModels: async () => ["vm"],
+      transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "vm" }; },
+    });
+    await view.onOpen();
+    await view.run();
+    expect(setModel).not.toHaveBeenCalled();
+  });
 });
 
 describe("ImgToMdView — PDF", () => {
