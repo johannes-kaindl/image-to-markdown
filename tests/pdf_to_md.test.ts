@@ -89,4 +89,28 @@ describe("writePdfTranscript", () => {
     expect(Object.keys(created)).toEqual([]);
     expect(notes.get("q.md")).toBe("![[doc.pdf]]");
   });
+  it("Override: überschreibt bestehende PDF-Notiz, neue pages, Quelle unverändert", async () => {
+    const notes = new Map<string, string>([
+      ["q.md", "![[doc.pdf]]"],
+      ["doc (PDF transcript).md", `---\nsource_pdf: "[[doc.pdf]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\npages: "1-1"\n---\n![[doc.pdf]]\n\nALT\n`],
+    ]);
+    const created: Record<string, string> = {};
+    const io: any = {
+      date: () => "2026-06-23",
+      readNote: async (p: string) => notes.get(p) ?? "",
+      writeNote: async (p: string, c: string) => { notes.set(p, c); },
+      createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
+      noteExists: (p: string) => notes.has(p),
+      resolveImage: (l: string) => ({ path: l, ext: "pdf" }),
+    };
+    const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" }, [
+      { page: 1, content: "A", model: "neu" }, { page: 2, content: "B", model: "neu" },
+    ], "comment", "doc (PDF transcript).md");
+    expect(r.path).toBe("doc (PDF transcript).md");
+    expect(Object.keys(created)).toEqual([]);                       // kein createNote
+    expect(notes.get("doc (PDF transcript).md")).toContain("created: 2026-01-01");
+    expect(notes.get("doc (PDF transcript).md")).toContain('pages: "1-2"');
+    expect(notes.get("doc (PDF transcript).md")).toContain("%% Page 1 %%");
+    expect(notes.get("q.md")).toBe("![[doc.pdf]]");                 // kein Embed-Ersatz
+  });
 });
