@@ -188,12 +188,13 @@ const PDF_ITEMS: ImgItem[] = [
 ];
 
 describe("ImgToMdView — PDF", () => {
-  it("listet PDF mit Seitenzahl + Bereichsfeldern", async () => {
+  it("listet PDF mit Titel + Seite/bis-Labels + Bereichsfeldern", async () => {
     const { view } = mkView({ scan: async () => PDF_ITEMS });
     await view.onOpen();
-    expect(all(view.contentEl, "img2md-name")[0].textContent).toContain("2");
+    expect(all(view.contentEl, "img2md-name")[0].textContent).toContain("doc.pdf");
     expect(all(view.contentEl, "img2md-pdf-from").length).toBe(1);
     expect(all(view.contentEl, "img2md-pdf-to").length).toBe(1);
+    expect(all(view.contentEl, "img2md-pdf-lbl").length).toBe(2);
   });
   it("run erzeugt eine Karte je Seite mit Seiten-Kopf", async () => {
     const { view } = mkView({ scan: async () => PDF_ITEMS });

@@ -100,14 +100,18 @@ export class ImgToMdView extends ItemView {
       cb.disabled = !item.supported;
       cb.addEventListener("change", () => { this.state.toggle(item.link); this.renderList(); });
       if (item.kind === "pdf") {
-        row.createEl("span", { cls: "img2md-name", text: t("view.pdfPages", this.basename(item.link), item.pageCount ?? 0) });
         const r = item.range ?? { from: 1, to: item.pageCount ?? 1 };
-        const from = row.createEl("input", { cls: "img2md-pdf-from" }); from.type = "number"; from.value = String(r.from);
-        from.setAttribute("aria-label", t("view.pdfRangeFrom"));
-        const to = row.createEl("input", { cls: "img2md-pdf-to" }); to.type = "number"; to.value = String(r.to);
-        to.setAttribute("aria-label", t("view.pdfRangeTo"));
+        const max = item.pageCount ?? 1;
+        const name = row.createEl("span", { cls: "img2md-name", text: this.basename(item.link) });
+        name.setAttribute("title", t("view.pdfPages", this.basename(item.link), max));
+        const range = row.createEl("span", { cls: "img2md-pdf-range" });
+        range.createEl("span", { cls: "img2md-pdf-lbl", text: t("view.pdfRangePrefix") });
+        const from = range.createEl("input", { cls: "img2md-pdf-from" }); from.type = "number"; from.value = String(r.from);
+        from.setAttribute("min", "1"); from.setAttribute("max", String(max)); from.setAttribute("aria-label", t("view.pdfRangeFrom"));
+        range.createEl("span", { cls: "img2md-pdf-lbl", text: t("view.pdfRangeMid") });
+        const to = range.createEl("input", { cls: "img2md-pdf-to" }); to.type = "number"; to.value = String(r.to);
+        to.setAttribute("min", "1"); to.setAttribute("max", String(max)); to.setAttribute("aria-label", t("view.pdfRangeTo"));
         const clamp = () => {
-          const max = item.pageCount ?? 1;
           const f = Math.max(1, Math.min(max, Math.floor(Number(from.value) || 1)));
           const tt = Math.max(f, Math.min(max, Math.floor(Number(to.value) || max)));
           item.range = { from: f, to: tt }; from.value = String(f); to.value = String(tt);
