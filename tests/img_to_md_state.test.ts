@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ImgToMdState, ImgItem, partitionDoneCards } from "../src/img_to_md_state";
+import { ImgToMdState, ImgItem, ImgCard, partitionDoneCards, actualModel } from "../src/img_to_md_state";
 
 const items: ImgItem[] = [
   { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
@@ -125,5 +125,20 @@ describe("ImgToMdState — PDF-Karten", () => {
     expect(part.pdfs[0].link).toBe("doc.pdf");
     expect(part.pdfs[0].pages.map(p => p.page)).toEqual([1, 2, 3]);
     expect(part.pdfs[0].cardIndices.length).toBe(3);
+  });
+});
+
+function mkCard(model: string): ImgCard {
+  return { item: items[0], index: 1, total: 1, text: "x", reasoning: "", model, status: "done" };
+}
+describe("actualModel", () => {
+  it("liefert das erste nicht-leere card.model", () => {
+    expect(actualModel([mkCard(""), mkCard("mlx-vlm"), mkCard("other")])).toBe("mlx-vlm");
+  });
+  it("liefert \"\" wenn keine Karte ein Modell hat", () => {
+    expect(actualModel([mkCard(""), mkCard("")])).toBe("");
+  });
+  it("liefert \"\" für leere Kartenliste", () => {
+    expect(actualModel([])).toBe("");
   });
 });
