@@ -18,7 +18,7 @@ describe("findImageEmbeds", () => {
     const c = "text\n![[foto.jpg]]\n![[notiz]]\n![alt](bilder/x.png)\n![web](https://e/x.png)";
     const r = findImageEmbeds(c);
     expect(r.map(e => e.link)).toEqual(["foto.jpg", "bilder/x.png"]);
-    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg", kind: "image" });
+    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg", kind: "image", embed: true });
   });
   it("ignoriert # und | im Wikilink", () => {
     expect(findImageEmbeds("![[foto.png|200]]")[0].link).toBe("foto.png");
@@ -28,7 +28,7 @@ describe("findImageEmbeds", () => {
     expect(SUPPORTED_EXTS.includes("heic")).toBe(false);
   });
   it("erkennt PDF-Embeds als kind pdf (ohne #page → page undefined)", () => {
-    expect(findImageEmbeds("![[doc.pdf]]")[0]).toEqual({ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", kind: "pdf", page: undefined });
+    expect(findImageEmbeds("![[doc.pdf]]")[0]).toEqual({ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", kind: "pdf", page: undefined, embed: true });
   });
   it("liest #page=N aus dem PDF-Wikilink", () => {
     expect(findImageEmbeds("![[doc.pdf#page=3]]")[0]).toMatchObject({ link: "doc.pdf", kind: "pdf", page: 3 });
@@ -38,6 +38,25 @@ describe("findImageEmbeds", () => {
   });
   it("erkennt PDF auch als Markdown-Embed", () => {
     expect(findImageEmbeds("![x](files/doc.pdf)")[0]).toMatchObject({ link: "files/doc.pdf", kind: "pdf" });
+  });
+  it("erkennt reinen Wikilink (ohne !) als embed:false", () => {
+    expect(findImageEmbeds("siehe [[scan.pdf]] dazu")[0]).toMatchObject({ link: "scan.pdf", kind: "pdf", embed: false });
+  });
+  it("erkennt reinen Markdown-Link (ohne !) als embed:false", () => {
+    expect(findImageEmbeds("[Vertrag](akten/scan.png)")[0]).toMatchObject({ link: "akten/scan.png", kind: "image", embed: false });
+  });
+  it("liest #page=N auch aus reinem PDF-Wikilink", () => {
+    expect(findImageEmbeds("[[doc.pdf#page=3]]")[0]).toMatchObject({ kind: "pdf", page: 3, embed: false });
+  });
+  it("Embed und reiner Link derselben Datei → zwei Treffer mit korrektem embed", () => {
+    const r = findImageEmbeds("![[a.png]] und [[a.png]]");
+    expect(r.map(e => e.embed)).toEqual([true, false]);
+  });
+  it("ignoriert externe URL auch als reinen Link", () => {
+    expect(findImageEmbeds("[x](https://e.com/a.pdf)")).toEqual([]);
+  });
+  it("findet Bild/PDF-Links nicht im Frontmatter (Loop-Schutz)", () => {
+    expect(findImageEmbeds("---\nsource_pdf: \"[[scan.pdf]]\"\n---\nText ohne Quelle")).toEqual([]);
   });
 });
 

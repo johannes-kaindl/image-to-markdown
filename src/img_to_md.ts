@@ -4,7 +4,7 @@ export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
 export const PDF_EXT = "pdf";
 
-export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number }
+export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number; embed: boolean }
 
 function extOf(link: string): string {
   const clean = link.split("#")[0].split("|")[0].trim();
@@ -25,26 +25,30 @@ export function stripFrontmatter(content: string): string {
   return m ? content.slice(m[0].length) : content;
 }
 
-/** Findet eingebettete Bilder: ![[link.ext]] (Wikilink) und ![alt](pfad) (Markdown, externe http(s) aus). */
+/** Findet Bild-/PDF-Embeds UND reine Links: ![[x]] / [[x]] (Wikilink) und ![alt](p) / [t](p)
+ *  (Markdown, externe http(s) aus). `embed` = true bei führendem `!`. Frontmatter wird ignoriert. */
 export function findImageEmbeds(content: string): ImageEmbed[] {
+  const body = stripFrontmatter(content);
   const out: ImageEmbed[] = [];
   let m: RegExpExecArray | null;
-  const wiki = /!\[\[([^\]]+?)\]\]/g;
-  while ((m = wiki.exec(content)) !== null) {
-    const inner = m[1];
+  const wiki = /(!?)\[\[([^\]]+?)\]\]/g;
+  while ((m = wiki.exec(body)) !== null) {
+    const embed = m[1] === "!";
+    const inner = m[2];
     const link = inner.split("#")[0].split("|")[0].trim();
     const ext = extOf(link);
-    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image" });
-    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(inner) });
+    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image", embed });
+    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(inner), embed });
   }
-  const md = /!\[[^\]]*\]\(([^)]+?)\)/g;
-  while ((m = md.exec(content)) !== null) {
-    const target = m[1].trim();
+  const md = /(!?)\[[^\]]*\]\(([^)]+?)\)/g;
+  while ((m = md.exec(body)) !== null) {
+    const embed = m[1] === "!";
+    const target = m[2].trim();
     if (/^https?:\/\//i.test(target)) continue;
     const link = target.split("#")[0].trim();
     const ext = extOf(link);
-    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image" });
-    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(target) });
+    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image", embed });
+    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(target), embed });
   }
   return out;
 }
