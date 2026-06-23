@@ -157,10 +157,10 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     // ── PDF Render Scale ──
     new Setting(containerEl)
       .setName(t("settings.pdfRenderScale.name")).setDesc(t("settings.pdfRenderScale.desc"))
-      .addText(tx => tx.setValue(String(this.plugin.settings.pdfRenderScale))
-        .onChange(async (v: string) => {
-          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfRenderScale = Math.min(n, 4.0); await this.plugin.saveSettings(); }
-        }));
+      .addSlider(sl => sl
+        .setLimits(1, 4, 0.5)
+        .setValue(this.plugin.settings.pdfRenderScale)
+        .onChange(async (v: number) => { this.plugin.settings.pdfRenderScale = v; await this.plugin.saveSettings(); }));
 
     // ── PDF Page Separator ──
     new Setting(containerEl)
