@@ -147,6 +147,15 @@ describe("writeTranscripts", () => {
     ]);
     expect(r.paths).toEqual(["foto (transcript).md", "foto (transcript)-2.md"]);
   });
+  it("embed:false legt Notiz an, lässt den Quell-Link aber unverändert", async () => {
+    const { io, created, notes } = fakeIO({ notes: [["q.md", "siehe [[scan.png]] dazu"]] });
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "[[scan.png]]", link: "scan.png", content: "# T", model: "vm", embed: false },
+    ]);
+    expect(r.paths).toEqual(["scan (transcript).md"]);
+    expect(created["scan (transcript).md"]).toContain("# T");
+    expect(notes.get("q.md")).toBe("siehe [[scan.png]] dazu");   // Quelle unangetastet
+  });
   it("Override: überschreibt bestehende Notiz, erhält Frontmatter, Quelle unverändert", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["q.md", "![[b.png]]"],

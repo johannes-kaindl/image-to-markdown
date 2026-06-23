@@ -132,7 +132,7 @@ export interface ImgToMdIO {
  *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet). */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean }[],
 ): Promise<{ paths: string[] }> {
   const before = await io.readNote(sourcePath);
   let content = before;
@@ -151,7 +151,7 @@ export async function writeTranscripts(
     const imagePath = resolved?.path ?? e.link;
     const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
-    content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
+    if (e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     paths.push(newPath);
   }
   if (content !== before) await io.writeNote(sourcePath, content);
@@ -170,7 +170,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
   embeds = embeds.filter(e => { if (seen.has(e.link)) return false; seen.add(e.link); return true; });
   if (!embeds.length) { io.notify(t("core.noMatchingImages")); return { transcribed: 0, skipped: 0 }; }
   let skipped = 0;
-  const entries: { raw: string; link: string; content: string; model: string }[] = [];
+  const entries: { raw: string; link: string; content: string; model: string; embed: boolean }[] = [];
   for (let i = 0; i < embeds.length; i++) {
     const e = embeds[i];
     const resolved = io.resolveImage(e.link, sourcePath);
@@ -184,7 +184,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
       res = await io.transcribe(dataUrl);
     } catch (err) { io.notify(t("core.transcribeFailed", e.link, err instanceof Error ? err.message : String(err))); skipped++; continue; }
     if (!res.content.trim()) { io.notify(t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
-    entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model });
+    entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model, embed: e.embed });
   }
   const { paths } = await writeTranscripts(io, sourcePath, entries);
   const base = t(paths.length === 1 ? "core.transcribed.one" : "core.transcribed.other", paths.length);
