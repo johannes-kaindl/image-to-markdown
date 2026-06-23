@@ -119,7 +119,7 @@ export interface ImgToMdIO {
  *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race. */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string }[],
 ): Promise<{ paths: string[] }> {
   const before = await io.readNote(sourcePath);
   let content = before;
@@ -128,6 +128,12 @@ export async function writeTranscripts(
   for (const e of entries) {
     const transcript = e.content.trim();
     if (!transcript) continue;
+    if (e.overwritePath) {
+      const old = await io.readNote(e.overwritePath);
+      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: transcript }));
+      paths.push(e.overwritePath);
+      continue;
+    }
     const resolved = io.resolveImage(e.link, sourcePath);
     const imagePath = resolved?.path ?? e.link;
     const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");

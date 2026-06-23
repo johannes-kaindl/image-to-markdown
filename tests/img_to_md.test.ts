@@ -116,6 +116,20 @@ describe("writeTranscripts", () => {
     ]);
     expect(r.paths).toEqual(["foto (transcript).md", "foto (transcript)-2.md"]);
   });
+  it("Override: überschreibt bestehende Notiz, erhält Frontmatter, Quelle unverändert", async () => {
+    const { io, notes } = fakeIO({ notes: [
+      ["q.md", "![[b.png]]"],
+      ["b (transcript).md", `---\nsource_image: "[[b.png]]"\nsource_note: "[[Orig]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT\n`],
+    ] });
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md" },
+    ]);
+    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(notes.get("b (transcript).md")).toContain("NEU");
+    expect(notes.get("b (transcript).md")).toContain("created: 2026-01-01");
+    expect(notes.get("b (transcript).md")).toContain('transcribed_by: "neu"');
+    expect(notes.get("q.md")).toBe("![[b.png]]");  // kein Embed-Ersatz
+  });
 });
 
 describe("runImgToMd", () => {
