@@ -39,7 +39,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("editor-menu", (menu: Menu, editor: Editor) => {
       const cur = editor.getCursor();
       const line = editor.getLine(cur.line);
-      const embeds = findImageEmbeds(line);
+      const embeds = findImageEmbeds(line).filter(e => e.embed);   // Kontextmenü nur über Embeds (reine Links = Sidebar)
       const f = this.app.workspace.getActiveFile();
       if (!embeds.length || !f) return;
       // Bild unter dem Cursor wählen (sonst das erste der Zeile)
@@ -110,9 +110,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
             }
             const supported = pageCount > 0;
             const cappedTo = Math.min(pageCount, this.settings.pdfMaxPages);
-            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported, kind: "pdf", pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 }, existingTranscriptPath });
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported, kind: "pdf", pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 }, existingTranscriptPath, embed: e.embed });
           } else {
-            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image", existingTranscriptPath });
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image", existingTranscriptPath, embed: e.embed });
           }
         }
         return items;
@@ -134,11 +134,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
         return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
       },
       writeTranscripts: async (sourcePath, entries) => {
-        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath })));
+        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed })));
         return paths;
       },
-      writePdf: async (sourcePath, raw, link, pages, overwritePath) => {
-        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath);
+      writePdf: async (sourcePath, raw, link, pages, overwritePath, embed) => {
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed);
         return path;
       },
       ping: () => new VisionClient(visionEndpoint(), "").ping(),

@@ -51,13 +51,15 @@ export function buildPdfNote(o: {
 }
 
 /** Schreibt EINE Standard-Notiz für ein PDF (alle nicht-leeren Seiten), ersetzt den PDF-Embed.
- *  Bei `overwritePath` gesetzt: überschreibt bestehende PDF-Notiz, keine Embed-Ersetzung. */
+ *  Bei `overwritePath` gesetzt: überschreibt bestehende PDF-Notiz, keine Embed-Ersetzung.
+ *  Bei `embed = false`: legt Notiz an, lässt aber den Quell-Link im Quelltext unverändert. */
 export async function writePdfTranscript(
   io: ImgToMdIO, sourcePath: string,
-  embed: { raw: string; link: string },
+  source: { raw: string; link: string },
   pages: { page: number; content: string; model: string }[],
   separator: PdfPageSeparator,
   overwritePath?: string,
+  embed = true,
 ): Promise<{ path: string | null }> {
   const kept = pages.filter(p => p.content.trim()).sort((a, b) => a.page - b.page);
   if (!kept.length) return { path: null };
@@ -66,21 +68,23 @@ export async function writePdfTranscript(
   if (overwritePath) {
     const old = await io.readNote(overwritePath);
     const body = buildPdfBody(kept.map(p => ({ page: p.page, text: p.content })), separator);
-    await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: embed.link, body, pages: pagesStr }));
+    await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body, pages: pagesStr }));
     return { path: overwritePath };
   }
-  const before = await io.readNote(sourcePath);
   const sourceName = basenameNoExt(sourcePath);
-  const resolved = io.resolveImage(embed.link, sourcePath);
-  const pdfPath = resolved?.path ?? embed.link;
+  const resolved = io.resolveImage(source.link, sourcePath);
+  const pdfPath = resolved?.path ?? source.link;
   const notePath = transcriptNotePath(io, sourcePath, pdfPath, "pdf");
   const content = buildPdfNote({
-    pdfLink: embed.link, sourceName, date: io.date(), model,
+    pdfLink: source.link, sourceName, date: io.date(), model,
     pages: kept.map(p => ({ page: p.page, text: p.content })),
     rangeFrom: kept[0].page, rangeTo: kept[kept.length - 1].page, separator,
   });
   await io.createNote(notePath, content);
-  const replaced = replaceEmbed(before, embed.raw, basenameNoExt(notePath));
-  if (replaced !== before) await io.writeNote(sourcePath, replaced);
+  if (embed) {
+    const before = await io.readNote(sourcePath);
+    const replaced = replaceEmbed(before, source.raw, basenameNoExt(notePath));
+    if (replaced !== before) await io.writeNote(sourcePath, replaced);
+  }
   return { path: notePath };
 }

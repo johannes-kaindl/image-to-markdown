@@ -9,6 +9,7 @@ export interface ImgItem {
   pageCount?: number;
   range?: { from: number; to: number };
   existingTranscriptPath?: string;
+  embed?: boolean;   // false = reiner Link (Quelltext bleibt); fehlt/true = Embed (heutiges Verhalten)
 }
 
 export type CardStatus = "streaming" | "done" | "error" | "written";

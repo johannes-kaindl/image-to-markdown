@@ -27,6 +27,8 @@ The sidebar view lists every embedded image and PDF of the active note as a chec
 
 A row that already has a transcript shows a "✓ transcript exists" ("✓ Transkript vorhanden") marker with an "open" ("öffnen") link to that note, and a row tooltip "re-transcribing overwrites it" ("erneut transkribieren überschreibt").
 
+Pure links (non-embed references) on images and PDFs — `[[x.pdf]]` or `[text](x.pdf)` **without** a leading `!` — are also recognised as sources and appear in the sidebar. Such rows are marked with a **"linked"** ("verlinkt") badge. When the transcript note is written for a linked source, the link in the source note is left untouched (unlike embeds, which are replaced by an embed of the transcript note).
+
 ### PDFs in the sidebar
 
 PDFs embedded in a note are transcribed **page-by-page** via the sidebar and merged into **one transcript note per PDF**. Each PDF row carries a **page range** selector — a "Page" ("Seite") label, a numeric *from* input, a "to" ("bis") separator, and a numeric *to* input. The range defaults to the whole document, capped to the "PDF max. pages per run" setting (`{ from: 1, to: min(pageCount, pdfMaxPages) }`); the inputs are clamped to `1…pageCount`. The row title shows `name · N pages` ("… Seiten"). One streaming card is produced per page (head `name · page i/N` / "… Seite i/N"). The transcript note's title uses the localized PDF suffix "(PDF transcript)" ("(PDF-Transkript)"); how its pages are joined is controlled by [PDF page separator](#settings) and the render resolution by [PDF render scale](#settings). If the selected range exceeds the cap, transcription stops with the notice "PDF has {0} pages (limit {1}) — narrow the page range."
@@ -112,8 +114,8 @@ For every transcribed image (or PDF), the plugin writes exactly one transcript n
 Behaviour:
 
 - One transcript note per image (one per PDF). Re-running produces no duplicates (idempotent).
-- The image/PDF embed in the source note is replaced by an embed of the new transcript note. The original text is never overwritten (non-destructive).
-- Because the embed is replaced, the handled image no longer appears in the sidebar list on the next scan.
+- For **embeds** (`![[x]]`): the image/PDF embed in the source note is replaced by an embed of the new transcript note. The original text is never overwritten (non-destructive). Because the embed is replaced, the handled image no longer appears in the sidebar list on the next scan.
+- For **pure links** (`[[x]]` / `[text](x)`, shown with the "linked" badge in the sidebar): the transcript note is written, but the link in the source note is **left unchanged**. The source note is not modified.
 
 ### Idempotency & the backlink index
 

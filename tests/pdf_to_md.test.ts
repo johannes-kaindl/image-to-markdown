@@ -89,6 +89,14 @@ describe("writePdfTranscript", () => {
     expect(Object.keys(created)).toEqual([]);
     expect(notes.get("q.md")).toBe("![[doc.pdf]]");
   });
+  it("embed:false legt PDF-Notiz an, lässt den Quell-Link unverändert", async () => {
+    const { io, created, notes } = pdfIO("siehe [[doc.pdf]] dazu");
+    const r = await writePdfTranscript(io, "q.md", { raw: "[[doc.pdf]]", link: "doc.pdf" },
+      [{ page: 1, content: "A", model: "m" }], "comment", undefined, false);
+    expect(r.path).toBe("doc (PDF transcript).md");
+    expect(created["doc (PDF transcript).md"]).toBeDefined();
+    expect(notes.get("q.md")).toBe("siehe [[doc.pdf]] dazu");   // Quelle unangetastet
+  });
   it("Override: überschreibt bestehende PDF-Notiz, neue pages, Quelle unverändert", async () => {
     const notes = new Map<string, string>([
       ["q.md", "![[doc.pdf]]"],

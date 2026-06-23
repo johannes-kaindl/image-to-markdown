@@ -1,12 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter } from "../src/img_to_md";
+
+describe("stripFrontmatter", () => {
+  it("entfernt führenden YAML-Block", () => {
+    expect(stripFrontmatter("---\nsource_pdf: \"[[x.pdf]]\"\n---\nBody [[y.png]]")).toBe("Body [[y.png]]");
+  });
+  it("lässt Inhalt ohne Frontmatter unverändert", () => {
+    expect(stripFrontmatter("kein FM [[a.png]]")).toBe("kein FM [[a.png]]");
+  });
+  it("greift nur am Anfang (--- mitten im Text bleibt)", () => {
+    expect(stripFrontmatter("text\n---\na: 1\n---\n")).toBe("text\n---\na: 1\n---\n");
+  });
+  it("entfernt auch CRLF-Frontmatter (Loop-Schutz robust)", () => {
+    expect(stripFrontmatter("---\r\nsource_pdf: \"[[x.pdf]]\"\r\n---\r\nBody")).toBe("Body");
+  });
+});
 
 describe("findImageEmbeds", () => {
   it("findet wikilink- und markdown-Bild-Embeds, filtert Extensions", () => {
     const c = "text\n![[foto.jpg]]\n![[notiz]]\n![alt](bilder/x.png)\n![web](https://e/x.png)";
     const r = findImageEmbeds(c);
     expect(r.map(e => e.link)).toEqual(["foto.jpg", "bilder/x.png"]);
-    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg", kind: "image" });
+    expect(r[0]).toEqual({ raw: "![[foto.jpg]]", link: "foto.jpg", ext: "jpg", kind: "image", embed: true });
   });
   it("ignoriert # und | im Wikilink", () => {
     expect(findImageEmbeds("![[foto.png|200]]")[0].link).toBe("foto.png");
@@ -16,7 +31,7 @@ describe("findImageEmbeds", () => {
     expect(SUPPORTED_EXTS.includes("heic")).toBe(false);
   });
   it("erkennt PDF-Embeds als kind pdf (ohne #page → page undefined)", () => {
-    expect(findImageEmbeds("![[doc.pdf]]")[0]).toEqual({ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", kind: "pdf", page: undefined });
+    expect(findImageEmbeds("![[doc.pdf]]")[0]).toEqual({ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", kind: "pdf", page: undefined, embed: true });
   });
   it("liest #page=N aus dem PDF-Wikilink", () => {
     expect(findImageEmbeds("![[doc.pdf#page=3]]")[0]).toMatchObject({ link: "doc.pdf", kind: "pdf", page: 3 });
@@ -26,6 +41,25 @@ describe("findImageEmbeds", () => {
   });
   it("erkennt PDF auch als Markdown-Embed", () => {
     expect(findImageEmbeds("![x](files/doc.pdf)")[0]).toMatchObject({ link: "files/doc.pdf", kind: "pdf" });
+  });
+  it("erkennt reinen Wikilink (ohne !) als embed:false", () => {
+    expect(findImageEmbeds("siehe [[scan.pdf]] dazu")[0]).toMatchObject({ link: "scan.pdf", kind: "pdf", embed: false });
+  });
+  it("erkennt reinen Markdown-Link (ohne !) als embed:false", () => {
+    expect(findImageEmbeds("[Vertrag](akten/scan.png)")[0]).toMatchObject({ link: "akten/scan.png", kind: "image", embed: false });
+  });
+  it("liest #page=N auch aus reinem PDF-Wikilink", () => {
+    expect(findImageEmbeds("[[doc.pdf#page=3]]")[0]).toMatchObject({ kind: "pdf", page: 3, embed: false });
+  });
+  it("Embed und reiner Link derselben Datei → zwei Treffer mit korrektem embed", () => {
+    const r = findImageEmbeds("![[a.png]] und [[a.png]]");
+    expect(r.map(e => e.embed)).toEqual([true, false]);
+  });
+  it("ignoriert externe URL auch als reinen Link", () => {
+    expect(findImageEmbeds("[x](https://e.com/a.pdf)")).toEqual([]);
+  });
+  it("findet Bild/PDF-Links nicht im Frontmatter (Loop-Schutz)", () => {
+    expect(findImageEmbeds("---\nsource_pdf: \"[[scan.pdf]]\"\n---\nText ohne Quelle")).toEqual([]);
   });
 });
 
@@ -116,6 +150,15 @@ describe("writeTranscripts", () => {
     ]);
     expect(r.paths).toEqual(["foto (transcript).md", "foto (transcript)-2.md"]);
   });
+  it("embed:false legt Notiz an, lässt den Quell-Link aber unverändert", async () => {
+    const { io, created, notes } = fakeIO({ notes: [["q.md", "siehe [[scan.png]] dazu"]] });
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "[[scan.png]]", link: "scan.png", content: "# T", model: "vm", embed: false },
+    ]);
+    expect(r.paths).toEqual(["scan (transcript).md"]);
+    expect(created["scan (transcript).md"]).toContain("# T");
+    expect(notes.get("q.md")).toBe("siehe [[scan.png]] dazu");   // Quelle unangetastet
+  });
   it("Override: überschreibt bestehende Notiz, erhält Frontmatter, Quelle unverändert", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["q.md", "![[b.png]]"],
@@ -146,6 +189,14 @@ describe("runImgToMd", () => {
     const r = await runImgToMd(io, "q.md");
     expect(r.transcribed).toBe(0);
     expect(Object.keys(created)).toEqual([]);
+  });
+  it("transkribiert nur Embeds, überspringt reine Links (Command/Kontextmenü ohne Idempotenz-Schutz)", async () => {
+    const { io, created, notes } = fakeIO({ notes: [["q.md", "![[a.png]] siehe [[b.png]]"]] });
+    const r = await runImgToMd(io, "q.md");
+    expect(r.transcribed).toBe(1);
+    expect(created["a (transcript).md"]).toBeDefined();
+    expect(created["b (transcript).md"]).toBeUndefined();
+    expect(notes.get("q.md")).toBe("![[a (transcript)]] siehe [[b.png]]");   // Embed ersetzt, reiner Link bleibt
   });
   it("nicht unterstütztes Format → skip", async () => {
     const { io, created, notices } = fakeIO({ notes: [["q.md", "![[IMG.heic]]"]] });

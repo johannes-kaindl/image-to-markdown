@@ -4,7 +4,7 @@ export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
 export const PDF_EXT = "pdf";
 
-export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number }
+export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number; embed: boolean }
 
 function extOf(link: string): string {
   const clean = link.split("#")[0].split("|")[0].trim();
@@ -18,26 +18,37 @@ function pageOf(rawTarget: string): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
-/** Findet eingebettete Bilder: ![[link.ext]] (Wikilink) und ![alt](pfad) (Markdown, externe http(s) aus). */
+/** Entfernt einen führenden YAML-Frontmatter-Block (---\n…\n---). Ohne Frontmatter unverändert.
+ *  Schützt den Link-Scan davor, source_pdf/source_note-Wikilinks als Quelle zu erkennen. */
+export function stripFrontmatter(content: string): string {
+  const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(content);
+  return m ? content.slice(m[0].length) : content;
+}
+
+/** Findet Bild-/PDF-Embeds UND reine Links: ![[x]] / [[x]] (Wikilink) und ![alt](p) / [t](p)
+ *  (Markdown, externe http(s) aus). `embed` = true bei führendem `!`. Frontmatter wird ignoriert. */
 export function findImageEmbeds(content: string): ImageEmbed[] {
+  const body = stripFrontmatter(content);
   const out: ImageEmbed[] = [];
   let m: RegExpExecArray | null;
-  const wiki = /!\[\[([^\]]+?)\]\]/g;
-  while ((m = wiki.exec(content)) !== null) {
-    const inner = m[1];
+  const wiki = /(!?)\[\[([^\]]+?)\]\]/g;
+  while ((m = wiki.exec(body)) !== null) {
+    const embed = m[1] === "!";
+    const inner = m[2];
     const link = inner.split("#")[0].split("|")[0].trim();
     const ext = extOf(link);
-    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image" });
-    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(inner) });
+    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image", embed });
+    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(inner), embed });
   }
-  const md = /!\[[^\]]*\]\(([^)]+?)\)/g;
-  while ((m = md.exec(content)) !== null) {
-    const target = m[1].trim();
+  const md = /(!?)\[[^\]]*\]\(([^)]+?)\)/g;
+  while ((m = md.exec(body)) !== null) {
+    const embed = m[1] === "!";
+    const target = m[2].trim();
     if (/^https?:\/\//i.test(target)) continue;
     const link = target.split("#")[0].trim();
     const ext = extOf(link);
-    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image" });
-    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(target) });
+    if (IMAGE_EXTS.includes(ext)) out.push({ raw: m[0], link, ext, kind: "image", embed });
+    else if (ext === PDF_EXT) out.push({ raw: m[0], link, ext, kind: "pdf", page: pageOf(target), embed });
   }
   return out;
 }
@@ -121,7 +132,7 @@ export interface ImgToMdIO {
  *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet). */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean }[],
 ): Promise<{ paths: string[] }> {
   const before = await io.readNote(sourcePath);
   let content = before;
@@ -140,18 +151,20 @@ export async function writeTranscripts(
     const imagePath = resolved?.path ?? e.link;
     const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
-    content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
+    if (e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     paths.push(newPath);
   }
   if (content !== before) await io.writeNote(sourcePath, content);
   return { paths };
 }
 
-/** Transkribiert die Bilder einer Notiz nach Markdown, legt je Bild eine Notiz an und
- *  ersetzt den Bild-Link durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent. */
+/** Transkribiert die EMBEDS einer Notiz nach Markdown (Command/Kontextmenü-Pfad), legt je Bild eine
+ *  Notiz an und ersetzt den Bild-Embed durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
+ *  Reine Links (embed:false) werden hier bewusst übersprungen — sie sind ein Sidebar-Feature mit
+ *  Backlink-Idempotenz (Etappe 1); ohne diesen Schutz würde der Command Re-Transkriptions-Dubletten erzeugen. */
 export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onlyRaw?: string }): Promise<{ transcribed: number; skipped: number }> {
   const content = await io.readNote(sourcePath);
-  let embeds = findImageEmbeds(content);
+  let embeds = findImageEmbeds(content).filter(e => e.embed);
   if (opts?.onlyRaw) embeds = embeds.filter(e => e.raw === opts.onlyRaw);
   // Pro Bild-Datei nur einmal: dasselbe Bild mehrfach eingebettet → eine Notiz;
   // replaceEmbed ersetzt unten ohnehin ALLE Vorkommen des raw-Strings.
@@ -159,7 +172,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
   embeds = embeds.filter(e => { if (seen.has(e.link)) return false; seen.add(e.link); return true; });
   if (!embeds.length) { io.notify(t("core.noMatchingImages")); return { transcribed: 0, skipped: 0 }; }
   let skipped = 0;
-  const entries: { raw: string; link: string; content: string; model: string }[] = [];
+  const entries: { raw: string; link: string; content: string; model: string; embed: boolean }[] = [];
   for (let i = 0; i < embeds.length; i++) {
     const e = embeds[i];
     const resolved = io.resolveImage(e.link, sourcePath);
@@ -173,7 +186,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
       res = await io.transcribe(dataUrl);
     } catch (err) { io.notify(t("core.transcribeFailed", e.link, err instanceof Error ? err.message : String(err))); skipped++; continue; }
     if (!res.content.trim()) { io.notify(t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
-    entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model });
+    entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model, embed: e.embed });
   }
   const { paths } = await writeTranscripts(io, sourcePath, entries);
   const base = t(paths.length === 1 ? "core.transcribed.one" : "core.transcribed.other", paths.length);
