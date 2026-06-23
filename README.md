@@ -1,17 +1,26 @@
 # Image to Markdown
 
-> 🇬🇧 English · [🇩🇪 Deutsch](README.de.md)
+> 🇬🇧 English · [🇩🇪 Deutsch](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/README.de.md)
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](LICENSE-DOCS)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE)
+[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS)
 [![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fcodeberg.org&label=release)](https://codeberg.org/jkaindl/image-to-markdown/releases)
-![Platform](https://img.shields.io/badge/platform-Obsidian%201.4%2B%20·%20desktop%20%26%20mobile-7c3aed)
+![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
-**Transcribe the images in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming live into the sidebar.**
-
-Image to Markdown turns the embedded images of an Obsidian note — scans, screenshots, photographed pages — into editable Markdown using an OpenAI-compatible vision model that runs on your own machine. Nothing leaves your computer, and your source note is never overwritten: each image gets its own transcript note, and the original embed is simply replaced by an embed of that new note.
+**Transcribe images and PDFs in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming live into the sidebar.**
 
 ## Features
+
+- Transcribes **images and PDFs** embedded in a note via any OpenAI-compatible local vision model
+- **Streaming live** into a sidebar — watch the Markdown appear as the model generates
+- **PDF page ranges** — pick which pages to transcribe; pdf.js is bundled, fully offline
+- **Idempotent** — one transcript note per source, no duplicates; re-transcribe is opt-in
+- **Bilingual** — Obsidian's language setting (English / Deutsch) drives the UI automatically
+- **Non-destructive** — source notes are never overwritten; embeds are replaced, originals untouched
+
+### In detail
+
+Image to Markdown turns the embedded images and PDFs of an Obsidian note — scans, screenshots, photographed pages — into editable Markdown using an OpenAI-compatible vision model that runs on your own machine. Nothing leaves your computer, and your source note is never overwritten: each image or PDF gets its own transcript note, and the original embed is simply replaced by an embed of that new note.
 
 - **Sidebar view.** A ribbon icon (`scan-text`, label "Image → Markdown") opens the "IMG → MD" view. It lists every embedded image of the active note as a checkbox list — all preselected, with unsupported formats disabled. The **"Transcribe"** button streams the vision model's answer **live** into one card per image, including an expandable thinking block for reasoning models and a copy button. Each card has a **"Create note"** button, plus **"Create all"**. Cards are read-only and show the raw Markdown pre-wrapped. After a transcript is written, the handled image drops out of the list on the next scan.
 - **PDF transcription (sidebar).** Embedded PDFs appear in the same sidebar alongside images. Select the page range you want (default: all pages), then click **"Transcribe"** — each page is rendered via the bundled pdf.js and transcribed page-by-page. One transcript note is created per PDF and the PDF embed is replaced, exactly like an image. Page limits (`pdfMaxPages`) and a mobile-friendly render scale (`pdfRenderScale`) keep memory usage in check. No external CDN — pdf.js is bundled fully offline.
@@ -23,8 +32,6 @@ Image to Markdown turns the embedded images of an Obsidian note — scans, scree
 
 Reasoning models that emit `reasoning_content` in the stream, or inline `<think>` tags, get their thoughts collected into the expandable thinking block. Reasoning is ephemeral — it is shown to you but **never** added to the LLM history.
 
-Everything is **non-destructive and idempotent**: there is exactly one transcript note per image, the image embed in the source note is replaced by an embed of the new note, and running the transcription again creates no duplicates.
-
 ## Requirements
 
 - **Obsidian 1.8.7+** (desktop or mobile).
@@ -32,9 +39,9 @@ Everything is **non-destructive and idempotent**: there is exactly one transcrip
 
 ## Install
 
-### Community Plugins
+### Community Plugins (coming soon)
 
-Once it is listed in the directory, install it from **Settings → Community plugins → Browse** by searching for **Image to Markdown**. Until then, use the Manual or BRAT method below.
+Search for **Image to Markdown** in **Settings → Community plugins → Browse**. Until the directory listing goes live, use BRAT or Manual below.
 
 ### Manual
 
@@ -58,10 +65,10 @@ Then copy `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/p
 ## Usage
 
 1. Point the plugin at your local vision server (see [Configuration](#configuration) below) and make sure the model is loaded.
-2. Open a note that contains embedded images.
-3. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to open the **"IMG → MD"** sidebar. The embedded images appear as a preselected checkbox list; unsupported formats are disabled.
-4. Click **"Transcribe"**. Each selected image gets a card that fills live with the streamed Markdown. For reasoning models, expand the thinking block to watch the model reason; use the copy button to grab the raw Markdown.
-5. Click **"Create note"** on a single card, or **"Create all"** to write every transcript at once. Each image becomes one transcript note, and its embed in the source note is replaced by an embed of the new note.
+2. Open a note that contains embedded images or PDFs.
+3. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to open the **"IMG → MD"** sidebar. The embedded images and PDFs appear as a preselected checkbox list; unsupported formats are disabled.
+4. Click **"Transcribe"**. Each selected image or PDF gets a card that fills live with the streamed Markdown. For reasoning models, expand the thinking block to watch the model reason; use the copy button to grab the raw Markdown.
+5. Click **"Create note"** on a single card, or **"Create all"** to write every transcript at once. Each image or PDF becomes one transcript note, and its embed in the source note is replaced by an embed of the new note.
 
 Prefer to skip the sidebar? Run the command **"Transcribe images in the active note"** to batch-transcribe the active note. Or right-click an image in the editor and choose **"Image → Markdown"** to transcribe only the image under the cursor.
 
@@ -77,7 +84,7 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 
-Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](docs/manual/reference.md#vision-capability-detection).
+Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/docs/manual/reference.md#vision-capability-detection).
 
 ## How it works
 
@@ -85,18 +92,18 @@ For each selected image, the plugin builds a multimodal chat-completions request
 
 For PDFs, each page is rendered to a canvas by the bundled pdf.js (offline, no CDN; worker embedded as a Blob URL), converted to a PNG data URL, and sent to the same vision endpoint as a regular image. Pages stream as individual cards in the sidebar, and one transcript note is produced for the whole PDF.
 
-The architecture and module layout are documented in [AGENTS.md](AGENTS.md).
+The architecture and module layout are documented in [AGENTS.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
 
 ## Manual
 
-The full documentation follows the [Diátaxis](https://diataxis.fr) framework — see [docs/manual/index.md](docs/manual/index.md):
+The full documentation follows the [Diátaxis](https://diataxis.fr) framework — see [docs/manual/index.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md):
 
 - **Tutorial** — get from zero to your first transcript.
 - **How-to guides** — task-focused recipes (configuring LM Studio, handling HEIC, batch transcription).
 - **Reference** — settings, commands, supported formats.
 - **Explanation** — the non-destructive/idempotent design and the streaming mechanism.
 
-See the [changelog](CHANGELOG.md) for release notes.
+See the [changelog](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md) for release notes.
 
 ### Supported image formats
 
@@ -108,11 +115,11 @@ Sent to the model: **PNG, JPG, JPEG, WebP, GIF.** Recognized but **skipped** (wi
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Codeberg](https://codeberg.org/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
+Contributions are welcome. Please read [CONTRIBUTING.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Codeberg](https://codeberg.org/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
 
 ## License
 
-- **Code:** [AGPL-3.0-or-later](LICENSE). A commercial dual-license is available on request if the AGPL copyleft does not fit your use case.
-- **Documentation and text:** [CC BY-SA 4.0](LICENSE-DOCS).
+- **Code:** [AGPL-3.0-or-later](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE). A commercial dual-license is available on request if the AGPL copyleft does not fit your use case.
+- **Documentation and text:** [CC BY-SA 4.0](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS).
 
 Copyright © 2026 Johannes Kaindl.
