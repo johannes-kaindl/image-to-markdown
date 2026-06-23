@@ -38,8 +38,12 @@ export class ImgToMdView extends ItemView {
     const c = this.contentEl; c.empty(); c.addClass("img2md-root");
     this.statusEl = c.createDiv({ cls: "img2md-status" });
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
-    this.modelSel = c.createEl("select", { cls: "img2md-model dropdown" });
+    const modelRow = c.createDiv({ cls: "img2md-model-row" });
+    this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
     this.modelSel.addEventListener("change", () => this.deps.setModel(this.modelSel?.value ?? ""));
+    const refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
+    setIcon(refreshBtn, "refresh-cw");
+    refreshBtn.addEventListener("click", () => void this.refreshModels());
     const head = c.createDiv({ cls: "img2md-head" });
     this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: t("view.deselectAll") });
     this.toggleBtn.addEventListener("click", () => { this.state.toggleAll(); this.renderList(); });
@@ -63,10 +67,15 @@ export class ImgToMdView extends ItemView {
 
   private async refreshModels(): Promise<void> {
     const sel = this.modelSel; if (!sel) return;
-    const cur = this.deps.getModel();
+    let cur = this.deps.getModel();
     const models = await this.deps.listModels();
+    if (cur && models.length && !models.includes(cur)) {   // Auswahl nicht mehr geladen → angleichen
+      cur = models[0];
+      this.deps.setModel(cur);
+      this.statusEl?.setText(t("view.modelChanged", cur));
+    }
     sel.empty();
-    const list = models.includes(cur) ? models : [cur, ...models];
+    const list = models.includes(cur) || !cur ? models : [cur, ...models];
     for (const m of list) { const o = sel.createEl("option", { text: m }); o.value = m; }
     sel.value = cur;
   }
