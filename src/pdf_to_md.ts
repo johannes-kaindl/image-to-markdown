@@ -21,6 +21,14 @@ function pageGap(sep: PdfPageSeparator): string {
   return "\n\n";
 }
 
+/** Nur die Seiten-Blöcke (ohne Frontmatter/Embed), getrennt gemäß separator. */
+export function buildPdfBody(pages: PdfPageTranscript[], separator: PdfPageSeparator): string {
+  return pages
+    .filter(p => p.text.trim())
+    .map(p => `${pagePrefix(separator, p.page)}${p.text.trim()}`)
+    .join(pageGap(separator));
+}
+
 /** Baut die PDF-Transkript-Notiz: Frontmatter + PDF-Embed oben + je nicht-leere Seite ein Block,
  *  getrennt gemäß `separator`. */
 export function buildPdfNote(o: {
@@ -38,10 +46,7 @@ export function buildPdfNote(o: {
     `pages: "${o.rangeFrom}-${o.rangeTo}"`,
     "---",
   ].join("\n");
-  const body = o.pages
-    .filter(p => p.text.trim())
-    .map(p => `${pagePrefix(o.separator, p.page)}${p.text.trim()}`)
-    .join(pageGap(o.separator));
+  const body = buildPdfBody(o.pages, o.separator);
   return `${frontmatter}\n![[${o.pdfLink}]]\n\n${body}\n`;
 }
 

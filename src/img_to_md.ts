@@ -59,6 +59,22 @@ export function buildTranscriptNote(o: { imageLink: string; sourceName: string; 
   ].join("\n");
 }
 
+/** Override: erhält das komplette Frontmatter der alten Notiz, ersetzt transcribed_by (+ pages bei PDF)
+ *  und den Body. Quelle/Quellnotiz/created bleiben damit unverändert. */
+export function rewriteTranscript(old: string, o: { model: string; sourceLink: string; body: string; pages?: string }): string {
+  const esc = (s: string) => s.replace(/"/g, '\\"');
+  const fm = /^---\n([\s\S]*?)\n---/.exec(old);
+  // Fallback nur theoretisch — Override wirkt ausschließlich auf unsere Transkript-Notizen, die immer Frontmatter haben.
+  let frontmatter = fm ? fm[1] : `transcribed_by: "${esc(o.model)}"`;
+  frontmatter = frontmatter.replace(/^transcribed_by:.*$/m, `transcribed_by: "${esc(o.model)}"`);
+  if (o.pages !== undefined) {
+    frontmatter = /^pages:.*$/m.test(frontmatter)
+      ? frontmatter.replace(/^pages:.*$/m, `pages: "${o.pages}"`)
+      : `${frontmatter}\npages: "${o.pages}"`;
+  }
+  return `---\n${frontmatter}\n---\n![[${o.sourceLink}]]\n\n${o.body}\n`;
+}
+
 /** Ersetzt alle Vorkommen des Bild-Embeds (literal) durch einen Embed der neuen Notiz. */
 export function replaceEmbed(content: string, raw: string, newBasename: string): string {
   return content.split(raw).join(`![[${newBasename}]]`);

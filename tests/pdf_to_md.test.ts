@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPdfNote, writePdfTranscript } from "../src/pdf_to_md";
+import { buildPdfNote, writePdfTranscript, buildPdfBody } from "../src/pdf_to_md";
 
 describe("buildPdfNote", () => {
   it("Frontmatter + PDF-Embed oben + Heading-Sektionen in Reihenfolge", () => {
@@ -57,6 +57,17 @@ function pdfIO(initial: string) {
   };
   return { io, created, notes };
 }
+
+describe("buildPdfBody", () => {
+  it("baut nur die Seiten-Blöcke (ohne Frontmatter/Embed)", () => {
+    const body = buildPdfBody([{ page: 1, text: "A" }, { page: 2, text: "B" }], "comment");
+    expect(body).toContain("%% Page 1 %%");
+    expect(body).toContain("A");
+    expect(body).toContain("%% Page 2 %%");
+    expect(body).not.toContain("source_pdf");
+    expect(body).not.toContain("![[");
+  });
+});
 
 describe("writePdfTranscript", () => {
   it("eine Notiz für alle Seiten (comment-Default), PDF-Suffix, Embed ersetzt", async () => {

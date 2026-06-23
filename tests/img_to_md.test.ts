@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript } from "../src/img_to_md";
 
 describe("findImageEmbeds", () => {
   it("findet wikilink- und markdown-Bild-Embeds, filtert Extensions", () => {
@@ -174,5 +174,27 @@ describe("runImgToMd", () => {
     expect(r).toEqual({ transcribed: 0, skipped: 1 });
     expect(Object.keys(created)).toEqual([]);
     expect(notices.some(n => n.includes("sidebar"))).toBe(true);
+  });
+});
+
+describe("rewriteTranscript", () => {
+  it("erhält source_*/source_note/created, ersetzt transcribed_by + Body, kein doppeltes Frontmatter", () => {
+    const old = `---\nsource_image: "[[b.png]]"\nsource_note: "[[Quelle]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALTER TEXT\n`;
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEUER TEXT" });
+    expect(out).toContain('source_image: "[[b.png]]"');
+    expect(out).toContain('source_note: "[[Quelle]]"');
+    expect(out).toContain("created: 2026-01-01");
+    expect(out).toContain('transcribed_by: "neu"');
+    expect(out).not.toContain('transcribed_by: "alt"');
+    expect(out).toContain("![[b.png]]");
+    expect(out).toContain("NEUER TEXT");
+    expect(out).not.toContain("ALTER TEXT");
+    expect(out.match(/^---$/gm)?.length).toBe(2);
+  });
+  it("ersetzt vorhandenes pages bei PDF-Override", () => {
+    const old = `---\nsource_pdf: "[[d.pdf]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\npages: "1-2"\n---\n![[d.pdf]]\n\nX\n`;
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "d.pdf", body: "Y", pages: "1-5" });
+    expect(out).toContain('pages: "1-5"');
+    expect(out).not.toContain('pages: "1-2"');
   });
 });
