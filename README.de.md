@@ -36,6 +36,12 @@ Duplikate. Nichts verlässt die Maschine: keine Cloud, keine Telemetrie, kein VP
   entsteht eine Transkript-Notiz, der PDF-Embed wird ersetzt (genau wie bei Bildern). Limits:
   `pdfMaxPages` (konfigurierbar) und `pdfRenderScale` (mobil kleiner, OOM-Schutz). Kein CDN —
   pdf.js ist vollständig offline gebündelt.
+- **Backlink-basierte Idempotenz.** Bereits transkribierte Quellen werden automatisch erkannt:
+  Hat eine Notiz ein `source_pdf`- oder `source_image`-Frontmatter-Feld, das auf die Quelldatei
+  auflöst, zeigt die Sidebar „vorhanden → öffnen" statt erneut zu transkribieren. Per Checkbox
+  **„Erneut transkribieren (überschreiben)"** lässt sich eine neue Transkription erzwingen; die
+  bestehende Notiz wird überschrieben, das vollständige Frontmatter (bis auf `transcribed_by`/`pages`)
+  bleibt erhalten.
 - **Zweisprachige Oberfläche (Deutsch / English)** — alle nutzersichtbaren Texte folgen der
   Sprach-Einstellung von Obsidian; Englisch ist kanonisch, Deutsch wird automatisch geliefert.
   Die Sprache wird einmalig beim Laden des Plugins erkannt (zum Wechseln neu laden).

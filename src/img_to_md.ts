@@ -59,6 +59,22 @@ export function buildTranscriptNote(o: { imageLink: string; sourceName: string; 
   ].join("\n");
 }
 
+/** Override: erhält das komplette Frontmatter der alten Notiz, ersetzt transcribed_by (+ pages bei PDF)
+ *  und den Body. Quelle/Quellnotiz/created bleiben damit unverändert. */
+export function rewriteTranscript(old: string, o: { model: string; sourceLink: string; body: string; pages?: string }): string {
+  const esc = (s: string) => s.replace(/"/g, '\\"');
+  const fm = /^---\n([\s\S]*?)\n---/.exec(old);
+  // Fallback nur theoretisch — Override wirkt ausschließlich auf unsere Transkript-Notizen, die immer Frontmatter haben.
+  let frontmatter = fm ? fm[1] : `transcribed_by: "${esc(o.model)}"`;
+  frontmatter = frontmatter.replace(/^transcribed_by:.*$/m, `transcribed_by: "${esc(o.model)}"`);
+  if (o.pages !== undefined) {
+    frontmatter = /^pages:.*$/m.test(frontmatter)
+      ? frontmatter.replace(/^pages:.*$/m, `pages: "${o.pages}"`)
+      : `${frontmatter}\npages: "${o.pages}"`;
+  }
+  return `---\n${frontmatter}\n---\n![[${o.sourceLink}]]\n\n${o.body}\n`;
+}
+
 /** Ersetzt alle Vorkommen des Bild-Embeds (literal) durch einen Embed der neuen Notiz. */
 export function replaceEmbed(content: string, raw: string, newBasename: string): string {
   return content.split(raw).join(`![[${newBasename}]]`);
@@ -100,10 +116,12 @@ export interface ImgToMdIO {
 
 /** Schreibt mehrere Transkripte gebündelt: Quelle EINMAL lesen, pro Eintrag Notiz anlegen
  *  + Embed ersetzen (akkumuliert), Quelle EINMAL schreiben. Leere Transkripte werden
- *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race. */
+ *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race.
+ *  Override: ist `overwritePath` gesetzt, wird stattdessen die bestehende Notiz via
+ *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet). */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string }[],
 ): Promise<{ paths: string[] }> {
   const before = await io.readNote(sourcePath);
   let content = before;
@@ -112,6 +130,12 @@ export async function writeTranscripts(
   for (const e of entries) {
     const transcript = e.content.trim();
     if (!transcript) continue;
+    if (e.overwritePath) {
+      const old = await io.readNote(e.overwritePath);
+      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: transcript }));
+      paths.push(e.overwritePath);
+      continue;
+    }
     const resolved = io.resolveImage(e.link, sourcePath);
     const imagePath = resolved?.path ?? e.link;
     const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");

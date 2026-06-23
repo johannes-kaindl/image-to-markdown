@@ -81,6 +81,21 @@ describe("ImgToMdState — Karten", () => {
   });
 });
 
+describe("ImgToMdState — vorhandenes Transkript", () => {
+  const withTx: ImgItem = { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "b (transcript).md" };
+  const without: ImgItem = { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" };
+  it("setItems wählt Items mit vorhandenem Transkript NICHT vor", () => {
+    const s = new ImgToMdState(); s.setItems([without, withTx]);
+    expect(s.isSelected("a.png")).toBe(true);
+    expect(s.isSelected("b.png")).toBe(false);
+  });
+  it("toggle aktiviert ein Item mit Transkript trotzdem (Override opt-in)", () => {
+    const s = new ImgToMdState(); s.setItems([withTx]);
+    s.toggle("b.png");
+    expect(s.isSelected("b.png")).toBe(true);
+  });
+});
+
 describe("ImgToMdState — PDF-Karten", () => {
   const pdf: ImgItem = { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 3, range: { from: 1, to: 3 } };
 

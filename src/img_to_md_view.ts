@@ -9,7 +9,7 @@ export interface ImgToMdViewDeps {
   scan: (sourcePath: string) => Promise<ImgItem[]>;
   transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
   writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string }[]) => Promise<string[]>;
-  writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[]) => Promise<string | null>;
+  writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string) => Promise<string | null>;
   ping: () => Promise<boolean>;
   listModels: () => Promise<string[]>;
   getModel: () => string;
@@ -121,6 +121,12 @@ export class ImgToMdView extends ItemView {
         const label = item.supported ? this.basename(item.link) : t("view.unsupportedSuffix", this.basename(item.link));
         row.createEl("span", { cls: "img2md-name", text: label });
       }
+      if (item.existingTranscriptPath) {
+        row.createEl("span", { cls: "img2md-exists", text: t("view.transcriptExists") });
+        const open = row.createEl("a", { cls: "img2md-exists-open", text: t("view.open") });
+        open.addEventListener("click", () => this.deps.openPath(item.existingTranscriptPath!));
+        row.setAttribute("title", t("view.overwriteHint"));
+      }
     }
   }
 
@@ -202,7 +208,7 @@ export class ImgToMdView extends ItemView {
     if (card.item.kind === "pdf") {
       const g = partitionDoneCards(this.state.cards).pdfs.find(x => x.raw === card.item.raw);
       if (g) {
-        const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })));
+        const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })), g.item.existingTranscriptPath);
         if (created) g.cardIndices.forEach(j => this.state.markWritten(j, created));
       }
     } else {
@@ -223,7 +229,7 @@ export class ImgToMdView extends ItemView {
       part.images.forEach((x, k) => { if (paths[k]) this.state.markWritten(x.cardIndex, paths[k]); });
     }
     for (const g of part.pdfs) {
-      const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })));
+      const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })), g.item.existingTranscriptPath);
       if (created) g.cardIndices.forEach(i => this.state.markWritten(i, created));
     }
     this.renderCards();
