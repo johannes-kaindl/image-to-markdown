@@ -23,6 +23,7 @@ the setup notes in the [README](../../README.md).
 8. [Pick or pin a specific model](#pick-or-pin-a-specific-model)
 9. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
 10. [Transcribe a PDF](#transcribe-a-pdf)
+11. [Transcribe a linked image or PDF (without an embed)](#transcribe-a-linked-image-or-pdf-without-an-embed)
 
 ---
 
@@ -291,6 +292,30 @@ options (default is the first):
 - **"None (seamless text)"** — no separator; the pages run together as continuous text.
 
 Pick the one that suits how you want to read or export the merged PDF transcript.
+
+---
+
+## Transcribe a linked image or PDF (without an embed)
+
+Use this when your note references an image or PDF as a plain link — `[[scan.pdf]]` or
+`[Vertrag](akten/doc.pdf)` — rather than an embed (`![[scan.pdf]]`), and you still want a
+transcript note without touching the original link.
+
+The plugin recognises both embed syntax (`![[x]]` / `![alt](x)`) and plain link syntax
+(`[[x]]` / `[text](x)`) for images and PDFs. Plain links appear in the sidebar with a
+**"linked"** ("verlinkt") badge next to the file name.
+
+1. Open the note containing the plain link.
+2. Open the sidebar (**"Image → Markdown"** ribbon icon or **"Open sidebar"** command).
+   The linked image or PDF appears in the list with the **"linked"** badge.
+3. Select its checkbox and click **"Transcribe"** ("Transkribieren"). Transcription proceeds
+   exactly as for an embed.
+4. Click **"Create note"** ("Notiz anlegen") to write the transcript note.
+
+**Key difference from embeds:** the plain link in the source note is **left unchanged**. Only the
+transcript note is created — the source text is never modified. On the next scan the source still
+shows the same link, and the row will display **"✓ transcript exists"** ("✓ Transkript vorhanden")
+to indicate the transcript has already been written.
 
 ---
 
