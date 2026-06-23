@@ -22,6 +22,8 @@ export class ImgToMdView extends ItemView {
   private state = new ImgToMdState();
   private statusEl: HTMLElement | null = null;
   private modelSel: HTMLSelectElement | null = null;
+  private modelStatusEl: HTMLElement | null = null;
+  private refreshBtn: HTMLElement | null = null;
   private listEl: HTMLElement | null = null;
   private cardsEl: HTMLElement | null = null;
   private toggleBtn: HTMLElement | null = null;
@@ -41,9 +43,10 @@ export class ImgToMdView extends ItemView {
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
     this.modelSel.addEventListener("change", () => this.deps.setModel(this.modelSel?.value ?? ""));
-    const refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
-    setIcon(refreshBtn, "refresh-cw");
-    refreshBtn.addEventListener("click", () => void this.refreshModels());
+    this.modelStatusEl = modelRow.createEl("span", { cls: "img2md-model-status" });
+    this.refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
+    setIcon(this.refreshBtn, "refresh-cw");
+    this.refreshBtn.addEventListener("click", () => void this.refreshModels(true));
     const head = c.createDiv({ cls: "img2md-head" });
     this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: t("view.deselectAll") });
     this.toggleBtn.addEventListener("click", () => { this.state.toggleAll(); this.renderList(); });
@@ -65,19 +68,35 @@ export class ImgToMdView extends ItemView {
     el.setText(ok ? t("view.connected") : t("view.offline"));
   }
 
-  private async refreshModels(): Promise<void> {
+  private async refreshModels(userTriggered = false): Promise<void> {
     const sel = this.modelSel; if (!sel) return;
+    this.refreshBtn?.addClass("is-loading");   // Klick-Feedback: Lade-Zustand
     let cur = this.deps.getModel();
     const models = await this.deps.listModels();
+    let realigned = false;
     if (cur && models.length && !models.includes(cur)) {   // Auswahl nicht mehr geladen → angleichen
       cur = models[0];
       this.deps.setModel(cur);
       this.statusEl?.setText(t("view.modelChanged", cur));
+      realigned = true;
     }
     sel.empty();
     const list = models.includes(cur) || !cur ? models : [cur, ...models];
     for (const m of list) { const o = sel.createEl("option", { text: m }); o.value = m; }
     sel.value = cur;
+    this.updateModelStatus(models, cur);
+    this.refreshBtn?.removeClass("is-loading");
+    // Bei manuellem Refresh ohne Modellwechsel ein kurzes „N Modelle geladen" — sonst bliebe der Klick unsichtbar.
+    if (userTriggered && !realigned) this.statusEl?.setText(t("view.modelsLoaded", models.length));
+  }
+
+  /** Grüner Haken neben dem Dropdown, wenn die Auswahl im Backend (/v1/models) geladen ist. */
+  private updateModelStatus(models: string[], cur: string): void {
+    const el = this.modelStatusEl; if (!el) return;
+    el.empty();
+    const loaded = !!cur && models.includes(cur);
+    if (loaded) { el.addClass("is-loaded"); setIcon(el, "check"); el.setAttribute("title", t("view.modelLoaded")); }
+    else { el.removeClass("is-loaded"); el.setAttribute("title", ""); }
   }
 
   async rescan(): Promise<void> {

@@ -255,6 +255,23 @@ describe("ImgToMdView — Modell-Refresh", () => {
     await view.run();
     expect(setModel).not.toHaveBeenCalled();
   });
+  it("zeigt den grünen Haken, wenn die Auswahl im Backend geladen ist", async () => {
+    const { view } = mkView({ getModel: () => "vm", listModels: async () => ["vm", "other"] });
+    await view.onOpen();
+    expect(all(view.contentEl, "img2md-model-status")[0].className).toContain("is-loaded");
+  });
+  it("kein Haken, wenn die Auswahl nicht geladen ist (offline/leere Liste)", async () => {
+    const { view } = mkView({ getModel: () => "vm", listModels: async () => [] });
+    await view.onOpen();
+    expect(all(view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+  });
+  it("manueller Refresh zeigt die Modell-Anzahl in der Statuszeile (Klick-Feedback)", async () => {
+    const { view } = mkView({ getModel: () => "vm", listModels: async () => ["vm", "other"] });
+    await view.onOpen();
+    all(view.contentEl, "img2md-model-refresh")[0].click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(all(view.contentEl, "img2md-status")[0].textContent).toContain("2");
+  });
 });
 
 describe("ImgToMdView — PDF", () => {
