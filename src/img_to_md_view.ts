@@ -21,6 +21,8 @@ export interface ImgToMdViewDeps {
 export class ImgToMdView extends ItemView {
   private state = new ImgToMdState();
   private statusEl: HTMLElement | null = null;
+  private statusIconEl: HTMLElement | null = null;
+  private statusLabelEl: HTMLElement | null = null;
   private modelSel: HTMLSelectElement | null = null;
   private modelStatusEl: HTMLElement | null = null;
   private refreshBtn: HTMLElement | null = null;
@@ -39,6 +41,8 @@ export class ImgToMdView extends ItemView {
   async onOpen(): Promise<void> {
     const c = this.contentEl; c.empty(); c.addClass("img2md-root");
     this.statusEl = c.createDiv({ cls: "img2md-status" });
+    this.statusIconEl = this.statusEl.createSpan({ cls: "img2md-status-icon" });
+    this.statusLabelEl = this.statusEl.createSpan({ cls: "img2md-status-label" });
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
@@ -62,10 +66,21 @@ export class ImgToMdView extends ItemView {
   }
 
   async refreshStatus(): Promise<void> {
-    const el = this.statusEl; if (!el) return;
-    el.setText(t("view.checking"));
+    if (!this.statusEl) return;
+    this.setConnState(null);
     const ok = await this.deps.ping();
-    el.setText(ok ? t("view.connected") : t("view.offline"));
+    this.setConnState(ok);
+  }
+
+  /** Verbindungsstatus per Icon-FORM (loader / circle-check / circle-x) + Text; Farbe nur
+   *  sekundär — lesbar auch bei Farbsehschwäche (WCAG 1.4.1). */
+  private setConnState(state: boolean | null): void {
+    const root = this.statusEl, icon = this.statusIconEl, label = this.statusLabelEl;
+    if (!root || !icon || !label) return;
+    root.removeClass("is-ok"); root.removeClass("is-error"); root.removeClass("is-checking");
+    if (state === null) { root.addClass("is-checking"); setIcon(icon, "loader"); label.setText(t("view.checking")); }
+    else if (state) { root.addClass("is-ok"); setIcon(icon, "circle-check"); label.setText(t("view.connected")); }
+    else { root.addClass("is-error"); setIcon(icon, "circle-x"); label.setText(t("view.offline")); }
   }
 
   private async refreshModels(userTriggered = false): Promise<void> {
@@ -77,7 +92,7 @@ export class ImgToMdView extends ItemView {
     if (cur && models.length && !models.includes(cur)) {   // Auswahl nicht mehr geladen → angleichen
       cur = models[0];
       this.deps.setModel(cur);
-      this.statusEl?.setText(t("view.modelChanged", cur));
+      this.statusLabelEl?.setText(t("view.modelChanged", cur));
       realigned = true;
     }
     sel.empty();
@@ -87,16 +102,17 @@ export class ImgToMdView extends ItemView {
     this.updateModelStatus(models, cur);
     this.refreshBtn?.removeClass("is-loading");
     // Bei manuellem Refresh ohne Modellwechsel ein kurzes „N Modelle geladen" — sonst bliebe der Klick unsichtbar.
-    if (userTriggered && !realigned) this.statusEl?.setText(t("view.modelsLoaded", models.length));
+    if (userTriggered && !realigned) this.statusLabelEl?.setText(t("view.modelsLoaded", models.length));
   }
 
-  /** Grüner Haken neben dem Dropdown, wenn die Auswahl im Backend (/v1/models) geladen ist. */
+  /** Status-Icon neben dem Dropdown. Die Form (circle-check vs. circle-slash) trägt die
+   *  Bedeutung, Farbe nur sekundär — lesbar auch bei Farbsehschwäche (WCAG 1.4.1). */
   private updateModelStatus(models: string[], cur: string): void {
     const el = this.modelStatusEl; if (!el) return;
     el.empty();
     const loaded = !!cur && models.includes(cur);
-    if (loaded) { el.addClass("is-loaded"); setIcon(el, "check"); el.setAttribute("title", t("view.modelLoaded")); }
-    else { el.removeClass("is-loaded"); el.setAttribute("title", ""); }
+    if (loaded) { el.addClass("is-loaded"); setIcon(el, "circle-check"); el.setAttribute("title", t("view.modelLoaded")); }
+    else { el.removeClass("is-loaded"); setIcon(el, "circle-slash"); el.setAttribute("title", t("view.modelNotLoaded")); }
   }
 
   async rescan(): Promise<void> {
@@ -235,7 +251,7 @@ export class ImgToMdView extends ItemView {
       await this.refreshModels();
       // refreshModels kann im atypischen Fall (actual nicht in /v1/models) selbst auf ein anderes Modell
       // angleichen und den Hinweis setzen; den eigenen Hinweis nur überschreiben, wenn actual gewonnen hat.
-      if (this.deps.getModel() === actual) this.statusEl?.setText(t("view.modelChanged", actual));
+      if (this.deps.getModel() === actual) this.statusLabelEl?.setText(t("view.modelChanged", actual));
     }
     this.renderCards();
   }
