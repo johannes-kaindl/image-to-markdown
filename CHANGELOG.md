@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.4.1] — 2026-06-24
+
+### Geändert
+
+Wartungs-Release für die Konformität mit dem Obsidian-Community-Plugin-Review (keine
+nutzersichtbaren Funktionsänderungen):
+
+- Settings-Re-Render läuft über eine private Methode statt der seit Obsidian 1.13 veralteten
+  `display()` — `minAppVersion` bleibt 1.8.7, Verhalten unverändert.
+- `authorUrl` im Manifest zeigt auf die Autoren-Homepage (jkaindl.de).
+- Installations-Doku auf die Community-Plugins-Suche umgestellt (BRAT-Anleitung entfernt, da
+  das Plugin nun gelistet ist).
+
 ## [0.4.0] — 2026-06-24
 
 ### Hinzugefügt
