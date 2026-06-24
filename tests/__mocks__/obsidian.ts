@@ -1,5 +1,6 @@
 export function makeFakeEl(): any {
   const children: any[] = [];
+  const attrs: Record<string, string> = {};
   const el: any = {
     children, empty: () => { children.length = 0; },
     createDiv: (o?: any) => { const c = makeFakeEl(); if (o?.cls) c.className = o.cls; if (o?.text) c.textContent = o.text; children.push(c); return c; },
@@ -9,7 +10,8 @@ export function makeFakeEl(): any {
     removeClass: (c: string) => { el.className = String(el.className ?? "").split(" ").filter((x: string) => x && x !== c).join(" "); },
     _listeners: {} as Record<string, Function[]>,
     addEventListener: (event: string, cb: Function) => { if (!el._listeners[event]) el._listeners[event] = []; el._listeners[event].push(cb); },
-    setAttribute: (_name: string, _val: string) => {},
+    setAttribute: (name: string, val: string) => { attrs[name] = String(val); },
+    getAttribute: (name: string) => (name in attrs ? attrs[name] : null),
     click: () => { (el._listeners["click"] ?? []).forEach((cb: Function) => cb()); },
   };
   return el;
@@ -19,7 +21,7 @@ export class ItemView { app: any; contentEl: any; constructor(public leaf: any) 
 export class PluginSettingTab { app: any; plugin: any; containerEl: any; constructor(app: any, plugin: any) { this.app = app; this.plugin = plugin; this.containerEl = makeFakeEl(); } display() {} }
 export class Setting { constructor(public containerEl: any) {} setName(_: string) { return this; } setDesc(_: string) { return this; } addText(cb: any) { cb({ setValue: () => ({ onChange: () => {} }), setPlaceholder: () => ({}) }); return this; } addSlider(cb: any) { cb({ setLimits: () => ({ setValue: () => ({ onChange: () => {} }) }) }); return this; } }
 export class TFile { path = ""; basename = ""; extension = "md"; }
-export function setIcon(_el: any, _name: string): void {}
+export function setIcon(el: any, name: string): void { el?.setAttribute?.("data-icon", name); }
 export function getLanguage(): string { return "en"; }
 export class Notice { constructor(_message: string) {} }
 import { vi } from "vitest";

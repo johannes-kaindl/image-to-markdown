@@ -90,13 +90,14 @@ export class ImgToMdView extends ItemView {
     if (userTriggered && !realigned) this.statusEl?.setText(t("view.modelsLoaded", models.length));
   }
 
-  /** Grüner Haken neben dem Dropdown, wenn die Auswahl im Backend (/v1/models) geladen ist. */
+  /** Status-Icon neben dem Dropdown. Die Form (circle-check vs. circle-slash) trägt die
+   *  Bedeutung, Farbe nur sekundär — lesbar auch bei Farbsehschwäche (WCAG 1.4.1). */
   private updateModelStatus(models: string[], cur: string): void {
     const el = this.modelStatusEl; if (!el) return;
     el.empty();
     const loaded = !!cur && models.includes(cur);
-    if (loaded) { el.addClass("is-loaded"); setIcon(el, "check"); el.setAttribute("title", t("view.modelLoaded")); }
-    else { el.removeClass("is-loaded"); el.setAttribute("title", ""); }
+    if (loaded) { el.addClass("is-loaded"); setIcon(el, "circle-check"); el.setAttribute("title", t("view.modelLoaded")); }
+    else { el.removeClass("is-loaded"); setIcon(el, "circle-slash"); el.setAttribute("title", t("view.modelNotLoaded")); }
   }
 
   async rescan(): Promise<void> {

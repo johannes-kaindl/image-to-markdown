@@ -265,6 +265,19 @@ describe("ImgToMdView — Modell-Refresh", () => {
     await view.onOpen();
     expect(all(view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
   });
+  it("Modell-Status unterscheidet geladen/nicht-geladen per Icon-Form (nicht nur Farbe)", async () => {
+    const okV = mkView({ getModel: () => "vm", listModels: async () => ["vm", "other"] });
+    await okV.view.onOpen();
+    const okIcon = all(okV.view.contentEl, "img2md-model-status")[0].getAttribute("data-icon");
+
+    const offV = mkView({ getModel: () => "vm", listModels: async () => [] });
+    await offV.view.onOpen();
+    const offIcon = all(offV.view.contentEl, "img2md-model-status")[0].getAttribute("data-icon");
+
+    expect(okIcon).toBeTruthy();
+    expect(offIcon).toBeTruthy();      // nicht-geladen hat jetzt eine eigene Form statt "leer"
+    expect(okIcon).not.toBe(offIcon);  // farbunabhängig unterscheidbar
+  });
   it("manueller Refresh zeigt die Modell-Anzahl in der Statuszeile (Klick-Feedback)", async () => {
     const { view } = mkView({ getModel: () => "vm", listModels: async () => ["vm", "other"] });
     await view.onOpen();
