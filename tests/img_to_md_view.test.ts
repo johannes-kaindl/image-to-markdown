@@ -44,6 +44,15 @@ describe("ImgToMdView — Gerüst + Liste", () => {
     const offV = mkView({ ping: async () => false }); await offV.view.onOpen();
     expect(all(offV.view.contentEl, "img2md-status")[0].textContent).toContain("offline");
   });
+  it("Verbindungsstatus unterscheidet sich per Icon-Form (nicht nur Glyph/Farbe)", async () => {
+    const okV = mkView({ ping: async () => true }); await okV.view.onOpen();
+    const okIcon = all(okV.view.contentEl, "img2md-status-icon")[0].getAttribute("data-icon");
+    const offV = mkView({ ping: async () => false }); await offV.view.onOpen();
+    const offIcon = all(offV.view.contentEl, "img2md-status-icon")[0].getAttribute("data-icon");
+    expect(okIcon).toBeTruthy();
+    expect(offIcon).toBeTruthy();
+    expect(okIcon).not.toBe(offIcon);
+  });
   it("listet erkannte Bilder mit Checkbox; unsupported ist disabled", async () => {
     const { view } = mkView(); await view.onOpen();
     const checks = all(view.contentEl, "img2md-check");

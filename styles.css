@@ -1,6 +1,12 @@
 /* Image to Markdown — Sidebar-Styles */
 .img2md-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.img2md-status { font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 2px 0; margin-bottom: 6px; flex: 0 0 auto; }
+/* Status-Icon: Form (circle-check / circle-x / loader) trägt die Bedeutung, Farbe nur sekundär — barrierefrei bei Farbsehschwäche (WCAG 1.4.1). */
+.img2md-status { font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 2px 0; margin-bottom: 6px; flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+.img2md-status-icon { display: inline-flex; align-items: center; color: var(--text-muted); }
+.img2md-status-icon svg { width: 14px; height: 14px; }
+.img2md-status.is-ok .img2md-status-icon { color: var(--text-success); }
+.img2md-status.is-error .img2md-status-icon { color: var(--text-error); }
+.img2md-status.is-checking .img2md-status-icon { color: var(--text-muted); }
 .img2md-model { width: 100%; flex: 0 0 auto; font-size: 12px; }
 .img2md-head { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; margin-bottom: 6px; }
 .img2md-toggle { font-size: 12px; }
