@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.4.2] — 2026-06-24
+
+### Geändert
+
+Barrierefreie Statusanzeige (keine Änderung am Transkribieren):
+
+- Verbindungs- und Modell-Status werden über die Icon-**Form** unterschieden
+  (`circle-check` verbunden · `circle-x` offline · `circle-slash` Modell nicht geladen ·
+  `loader` prüft) statt allein über Farbe — lesbar auch bei Rot-Grün-Sehschwäche
+  (WCAG 1.4.1, redundante Kodierung aus Form + Text + Farbe).
+- `minAppVersion` bleibt 1.8.7.
+
 ## [0.4.1] — 2026-06-24
 
 ### Geändert
