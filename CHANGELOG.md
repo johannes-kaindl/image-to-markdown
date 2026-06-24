@@ -4,14 +4,16 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
-## [Unreleased]
+## [0.4.0] — 2026-06-24
 
 ### Hinzugefügt
 
 - **Modell-Transparenz:** ein Refresh-Icon neben beiden Modell-Auswahlen (Sidebar + Einstellungen)
   lädt die Modell-Liste neu — nützlich, wenn ein externer Prozess das geladene Modell des lokalen
   Backends (MLX/LM Studio) gewechselt hat. Nach jeder Transkription gleicht die Sidebar die Auswahl
-  automatisch an das tatsächlich verwendete Modell (`response.model`) an.
+  automatisch an das tatsächlich verwendete Modell (`response.model`) an. Ein grüner Haken neben dem
+  Dropdown zeigt, ob die Auswahl im Backend geladen ist; der Refresh gibt sichtbares Feedback
+  („N Modelle geladen").
 
 - **Verlinkte Quellen:** reine Links auf Bilder/PDFs (`[[x.pdf]]`, `[text](x.pdf)` ohne `!`) werden
   jetzt ebenfalls als Quelle erkannt und transkribiert; der Link im Text bleibt dabei unverändert
