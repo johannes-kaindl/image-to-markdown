@@ -27,7 +27,7 @@ Contributions of all sizes are welcome: bug reports, fixes, docs, and features. 
 
 - Releases are tagged with [SemVer](https://semver.org/) **without** a `v` prefix — e.g. `1.2.3`, not `v1.2.3`.
 - [Codeberg](https://codeberg.org/jkaindl/image-to-markdown) is the canonical, primary remote (`origin`).
-- The [GitHub repository](https://github.com/johannes-kaindl/image-to-markdown) is a **mirror** only (used for BRAT and registry purposes). Open your contributions against Codeberg.
+- The [GitHub repository](https://github.com/johannes-kaindl/image-to-markdown) is a **mirror** only (used for the community plugin registry and release CI). Open your contributions against Codeberg.
 
 ## Quality gate
 

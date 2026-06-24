@@ -65,9 +65,9 @@ Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 
 ## Installation
 
-### Community-Plugins (in Kürze)
+### Community-Plugins (empfohlen)
 
-**Image to Markdown** in **Einstellungen → Community-Plugins → Durchsuchen** suchen und installieren. Bis das Directory-Listing live geht, bitte BRAT oder Manuell (unten) verwenden.
+**Image to Markdown** in **Einstellungen → Community-Plugins → Durchsuchen** suchen, dann **Installieren** und **Aktivieren**.
 
 ### Manuell
 
@@ -75,11 +75,6 @@ Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 [letzten Release](https://codeberg.org/jkaindl/image-to-markdown/releases) nach
 `<vault>/.obsidian/plugins/image-to-markdown/` legen, dann unter **Settings → Community
 plugins** aktivieren.
-
-### BRAT (Beta)
-
-Den GitHub-Mirror `johannes-kaindl/image-to-markdown` in
-[BRAT](https://github.com/TfTHacker/obsidian42-brat) eintragen.
 
 ### From source
 

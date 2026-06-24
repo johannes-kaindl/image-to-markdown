@@ -39,17 +39,13 @@ Reasoning models that emit `reasoning_content` in the stream, or inline `<think>
 
 ## Install
 
-### Community Plugins (coming soon)
+### Community plugins (recommended)
 
-Search for **Image to Markdown** in **Settings → Community plugins → Browse**. Until the directory listing goes live, use BRAT or Manual below.
+Search for **Image to Markdown** in **Settings → Community plugins → Browse**, then click **Install** and **Enable**.
 
 ### Manual
 
 Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://codeberg.org/jkaindl/image-to-markdown/releases) and place them in `<vault>/.obsidian/plugins/image-to-markdown/`, then enable the plugin under **Settings → Community plugins**.
-
-### BRAT (beta)
-
-Add the GitHub mirror `johannes-kaindl/image-to-markdown` to [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 
 ### From source
 

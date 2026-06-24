@@ -42,11 +42,10 @@ first run produces nothing, so we will get it right in Step 3.
 
 ## Step 2 — Install and enable the plugin
 
-Install Image to Markdown using any of the install paths in the
-[README](../../README.md) — for a first try, the manual install (copy `main.js`,
-`manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/image-to-markdown/`)
-is the quickest. Then open **Settings → Community plugins** and enable **Image to
-Markdown**.
+Install Image to Markdown from **Settings → Community plugins → Browse** (search
+for "Image to Markdown" and click **Install**), or use any of the other install
+paths in the [README](../../README.md). Then open **Settings → Community plugins**
+and enable **Image to Markdown**.
 
 When it is enabled you will see a new icon in the left ribbon labelled **"Image →
 Markdown"** (a small scan-text icon). We will use it in Step 5.
