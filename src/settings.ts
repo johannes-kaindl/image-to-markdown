@@ -51,7 +51,12 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
 
   constructor(app: App, private plugin: ImageToMarkdownPlugin) { super(app, plugin); }
 
-  display(): void {
+  // display() ist seit Obsidian 1.13 deprecated, bleibt aber der Fallback-Override für
+  // minAppVersion < 1.13. Es delegiert an render(); interne Re-Renders rufen render() direkt,
+  // damit kein deprecated this.display()-Aufruf entsteht (Community-Review SOURCE-CODE-Check).
+  display(): void { this.render(); }
+
+  private render(): void {
     const { containerEl } = this;
     containerEl.empty();
     const endpoint = (): string => this.plugin.settings.visionEndpoint;
@@ -87,7 +92,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
 
     // ── Modell ──
     const modelSetting = new Setting(containerEl).setName(t("settings.model.name")).setDesc(t("settings.model.desc"));
-    modelSetting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => this.display()));
+    modelSetting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => this.render()));
 
     // ── Vision-Fähigkeit (Icon + Text) + aktiver Test ──
     const capSetting = new Setting(containerEl).setName(t("settings.capability.name"));
@@ -131,7 +136,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       } else {
         modelSetting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
           .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); this.plugin.reconnectVision(); }));
-        modelSetting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => this.display()));
+        modelSetting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => this.render()));
       }
       showCaps(this.plugin.settings.visionModel);
     });
