@@ -5,6 +5,14 @@ import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilitie
 import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 
+/** Endpoint-Liste aus geladenen Settings: vorhandene visionEndpoints (leere gefiltert),
+ *  sonst der alte Einzel-visionEndpoint als 1-Element-Liste, sonst leer. Reiner Helfer. */
+export function migrateEndpoints(saved: { visionEndpoint?: string; visionEndpoints?: string[] } | null | undefined): string[] {
+  if (saved?.visionEndpoints) return saved.visionEndpoints.filter(e => e && e.trim());
+  if (saved?.visionEndpoint && saved.visionEndpoint.trim()) return [saved.visionEndpoint];
+  return [];
+}
+
 export interface ImageToMarkdownSettings {
   visionEndpoint: string;
   visionModel: string;
