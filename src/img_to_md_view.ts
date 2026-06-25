@@ -165,7 +165,8 @@ export class ImgToMdView extends ItemView {
         const label = item.supported ? this.basename(item.link) : t("view.unsupportedSuffix", this.basename(item.link));
         row.createEl("span", { cls: "img2md-name", text: label });
       }
-      if (item.embed === false) row.createEl("span", { cls: "img2md-linked", text: t("view.linked") });
+      if (item.selfSource) row.createEl("span", { cls: "img2md-linked", text: t("view.thisFile") });
+      else if (item.embed === false) row.createEl("span", { cls: "img2md-linked", text: t("view.linked") });
       if (item.existingTranscriptPath) {
         row.createEl("span", { cls: "img2md-exists", text: t("view.transcriptExists") });
         const open = row.createEl("a", { cls: "img2md-exists-open", text: t("view.open") });

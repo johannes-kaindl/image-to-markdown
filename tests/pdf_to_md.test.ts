@@ -42,12 +42,18 @@ describe("buildPdfNote", () => {
     expect(note).toContain('source_pdf: "[[d\\"c.pdf]]"');
     expect(note).toContain('transcribed_by: "v\\"m"');
   });
+  it("ohne sourceName → keine source_note-Zeile", () => {
+    const note = buildPdfNote({ pdfLink: "doc.pdf", date: "2026-06-25", model: "vm", rangeFrom: 1, rangeTo: 1, separator: "comment", pages: [{ page: 1, text: "x" }] });
+    expect(note).toContain('source_pdf: "[[doc.pdf]]"');
+    expect(note).not.toContain("source_note");
+  });
 });
 
 function pdfIO(initial: string) {
   const notes = new Map<string, string>([["q.md", initial]]);
   const created: Record<string, string> = {};
   const io: any = {
+    notes,
     date: () => "2026-06-22",
     readNote: async (p: string) => notes.get(p) ?? "",
     writeNote: async (p: string, c: string) => { notes.set(p, c); },
@@ -96,6 +102,17 @@ describe("writePdfTranscript", () => {
     expect(r.path).toBe("doc (PDF transcript).md");
     expect(created["doc (PDF transcript).md"]).toBeDefined();
     expect(notes.get("q.md")).toBe("siehe [[doc.pdf]] dazu");   // Quelle unangetastet
+  });
+  it("selfSource: Notiz unter destDir, kein source_note, Quelldatei unangetastet", async () => {
+    const { io, notes } = pdfIO("");   // leerer Vault, keine Quellnotiz
+    const r = await writePdfTranscript(io, "Anhänge/scan.pdf", { raw: "", link: "scan.pdf" },
+      [{ page: 1, content: "Seite 1", model: "vm" }], "comment", undefined, false, { selfSource: true, destDir: "Transkripte" });
+
+    expect(r.path).toBe("Transkripte/scan (PDF transcript).md");
+    const note = notes.get("Transkripte/scan (PDF transcript).md");
+    expect(note).toContain('source_pdf: "[[scan.pdf]]"');
+    expect(note).not.toContain("source_note");
+    expect(notes.has("Anhänge/scan.pdf")).toBe(false);   // Quelldatei nie geschrieben
   });
   it("Override: überschreibt bestehende PDF-Notiz, neue pages, Quelle unverändert", async () => {
     const notes = new Map<string, string>([

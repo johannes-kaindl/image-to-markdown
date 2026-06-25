@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import type { ImgItem } from "./img_to_md_state";
 
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
@@ -6,10 +7,18 @@ export const PDF_EXT = "pdf";
 
 export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number; embed: boolean }
 
-function extOf(link: string): string {
+export function extOf(link: string): string {
   const clean = link.split("#")[0].split("|")[0].trim();
   const dot = clean.lastIndexOf(".");
   return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
+}
+
+/** Klassifiziert eine Datei-Extension als Medientyp (Bild/PDF) oder null, wenn nicht transkribierbar. */
+export function classifySource(ext: string): "image" | "pdf" | null {
+  const e = ext.toLowerCase();
+  if (IMAGE_EXTS.includes(e)) return "image";
+  if (e === PDF_EXT) return "pdf";
+  return null;
 }
 
 /** #page=N aus dem rohen Linkziel (vor dem #-Strip) lesen. */
@@ -54,20 +63,12 @@ export function findImageEmbeds(content: string): ImageEmbed[] {
 }
 
 /** Baut die Transkript-Notiz: Frontmatter-Ref + Foto-Embed oben + Transkript. */
-export function buildTranscriptNote(o: { imageLink: string; sourceName: string; date: string; model: string; transcript: string }): string {
+export function buildTranscriptNote(o: { imageLink: string; sourceName?: string; date: string; model: string; transcript: string }): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');   // YAML-Doppelquote-String — schützt vor Frontmatter-Bruch
-  return [
-    "---",
-    `source_image: "[[${esc(o.imageLink)}]]"`,
-    `source_note: "[[${esc(o.sourceName)}]]"`,
-    `created: ${o.date}`,
-    `transcribed_by: "${esc(o.model)}"`,
-    "---",
-    `![[${o.imageLink}]]`,
-    "",
-    o.transcript,
-    "",
-  ].join("\n");
+  const lines = ["---", `source_image: "[[${esc(o.imageLink)}]]"`];
+  if (o.sourceName !== undefined) lines.push(`source_note: "[[${esc(o.sourceName)}]]"`);
+  lines.push(`created: ${o.date}`, `transcribed_by: "${esc(o.model)}"`, "---", `![[${o.imageLink}]]`, "", o.transcript, "");
+  return lines.join("\n");
 }
 
 /** Override: erhält das komplette Frontmatter der alten Notiz, ersetzt transcribed_by (+ pages bei PDF)
@@ -103,14 +104,37 @@ export function uniqueNotePath(io: { noteExists(p: string): boolean }, dir: stri
 function dirOf(path: string): string { const i = path.lastIndexOf("/"); return i >= 0 ? path.slice(0, i) : ""; }
 export function basenameNoExt(path: string): string { const b = path.slice(path.lastIndexOf("/") + 1); const d = b.lastIndexOf("."); return d >= 0 ? b.slice(0, d) : b; }
 
+/** Letztes Pfadsegment inkl. Extension (für Wikilink/Anzeige der Selbst-Quelle). */
+export function basename(path: string): string { return path.slice(path.lastIndexOf("/") + 1); }
+
+/** Baut das eine ImgItem für eine direkt geöffnete Medien-Datei (Selbst-Quelle).
+ *  null, wenn sourcePath kein Bild/PDF ist. pageCount/existingTranscriptPath kommen
+ *  von der Obsidian-Schicht (I/O); diese Funktion bleibt rein. */
+export function buildSelfSourceItem(
+  sourcePath: string,
+  opts: { pageCount?: number; existingTranscriptPath?: string; pdfMaxPages: number },
+): ImgItem | null {
+  const ext = extOf(sourcePath);
+  const cls = classifySource(ext);
+  if (!cls) return null;
+  const common = { raw: "", link: basename(sourcePath), ext, existingTranscriptPath: opts.existingTranscriptPath, embed: false, selfSource: true };
+  if (cls === "pdf") {
+    const pageCount = opts.pageCount ?? 0;
+    const cappedTo = Math.min(pageCount, opts.pdfMaxPages);
+    return { ...common, kind: "pdf", supported: pageCount > 0, pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 } };
+  }
+  return { ...common, kind: "image", supported: SUPPORTED_EXTS.includes(ext) };
+}
+
 function transcriptSuffix(kind: "image" | "pdf"): string {
   return t(kind === "pdf" ? "note.suffix.pdf" : "note.suffix.image");
 }
 
-/** Pfad für die Transkript-Notiz: neben der Quellnotiz, Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
-export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, kind: "image" | "pdf"): string {
+/** Pfad für die Transkript-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
+ *  Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
+export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, kind: "image" | "pdf", destDir?: string): string {
   const base = `${basenameNoExt(imagePath)} ${transcriptSuffix(kind)}`;
-  return uniqueNotePath(io, dirOf(sourcePath), base);
+  return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
 }
 
 export interface ImgToMdIO {
@@ -125,18 +149,23 @@ export interface ImgToMdIO {
   notify(msg: string): void;
 }
 
-/** Schreibt mehrere Transkripte gebündelt: Quelle EINMAL lesen, pro Eintrag Notiz anlegen
- *  + Embed ersetzen (akkumuliert), Quelle EINMAL schreiben. Leere Transkripte werden
- *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race.
+/** Schreibt mehrere Transkripte gebündelt: im Nicht-selfSource-Pfad Quelle EINMAL lesen,
+ *  pro Eintrag Notiz anlegen + Embed ersetzen (akkumuliert), Quelle EINMAL schreiben. Leere
+ *  Transkripte werden übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race.
  *  Override: ist `overwritePath` gesetzt, wird stattdessen die bestehende Notiz via
- *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet). */
+ *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet).
+ *  selfSource: Quelle ist eine Binärdatei — kein readNote/writeNote auf sourcePath,
+ *  kein replaceEmbed, keine source_note, Ablage unter opts.destDir. */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
   entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean }[],
+  opts?: { selfSource?: boolean; destDir?: string },
 ): Promise<{ paths: string[] }> {
-  const before = await io.readNote(sourcePath);
+  const self = opts?.selfSource === true;
+  const destDir = opts?.destDir;
+  const before = self ? "" : await io.readNote(sourcePath);
   let content = before;
-  const sourceName = basenameNoExt(sourcePath);
+  const sourceName = self ? undefined : basenameNoExt(sourcePath);
   const paths: string[] = [];
   for (const e of entries) {
     const transcript = e.content.trim();
@@ -147,14 +176,13 @@ export async function writeTranscripts(
       paths.push(e.overwritePath);
       continue;
     }
-    const resolved = io.resolveImage(e.link, sourcePath);
-    const imagePath = resolved?.path ?? e.link;
-    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");
+    const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
+    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", destDir);
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
-    if (e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
+    if (!self && e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     paths.push(newPath);
   }
-  if (content !== before) await io.writeNote(sourcePath, content);
+  if (!self && content !== before) await io.writeNote(sourcePath, content);
   return { paths };
 }
 

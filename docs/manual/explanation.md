@@ -75,6 +75,14 @@ front matter is what makes "this is the transcript of that image" a fact the plu
 rather than a guess. It is the difference between recognising a transcript by what it *claims
 about itself* and guessing from incidental layout.
 
+One edge worth noting: when the active file *is itself* a PDF or image — opened directly in
+Obsidian rather than embedded in a note — there is no source note to sit next to and no embed
+to replace. The transcript is still created non-destructively and written to the vault's
+**"Default location for new notes"** (via `app.fileManager.getNewFileParent`); the source file
+is never touched. The frontmatter omits `source_note` because the concept simply does not apply;
+everything else (`source_pdf`/`source_image`, `created`, `transcribed_by`) is written as normal.
+Idempotency works exactly as in the note-embedded case.
+
 That recognition then powers a second 0.3.0 decision: **override is opt-in, and it preserves the
 front matter**. When a transcript already exists, its sidebar row starts *unchecked* — the safe
 default is to leave finished work alone. If you deliberately re-select it and transcribe again,

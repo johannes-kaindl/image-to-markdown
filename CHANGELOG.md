@@ -4,6 +4,24 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [Unreleased]
+
+### Hinzugefügt
+
+- **Aktive Datei als Quelle (Etappe 3):** ist die aktive Datei selbst ein Bild oder eine PDF
+  (d.h. keine Notiz, sondern die Mediendatei wird direkt in Obsidian angezeigt), zeigt die
+  Sidebar diese Datei als einzelnen Eintrag mit dem Label **„diese Datei"** (DE) bzw.
+  **„this file"** (EN) an und behandelt sie als Transkriptions-Quelle. PDFs: Seitenbereich
+  wählbar wie gewohnt; Bilder: einzelne Karte. Die Transkript-Notiz wird am
+  **„Standard-Speicherort für neue Notizen"** (`app.fileManager.getNewFileParent`) angelegt,
+  da es keine Quellnotiz gibt, neben der sie abgelegt werden könnte. Das Frontmatter enthält
+  kein `source_note`-Feld (es gibt keine Quellnotiz); `source_pdf`/`source_image`, `created`
+  und `transcribed_by` (PDFs auch `pages`) bleiben erhalten. Die Quelldatei wird **nicht
+  verändert** (kein Embed-Ersatz). Idempotenz und Override funktionieren wie gewohnt: eine
+  bereits transkribierte Datei zeigt „✓ Transkript vorhanden → öffnen"; Override überschreibt
+  die bestehende Notiz. Ausschließlich über die Sidebar — der Command „Bilder der aktiven Notiz
+  transkribieren" und das Kontextmenü betreffen weiterhin nur Notizen mit Embeds.
+
 ## [0.4.2] — 2026-06-24
 
 ### Geändert

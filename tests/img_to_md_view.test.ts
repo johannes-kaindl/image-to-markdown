@@ -196,6 +196,17 @@ const ITEMS_EXISTS: ImgItem[] = [
   { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "b (transcript).md" },
 ];
 
+describe("ImgToMdView — selfSource-Label", () => {
+  it("selfSource-Item rendert das 'diese Datei'-Label statt 'verlinkt'", async () => {
+    const item: ImgItem = { raw: "", link: "scan.png", ext: "png", supported: true, kind: "image", embed: false, selfSource: true };
+    const { view } = mkView({ scan: async () => [item] });
+    await view.onOpen();
+    const badges = all(view.contentEl, "img2md-linked");
+    expect(badges.length).toBe(1);
+    expect(badges[0].textContent).toBe("this file");
+  });
+});
+
 describe("ImgToMdView — linked-Badge", () => {
   it("rendert 'linked'-Badge nur für reine Links (embed:false)", async () => {
     const items: ImgItem[] = [

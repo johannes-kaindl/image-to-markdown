@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename } from "../src/img_to_md";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -79,6 +79,11 @@ describe("buildTranscriptNote", () => {
     expect(note).toContain('source_note: "[[No\\"tiz]]"');
     expect(note).toContain('transcribed_by: "v\\"m"');
   });
+  it("ohne sourceName → keine source_note-Zeile", () => {
+    const note = buildTranscriptNote({ imageLink: "scan.png", date: "2026-06-25", model: "vm", transcript: "x" });
+    expect(note).toContain('source_image: "[[scan.png]]"');
+    expect(note).not.toContain("source_note");
+  });
 });
 
 describe("replaceEmbed", () => {
@@ -103,6 +108,12 @@ describe("transcriptNotePath", () => {
     expect(transcriptNotePath(io, "dir/quelle.md", "dir/img/foto.png", "image")).toBe("dir/foto (transcript)-2.md");
     expect(transcriptNotePath(io, "quelle.md", "foto.png", "image")).toBe("foto (transcript).md");
   });
+
+  it("destDir überschreibt das Verzeichnis der Quellnotiz", () => {
+    const io = { noteExists: () => false };
+    expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "Transkripte")).toBe("Transkripte/scan (PDF transcript).md");
+    expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "")).toBe("scan (PDF transcript).md");
+  });
 });
 
 function fakeIO(over: any = {}) {
@@ -110,8 +121,9 @@ function fakeIO(over: any = {}) {
   const created: Record<string, string> = {};
   const notices: string[] = [];
   const io: any = {
+    notes,
     date: () => "2026-06-20",
-    readNote: async (p: string) => notes.get(p) ?? "",
+    readNote: over.readNote ?? (async (p: string) => notes.get(p) ?? ""),
     writeNote: async (p: string, c: string) => { notes.set(p, c); },
     createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
     noteExists: (p: string) => notes.has(p),
@@ -172,6 +184,23 @@ describe("writeTranscripts", () => {
     expect(notes.get("b (transcript).md")).toContain("created: 2026-01-01");
     expect(notes.get("b (transcript).md")).toContain('transcribed_by: "neu"');
     expect(notes.get("q.md")).toBe("![[b.png]]");  // kein Embed-Ersatz
+  });
+
+  it("selfSource: schreibt unter destDir, kein source_note, kein Quell-Read/-Write", async () => {
+    const reads: string[] = [];
+    const { io, notes } = fakeIO({
+      readNote: async (p: string) => { reads.push(p); return ""; },
+    });
+    const r = await writeTranscripts(io, "Anhänge/scan.png", [
+      { raw: "", link: "scan.png", content: "Hallo", model: "vm", embed: false },
+    ], { selfSource: true, destDir: "Transkripte" });
+
+    expect(r.paths).toEqual(["Transkripte/scan (transcript).md"]);
+    const note = notes.get("Transkripte/scan (transcript).md");
+    expect(note).toContain('source_image: "[[scan.png]]"');
+    expect(note).not.toContain("source_note");
+    expect(reads).not.toContain("Anhänge/scan.png");   // Quelldatei nie gelesen
+    expect(notes.has("Anhänge/scan.png")).toBe(false); // und nie geschrieben
   });
 });
 
@@ -242,6 +271,23 @@ describe("runImgToMd", () => {
   });
 });
 
+describe("classifySource", () => {
+  it("Bild-Extensions → image", () => {
+    expect(classifySource("png")).toBe("image");
+    expect(classifySource("JPG")).toBe("image");
+    expect(classifySource("heic")).toBe("image");
+  });
+  it("pdf → pdf", () => {
+    expect(classifySource("pdf")).toBe("pdf");
+    expect(classifySource("PDF")).toBe("pdf");
+  });
+  it("md/canvas/leer → null", () => {
+    expect(classifySource("md")).toBeNull();
+    expect(classifySource("canvas")).toBeNull();
+    expect(classifySource("")).toBeNull();
+  });
+});
+
 describe("rewriteTranscript", () => {
   it("erhält source_*/source_note/created, ersetzt transcribed_by + Body, kein doppeltes Frontmatter", () => {
     const old = `---\nsource_image: "[[b.png]]"\nsource_note: "[[Quelle]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALTER TEXT\n`;
@@ -261,5 +307,38 @@ describe("rewriteTranscript", () => {
     const out = rewriteTranscript(old, { model: "neu", sourceLink: "d.pdf", body: "Y", pages: "1-5" });
     expect(out).toContain('pages: "1-5"');
     expect(out).not.toContain('pages: "1-2"');
+  });
+});
+
+describe("buildSelfSourceItem", () => {
+  it("Bild → image-Item, supported, embed:false, selfSource:true", () => {
+    const it = buildSelfSourceItem("Anhänge/scan.png", { pdfMaxPages: 20 });
+    expect(it).toMatchObject({ kind: "image", link: "scan.png", ext: "png", supported: true, embed: false, selfSource: true, raw: "" });
+  });
+  it("HEIC → image-Item, supported:false", () => {
+    expect(buildSelfSourceItem("foto.heic", { pdfMaxPages: 20 })?.supported).toBe(false);
+  });
+  it("PDF → pdf-Item mit pageCount/range, range to auf pdfMaxPages gekappt", () => {
+    const it = buildSelfSourceItem("doc.pdf", { pageCount: 50, pdfMaxPages: 20 });
+    expect(it).toMatchObject({ kind: "pdf", supported: true, pageCount: 50, range: { from: 1, to: 20 }, selfSource: true });
+  });
+  it("PDF ohne lesbare Seiten → supported:false, range to:1", () => {
+    const it = buildSelfSourceItem("doc.pdf", { pageCount: 0, pdfMaxPages: 20 });
+    expect(it).toMatchObject({ supported: false, range: { from: 1, to: 1 } });
+  });
+  it("existingTranscriptPath wird durchgereicht", () => {
+    const it = buildSelfSourceItem("scan.png", { pdfMaxPages: 20, existingTranscriptPath: "scan (transcript).md" });
+    expect(it?.existingTranscriptPath).toBe("scan (transcript).md");
+  });
+  it("Nicht-Medien-Datei → null", () => {
+    expect(buildSelfSourceItem("note.md", { pdfMaxPages: 20 })).toBeNull();
+    expect(buildSelfSourceItem("board.canvas", { pdfMaxPages: 20 })).toBeNull();
+  });
+});
+
+describe("basename", () => {
+  it("letztes Segment mit Extension", () => {
+    expect(basename("a/b/scan.png")).toBe("scan.png");
+    expect(basename("scan.pdf")).toBe("scan.pdf");
   });
 });

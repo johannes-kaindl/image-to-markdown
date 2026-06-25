@@ -24,6 +24,7 @@ the setup notes in the [README](../../README.md).
 9. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
 10. [Transcribe a PDF](#transcribe-a-pdf)
 11. [Transcribe a linked image or PDF (without an embed)](#transcribe-a-linked-image-or-pdf-without-an-embed)
+12. [Transcribe a standalone PDF or image file](#transcribe-a-standalone-pdf-or-image-file)
 
 ---
 
@@ -324,6 +325,40 @@ The plugin recognises both embed syntax (`![[x]]` / `![alt](x)`) and plain link 
 transcript note is created — the source text is never modified. On the next scan the source still
 shows the same link, and the row will display **"✓ transcript exists"** ("✓ Transkript vorhanden")
 to indicate the transcript has already been written.
+
+---
+
+## Transcribe a standalone PDF or image file
+
+Use this when you have opened a PDF or image file **directly** in Obsidian — not embedded
+in a note, but as the active file itself — and you want to transcribe it without first
+embedding it in a note.
+
+1. Open the PDF or image directly in Obsidian (for example via the file explorer or a link
+   that resolves to the media file itself).
+2. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to
+   open the **"IMG → MD"** sidebar. Because the active file is itself the source, the sidebar
+   shows a single entry labelled **"this file"** ("diese Datei") instead of scanning a
+   note's embeds.
+3. *(PDF only)* Adjust the page range if needed. The default covers all pages.
+4. Click **"Transcribe"** ("Transkribieren"). Transcription streams exactly as for an
+   embedded source.
+5. Click **"Create note"** ("Notiz anlegen") to write the transcript note.
+
+The transcript note is placed at Obsidian's **"Default location for new notes"** (the
+same place Obsidian would create a new note) because there is no source note to sit next to.
+
+Key differences from the note-embedded workflow:
+
+- The transcript's frontmatter has no `source_note` field — there is no source note.
+- The source file is **never modified** — there is no embed to replace.
+- Idempotency and override work as usual: re-opening the same file shows
+  **"✓ transcript exists"** with an "open" link; re-selecting and transcribing again
+  overwrites the existing transcript note in place.
+
+> **Note:** this only applies to the sidebar. The command "Transcribe images in the
+> active note" and the editor context menu operate on notes with embedded media, not
+> on standalone media files.
 
 ---
 

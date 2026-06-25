@@ -32,27 +32,24 @@ export function buildPdfBody(pages: PdfPageTranscript[], separator: PdfPageSepar
 /** Baut die PDF-Transkript-Notiz: Frontmatter + PDF-Embed oben + je nicht-leere Seite ein Block,
  *  getrennt gemäß `separator`. */
 export function buildPdfNote(o: {
-  pdfLink: string; sourceName: string; date: string; model: string;
+  pdfLink: string; sourceName?: string; date: string; model: string;
   pages: PdfPageTranscript[]; rangeFrom: number; rangeTo: number;
   separator: PdfPageSeparator;
 }): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
-  const frontmatter = [
-    "---",
-    `source_pdf: "[[${esc(o.pdfLink)}]]"`,
-    `source_note: "[[${esc(o.sourceName)}]]"`,
-    `created: ${o.date}`,
-    `transcribed_by: "${esc(o.model)}"`,
-    `pages: "${o.rangeFrom}-${o.rangeTo}"`,
-    "---",
-  ].join("\n");
+  const fm = ["---", `source_pdf: "[[${esc(o.pdfLink)}]]"`];
+  if (o.sourceName !== undefined) fm.push(`source_note: "[[${esc(o.sourceName)}]]"`);
+  fm.push(`created: ${o.date}`, `transcribed_by: "${esc(o.model)}"`, `pages: "${o.rangeFrom}-${o.rangeTo}"`, "---");
+  const frontmatter = fm.join("\n");
   const body = buildPdfBody(o.pages, o.separator);
   return `${frontmatter}\n![[${o.pdfLink}]]\n\n${body}\n`;
 }
 
 /** Schreibt EINE Standard-Notiz für ein PDF (alle nicht-leeren Seiten), ersetzt den PDF-Embed.
  *  Bei `overwritePath` gesetzt: überschreibt bestehende PDF-Notiz, keine Embed-Ersetzung.
- *  Bei `embed = false`: legt Notiz an, lässt aber den Quell-Link im Quelltext unverändert. */
+ *  Bei `embed = false`: legt Notiz an, lässt aber den Quell-Link im Quelltext unverändert.
+ *  Bei `opts.selfSource`: kein source_note, Ablage unter opts.destDir, pdfPath = sourcePath,
+ *  kein replaceEmbed/Quell-Read. */
 export async function writePdfTranscript(
   io: ImgToMdIO, sourcePath: string,
   source: { raw: string; link: string },
@@ -60,7 +57,9 @@ export async function writePdfTranscript(
   separator: PdfPageSeparator,
   overwritePath?: string,
   embed = true,
+  opts?: { selfSource?: boolean; destDir?: string },
 ): Promise<{ path: string | null }> {
+  const self = opts?.selfSource === true;
   const kept = pages.filter(p => p.content.trim()).sort((a, b) => a.page - b.page);
   if (!kept.length) return { path: null };
   const model = kept.find(p => p.model)?.model ?? "";
@@ -71,17 +70,16 @@ export async function writePdfTranscript(
     await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body, pages: pagesStr }));
     return { path: overwritePath };
   }
-  const sourceName = basenameNoExt(sourcePath);
-  const resolved = io.resolveImage(source.link, sourcePath);
-  const pdfPath = resolved?.path ?? source.link;
-  const notePath = transcriptNotePath(io, sourcePath, pdfPath, "pdf");
+  const sourceName = self ? undefined : basenameNoExt(sourcePath);
+  const pdfPath = self ? sourcePath : (io.resolveImage(source.link, sourcePath)?.path ?? source.link);
+  const notePath = transcriptNotePath(io, sourcePath, pdfPath, "pdf", opts?.destDir);
   const content = buildPdfNote({
     pdfLink: source.link, sourceName, date: io.date(), model,
     pages: kept.map(p => ({ page: p.page, text: p.content })),
     rangeFrom: kept[0].page, rangeTo: kept[kept.length - 1].page, separator,
   });
   await io.createNote(notePath, content);
-  if (embed) {
+  if (embed && !self) {
     const before = await io.readNote(sourcePath);
     const replaced = replaceEmbed(before, source.raw, basenameNoExt(notePath));
     if (replaced !== before) await io.writeNote(sourcePath, replaced);

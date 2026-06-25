@@ -10,6 +10,7 @@ export interface ImgItem {
   range?: { from: number; to: number };
   existingTranscriptPath?: string;
   embed?: boolean;   // false = reiner Link (Quelltext bleibt); fehlt/true = Embed (heutiges Verhalten)
+  selfSource?: boolean;   // true = die aktive Datei selbst ist die Quelle (embed dann immer false)
 }
 
 export type CardStatus = "streaming" | "done" | "error" | "written";
