@@ -1,6 +1,6 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
-import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab } from "./settings";
-import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
+import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints } from "./settings";
+import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint } from "./vision_client";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
 import { findExistingTranscript, BacklinkLookup } from "./backlinks";
@@ -13,6 +13,7 @@ import { writePdfTranscript } from "./pdf_to_md";
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
   visionClient!: VisionClient;
+  activeEndpoint: string | null = null;
 
   private openPath = (p: string): void => {
     const f = this.app.vault.getAbstractFileByPath(p);
@@ -25,7 +26,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
     setLang(pickLang(getLanguage()));
     const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
     this.settings = Object.assign({}, defaultSettings(), saved ?? {});
-    this.visionClient = new VisionClient(this.settings.visionEndpoint, this.settings.visionModel);
+    const migratedEps = migrateEndpoints(saved);
+    this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
+    this.visionClient = new VisionClient(this.settings.visionEndpoints[0] ?? "", this.settings.visionModel);
+    void this.resolveAndReconnect();
 
     this.addSettingTab(new ImageToMarkdownSettingTab(this.app, this));
     this.registerView(VIEW_TYPE_IMGMD, (leaf: WorkspaceLeaf) => new ImgToMdView(leaf, this.makeImgViewDeps()));
@@ -54,8 +58,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshImgViews()));
   }
 
-  reconnectVision(): void {
-    this.visionClient = new VisionClient(this.settings.visionEndpoint, this.settings.visionModel);
+  async resolveAndReconnect(): Promise<void> {
+    const active = await resolveActiveEndpoint(this.settings.visionEndpoints, ep => new VisionClient(ep, "").ping());
+    this.activeEndpoint = active;
+    const ep = active ?? this.settings.visionEndpoints[0] ?? "";
+    this.visionClient = new VisionClient(ep, this.settings.visionModel);
   }
 
   private mimeOf(ext: string): string { const e = ext.toLowerCase(); return e === "jpg" ? "jpeg" : e; }
@@ -90,7 +97,6 @@ export default class ImageToMarkdownPlugin extends Plugin {
   }
 
   private makeImgViewDeps(): ImgToMdViewDeps {
-    const visionEndpoint = () => this.settings.visionEndpoint;
     return {
       getActivePath: () => this.app.workspace.getActiveFile()?.path ?? null,
       scan: async (sourcePath: string): Promise<ImgItem[]> => {
@@ -146,7 +152,13 @@ export default class ImageToMarkdownPlugin extends Plugin {
         } else {
           dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
         }
-        return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
+        try {
+          return await this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
+        } catch (err) {
+          await this.resolveAndReconnect();
+          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
+          throw err;
+        }
       },
       writeTranscripts: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
@@ -160,10 +172,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir });
         return path;
       },
-      ping: () => new VisionClient(visionEndpoint(), "").ping(),
-      listModels: () => new VisionClient(visionEndpoint(), "").listModels(),
+      ping: async () => { await this.resolveAndReconnect(); return this.activeEndpoint !== null; },
+      listModels: () => new VisionClient(this.activeEndpoint ?? this.settings.visionEndpoints[0] ?? "", "").listModels(),
       getModel: () => this.settings.visionModel,
-      setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); this.reconnectVision(); },
+      setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); void this.resolveAndReconnect(); },
       openPath: this.openPath,
       copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },
     };

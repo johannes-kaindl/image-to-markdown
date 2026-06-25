@@ -14,7 +14,7 @@ export function migrateEndpoints(saved: { visionEndpoint?: string; visionEndpoin
 }
 
 export interface ImageToMarkdownSettings {
-  visionEndpoint: string;
+  visionEndpoints: string[];
   visionModel: string;
   visionPrompt: string;
   pdfMaxPages: number;
@@ -25,7 +25,7 @@ export interface ImageToMarkdownSettings {
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
 export function defaultSettings(): ImageToMarkdownSettings {
   return {
-    visionEndpoint: "http://localhost:8080",
+    visionEndpoints: ["http://localhost:8080"],
     visionModel: "",
     visionPrompt: defaultVisionPrompt(),
     pdfMaxPages: 25,
@@ -67,7 +67,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   private render(): void {
     const { containerEl } = this;
     containerEl.empty();
-    const endpoint = (): string => this.plugin.settings.visionEndpoint;
+    const endpoint = (): string => this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0] ?? "";
 
     // ── Status-Dot-Helfer ──
     const statusDot = (setting: Setting): HTMLElement => {
@@ -87,8 +87,8 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     const epSetting = new Setting(containerEl)
       .setName(t("settings.endpoint.name"))
       .setDesc(t("settings.endpoint.desc"))
-      .addText(tx => tx.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.visionEndpoint)
-        .onChange(async (v: string) => { this.plugin.settings.visionEndpoint = v.trim(); await this.plugin.saveSettings(); this.plugin.reconnectVision(); }))
+      .addText(tx => tx.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.visionEndpoints[0] ?? "")
+        .onChange(async (v: string) => { this.plugin.settings.visionEndpoints[0] = v.trim(); await this.plugin.saveSettings(); await this.plugin.resolveAndReconnect(); }))
       .addButton(b => b.setButtonText(t("settings.testConnection")).onClick(async () => {
         b.setDisabled(true);
         const ok = await new VisionClient(endpoint(), "").ping();
@@ -139,11 +139,11 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         modelSetting.addDropdown(d => {
           for (const m of list) d.addOption(m, m);
           d.setValue(cur);
-          d.onChange(async (v: string) => { this.plugin.settings.visionModel = v; await this.plugin.saveSettings(); this.plugin.reconnectVision(); showCaps(v); });
+          d.onChange(async (v: string) => { this.plugin.settings.visionModel = v; await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); showCaps(v); });
         });
       } else {
         modelSetting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
-          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); this.plugin.reconnectVision(); }));
+          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); }));
         modelSetting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => this.render()));
       }
       showCaps(this.plugin.settings.visionModel);
