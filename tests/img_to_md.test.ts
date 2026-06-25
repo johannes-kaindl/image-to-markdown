@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource } from "../src/img_to_md";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -239,6 +239,23 @@ describe("runImgToMd", () => {
     expect(r).toEqual({ transcribed: 0, skipped: 1 });
     expect(Object.keys(created)).toEqual([]);
     expect(notices.some(n => n.includes("sidebar"))).toBe(true);
+  });
+});
+
+describe("classifySource", () => {
+  it("Bild-Extensions → image", () => {
+    expect(classifySource("png")).toBe("image");
+    expect(classifySource("JPG")).toBe("image");
+    expect(classifySource("heic")).toBe("image");
+  });
+  it("pdf → pdf", () => {
+    expect(classifySource("pdf")).toBe("pdf");
+    expect(classifySource("PDF")).toBe("pdf");
+  });
+  it("md/canvas/leer → null", () => {
+    expect(classifySource("md")).toBeNull();
+    expect(classifySource("canvas")).toBeNull();
+    expect(classifySource("")).toBeNull();
   });
 });
 

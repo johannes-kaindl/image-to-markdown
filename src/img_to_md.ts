@@ -6,10 +6,18 @@ export const PDF_EXT = "pdf";
 
 export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number; embed: boolean }
 
-function extOf(link: string): string {
+export function extOf(link: string): string {
   const clean = link.split("#")[0].split("|")[0].trim();
   const dot = clean.lastIndexOf(".");
   return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
+}
+
+/** Klassifiziert eine Datei-Extension als transkribierbare Selbst-Quelle. */
+export function classifySource(ext: string): "image" | "pdf" | null {
+  const e = ext.toLowerCase();
+  if (IMAGE_EXTS.includes(e)) return "image";
+  if (e === PDF_EXT) return "pdf";
+  return null;
 }
 
 /** #page=N aus dem rohen Linkziel (vor dem #-Strip) lesen. */
