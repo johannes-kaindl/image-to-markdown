@@ -45,4 +45,9 @@ describe("i18n", () => {
     setLang("en");
     expect(defaultVisionPrompt()).toContain("headings");
   });
+
+  it("view.thisFile EN/DE", () => {
+    setLang("en"); expect(t("view.thisFile")).toBe("this file");
+    setLang("de"); expect(t("view.thisFile")).toBe("diese Datei");
+  });
 });
