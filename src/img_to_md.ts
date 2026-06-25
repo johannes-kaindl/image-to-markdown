@@ -130,14 +130,18 @@ export interface ImgToMdIO {
  *  + Embed ersetzen (akkumuliert), Quelle EINMAL schreiben. Leere Transkripte werden
  *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race.
  *  Override: ist `overwritePath` gesetzt, wird stattdessen die bestehende Notiz via
- *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet). */
+ *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet).
+ *  selfSource: Quelle ist eine Binärdatei — kein readNote/writeNote auf sourcePath,
+ *  kein replaceEmbed, keine source_note, Ablage unter opts.destDir. */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
   entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean }[],
+  opts?: { selfSource?: boolean; destDir?: string },
 ): Promise<{ paths: string[] }> {
-  const before = await io.readNote(sourcePath);
+  const self = opts?.selfSource === true;
+  const before = self ? "" : await io.readNote(sourcePath);
   let content = before;
-  const sourceName = basenameNoExt(sourcePath);
+  const sourceName = self ? undefined : basenameNoExt(sourcePath);
   const paths: string[] = [];
   for (const e of entries) {
     const transcript = e.content.trim();
@@ -148,14 +152,13 @@ export async function writeTranscripts(
       paths.push(e.overwritePath);
       continue;
     }
-    const resolved = io.resolveImage(e.link, sourcePath);
-    const imagePath = resolved?.path ?? e.link;
-    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image");
+    const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
+    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", opts?.destDir);
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
-    if (e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
+    if (!self && e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     paths.push(newPath);
   }
-  if (content !== before) await io.writeNote(sourcePath, content);
+  if (!self && content !== before) await io.writeNote(sourcePath, content);
   return { paths };
 }
 

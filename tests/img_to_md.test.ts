@@ -121,8 +121,9 @@ function fakeIO(over: any = {}) {
   const created: Record<string, string> = {};
   const notices: string[] = [];
   const io: any = {
+    notes,
     date: () => "2026-06-20",
-    readNote: async (p: string) => notes.get(p) ?? "",
+    readNote: over.readNote ?? (async (p: string) => notes.get(p) ?? ""),
     writeNote: async (p: string, c: string) => { notes.set(p, c); },
     createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
     noteExists: (p: string) => notes.has(p),
@@ -183,6 +184,23 @@ describe("writeTranscripts", () => {
     expect(notes.get("b (transcript).md")).toContain("created: 2026-01-01");
     expect(notes.get("b (transcript).md")).toContain('transcribed_by: "neu"');
     expect(notes.get("q.md")).toBe("![[b.png]]");  // kein Embed-Ersatz
+  });
+
+  it("selfSource: schreibt unter destDir, kein source_note, kein Quell-Read/-Write", async () => {
+    const reads: string[] = [];
+    const io = fakeIO({
+      readNote: async (p: string) => { reads.push(p); return ""; },
+    });
+    const r = await writeTranscripts(io.io, "Anhänge/scan.png", [
+      { raw: "", link: "scan.png", content: "Hallo", model: "vm", embed: false },
+    ], { selfSource: true, destDir: "Transkripte" });
+
+    expect(r.paths).toEqual(["Transkripte/scan (transcript).md"]);
+    const note = io.io.notes.get("Transkripte/scan (transcript).md");
+    expect(note).toContain('source_image: "[[scan.png]]"');
+    expect(note).not.toContain("source_note");
+    expect(reads).not.toContain("Anhänge/scan.png");   // Quelldatei nie gelesen
+    expect(io.io.notes.has("Anhänge/scan.png")).toBe(false); // und nie geschrieben
   });
 });
 
