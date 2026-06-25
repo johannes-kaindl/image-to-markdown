@@ -25,6 +25,7 @@ the setup notes in the [README](../../README.md).
 10. [Transcribe a PDF](#transcribe-a-pdf)
 11. [Transcribe a linked image or PDF (without an embed)](#transcribe-a-linked-image-or-pdf-without-an-embed)
 12. [Transcribe a standalone PDF or image file](#transcribe-a-standalone-pdf-or-image-file)
+13. [Configure multiple endpoints (home + on the road)](#configure-multiple-endpoints-home--on-the-road)
 
 ---
 
@@ -359,6 +360,48 @@ Key differences from the note-embedded workflow:
 > **Note:** this only applies to the sidebar. The command "Transcribe images in the
 > active note" and the editor context menu operate on notes with embedded media, not
 > on standalone media files.
+
+---
+
+## Configure multiple endpoints (home + on the road)
+
+Use this when you sync your vault across devices (desktop, iPhone, iPad) and the local server
+runs on a machine that is not always the active device — so a single hard-coded endpoint address
+does not work everywhere.
+
+**The idea:** put `localhost:1234` first (works on the machine that runs LM Studio) and a LAN IP
+second (works from your phone or tablet via WireGuard when you are at home). The plugin picks
+the first reachable one automatically, so the same config file works on every device.
+
+1. Open **Settings → Community plugins → Image to Markdown** (heading
+   **"Vision (Image → Markdown)"**).
+2. You will see an **endpoint list** — one input field per endpoint, with an empty field at the
+   bottom as the "add new" slot.
+3. In the **first field**, enter `http://localhost:1234` (the address of your local LM Studio).
+4. Click into the **empty field** at the bottom and enter the LAN IP of the machine running LM
+   Studio, e.g. `http://192.168.178.27:1234`.
+5. Press Tab or click away. Each field immediately shows its reachability status:
+   - Circle-check (green) — reachable right now.
+   - Circle-x (red) — not reachable from this device / network.
+   - Loader — checking.
+   The **active** endpoint (the first reachable one) is labelled "active".
+6. In the sidebar, the connection status reads **"connected via \<endpoint\>"** so you always
+   know which server is in use.
+
+Notes:
+
+- **Order = priority.** The plugin tries endpoints from top to bottom and uses the first one
+  that responds. Reorder by editing the fields: clear a lower field and re-enter it higher up.
+- **Removing an endpoint:** clear the field and click away (blur). The empty slot disappears.
+- **All offline:** if no endpoint responds the plugin reports offline and falls back to the first
+  entry for display. Check the per-field icons to see which addresses are reachable.
+- **Re-resolution:** the active endpoint is re-checked each time you open or refresh the sidebar,
+  and automatically after a failed transcription call (one retry). No manual step needed when
+  you switch networks.
+- **One device, one endpoint:** if you only ever use one machine, a single endpoint is enough —
+  the list with one entry behaves exactly like the old single-field mode.
+- **Migration:** if you are upgrading from a version with a single endpoint field, your existing
+  value is automatically converted to a one-item list — no action needed.
 
 ---
 

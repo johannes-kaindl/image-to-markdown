@@ -8,6 +8,19 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- **Endpoint-Fallback-Liste:** statt eines einzelnen Vision-Endpoints lässt sich eine geordnete
+  Liste konfigurieren — das Plugin pingt sie der Reihe nach und nutzt den **ersten erreichbaren**
+  automatisch (re-resolved beim Sidebar-Refresh und nach einem fehlgeschlagenen Aufruf mit einem
+  Retry). So funktioniert eine einzelne gesyncte Config auf mehreren Geräten und Netzen: z.B.
+  `localhost:1234` (das Gerät, auf dem LM Studio läuft) als Erstes, dann `192.168.178.27:1234`
+  (LAN-IP, erreichbar vom iPhone/iPad via WireGuard). Im Settings-Tab gibt es ein dynamisches
+  Endpunkt-Feld pro Eintrag (leeres Feld am Ende = „Neuen hinzufügen"; Feld leeren entfernt den
+  Eintrag beim Verlassen) mit je einem Erreichbarkeits-Icon pro Feld (Kreis-Haken / Kreis-X /
+  Ladekreis + Titeltext). Der aktive Endpoint ist markiert. Die Sidebar zeigt
+  **„verbunden via \<Endpoint\>"** statt nur des Status. Migration: ein vorhandenes
+  `visionEndpoint`-Feld in `data.json` wird automatisch nach `visionEndpoints` migriert —
+  bestehende Konfigurationen bleiben ohne manuellen Eingriff funktionsfähig.
+
 - **Aktive Datei als Quelle (Etappe 3):** ist die aktive Datei selbst ein Bild oder eine PDF
   (d.h. keine Notiz, sondern die Mediendatei wird direkt in Obsidian angezeigt), zeigt die
   Sidebar diese Datei als einzelnen Eintrag mit dem Label **„diese Datei"** (DE) bzw.

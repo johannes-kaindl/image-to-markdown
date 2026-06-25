@@ -18,6 +18,7 @@
 - **Zweisprachig** — Obsidians Spracheinstellung (English / Deutsch) steuert die Oberfläche automatisch
 - **Nicht-destruktiv** — Quellnotizen werden nie überschrieben; Embeds werden ersetzt, Originale bleiben erhalten
 - **Eigenständige Dateien** — eine PDF oder ein Bild direkt in Obsidian öffnen, und die Sidebar behandelt *diese Datei* als Quelle — keine umgebende Notiz nötig
+- **Endpoint-Fallback-Liste** — eine geordnete Liste von Vision-Endpunkten konfigurieren; das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren automatisch — eine einzige gesyncte Config funktioniert auf allen Geräten und Netzen
 
 ### Im Detail
 
@@ -45,6 +46,7 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
   transkribieren erzwingt eine neue Transkription (der Tooltip der Zeile lautet „erneut transkribieren
   überschreibt") — die bestehende Notiz wird überschrieben, das vollständige Frontmatter (bis auf
   `transcribed_by`/`pages`) bleibt erhalten.
+- **Endpoint-Fallback-Liste.** Statt eines einzelnen Vision-Endpunkts nimmt das Plugin eine geordnete Liste entgegen. Bei jedem Resolve (Sidebar-Refresh oder nach einem fehlgeschlagenen Aufruf mit einem automatischen Retry) werden die Endpunkte der Reihe nach angepingt und der erste erreichbare genutzt. Der aktive Endpunkt ist im Settings-Tab markiert und wird in der Sidebar-Statuszeile als **„verbunden via \<Endpunkt\>"** angezeigt. Der Settings-Tab rendert ein dynamisches Feld pro Eintrag — ein leeres Abschlussfeld ist der „Neu hinzufügen"-Einstieg; ein Feld leeren und verlassen entfernt den Eintrag. Jedes Feld zeigt ein eigenes Erreichbarkeits-Icon (Kreis-Haken / Kreis-X / Ladekreis) plus barrierefreien Titeltext. Eine einzige gesyncte `data.json` funktioniert damit auf allen Geräten: `localhost:1234` zuerst (das Gerät mit LM Studio), dann eine LAN-IP als Fallback (z.B. erreichbar vom Handy via WireGuard). Migration ist automatisch: ein vorhandenes `visionEndpoint`-Feld wird still nach `visionEndpoints` überführt — kein manueller Eingriff nötig.
 - **Zweisprachige Oberfläche (Deutsch / English)** — alle nutzersichtbaren Texte folgen der
   Sprach-Einstellung von Obsidian; Englisch ist kanonisch, Deutsch wird automatisch geliefert.
   Die Sprache wird einmalig beim Laden des Plugins erkannt (zum Wechseln neu laden).
@@ -115,7 +117,7 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 
 | Einstellung | Default | Hinweis |
 |---|---|---|
-| **Vision-Endpunkt** | `http://localhost:8080` | OpenAI-kompatibler Server mit Vision-Modell. Das ist der MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
+| **Vision-Endpunkte** | `["http://localhost:8080"]` | Geordnete Liste OpenAI-kompatibler Server. Das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren. MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
 | **Vision-Modell** | (leer) | Vision-fähiges Modell (z.B. Qwen2-VL, Llama-3.2-Vision). Dropdown, gefüllt aus `/v1/models` des Endpoints; ist der Endpoint offline, wird es zum Freitextfeld. Das tatsächlich genutzte Modell wird aus `response.model` gelesen. |
 | **Vision-Prompt** | Markdown-Transkription (siehe unten) | Anweisung an das Vision-Modell, frei editierbar (Text-Area). |
 | **PDF max. Seiten pro Lauf** | `25` | Schutzgrenze für die Zahl transkribierter PDF-Seiten pro Lauf — größere PDFs über den Seitenbereich einschränken. Harte Obergrenze 500. |
