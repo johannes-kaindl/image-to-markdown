@@ -198,8 +198,8 @@ const ITEMS_EXISTS: ImgItem[] = [
 
 describe("ImgToMdView — selfSource-Label", () => {
   it("selfSource-Item rendert das 'diese Datei'-Label statt 'verlinkt'", async () => {
-    const item = { raw: "", link: "scan.png", ext: "png", supported: true, kind: "image", embed: false, selfSource: true };
-    const { view } = mkView({ scan: async () => [item] as any });
+    const item: ImgItem = { raw: "", link: "scan.png", ext: "png", supported: true, kind: "image", embed: false, selfSource: true };
+    const { view } = mkView({ scan: async () => [item] });
     await view.onOpen();
     const badges = all(view.contentEl, "img2md-linked");
     expect(badges.length).toBe(1);

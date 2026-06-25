@@ -13,7 +13,7 @@ export function extOf(link: string): string {
   return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
 }
 
-/** Klassifiziert eine Datei-Extension als transkribierbare Selbst-Quelle. */
+/** Klassifiziert eine Datei-Extension als Medientyp (Bild/PDF) oder null, wenn nicht transkribierbar. */
 export function classifySource(ext: string): "image" | "pdf" | null {
   const e = ext.toLowerCase();
   if (IMAGE_EXTS.includes(e)) return "image";
