@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, setIcon, Notice } from "obsidian";
 import type ImageToMarkdownPlugin from "./main";
-import { VisionClient } from "./vision_client";
+import { VisionClient, normalizeEndpoint } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
 import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
@@ -69,34 +69,43 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     containerEl.empty();
     const endpoint = (): string => this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0] ?? "";
 
-    // ── Status-Dot-Helfer ──
-    const statusDot = (setting: Setting): HTMLElement => {
-      const dot = setting.controlEl.createSpan({ cls: "img2md-status-dot" });
-      dot.setText("·");
-      return dot;
-    };
-    const showPing = (dot: HTMLElement, ok: boolean): void => {
-      dot.toggleClass("is-ok", ok);
-      dot.toggleClass("is-error", !ok);
-      dot.setText(ok ? t("settings.connected") : t("settings.offline"));
-    };
-
     new Setting(containerEl).setName(t("settings.heading")).setHeading();
 
-    // ── Endpoint + Status-Dot + Test ──
-    const epSetting = new Setting(containerEl)
-      .setName(t("settings.endpoint.name"))
-      .setDesc(t("settings.endpoint.desc"))
-      .addText(tx => tx.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.visionEndpoints[0] ?? "")
-        .onChange(async (v: string) => { this.plugin.settings.visionEndpoints[0] = v.trim(); await this.plugin.saveSettings(); await this.plugin.resolveAndReconnect(); }))
-      .addButton(b => b.setButtonText(t("settings.testConnection")).onClick(async () => {
-        b.setDisabled(true);
-        const ok = await new VisionClient(endpoint(), "").ping();
-        showPing(dot, ok);
-        b.setDisabled(false);
-      }));
-    const dot = statusDot(epSetting);
-    void new VisionClient(endpoint(), "").ping().then(ok => showPing(dot, ok));
+    // ── Vision-Endpunkte (geordnete Fallback-Liste) ──
+    const eps = this.plugin.settings.visionEndpoints;
+    const rows = [...eps, ""];   // leeres Zusatzfeld am Ende
+    rows.forEach((value, i) => {
+      const isAdder = i >= eps.length;
+      const s = new Setting(containerEl);
+      if (i === 0) s.setName(t("settings.endpoints.name")).setDesc(t("settings.endpoints.desc"));
+      const statusIcon = s.controlEl.createSpan({ cls: "img2md-ep-status" });
+      s.addText(tx => tx
+        .setPlaceholder(isAdder ? t("settings.endpoints.addPlaceholder") : "http://localhost:1234")
+        .setValue(value)
+        .onChange(async (v: string) => {
+          const next = [...this.plugin.settings.visionEndpoints];
+          if (isAdder) { if (v.trim()) next.push(v.trim()); }
+          else { next[i] = v.trim(); }
+          this.plugin.settings.visionEndpoints = next.filter(e => e);
+          await this.plugin.saveSettings();
+          await this.plugin.resolveAndReconnect();
+          this.render();   // re-render: leeres Feld verschwindet, neues Zusatzfeld erscheint
+        }));
+      // Pro-Feld-Status in A11y-Form (Form + Text + Farbe)
+      const ep = value.trim();
+      if (!isAdder && ep) {
+        setIcon(statusIcon, "loader"); statusIcon.setAttribute("title", t("view.checking"));
+        void new VisionClient(ep, "").ping().then(ok => {
+          statusIcon.empty();
+          setIcon(statusIcon, ok ? "circle-check" : "circle-x");
+          statusIcon.toggleClass("is-ok", ok); statusIcon.toggleClass("is-error", !ok);
+          const active = normalizeEndpoint(ep) === (this.plugin.activeEndpoint ?? "");
+          statusIcon.toggleClass("is-active", active);
+          statusIcon.setAttribute("title", (ok ? t("settings.connected") : t("settings.offline")) + (active ? " · " + t("settings.endpoints.active") : ""));
+        });
+      }
+    });
+    new Setting(containerEl).addButton(b => b.setButtonText(t("settings.testConnection")).onClick(() => this.render()));
 
     // ── Modell ──
     const modelSetting = new Setting(containerEl).setName(t("settings.model.name")).setDesc(t("settings.model.desc"));
