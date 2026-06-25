@@ -1,12 +1,20 @@
 import { App, PluginSettingTab, Setting, setIcon, Notice } from "obsidian";
 import type ImageToMarkdownPlugin from "./main";
-import { VisionClient } from "./vision_client";
+import { VisionClient, normalizeEndpoint } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
 import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 
+/** Endpoint-Liste aus geladenen Settings: vorhandene visionEndpoints (leere gefiltert),
+ *  sonst der alte Einzel-visionEndpoint als 1-Element-Liste, sonst leer. Reiner Helfer. */
+export function migrateEndpoints(saved: { visionEndpoint?: string; visionEndpoints?: string[] } | null | undefined): string[] {
+  if (saved?.visionEndpoints) return saved.visionEndpoints.filter(e => e && e.trim());
+  if (saved?.visionEndpoint && saved.visionEndpoint.trim()) return [saved.visionEndpoint];
+  return [];
+}
+
 export interface ImageToMarkdownSettings {
-  visionEndpoint: string;
+  visionEndpoints: string[];
   visionModel: string;
   visionPrompt: string;
   pdfMaxPages: number;
@@ -17,7 +25,7 @@ export interface ImageToMarkdownSettings {
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
 export function defaultSettings(): ImageToMarkdownSettings {
   return {
-    visionEndpoint: "http://localhost:8080",
+    visionEndpoints: ["http://localhost:8080"],
     visionModel: "",
     visionPrompt: defaultVisionPrompt(),
     pdfMaxPages: 25,
@@ -59,36 +67,49 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   private render(): void {
     const { containerEl } = this;
     containerEl.empty();
-    const endpoint = (): string => this.plugin.settings.visionEndpoint;
-
-    // ── Status-Dot-Helfer ──
-    const statusDot = (setting: Setting): HTMLElement => {
-      const dot = setting.controlEl.createSpan({ cls: "img2md-status-dot" });
-      dot.setText("·");
-      return dot;
-    };
-    const showPing = (dot: HTMLElement, ok: boolean): void => {
-      dot.toggleClass("is-ok", ok);
-      dot.toggleClass("is-error", !ok);
-      dot.setText(ok ? t("settings.connected") : t("settings.offline"));
-    };
+    const endpoint = (): string => this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0] ?? "";
 
     new Setting(containerEl).setName(t("settings.heading")).setHeading();
 
-    // ── Endpoint + Status-Dot + Test ──
-    const epSetting = new Setting(containerEl)
-      .setName(t("settings.endpoint.name"))
-      .setDesc(t("settings.endpoint.desc"))
-      .addText(tx => tx.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.visionEndpoint)
-        .onChange(async (v: string) => { this.plugin.settings.visionEndpoint = v.trim(); await this.plugin.saveSettings(); this.plugin.reconnectVision(); }))
-      .addButton(b => b.setButtonText(t("settings.testConnection")).onClick(async () => {
-        b.setDisabled(true);
-        const ok = await new VisionClient(endpoint(), "").ping();
-        showPing(dot, ok);
-        b.setDisabled(false);
-      }));
-    const dot = statusDot(epSetting);
-    void new VisionClient(endpoint(), "").ping().then(ok => showPing(dot, ok));
+    // ── Vision-Endpunkte (geordnete Fallback-Liste) ──
+    const eps = this.plugin.settings.visionEndpoints;
+    const rows = [...eps, ""];   // leeres Zusatzfeld am Ende
+    rows.forEach((value, i) => {
+      const isAdder = i >= eps.length;
+      const s = new Setting(containerEl);
+      if (i === 0) s.setName(t("settings.endpoints.name")).setDesc(t("settings.endpoints.desc"));
+      const statusIcon = s.controlEl.createSpan({ cls: "img2md-ep-status" });
+      s.addText(tx => {
+        tx
+          .setPlaceholder(isAdder ? t("settings.endpoints.addPlaceholder") : "http://localhost:1234")
+          .setValue(value)
+          // onChange feuert pro Tastendruck → nur speichern, NICHT re-rendern (sonst reißt
+          // containerEl.empty() das fokussierte Feld ab → man kann nicht mehrstellig tippen).
+          .onChange(async (v: string) => {
+            const next = [...this.plugin.settings.visionEndpoints];
+            if (isAdder) { if (v.trim()) next.push(v.trim()); }
+            else { next[i] = v.trim(); }
+            this.plugin.settings.visionEndpoints = next.filter(e => e);
+            await this.plugin.saveSettings();
+          });
+        // Struktur-Re-Render (leeres Feld weg / Add-Feld → neues Feld) + Auflösen erst bei blur.
+        tx.inputEl.addEventListener("blur", () => { void this.plugin.resolveAndReconnect().then(() => this.render()); });
+      });
+      // Pro-Feld-Status in A11y-Form (Form + Text + Farbe)
+      const ep = value.trim();
+      if (!isAdder && ep) {
+        setIcon(statusIcon, "loader"); statusIcon.setAttribute("title", t("view.checking"));
+        void new VisionClient(ep, "").ping().then(ok => {
+          statusIcon.empty();
+          setIcon(statusIcon, ok ? "circle-check" : "circle-x");
+          statusIcon.toggleClass("is-ok", ok); statusIcon.toggleClass("is-error", !ok);
+          const active = normalizeEndpoint(ep) === (this.plugin.activeEndpoint ?? "");
+          statusIcon.toggleClass("is-active", active);
+          statusIcon.setAttribute("title", (ok ? t("settings.connected") : t("settings.offline")) + (active ? " · " + t("settings.endpoints.active") : ""));
+        });
+      }
+    });
+    new Setting(containerEl).addButton(b => b.setButtonText(t("settings.testConnection")).onClick(() => this.render()));
 
     // ── Modell ──
     const modelSetting = new Setting(containerEl).setName(t("settings.model.name")).setDesc(t("settings.model.desc"));
@@ -131,11 +152,11 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         modelSetting.addDropdown(d => {
           for (const m of list) d.addOption(m, m);
           d.setValue(cur);
-          d.onChange(async (v: string) => { this.plugin.settings.visionModel = v; await this.plugin.saveSettings(); this.plugin.reconnectVision(); showCaps(v); });
+          d.onChange(async (v: string) => { this.plugin.settings.visionModel = v; await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); showCaps(v); });
         });
       } else {
         modelSetting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
-          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); this.plugin.reconnectVision(); }));
+          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); }));
         modelSetting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => this.render()));
       }
       showCaps(this.plugin.settings.visionModel);

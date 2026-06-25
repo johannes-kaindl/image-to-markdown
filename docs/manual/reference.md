@@ -43,7 +43,7 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading wor
 
 | Name (verbatim) | Description | Default |
 | --- | --- | --- |
-| "Vision endpoint" ("Vision-Endpunkt") | OpenAI-compatible server hosting a vision model. Enter the base URL. | `http://localhost:8080` |
+| "Vision endpoints" ("Vision-Endpunkte") | Ordered list of OpenAI-compatible servers. The plugin pings them in priority order and uses the **first reachable** one. Each entry is a base URL. The settings tab renders a dynamic field per entry; an empty trailing field is the "add new" slot — blurring an empty field removes it from the list. Each field shows its own per-field reachability icon (circle-check / circle-x / loader, with accessible `title` text), and the currently **active** endpoint is marked. See also [Endpoint fallback resolution](#endpoint-fallback-resolution). | `["http://localhost:8080"]` |
 | "Vision model" ("Vision-Modell") | Vision-capable model (examples: Qwen2-VL, Llama-3.2-Vision). Dropdown populated from the endpoint's `/v1/models`; falls back to a free-text field when the endpoint is offline. | `""` (empty) |
 | "Vision prompt" ("Vision-Prompt") | Instruction sent to the vision model (large free-text area). The shipped default is itself localized — see note below. | English: "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, \*\*emphasis\*\*, lists and tables. Output only the Markdown, no comments." German: "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, \*\*Hervorhebungen\*\*, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
 | "PDF max. pages per run" ("PDF max. Seiten pro Lauf") | Safety cap — PDFs with more pages than this limit must be narrowed via the page range selector in the sidebar. | `25` |
@@ -52,14 +52,14 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading wor
 
 Notes:
 
-- The default endpoint `http://localhost:8080` is the MLX default. LM Studio listens on `:1234` — this is the most common misconfiguration.
+- The default endpoint list contains `http://localhost:8080` (the MLX default). LM Studio listens on `:1234` — this is the most common misconfiguration. With the fallback list you can put both in order: `localhost:1234` first, then a LAN IP as fallback.
 - "Vision-Modell" defaults to empty; the model actually used is read from `response.model`. LM Studio ignores the `model` field in the request and uses the loaded model, so the effective model name comes back in the response.
 
 ### Connection & model controls
 
 Alongside the settings listed above, the tab shows:
 
-- A **connection status dot** next to the "Vision endpoint" field (auto-pinged when the tab opens) plus a **"Test connection"** ("Verbindung testen") button — both call the endpoint's `/v1/models` and report connected / offline (`● verbunden` / `○ offline` in German).
+- A **per-field reachability icon** next to each endpoint input (auto-pinged when the tab opens) — circle-check (reachable), circle-x (unreachable), or loader (checking) — plus accessible `title` text. The **active** endpoint (the first reachable one) is marked. A **"Test connection"** ("Verbindung testen") button re-runs the ping sequence. The **sidebar** connection status now reads **"connected via \<endpoint\>"** ("verbunden via \<endpoint\>") to show which endpoint is currently in use.
 - A **"Vision capability"** ("Vision-Fähigkeit") row for the selected model, plus a **"Test vision"** ("Vision testen") button — see [Vision capability detection](#vision-capability-detection).
 - A **"Load models"** ("Modelle laden") button that appears when the endpoint is offline, to refresh the model dropdown once the server is up.
 - A **"Refresh models"** ("Modelle aktualisieren") icon button (`refresh-cw`) next to the "Vision model" dropdown — re-fetches `/v1/models` at any time. If the previously selected model is no longer in the list (e.g. because an external process swapped the loaded model), the selection is automatically aligned to the first available model. The same icon also appears next to the model dropdown in the **sidebar**. After every transcription run the sidebar additionally performs an automatic post-sync: if `response.model` differs from the current selection, the selection is updated and a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …") is shown in the status line.
@@ -77,6 +77,16 @@ The "Vision capability" row reports one of three states for the selected model (
 It is computed passively from two sources, taking the stronger signal: a **name heuristic** (e.g. `llava`, `*-vl`, `pixtral`, `glm-4v`, `gemma3` ≥ 4B) and a **metadata probe** of the endpoint (Ollama `/api/show`, LM Studio `/api/v1/models` / `/api/v0/models`).
 
 The **"Test vision"** button confirms vision **actively**: it sends a small generated image containing a known token to the model and checks whether the reply contains that token. On success the model is marked `confirmed` for the rest of the settings session. This is the reliable check when an endpoint exposes no capability metadata (a plain `/v1` server).
+
+## Endpoint fallback resolution
+
+The plugin accepts an ordered list of Vision endpoints (`visionEndpoints`) instead of a single one. On each resolve it pings the endpoints in list order and uses the **first reachable** one:
+
+- **When is resolution triggered?** On sidebar open/refresh and after a failed transcription call (one automatic retry).
+- **Active endpoint:** the resolved endpoint is remembered until the next resolve. While the sidebar is open, the connection status line shows **"connected via \<endpoint\>"** ("verbunden via \<endpoint\>").
+- **All offline:** if no endpoint responds, the plugin reports offline and uses the first entry in the list as a placeholder for display.
+- **Single endpoint:** a list with one entry behaves identically to the old single-endpoint mode.
+- **Migration:** an existing `visionEndpoint` (singular) key in `data.json` is automatically carried over to `visionEndpoints: [value]` on first load — no manual action needed. The old key may linger inert in `data.json`; it is not deleted.
 
 ## Endpoint normalization
 

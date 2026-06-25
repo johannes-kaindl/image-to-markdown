@@ -23,7 +23,7 @@ function mkView(over: any = {}) {
     transcribeStream: over.transcribeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("Hal"); onContent("lo"); return { content: "Hallo", reasoning: "", model: "vm" }; }),
     writeTranscripts: over.writeTranscripts ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_: any, i: number) => `note-${i}.md`); }),
     writePdf: over.writePdf ?? (async (_sp: string, _raw: string, _link: string, _pages: any[]) => { calls.written.push(_pages); return "doc (PDF transcript).md"; }),
-    ping: over.ping ?? (async () => true),
+    connectionStatus: over.connectionStatus ?? (async () => ({ ok: true, endpoint: "http://localhost:1234" })),
     listModels: over.listModels ?? (async () => []),
     getModel: over.getModel ?? (() => "vm"),
     setModel: over.setModel ?? vi.fn(),
@@ -39,15 +39,25 @@ describe("ImgToMdView — Gerüst + Liste", () => {
     expect(mkView().view.getViewType()).toBe(VIEW_TYPE_IMGMD);
   });
   it("zeigt Verbindungsstatus nach onOpen", async () => {
-    const okV = mkView({ ping: async () => true }); await okV.view.onOpen();
+    const okV = mkView({ connectionStatus: async () => ({ ok: true, endpoint: "http://localhost:1234" }) }); await okV.view.onOpen();
     expect(all(okV.view.contentEl, "img2md-status")[0].textContent).toContain("connected");
-    const offV = mkView({ ping: async () => false }); await offV.view.onOpen();
+    const offV = mkView({ connectionStatus: async () => ({ ok: false, endpoint: null }) }); await offV.view.onOpen();
     expect(all(offV.view.contentEl, "img2md-status")[0].textContent).toContain("offline");
   });
+  it("zeigt 'verbunden via <endpoint>' nach onOpen", async () => {
+    const v = mkView({ connectionStatus: async () => ({ ok: true, endpoint: "http://localhost:1234" }) });
+    await v.view.onOpen();
+    expect(all(v.view.contentEl, "img2md-status")[0].textContent).toContain("http://localhost:1234");
+  });
+  it("zeigt 'offline' wenn nicht erreichbar", async () => {
+    const v = mkView({ connectionStatus: async () => ({ ok: false, endpoint: null }) });
+    await v.view.onOpen();
+    expect(all(v.view.contentEl, "img2md-status")[0].textContent).toContain("offline");
+  });
   it("Verbindungsstatus unterscheidet sich per Icon-Form (nicht nur Glyph/Farbe)", async () => {
-    const okV = mkView({ ping: async () => true }); await okV.view.onOpen();
+    const okV = mkView({ connectionStatus: async () => ({ ok: true, endpoint: "http://localhost:1234" }) }); await okV.view.onOpen();
     const okIcon = all(okV.view.contentEl, "img2md-status-icon")[0].getAttribute("data-icon");
-    const offV = mkView({ ping: async () => false }); await offV.view.onOpen();
+    const offV = mkView({ connectionStatus: async () => ({ ok: false, endpoint: null }) }); await offV.view.onOpen();
     const offIcon = all(offV.view.contentEl, "img2md-status-icon")[0].getAttribute("data-icon");
     expect(okIcon).toBeTruthy();
     expect(offIcon).toBeTruthy();
