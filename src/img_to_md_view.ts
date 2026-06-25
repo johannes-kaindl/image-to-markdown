@@ -10,7 +10,7 @@ export interface ImgToMdViewDeps {
   transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
   writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string }[]) => Promise<string[]>;
   writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean) => Promise<string | null>;
-  ping: () => Promise<boolean>;
+  connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;
   listModels: () => Promise<string[]>;
   getModel: () => string;
   setModel: (m: string) => void;
@@ -67,19 +67,19 @@ export class ImgToMdView extends ItemView {
 
   async refreshStatus(): Promise<void> {
     if (!this.statusEl) return;
-    this.setConnState(null);
-    const ok = await this.deps.ping();
-    this.setConnState(ok);
+    this.setConnState(null, null);
+    const { ok, endpoint } = await this.deps.connectionStatus();
+    this.setConnState(ok, endpoint);
   }
 
   /** Verbindungsstatus per Icon-FORM (loader / circle-check / circle-x) + Text; Farbe nur
    *  sekundär — lesbar auch bei Farbsehschwäche (WCAG 1.4.1). */
-  private setConnState(state: boolean | null): void {
+  private setConnState(state: boolean | null, endpoint: string | null): void {
     const root = this.statusEl, icon = this.statusIconEl, label = this.statusLabelEl;
     if (!root || !icon || !label) return;
     root.removeClass("is-ok"); root.removeClass("is-error"); root.removeClass("is-checking");
     if (state === null) { root.addClass("is-checking"); setIcon(icon, "loader"); label.setText(t("view.checking")); }
-    else if (state) { root.addClass("is-ok"); setIcon(icon, "circle-check"); label.setText(t("view.connected")); }
+    else if (state) { root.addClass("is-ok"); setIcon(icon, "circle-check"); label.setText(endpoint ? t("view.connectedVia", endpoint) : t("view.connected")); }
     else { root.addClass("is-error"); setIcon(icon, "circle-x"); label.setText(t("view.offline")); }
   }
 

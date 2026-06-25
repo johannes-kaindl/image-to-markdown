@@ -172,7 +172,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir });
         return path;
       },
-      ping: async () => { await this.resolveAndReconnect(); return this.activeEndpoint !== null; },
+      connectionStatus: async () => { await this.resolveAndReconnect(); return { ok: this.activeEndpoint !== null, endpoint: this.activeEndpoint }; },
       listModels: () => new VisionClient(this.activeEndpoint ?? this.settings.visionEndpoints[0] ?? "", "").listModels(),
       getModel: () => this.settings.visionModel,
       setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); void this.resolveAndReconnect(); },
