@@ -2,7 +2,7 @@ import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab } from "./settings";
 import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
-import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS } from "./img_to_md";
+import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
 import { findExistingTranscript, BacklinkLookup } from "./backlinks";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
@@ -94,11 +94,21 @@ export default class ImageToMarkdownPlugin extends Plugin {
     return {
       getActivePath: () => this.app.workspace.getActiveFile()?.path ?? null,
       scan: async (sourcePath: string): Promise<ImgItem[]> => {
+        const lookup = this.backlinkLookup();
+        const cls = classifySource(extOf(sourcePath));
+        if (cls) {   // aktive Datei IST ein Bild/PDF → Selbst-Quelle
+          const existingTranscriptPath = findExistingTranscript(lookup, sourcePath) ?? undefined;
+          let pageCount: number | undefined;
+          if (cls === "pdf") {
+            try { pageCount = await pdfPageCount(await this.app.vault.adapter.readBinary(sourcePath)); } catch { pageCount = 0; }
+          }
+          const item = buildSelfSourceItem(sourcePath, { pageCount, existingTranscriptPath, pdfMaxPages: this.settings.pdfMaxPages });
+          return item ? [item] : [];
+        }
         let content: string;
         try { content = await this.app.vault.adapter.read(sourcePath); } catch { return []; }
         const seen = new Set<string>();
         const items: ImgItem[] = [];
-        const lookup = this.backlinkLookup();
         for (const e of findImageEmbeds(content)) {
           if (seen.has(e.link)) continue; seen.add(e.link);
           const resolved = this.app.metadataCache.getFirstLinkpathDest(e.link, sourcePath);
@@ -118,27 +128,36 @@ export default class ImageToMarkdownPlugin extends Plugin {
         return items;
       },
       transcribeStream: async (sourcePath, item, onContent, onReasoning, signal, page) => {
-        const resolved = this.app.metadataCache.getFirstLinkpathDest(item.link, sourcePath);
-        if (!resolved) throw new Error(t("core.imageNotFound", item.link));
+        let filePath: string; let ext: string;
+        if (item.selfSource) { filePath = sourcePath; ext = item.ext; }
+        else {
+          const resolved = this.app.metadataCache.getFirstLinkpathDest(item.link, sourcePath);
+          if (!resolved) throw new Error(t("core.imageNotFound", item.link));
+          filePath = resolved.path; ext = resolved.extension;
+        }
         let dataUrl: string;
         if (item.kind === "pdf") {
           if ((item.range?.to ?? 1) - (item.range?.from ?? 1) + 1 > this.settings.pdfMaxPages) {
             throw new Error(t("core.pdfTooManyPages", item.pageCount ?? 0, this.settings.pdfMaxPages));
           }
           const scale = Platform.isMobile ? Math.min(this.settings.pdfRenderScale, 1.5) : this.settings.pdfRenderScale;
-          const bytes = await this.app.vault.adapter.readBinary(resolved.path);
+          const bytes = await this.app.vault.adapter.readBinary(filePath);
           dataUrl = await renderPdfPage(bytes, page ?? 1, scale);
         } else {
-          dataUrl = `data:image/${this.mimeOf(resolved.extension)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(resolved.path))}`;
+          dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
         }
         return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
       },
       writeTranscripts: async (sourcePath, entries) => {
-        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed })));
+        const self = classifySource(extOf(sourcePath)) !== null;
+        const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed })), { selfSource: self, destDir });
         return paths;
       },
       writePdf: async (sourcePath, raw, link, pages, overwritePath, embed) => {
-        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed);
+        const self = classifySource(extOf(sourcePath)) !== null;
+        const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir });
         return path;
       },
       ping: () => new VisionClient(visionEndpoint(), "").ping(),
