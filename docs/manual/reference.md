@@ -86,7 +86,7 @@ The plugin accepts an ordered list of Vision endpoints (`visionEndpoints`) inste
 - **Active endpoint:** the resolved endpoint is remembered until the next resolve. While the sidebar is open, the connection status line shows **"connected via \<endpoint\>"** ("verbunden via \<endpoint\>").
 - **All offline:** if no endpoint responds, the plugin reports offline and uses the first entry in the list as a placeholder for display.
 - **Single endpoint:** a list with one entry behaves identically to the old single-endpoint mode.
-- **Migration:** an existing `visionEndpoint` (singular) key in `data.json` is automatically promoted to `visionEndpoints: [value]` on first load — no manual action needed, and the old key is removed from the saved data.
+- **Migration:** an existing `visionEndpoint` (singular) key in `data.json` is automatically carried over to `visionEndpoints: [value]` on first load — no manual action needed. The old key may linger inert in `data.json`; it is not deleted.
 
 ## Endpoint normalization
 

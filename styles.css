@@ -42,9 +42,11 @@
 
 /* Settings-QoL */
 .img2md-prompt-textarea { width: 100%; min-height: 8rem; resize: vertical; }
-.img2md-status-dot { margin-left: 8px; color: var(--text-muted); }
-.img2md-status-dot.is-ok { color: var(--text-success); }
-.img2md-status-dot.is-error { color: var(--text-error); }
+.img2md-ep-status { display: inline-flex; align-items: center; color: var(--text-muted); margin: 0 4px; }
+.img2md-ep-status svg { width: 14px; height: 14px; vertical-align: middle; }
+.img2md-ep-status.is-ok { color: var(--text-success); }
+.img2md-ep-status.is-error { color: var(--text-error); }
+.img2md-ep-status.is-active { color: var(--interactive-accent); outline: 1px solid var(--interactive-accent); border-radius: 3px; }
 .img2md-cap { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
 .img2md-cap .svg-icon { width: var(--icon-s); height: var(--icon-s); }
 .img2md-cap.is-ok { color: var(--text-success); }
