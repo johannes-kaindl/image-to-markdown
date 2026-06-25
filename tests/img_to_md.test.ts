@@ -188,19 +188,19 @@ describe("writeTranscripts", () => {
 
   it("selfSource: schreibt unter destDir, kein source_note, kein Quell-Read/-Write", async () => {
     const reads: string[] = [];
-    const io = fakeIO({
+    const { io, notes } = fakeIO({
       readNote: async (p: string) => { reads.push(p); return ""; },
     });
-    const r = await writeTranscripts(io.io, "Anhänge/scan.png", [
+    const r = await writeTranscripts(io, "Anhänge/scan.png", [
       { raw: "", link: "scan.png", content: "Hallo", model: "vm", embed: false },
     ], { selfSource: true, destDir: "Transkripte" });
 
     expect(r.paths).toEqual(["Transkripte/scan (transcript).md"]);
-    const note = io.io.notes.get("Transkripte/scan (transcript).md");
+    const note = notes.get("Transkripte/scan (transcript).md");
     expect(note).toContain('source_image: "[[scan.png]]"');
     expect(note).not.toContain("source_note");
     expect(reads).not.toContain("Anhänge/scan.png");   // Quelldatei nie gelesen
-    expect(io.io.notes.has("Anhänge/scan.png")).toBe(false); // und nie geschrieben
+    expect(notes.has("Anhänge/scan.png")).toBe(false); // und nie geschrieben
   });
 });
 

@@ -126,9 +126,9 @@ export interface ImgToMdIO {
   notify(msg: string): void;
 }
 
-/** Schreibt mehrere Transkripte gebündelt: Quelle EINMAL lesen, pro Eintrag Notiz anlegen
- *  + Embed ersetzen (akkumuliert), Quelle EINMAL schreiben. Leere Transkripte werden
- *  übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race.
+/** Schreibt mehrere Transkripte gebündelt: im Nicht-selfSource-Pfad Quelle EINMAL lesen,
+ *  pro Eintrag Notiz anlegen + Embed ersetzen (akkumuliert), Quelle EINMAL schreiben. Leere
+ *  Transkripte werden übersprungen. Nicht-destruktiv/idempotent; keine Read-Modify-Write-Race.
  *  Override: ist `overwritePath` gesetzt, wird stattdessen die bestehende Notiz via
  *  rewriteTranscript überschrieben (kein replaceEmbed, Quelle bleibt unangetastet).
  *  selfSource: Quelle ist eine Binärdatei — kein readNote/writeNote auf sourcePath,
@@ -139,6 +139,7 @@ export async function writeTranscripts(
   opts?: { selfSource?: boolean; destDir?: string },
 ): Promise<{ paths: string[] }> {
   const self = opts?.selfSource === true;
+  const destDir = opts?.destDir;
   const before = self ? "" : await io.readNote(sourcePath);
   let content = before;
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
@@ -153,7 +154,7 @@ export async function writeTranscripts(
       continue;
     }
     const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
-    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", opts?.destDir);
+    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", destDir);
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
     if (!self && e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     paths.push(newPath);
