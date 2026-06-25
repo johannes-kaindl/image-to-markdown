@@ -79,18 +79,22 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       const s = new Setting(containerEl);
       if (i === 0) s.setName(t("settings.endpoints.name")).setDesc(t("settings.endpoints.desc"));
       const statusIcon = s.controlEl.createSpan({ cls: "img2md-ep-status" });
-      s.addText(tx => tx
-        .setPlaceholder(isAdder ? t("settings.endpoints.addPlaceholder") : "http://localhost:1234")
-        .setValue(value)
-        .onChange(async (v: string) => {
-          const next = [...this.plugin.settings.visionEndpoints];
-          if (isAdder) { if (v.trim()) next.push(v.trim()); }
-          else { next[i] = v.trim(); }
-          this.plugin.settings.visionEndpoints = next.filter(e => e);
-          await this.plugin.saveSettings();
-          await this.plugin.resolveAndReconnect();
-          this.render();   // re-render: leeres Feld verschwindet, neues Zusatzfeld erscheint
-        }));
+      s.addText(tx => {
+        tx
+          .setPlaceholder(isAdder ? t("settings.endpoints.addPlaceholder") : "http://localhost:1234")
+          .setValue(value)
+          // onChange feuert pro Tastendruck → nur speichern, NICHT re-rendern (sonst reißt
+          // containerEl.empty() das fokussierte Feld ab → man kann nicht mehrstellig tippen).
+          .onChange(async (v: string) => {
+            const next = [...this.plugin.settings.visionEndpoints];
+            if (isAdder) { if (v.trim()) next.push(v.trim()); }
+            else { next[i] = v.trim(); }
+            this.plugin.settings.visionEndpoints = next.filter(e => e);
+            await this.plugin.saveSettings();
+          });
+        // Struktur-Re-Render (leeres Feld weg / Add-Feld → neues Feld) + Auflösen erst bei blur.
+        tx.inputEl.addEventListener("blur", () => { void this.plugin.resolveAndReconnect().then(() => this.render()); });
+      });
       // Pro-Feld-Status in A11y-Form (Form + Text + Farbe)
       const ep = value.trim();
       if (!isAdder && ep) {
