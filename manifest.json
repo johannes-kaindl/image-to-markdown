@@ -1,7 +1,7 @@
 {
   "id": "image-to-markdown",
   "name": "Image to Markdown",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "minAppVersion": "1.8.7",
   "description": "Transcribe images and PDFs in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
   "author": "Johannes Kaindl",
