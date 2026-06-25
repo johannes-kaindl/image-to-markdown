@@ -108,6 +108,12 @@ describe("transcriptNotePath", () => {
     expect(transcriptNotePath(io, "dir/quelle.md", "dir/img/foto.png", "image")).toBe("dir/foto (transcript)-2.md");
     expect(transcriptNotePath(io, "quelle.md", "foto.png", "image")).toBe("foto (transcript).md");
   });
+
+  it("destDir überschreibt das Verzeichnis der Quellnotiz", () => {
+    const io = { noteExists: () => false };
+    expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "Transkripte")).toBe("Transkripte/scan (PDF transcript).md");
+    expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "")).toBe("scan (PDF transcript).md");
+  });
 });
 
 function fakeIO(over: any = {}) {

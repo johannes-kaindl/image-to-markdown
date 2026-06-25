@@ -107,10 +107,11 @@ function transcriptSuffix(kind: "image" | "pdf"): string {
   return t(kind === "pdf" ? "note.suffix.pdf" : "note.suffix.image");
 }
 
-/** Pfad für die Transkript-Notiz: neben der Quellnotiz, Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
-export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, kind: "image" | "pdf"): string {
+/** Pfad für die Transkript-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
+ *  Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
+export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, kind: "image" | "pdf", destDir?: string): string {
   const base = `${basenameNoExt(imagePath)} ${transcriptSuffix(kind)}`;
-  return uniqueNotePath(io, dirOf(sourcePath), base);
+  return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
 }
 
 export interface ImgToMdIO {
