@@ -32,20 +32,15 @@ export function buildPdfBody(pages: PdfPageTranscript[], separator: PdfPageSepar
 /** Baut die PDF-Transkript-Notiz: Frontmatter + PDF-Embed oben + je nicht-leere Seite ein Block,
  *  getrennt gemäß `separator`. */
 export function buildPdfNote(o: {
-  pdfLink: string; sourceName: string; date: string; model: string;
+  pdfLink: string; sourceName?: string; date: string; model: string;
   pages: PdfPageTranscript[]; rangeFrom: number; rangeTo: number;
   separator: PdfPageSeparator;
 }): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
-  const frontmatter = [
-    "---",
-    `source_pdf: "[[${esc(o.pdfLink)}]]"`,
-    `source_note: "[[${esc(o.sourceName)}]]"`,
-    `created: ${o.date}`,
-    `transcribed_by: "${esc(o.model)}"`,
-    `pages: "${o.rangeFrom}-${o.rangeTo}"`,
-    "---",
-  ].join("\n");
+  const fm = ["---", `source_pdf: "[[${esc(o.pdfLink)}]]"`];
+  if (o.sourceName !== undefined) fm.push(`source_note: "[[${esc(o.sourceName)}]]"`);
+  fm.push(`created: ${o.date}`, `transcribed_by: "${esc(o.model)}"`, `pages: "${o.rangeFrom}-${o.rangeTo}"`, "---");
+  const frontmatter = fm.join("\n");
   const body = buildPdfBody(o.pages, o.separator);
   return `${frontmatter}\n![[${o.pdfLink}]]\n\n${body}\n`;
 }

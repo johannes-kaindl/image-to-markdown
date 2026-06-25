@@ -62,20 +62,12 @@ export function findImageEmbeds(content: string): ImageEmbed[] {
 }
 
 /** Baut die Transkript-Notiz: Frontmatter-Ref + Foto-Embed oben + Transkript. */
-export function buildTranscriptNote(o: { imageLink: string; sourceName: string; date: string; model: string; transcript: string }): string {
+export function buildTranscriptNote(o: { imageLink: string; sourceName?: string; date: string; model: string; transcript: string }): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');   // YAML-Doppelquote-String — schützt vor Frontmatter-Bruch
-  return [
-    "---",
-    `source_image: "[[${esc(o.imageLink)}]]"`,
-    `source_note: "[[${esc(o.sourceName)}]]"`,
-    `created: ${o.date}`,
-    `transcribed_by: "${esc(o.model)}"`,
-    "---",
-    `![[${o.imageLink}]]`,
-    "",
-    o.transcript,
-    "",
-  ].join("\n");
+  const lines = ["---", `source_image: "[[${esc(o.imageLink)}]]"`];
+  if (o.sourceName !== undefined) lines.push(`source_note: "[[${esc(o.sourceName)}]]"`);
+  lines.push(`created: ${o.date}`, `transcribed_by: "${esc(o.model)}"`, "---", `![[${o.imageLink}]]`, "", o.transcript, "");
+  return lines.join("\n");
 }
 
 /** Override: erhält das komplette Frontmatter der alten Notiz, ersetzt transcribed_by (+ pages bei PDF)

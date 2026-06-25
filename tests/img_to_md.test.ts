@@ -79,6 +79,11 @@ describe("buildTranscriptNote", () => {
     expect(note).toContain('source_note: "[[No\\"tiz]]"');
     expect(note).toContain('transcribed_by: "v\\"m"');
   });
+  it("ohne sourceName → keine source_note-Zeile", () => {
+    const note = buildTranscriptNote({ imageLink: "scan.png", date: "2026-06-25", model: "vm", transcript: "x" });
+    expect(note).toContain('source_image: "[[scan.png]]"');
+    expect(note).not.toContain("source_note");
+  });
 });
 
 describe("replaceEmbed", () => {
