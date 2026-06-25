@@ -107,7 +107,7 @@ For every transcribed image (or PDF), the plugin writes exactly one transcript n
 | --- | --- |
 | `source_image` | (Image transcripts only) Wikilink to the transcribed image, e.g. `"[[scan.png]]"`. This link is the basis of idempotency — see [Idempotency & the backlink index](#idempotency--the-backlink-index). |
 | `source_pdf` | (PDF transcripts only) Wikilink to the transcribed PDF, e.g. `"[[doc.pdf]]"`. Same role as `source_image`. |
-| `source_note` | Wikilink to the source note the embed lived in. |
+| `source_note` | Wikilink to the source note the embed lived in. **Omitted** when the active file itself is the source (standalone file — no surrounding note). |
 | `created` | The creation date (`YYYY-MM-DD`). |
 | `transcribed_by` | The model name read from `response.model`. |
 | `pages` | (PDF transcripts only) The transcribed page range, e.g. `"1-12"`. |
@@ -117,6 +117,7 @@ Behaviour:
 - One transcript note per image (one per PDF). Re-running produces no duplicates (idempotent).
 - For **embeds** (`![[x]]`): the image/PDF embed in the source note is replaced by an embed of the new transcript note. The original text is never overwritten (non-destructive). Because the embed is replaced, the handled image no longer appears in the sidebar list on the next scan.
 - For **pure links** (`[[x]]` / `[text](x)`, shown with the "linked" badge in the sidebar): the transcript note is written, but the link in the source note is **left unchanged**. The source note is not modified.
+- For **standalone files** (the active file *is itself* a PDF or image): the transcript note is placed at Obsidian's **"Default location for new notes"** (via `app.fileManager.getNewFileParent`). The source file is never modified. The frontmatter omits `source_note` (there is no source note).
 
 ### Idempotency & the backlink index
 

@@ -17,6 +17,7 @@
 - **Idempotent** — eine Transkript-Notiz pro Quelle, keine Duplikate; Neu-Transkription ist opt-in
 - **Zweisprachig** — Obsidians Spracheinstellung (English / Deutsch) steuert die Oberfläche automatisch
 - **Nicht-destruktiv** — Quellnotizen werden nie überschrieben; Embeds werden ersetzt, Originale bleiben erhalten
+- **Eigenständige Dateien** — eine PDF oder ein Bild direkt in Obsidian öffnen, und die Sidebar behandelt *diese Datei* als Quelle — keine umgebende Notiz nötig
 
 ### Im Detail
 
@@ -36,6 +37,7 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
   `pdfMaxPages` (konfigurierbar) und `pdfRenderScale` (Slider 1.0–4.0, mobil kleiner, OOM-Schutz);
   der Seitentrenner der zusammengeführten Notiz (`pdfPageSeparator`) ist konfigurierbar. Kein CDN —
   pdf.js ist vollständig offline gebündelt.
+- **Eigenständige Datei als Quelle.** Ist die aktive Datei selbst eine PDF oder ein Bild — direkt in Obsidian geöffnet, nicht in eine Notiz eingebettet — zeigt die Sidebar sie als einzelnen Eintrag mit dem Label **„diese Datei"** an und behandelt sie als Transkriptions-Quelle. Der Seitenbereich ist bei PDFs wie gewohnt wählbar; Bilder zeigen eine einzelne Karte. Die Transkript-Notiz wird am **„Standard-Speicherort für neue Notizen"** (`app.fileManager.getNewFileParent`) angelegt, da es keine Quellnotiz gibt. Das Frontmatter enthält kein `source_note`-Feld; `source_pdf`/`source_image`, `created`, `transcribed_by` (bei PDFs auch `pages`) werden wie üblich geschrieben. Die Quelldatei wird nicht verändert. Idempotenz und Override gelten wie gewohnt.
 - **Backlink-basierte Idempotenz.** Bereits transkribierte Quellen werden automatisch erkannt:
   Hat eine Notiz ein `source_pdf`- oder `source_image`-Frontmatter-Feld, das auf die Quelldatei
   auflöst, zeigt die Sidebar **„✓ Transkript vorhanden"** mit einem **„öffnen"**-Link statt erneut

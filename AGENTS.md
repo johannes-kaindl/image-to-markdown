@@ -35,6 +35,9 @@ Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision
 ```
 img_to_md.ts        reiner Kern: findImageEmbeds · buildTranscriptNote · replaceEmbed ·
                     writeTranscripts (batched, read-once/write-once) · runImgToMd · ImgToMdIO.
+                    Etappe-3-Helfer: classifySource (Dateiext → image/pdf/null) ·
+                    buildSelfSourceItem (erzeugt das einzelne ImgItem wenn die aktive Datei
+                    selbst die Quelle ist); ImgItem hat dafür ein neues Feld selfSource: true.
 img_to_md_state.ts  ImgToMdState — Bild-Auswahl + Ergebnis-Karten (kein DOM/I/O).
 img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten,
                     PDF-Seitenbereichs-Auswahl. Idempotenz-Anzeige je Liste-Zeile: bei vorhandenem
