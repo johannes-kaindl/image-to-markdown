@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import type { ImgItem } from "./img_to_md_state";
 
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
@@ -102,6 +103,28 @@ export function uniqueNotePath(io: { noteExists(p: string): boolean }, dir: stri
 
 function dirOf(path: string): string { const i = path.lastIndexOf("/"); return i >= 0 ? path.slice(0, i) : ""; }
 export function basenameNoExt(path: string): string { const b = path.slice(path.lastIndexOf("/") + 1); const d = b.lastIndexOf("."); return d >= 0 ? b.slice(0, d) : b; }
+
+/** Letztes Pfadsegment inkl. Extension (für Wikilink/Anzeige der Selbst-Quelle). */
+export function basename(path: string): string { return path.slice(path.lastIndexOf("/") + 1); }
+
+/** Baut das eine ImgItem für eine direkt geöffnete Medien-Datei (Selbst-Quelle).
+ *  null, wenn sourcePath kein Bild/PDF ist. pageCount/existingTranscriptPath kommen
+ *  von der Obsidian-Schicht (I/O); diese Funktion bleibt rein. */
+export function buildSelfSourceItem(
+  sourcePath: string,
+  opts: { pageCount?: number; existingTranscriptPath?: string; pdfMaxPages: number },
+): ImgItem | null {
+  const ext = extOf(sourcePath);
+  const cls = classifySource(ext);
+  if (!cls) return null;
+  const common = { raw: "", link: basename(sourcePath), ext, existingTranscriptPath: opts.existingTranscriptPath, embed: false, selfSource: true };
+  if (cls === "pdf") {
+    const pageCount = opts.pageCount ?? 0;
+    const cappedTo = Math.min(pageCount, opts.pdfMaxPages);
+    return { ...common, kind: "pdf", supported: pageCount > 0, pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 } };
+  }
+  return { ...common, kind: "image", supported: SUPPORTED_EXTS.includes(ext) };
+}
 
 function transcriptSuffix(kind: "image" | "pdf"): string {
   return t(kind === "pdf" ? "note.suffix.pdf" : "note.suffix.image");

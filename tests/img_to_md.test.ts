@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename } from "../src/img_to_md";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -307,5 +307,38 @@ describe("rewriteTranscript", () => {
     const out = rewriteTranscript(old, { model: "neu", sourceLink: "d.pdf", body: "Y", pages: "1-5" });
     expect(out).toContain('pages: "1-5"');
     expect(out).not.toContain('pages: "1-2"');
+  });
+});
+
+describe("buildSelfSourceItem", () => {
+  it("Bild → image-Item, supported, embed:false, selfSource:true", () => {
+    const it = buildSelfSourceItem("Anhänge/scan.png", { pdfMaxPages: 20 });
+    expect(it).toMatchObject({ kind: "image", link: "scan.png", ext: "png", supported: true, embed: false, selfSource: true, raw: "" });
+  });
+  it("HEIC → image-Item, supported:false", () => {
+    expect(buildSelfSourceItem("foto.heic", { pdfMaxPages: 20 })?.supported).toBe(false);
+  });
+  it("PDF → pdf-Item mit pageCount/range, range to auf pdfMaxPages gekappt", () => {
+    const it = buildSelfSourceItem("doc.pdf", { pageCount: 50, pdfMaxPages: 20 });
+    expect(it).toMatchObject({ kind: "pdf", supported: true, pageCount: 50, range: { from: 1, to: 20 }, selfSource: true });
+  });
+  it("PDF ohne lesbare Seiten → supported:false, range to:1", () => {
+    const it = buildSelfSourceItem("doc.pdf", { pageCount: 0, pdfMaxPages: 20 });
+    expect(it).toMatchObject({ supported: false, range: { from: 1, to: 1 } });
+  });
+  it("existingTranscriptPath wird durchgereicht", () => {
+    const it = buildSelfSourceItem("scan.png", { pdfMaxPages: 20, existingTranscriptPath: "scan (transcript).md" });
+    expect(it?.existingTranscriptPath).toBe("scan (transcript).md");
+  });
+  it("Nicht-Medien-Datei → null", () => {
+    expect(buildSelfSourceItem("note.md", { pdfMaxPages: 20 })).toBeNull();
+    expect(buildSelfSourceItem("board.canvas", { pdfMaxPages: 20 })).toBeNull();
+  });
+});
+
+describe("basename", () => {
+  it("letztes Segment mit Extension", () => {
+    expect(basename("a/b/scan.png")).toBe("scan.png");
+    expect(basename("scan.pdf")).toBe("scan.pdf");
   });
 });
