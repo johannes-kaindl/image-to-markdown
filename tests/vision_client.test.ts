@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint, type HttpResponse } from "../src/vision_client";
+import { VisionClient, setHttp, setStreamFetch, type HttpResponse } from "../src/vision_client";
 
 // Mock-Transport für nicht-streamende Calls (ping/listModels/transcribe/visionConfidence/testVision).
 function mockHttp(impl: (url: string, init?: { method?: string; body?: string }) => HttpResponse): { url: string; body?: string }[] {
@@ -106,27 +106,6 @@ describe("VisionClient.testVision", () => {
   it("wirft bei HTTP-/Netzfehler", async () => {
     mockHttp(() => ({ ok: false, status: 500, text: "" }));
     await expect(new VisionClient("http://h", "m").testVision("d")).rejects.toThrow("500");
-  });
-});
-
-describe("resolveActiveEndpoint", () => {
-  it("nimmt den ersten erreichbaren in Reihenfolge", async () => {
-    const seen: string[] = [];
-    const ping = async (ep: string) => { seen.push(ep); return ep === "http://b:1234"; };
-    const r = await resolveActiveEndpoint(["http://a:1234", "http://b:1234", "http://c:1234"], ping);
-    expect(r).toBe("http://b:1234");
-    expect(seen).toEqual(["http://a:1234", "http://b:1234"]);   // c nicht mehr gepingt
-  });
-  it("null wenn keiner erreichbar", async () => {
-    expect(await resolveActiveEndpoint(["http://a:1234", "http://b:1234"], async () => false)).toBeNull();
-  });
-  it("überspringt leere/whitespace-Einträge", async () => {
-    const ping = async () => true;
-    expect(await resolveActiveEndpoint(["", "   ", "http://a:1234"], ping)).toBe("http://a:1234");
-  });
-  it("normalisiert je Eintrag (trailing /v1 und Slash)", async () => {
-    const ping = async () => true;
-    expect(await resolveActiveEndpoint(["http://a:1234/v1/"], ping)).toBe("http://a:1234");
   });
 });
 

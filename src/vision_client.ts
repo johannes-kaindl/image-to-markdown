@@ -1,5 +1,10 @@
 import { streamSSE } from "./sse";
 import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
+import { normalizeEndpoint, resolveActiveEndpoint } from "obsidian-kit/pure";
+
+// normalizeEndpoint + resolveActiveEndpoint stammen aus obsidian-kit (entdoppelt) — hier
+// re-exportiert, damit main.ts/settings.ts/Tests sie weiterhin aus ./vision_client beziehen.
+export { normalizeEndpoint, resolveActiveEndpoint };
 
 /** Transport-Abstraktion: hält den reinen Kern obsidian-frei (PROF-OBS-03/04). Die Obsidian-Schicht
  *  injiziert per setHttp() einen requestUrl-Adapter (src/http.ts); Tests injizieren einen Mock.
@@ -17,27 +22,6 @@ export function setStreamFetch(fn: StreamFetch): void { streamFn = fn; }
 function http(): HttpFetch {
   if (!httpFn) throw new Error("VisionClient: HTTP nicht konfiguriert (setHttp aufrufen)");
   return httpFn;
-}
-
-/** Normalisiert eine Endpoint-Eingabe: trailing Slashes + ein trailing `/v1` strippen.
- *  So funktioniert sowohl `http://host:1234` als auch `http://host:1234/v1` — die Client-
- *  Methoden hängen `/v1/...` selbst an, ein doppeltes `/v1` würde sonst 200+Fehler-Body geben. */
-export function normalizeEndpoint(endpoint: string): string {
-  return endpoint.trim().replace(/\/+$/, "").replace(/\/v1$/, "").replace(/\/+$/, "");
-}
-
-/** Erster erreichbarer Endpoint aus der geordneten Liste, oder null. Leere/whitespace-Einträge
- *  werden übersprungen; jeder Eintrag wird normalizeEndpoint-t. ping ist injiziert → app-frei. */
-export async function resolveActiveEndpoint(
-  endpoints: string[],
-  ping: (endpoint: string) => Promise<boolean>,
-): Promise<string | null> {
-  for (const raw of endpoints) {
-    if (!raw || !raw.trim()) continue;
-    const ep = normalizeEndpoint(raw);
-    if (await ping(ep)) return ep;
-  }
-  return null;
 }
 
 export class VisionClient {
