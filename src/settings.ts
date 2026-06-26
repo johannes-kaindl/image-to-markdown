@@ -13,6 +13,23 @@ export function migrateEndpoints(saved: { visionEndpoint?: string; visionEndpoin
   return [];
 }
 
+/** Wendet die Bearbeitung eines Endpoint-Felds auf die Liste an — bewusst EINMAL bei `blur`,
+ *  nicht pro `onChange`/Tastendruck (sonst hängt das Add-Feld jeden Zwischenstand `l`,`lo`,`loc`,…
+ *  als eigenen Eintrag an). `isAdder=true`: nicht-leerer Wert wird angehängt, leer → unverändert.
+ *  `isAdder=false`: Index wird gesetzt (leer → Eintrag entfernt). Ergebnis getrimmt + leer-gefiltert. Reiner Helfer. */
+export function applyEndpointEdit(endpoints: string[], index: number, value: string, isAdder: boolean): string[] {
+  const v = value.trim();
+  const next = [...endpoints];
+  if (isAdder) {
+    if (v) next.push(v);
+  } else if (v) {
+    next[index] = v;
+  } else {
+    next.splice(index, 1);
+  }
+  return next.map(e => e.trim()).filter(e => e);
+}
+
 export interface ImageToMarkdownSettings {
   visionEndpoints: string[];
   visionModel: string;
@@ -82,18 +99,19 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       s.addText(tx => {
         tx
           .setPlaceholder(isAdder ? t("settings.endpoints.addPlaceholder") : "http://localhost:1234")
-          .setValue(value)
-          // onChange feuert pro Tastendruck → nur speichern, NICHT re-rendern (sonst reißt
-          // containerEl.empty() das fokussierte Feld ab → man kann nicht mehrstellig tippen).
-          .onChange(async (v: string) => {
-            const next = [...this.plugin.settings.visionEndpoints];
-            if (isAdder) { if (v.trim()) next.push(v.trim()); }
-            else { next[i] = v.trim(); }
-            this.plugin.settings.visionEndpoints = next.filter(e => e);
-            await this.plugin.saveSettings();
-          });
-        // Struktur-Re-Render (leeres Feld weg / Add-Feld → neues Feld) + Auflösen erst bei blur.
-        tx.inputEl.addEventListener("blur", () => { void this.plugin.resolveAndReconnect().then(() => this.render()); });
+          .setValue(value);
+        // Listen-Mutation NUR bei blur, NICHT in onChange: onChange feuert pro Tastendruck und
+        // würde im Add-Feld jeden Zwischenstand (l, lo, loc, …) als eigenen Eintrag anhängen.
+        // Bei blur einmal den finalen Feldwert anwenden, dann Struktur-Re-Render + Auflösen.
+        tx.inputEl.addEventListener("blur", () => {
+          const before = this.plugin.settings.visionEndpoints;
+          const updated = applyEndpointEdit(before, i, tx.getValue(), isAdder);
+          if (updated.length === before.length && updated.every((e, k) => e === before[k])) return;   // unverändert → kein Re-Render
+          this.plugin.settings.visionEndpoints = updated;
+          void this.plugin.saveSettings()
+            .then(() => this.plugin.resolveAndReconnect())
+            .then(() => this.render());
+        });
       });
       // Pro-Feld-Status in A11y-Form (Form + Text + Farbe)
       const ep = value.trim();
