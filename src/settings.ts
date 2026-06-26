@@ -113,6 +113,19 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
             .then(() => this.render());
         });
       });
+      // Löschen: expliziter Mülleimer-Button (nicht am leeren Add-Feld) — entfernt den Eintrag.
+      // Das circle-x links ist nur Erreichbarkeits-Status, kein Lösch-Button (häufiges Missverständnis).
+      if (!isAdder) {
+        s.addExtraButton(b => b
+          .setIcon("trash-2")
+          .setTooltip(t("settings.endpoints.remove"))
+          .onClick(() => {
+            this.plugin.settings.visionEndpoints = applyEndpointEdit(this.plugin.settings.visionEndpoints, i, "", false);
+            void this.plugin.saveSettings()
+              .then(() => this.plugin.resolveAndReconnect())
+              .then(() => this.render());
+          }));
+      }
       // Pro-Feld-Status in A11y-Form (Form + Text + Farbe)
       const ep = value.trim();
       if (!isAdder && ep) {

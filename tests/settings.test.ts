@@ -31,6 +31,9 @@ describe("applyEndpointEdit", () => {
   it("bestehendes Feld geleert → Eintrag entfernt", () => {
     expect(applyEndpointEdit(["http://a:1234", "http://b:1234"], 0, "", false)).toEqual(["http://b:1234"]);
   });
+  it("Mülleimer-Löschen: entfernt den Eintrag an Index i (auch mittig)", () => {
+    expect(applyEndpointEdit(["http://a:1234", "http://b:1234", "http://c:1234"], 1, "", false)).toEqual(["http://a:1234", "http://c:1234"]);
+  });
   it("trimmt Eingabe + filtert leere Einträge", () => {
     expect(applyEndpointEdit(["http://a:1234"], 1, "  http://b:1234  ", true)).toEqual(["http://a:1234", "http://b:1234"]);
   });
