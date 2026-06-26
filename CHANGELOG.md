@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
 Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
+## [0.5.1] — 2026-06-26
+
+### Behoben
+
+- **Endpunkt-Eingabe:** Beim Tippen ins Endpunkt-Feld wurde pro Tastendruck ein eigener,
+  unvollständiger Eintrag angelegt (`l`, `lo`, `loc`, …) statt eines einzigen. Die Listen-
+  Bearbeitung wird jetzt erst beim Verlassen des Felds (blur) angewandt — ein Feld = ein Eintrag.
+
+### Hinzugefügt
+
+- **Endpunkt löschen:** Jede Endpunkt-Zeile hat einen eigenen Lösch-Button (Mülleimer). Das
+  Erreichbarkeits-Status-Icon (`circle-check`/`circle-x`) links bleibt reine Anzeige.
+
 ## [0.5.0] — 2026-06-25
 
 ### Hinzugefügt
