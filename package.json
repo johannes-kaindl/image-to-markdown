@@ -21,6 +21,7 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "version-bump": "node scripts/version-bump.mjs",
+    "release": "node scripts/release.mjs",
     "deploy": "npm run build && cp main.js manifest.json styles.css \"${OBSIDIAN_PLUGIN_DIR:?Setze OBSIDIAN_PLUGIN_DIR auf dein Vault-Plugin-Verzeichnis}\"/"
   },
   "devDependencies": {

@@ -1,12 +1,11 @@
 name: Release
 
-# Baut das Plugin, erzeugt Build-Provenance-Attestations für die Release-Assets und
-# veröffentlicht sie als GitHub-Release. Läuft auf der GitHub-Seite (Mirror von Codeberg):
-# bei einem SemVer-Tag (ohne v-Prefix) oder manuell via workflow_dispatch.
+# Baut das Plugin, attestiert die Assets und veröffentlicht ein GitHub-Release.
+# Läuft auf der GitHub-Seite (Mirror von Codeberg) bei einem SemVer-Tag (ohne v) oder manuell.
 on:
   push:
     tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+"   # SemVer ohne v-Praefix (CORE-GIT-03)
   workflow_dispatch:
     inputs:
       tag:
@@ -36,10 +35,27 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build
+
+      - name: Gate (typecheck + test + lint + build)
+        run: npm run typecheck && npm test && npm run lint && npm run build
+
+      - name: Verify tag == package.json == manifest.json and versions.json covers it
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          PKG="$(node -p "require('./package.json').version")"
+          MAN="$(node -p "require('./manifest.json').version")"
+          HAS="$(node -p "require('./versions.json')['$TAG'] ? 'yes' : 'no'")"
+          if [ "$TAG" != "$PKG" ] || [ "$TAG" != "$MAN" ]; then
+            echo "::error::Tag $TAG, package.json $PKG, manifest.json $MAN — must all match"
+            exit 1
+          fi
+          if [ "$HAS" != "yes" ]; then
+            echo "::error::versions.json has no entry for $TAG"
+            exit 1
+          fi
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             main.js
