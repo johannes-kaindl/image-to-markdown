@@ -87,8 +87,8 @@ function rewriteChangelog(version) {
   if (!/##\s*\[Unreleased\]/i.test(raw)) die("CHANGELOG.md hat keinen `## [Unreleased]`-Block.");
   // Fügt die neue Versions-Überschrift direkt nach [Unreleased] ein → der bisherige Unreleased-Inhalt
   // rutscht unter [version], [Unreleased] bleibt leer.
-  const next = raw.replace(/##\s*\[Unreleased\]/i, `## [Unreleased]\n\n## [${version}] - ${date}`);
-  if (dryRun) { console.log(`[dry-run] CHANGELOG: [Unreleased] → [${version}] - ${date}`); return; }
+  const next = raw.replace(/##\s*\[Unreleased\]/i, `## [Unreleased]\n\n## [${version}] — ${date}`);
+  if (dryRun) { console.log(`[dry-run] CHANGELOG: [Unreleased] → [${version}] — ${date}`); return; }
   writeFileSync(path, next);
 }
 function changelogSection(version) {

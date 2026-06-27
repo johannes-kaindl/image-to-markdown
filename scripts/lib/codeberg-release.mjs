@@ -20,7 +20,8 @@ export async function createCodebergRelease({ fetch, token, repo, tag, notes, as
     body: JSON.stringify({ has_releases: true }),
   });
 
-  // 2. Release finden (Update-Pfad) oder anlegen (benigner 409 toleriert via Re-Fetch nicht nötig — wir lesen vorher).
+  // 2. Release per Tag finden (Update-Pfad) oder neu anlegen. Der Tag wurde im scripted Flow bereits
+  //    gepusht, daher tritt kein „Release has no Tag"-409 auf; ein unerwarteter Fehler wird geworfen.
   let release;
   const existing = await fetch(`${API}/repos/${repo}/releases/tags/${tag}`, { headers: auth });
   if (existing.ok) {
