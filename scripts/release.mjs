@@ -31,6 +31,19 @@ if (!tagExists && !dryRun && sh("git", ["status", "--porcelain"]) !== "") {
   die("Arbeitsbaum nicht sauber — committe oder stashe erst.");
 }
 
+// Release nur vom Default-Branch — `git push origin HEAD` (Schritt 6) würde sonst den falschen
+// Branch pushen. Schützt nur den Full-Release-Pfad (Push); im Dry-Run/Resume übersprungen.
+const currentBranch = sh("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
+let defaultBranch;
+try {
+  defaultBranch = sh("git", ["rev-parse", "--abbrev-ref", "origin/HEAD"]).replace(/^origin\//, "");
+} catch {
+  defaultBranch = "main"; // origin/HEAD nicht gesetzt → Annahme main
+}
+if (!tagExists && !dryRun && currentBranch !== defaultBranch) {
+  die(`Release nur vom Default-Branch „${defaultBranch}" — aktuell „${currentBranch}".`);
+}
+
 // origin → "owner/name" (Codeberg) parsen.
 const originUrl = sh("git", ["remote", "get-url", "origin"]);
 const repoMatch = originUrl.match(/codeberg\.org[/:]([^/]+)\/(.+?)(?:\.git)?$/);
