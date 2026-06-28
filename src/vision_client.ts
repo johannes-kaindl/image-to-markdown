@@ -15,6 +15,32 @@ export type HttpFetch = (url: string, init?: { method?: string; headers?: Record
  *  Schicht über activeWindow.fetch injiziert; der Kern referenziert nie das globale fetch. */
 export type StreamFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
+/** Erkennt einen OpenAI-kompatiblen Fehler-Envelope in einem Antwort-Body. Lokale Server (LM Studio)
+ *  antworten auf Fehler oft mit **HTTP 200 + `{error:{message}}`** → der Aufrufer kann die echte
+ *  Servermeldung statt eines generischen Fehlers zeigen. Gibt `null` zurück, wenn der Body eine (auch
+ *  leere) Completion ist oder kein erkennbarer Fehler/kein JSON. Reine Funktion, obsidian-frei. */
+export function parseErrorEnvelope(text: string): string | null {
+  if (!text || !text.trim()) return null;
+  let j: unknown;
+  try { j = JSON.parse(text); } catch { return null; }
+  if (!j || typeof j !== "object") return null;
+  const o = j as Record<string, unknown>;
+  const err = o.error;
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (err && typeof err === "object") {
+    const m = (err as Record<string, unknown>).message;
+    if (typeof m === "string" && m.trim()) return m.trim();
+  }
+  // Nur ohne reguläre Completion-Felder zusätzliche Fehlerformen (FastAPI {detail}, schlichtes {message}).
+  if (!("choices" in o)) {
+    const detail = o.detail;
+    if (typeof detail === "string" && detail.trim()) return detail.trim();
+    const msg = o.message;
+    if (typeof msg === "string" && msg.trim()) return msg.trim();
+  }
+  return null;
+}
+
 let httpFn: HttpFetch | null = null;
 let streamFn: StreamFetch | null = null;
 export function setHttp(fn: HttpFetch): void { httpFn = fn; }
@@ -63,9 +89,14 @@ export class VisionClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: false }),
     });
-    if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
+    // LM Studio & Co. liefern Fehler teils als HTTP 200 mit {error:{message}} → echte Meldung heben
+    // statt sie als „leeres Transkript" zu verschlucken (siehe AGENTS.md-Gotcha).
+    const envelope = parseErrorEnvelope(res.text);
+    if (!res.ok) throw new Error(envelope ?? `Vision HTTP ${res.status}`);
     const j = JSON.parse(res.text) as { model?: string; choices?: { message?: { content?: string } }[] };
-    return { content: j.choices?.[0]?.message?.content ?? "", model: j.model ?? this.model };
+    const content = j.choices?.[0]?.message?.content ?? "";
+    if (!content.trim() && envelope) throw new Error(envelope);
+    return { content, model: j.model ?? this.model };
   }
 
   /** Passive Vision-Erkennung: native Metadaten-Probe + Namens-Heuristik.
@@ -98,6 +129,11 @@ export class VisionClient {
     });
     if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
     const r = await streamSSE(res, onContent, onReasoning);
+    // 200 mit Error-Body statt SSE (keine data:-Zeile, kein Inhalt) → echte Servermeldung heben.
+    if (!r.content.trim() && !/^data:/m.test(r.raw)) {
+      const envelope = parseErrorEnvelope(r.raw);
+      if (envelope) throw new Error(envelope);
+    }
     return { content: r.content, reasoning: r.reasoning, model: r.model || this.model };
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { VisionClient, setHttp, setStreamFetch, type HttpResponse } from "../src/vision_client";
+import { VisionClient, setHttp, setStreamFetch, parseErrorEnvelope, type HttpResponse } from "../src/vision_client";
 
 // Mock-Transport für nicht-streamende Calls (ping/listModels/transcribe/visionConfidence/testVision).
 function mockHttp(impl: (url: string, init?: { method?: string; body?: string }) => HttpResponse): { url: string; body?: string }[] {
@@ -18,6 +18,31 @@ function streamRes(chunks: string[], okFlag = true, status = 200): any {
       : { done: true, value: undefined },
   }) } };
 }
+
+describe("parseErrorEnvelope", () => {
+  it("{error:{message}} → message", () => {
+    expect(parseErrorEnvelope('{"error":{"message":"model X is not loaded"}}')).toBe("model X is not loaded");
+  });
+  it("{error:'…'} → string", () => {
+    expect(parseErrorEnvelope('{"error":"bad request"}')).toBe("bad request");
+  });
+  it("{detail} (ohne choices) → detail", () => {
+    expect(parseErrorEnvelope('{"detail":"not found"}')).toBe("not found");
+  });
+  it("{message} (ohne choices) → message", () => {
+    expect(parseErrorEnvelope('{"message":"server busy"}')).toBe("server busy");
+  });
+  it("valide Completion (auch leer) → null", () => {
+    expect(parseErrorEnvelope('{"choices":[{"message":{"content":"x"}}]}')).toBeNull();
+    expect(parseErrorEnvelope('{"choices":[]}')).toBeNull();
+  });
+  it("leer / Nicht-JSON / HTML → null", () => {
+    expect(parseErrorEnvelope("")).toBeNull();
+    expect(parseErrorEnvelope("   ")).toBeNull();
+    expect(parseErrorEnvelope("<html>oops</html>")).toBeNull();
+    expect(parseErrorEnvelope("not json")).toBeNull();
+  });
+});
 
 describe("VisionClient (non-streaming, injizierter http)", () => {
   it("transcribe schickt text+image_url, non-streaming, und parst content", async () => {
@@ -43,6 +68,14 @@ describe("VisionClient (non-streaming, injizierter http)", () => {
   it("transcribe nimmt das Modell aus der Response (autoritativ)", async () => {
     mockHttp(() => ok({ model: "qwen2-vl:7b", choices: [{ message: { content: "x" } }] }));
     expect(await new VisionClient("http://x", "").transcribe("d", "p")).toEqual({ content: "x", model: "qwen2-vl:7b" });
+  });
+  it("wirft die Servermeldung bei HTTP 200 + Error-Body (LM-Studio-Footgun)", async () => {
+    mockHttp(() => ok({ error: { message: "model X is not loaded" } }));
+    await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow("model X is not loaded");
+  });
+  it("hängt die Servermeldung an den HTTP-Fehler (!ok mit Error-Body)", async () => {
+    mockHttp(() => ({ ok: false, status: 400, text: JSON.stringify({ error: { message: "bad image" } }) }));
+    await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow("bad image");
   });
 });
 
@@ -79,6 +112,15 @@ describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
   it("wirft bei HTTP-Fehler", async () => {
     setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
     await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow("500");
+  });
+  it("wirft die Servermeldung bei 200-Stream mit Error-Body (kein SSE)", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes(['{"error":{"message":"boom"}}'])));
+    await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow("boom");
+  });
+  it("leerer SSE-Stream ([DONE]) wirft NICHT, liefert leeren content", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes(['data: [DONE]\n\n'])));
+    const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
+    expect(r.content).toBe("");
   });
 });
 
