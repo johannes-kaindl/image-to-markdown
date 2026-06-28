@@ -19,6 +19,7 @@
     "dev": "npm run build:worker && node esbuild.config.mjs",
     "test": "vitest run",
     "lint": "eslint src",
+    "pretypecheck": "npm run build:worker",
     "typecheck": "tsc --noEmit",
     "version-bump": "node scripts/version-bump.mjs",
     "release": "node scripts/release.mjs",
