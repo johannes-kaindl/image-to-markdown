@@ -65,7 +65,7 @@ interface CardRefs {
 
 `updateCard(i)` adressiert `cardEls[i]`. Optionale Knoten werden beim ersten Bedarf erzeugt.
 
-**Knoten-Reihenfolge-Invariante:** Der reasoning-`<details>` steht immer direkt nach `headEl` und **vor** dem Text-`<div>`. Da Reasoning real (und in den Tests) vor dem Content kommt, ist die natürliche Append-Reihenfolge meist korrekt; käme Content je zuerst, wird der Text-Knoten so eingefügt, dass ein später erzeugter reasoning-`<details>` per `insertBefore(textEl)` davor landet.
+**Knoten-Reihenfolge-Invariante:** Der reasoning-`<details>` steht direkt nach `headEl` und **vor** dem Text-`<div>`. Das wird über die **Anlege-Reihenfolge** erreicht: Knoten werden lazy per `createEl`/`createDiv` (am Container-Ende) erzeugt, und Reasoning kommt real wie in allen Tests vor dem Content → head → reasoning → text. Kein DOM-Umsortieren (`insertBefore`) nötig — der Test-Mock böte es ohnehin nicht. Der theoretische Fall „Content vor Reasoning" (bei realen Vision-Modellen praktisch ausgeschlossen, da `reasoning_content`/`<think>` zuerst strömen) bliebe rein **kosmetisch** (Reasoning erschiene unter dem Text, kein Datenverlust) und wird bewusst nicht gesondert behandelt (YAGNI).
 
 ## 4. Reasoning-Block-Lebenszyklus
 
