@@ -6,6 +6,19 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-28
+
+### Geändert
+
+- **Flüssigeres Streaming in der Sidebar:** Die Transkriptions-Karten werden beim Streaming nur
+  noch inkrementell aktualisiert statt bei jedem Token komplett neu aufgebaut. Kein Flackern und
+  keine Scroll-Sprünge mehr — spürbar besonders auf Mobilgeräten; der Gedanken-Block behält dabei
+  seinen Auf-/Zu-Zustand.
+- **Aufgeräumte Sidebar-Optik (theme-treu):** Der Gedanken-Block trägt jetzt ein `brain`-Icon statt
+  eines Emojis, lange Dateinamen werden im Karten-Kopf mittig gekürzt, der „Notiz anlegen"-Button
+  hat ein Icon, und die Abstände im Kopfbereich sind ruhiger. Die Schrift bleibt unverändert vom
+  Obsidian-Theme bestimmt (kein Font-Override).
+
 ## [0.5.1] — 2026-06-26
 
 ### Behoben
