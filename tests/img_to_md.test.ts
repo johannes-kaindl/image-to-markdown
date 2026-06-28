@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle } from "../src/img_to_md";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -340,5 +340,23 @@ describe("basename", () => {
   it("letztes Segment mit Extension", () => {
     expect(basename("a/b/scan.png")).toBe("scan.png");
     expect(basename("scan.pdf")).toBe("scan.pdf");
+  });
+});
+
+describe("truncateMiddle", () => {
+  it("lässt Namen <= max unverändert", () => {
+    expect(truncateMiddle("foto.png", 20)).toBe("foto.png");
+    expect(truncateMiddle("foto.png", 8)).toBe("foto.png");   // genau max
+  });
+  it("kürzt lange Namen mittig: Gesamtlänge = max, Ellipsis enthalten, Endung bleibt", () => {
+    const long = "9E894F8A-1C01-4CCF-96C9-AAB2A290C2CB.jpeg";   // 42 Zeichen
+    const r = truncateMiddle(long, 24);
+    expect(r.length).toBe(24);
+    expect(r).toContain("…");
+    expect(r.startsWith("9E894F8A")).toBe(true);
+    expect(r.endsWith(".jpeg")).toBe(true);
+  });
+  it("Edge: max <= 1 ergibt nur die Ellipsis", () => {
+    expect(truncateMiddle("abcdef", 1)).toBe("…");
   });
 });

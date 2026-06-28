@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { ImgToMdState, ImgItem, partitionDoneCards, actualModel } from "./img_to_md_state";
+import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
@@ -8,7 +9,7 @@ interface CardRefs {
   cardEl: HTMLElement;
   headEl: HTMLElement;
   reasoningDet?: HTMLDetailsElement;
-  reasoningSum?: HTMLElement;
+  reasoningLbl?: HTMLElement;
   reasoningBody?: HTMLElement;
   textEl?: HTMLElement;
   errorEl?: HTMLElement;
@@ -212,9 +213,10 @@ export class ImgToMdView extends ItemView {
     let refs = this.cardEls[i];
     if (!refs) {
       const cardEl = el.createDiv({ cls: "img2md-card" });
+      const name = truncateMiddle(this.basename(card.item.link), 32);
       const head = card.page != null
-        ? t("view.cardHeadPage", this.basename(card.item.link), card.page, card.total)
-        : t("view.cardHead", card.index, card.total, this.basename(card.item.link));
+        ? t("view.cardHeadPage", name, card.page, card.total)
+        : t("view.cardHead", card.index, card.total, name);
       const headEl = cardEl.createDiv({ cls: "img2md-card-head", text: head });
       refs = this.cardEls[i] = { cardEl, headEl, liveWas: false, autoCollapsed: false };
     }
@@ -226,11 +228,14 @@ export class ImgToMdView extends ItemView {
         const det = cardEl.createEl("details", { cls: "img2md-reasoning" });
         det.open = live;
         const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
+        const icon = sum.createSpan({ cls: "img2md-reasoning-icon" });
+        setIcon(icon, "brain");
+        const lbl = sum.createSpan({ cls: "img2md-reasoning-lbl" });
         const body = det.createDiv({ cls: "img2md-reasoning-body" });
-        refs.reasoningDet = det; refs.reasoningSum = sum; refs.reasoningBody = body;
+        refs.reasoningDet = det; refs.reasoningLbl = lbl; refs.reasoningBody = body;
         refs.liveWas = live;
       }
-      refs.reasoningSum!.setText(live ? t("view.thinking") : t("view.thoughts"));
+      refs.reasoningLbl!.setText(live ? t("view.thinking") : t("view.thoughts"));
       refs.reasoningBody!.setText(card.reasoning);
       // Einmaliger Auto-Collapse beim Übergang live -> nicht-live; danach gehört .open dem User.
       if (refs.liveWas && !live && !refs.autoCollapsed) {
@@ -264,7 +269,10 @@ export class ImgToMdView extends ItemView {
         refs.actionsEl = actions;
       }
       if (card.status === "done" && !refs.writeBtn) {
-        const wb = refs.actionsEl.createEl("button", { cls: "img2md-write", text: t("view.createNote") });
+        const wb = refs.actionsEl.createEl("button", { cls: "img2md-write" });
+        const wbIcon = wb.createSpan({ cls: "img2md-write-icon" });
+        setIcon(wbIcon, "file-plus");
+        wb.createSpan({ cls: "img2md-write-lbl", text: t("view.createNote") });
         wb.addEventListener("click", () => void this.writeOne(i));
         refs.writeBtn = wb;
       } else if (card.status !== "done" && refs.writeBtn) {

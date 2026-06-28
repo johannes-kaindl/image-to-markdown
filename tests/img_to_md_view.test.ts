@@ -193,6 +193,16 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(openAfter).toBe(false);
   });
 
+  it("kürzt lange Dateinamen im Karten-Kopf (Ellipsis)", async () => {
+    const longItem: ImgItem = { raw: "", link: "9E894F8A-1C01-4CCF-96C9-AAB2A290C2CB-2026-06-28-14.23.34.jpeg", ext: "jpeg", supported: true, kind: "image" };
+    const { view } = mkView({ scan: async () => [longItem] });
+    await view.onOpen(); await view.run();
+    const head = all(view.contentEl, "img2md-card-head")[0].textContent ?? "";
+    expect(head).toContain("…");
+    expect(head).toContain("Image 1/1");
+    expect(head.length).toBeLessThan(longItem.link.length);   // deutlich kürzer als der volle Name
+  });
+
   it("Toggle einer fertigen Karte bleibt erhalten, während eine spätere Karte streamt", async () => {
     const ITEMS2: ImgItem[] = [
       { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
@@ -236,6 +246,27 @@ describe("ImgToMdView — Transkribieren", () => {
     await v.view.run();
     expect(sameNode).toBe(true);
     expect(all(v.view.contentEl, "img2md-text")[0].textContent).toBe("Hallo");
+  });
+
+  it("reasoning-Block trägt ein brain-Icon getrennt vom Label-Text", async () => {
+    const v = mkView({ transcribeStream: async (_sp: string, _it: ImgItem, onC: any, onR: any) => { onR("denkt"); onC("Text"); return { content: "Text", reasoning: "denkt", model: "vm" }; } });
+    await v.view.onOpen(); await v.view.run();
+    const icons = all(v.view.contentEl, "img2md-reasoning-icon");
+    expect(icons.length).toBe(1);
+    expect(icons[0].getAttribute("data-icon")).toBe("brain");
+    const lbl = all(v.view.contentEl, "img2md-reasoning-lbl");
+    expect(lbl.length).toBe(1);
+    expect(lbl[0].textContent).toContain("Thoughts");   // EN-Label nach Content, ohne Emoji
+    expect(lbl[0].textContent).not.toContain("💭");
+  });
+
+  it("Notiz-anlegen-Button trägt ein file-plus-Icon neben dem Label", async () => {
+    const { view } = mkView(); await view.onOpen(); await view.run();
+    const icon = all(view.contentEl, "img2md-write-icon");
+    expect(icon.length).toBe(1);
+    expect(icon[0].getAttribute("data-icon")).toBe("file-plus");
+    const lbl = all(view.contentEl, "img2md-write-lbl");
+    expect(lbl[0].textContent).toBe("Create note");
   });
 });
 
