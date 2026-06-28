@@ -1,16 +1,16 @@
 /* Image to Markdown — Sidebar-Styles */
 .img2md-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 /* Status-Icon: Form (circle-check / circle-x / loader) trägt die Bedeutung, Farbe nur sekundär — barrierefrei bei Farbsehschwäche (WCAG 1.4.1). */
-.img2md-status { font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 2px 0; margin-bottom: 6px; flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+.img2md-status { font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 2px 0; margin-bottom: var(--size-4-2); flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 .img2md-status-icon { display: inline-flex; align-items: center; color: var(--text-muted); }
 .img2md-status-icon svg { width: 14px; height: 14px; }
 .img2md-status.is-ok .img2md-status-icon { color: var(--text-success); }
 .img2md-status.is-error .img2md-status-icon { color: var(--text-error); }
 .img2md-status.is-checking .img2md-status-icon { color: var(--text-muted); }
 .img2md-model { width: 100%; flex: 0 0 auto; font-size: 12px; }
-.img2md-head { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; margin-bottom: 6px; }
+.img2md-head { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; margin-bottom: var(--size-4-2); }
 .img2md-toggle { font-size: 12px; }
-.img2md-list { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; max-height: 30vh; overflow-y: auto; margin-bottom: 6px; }
+.img2md-list { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; max-height: 30vh; overflow-y: auto; margin-bottom: var(--size-4-2); }
 .img2md-item { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .img2md-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
 .img2md-pdf-range { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
@@ -31,16 +31,18 @@
 .img2md-card-actions { display: flex; gap: 4px; margin-top: 4px; }
 .img2md-copy.clickable-icon { color: var(--text-faint); padding: 2px 4px; height: auto; width: auto; }
 .img2md-copy.clickable-icon:hover { color: var(--text-normal); }
-.img2md-write { font-size: 12px; }
+.img2md-write { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+.img2md-write-icon { display: inline-flex; align-items: center; }
+.img2md-write-icon svg { width: 14px; height: 14px; }
 .img2md-exists { color: var(--text-accent); font-size: 11px; margin-left: 4px; }
 .img2md-exists-open { color: var(--text-accent); font-size: 11px; margin-left: 4px; cursor: pointer; text-decoration: underline; }
 .img2md-linked { font-size: var(--font-ui-smaller); color: var(--text-muted); margin-left: 0.4em; }
-.img2md-model-row { display: flex; align-items: center; gap: 0.4em; margin-bottom: 6px; }
+.img2md-model-row { display: flex; align-items: center; gap: 0.4em; margin-bottom: var(--size-4-2); }
 .img2md-model-row .img2md-model { flex: 1; }
 .img2md-model-status { display: inline-flex; align-items: center; color: var(--text-faint); flex: 0 0 auto; }
 .img2md-model-status.is-loaded { color: var(--text-success); }
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
-.img2md-foot { flex: 0 0 auto; margin-top: 6px; }
+.img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); }
 
 /* Settings-QoL */
 .img2md-prompt-textarea { width: 100%; min-height: 8rem; resize: vertical; }

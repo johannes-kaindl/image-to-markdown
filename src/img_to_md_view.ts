@@ -269,7 +269,10 @@ export class ImgToMdView extends ItemView {
         refs.actionsEl = actions;
       }
       if (card.status === "done" && !refs.writeBtn) {
-        const wb = refs.actionsEl.createEl("button", { cls: "img2md-write", text: t("view.createNote") });
+        const wb = refs.actionsEl.createEl("button", { cls: "img2md-write" });
+        const wbIcon = wb.createSpan({ cls: "img2md-write-icon" });
+        setIcon(wbIcon, "file-plus");
+        wb.createSpan({ cls: "img2md-write-lbl", text: t("view.createNote") });
         wb.addEventListener("click", () => void this.writeOne(i));
         refs.writeBtn = wb;
       } else if (card.status !== "done" && refs.writeBtn) {

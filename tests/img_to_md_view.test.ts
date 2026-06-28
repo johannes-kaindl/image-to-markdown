@@ -259,6 +259,15 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(lbl[0].textContent).toContain("Thoughts");   // EN-Label nach Content, ohne Emoji
     expect(lbl[0].textContent).not.toContain("💭");
   });
+
+  it("Notiz-anlegen-Button trägt ein file-plus-Icon neben dem Label", async () => {
+    const { view } = mkView(); await view.onOpen(); await view.run();
+    const icon = all(view.contentEl, "img2md-write-icon");
+    expect(icon.length).toBe(1);
+    expect(icon[0].getAttribute("data-icon")).toBe("file-plus");
+    const lbl = all(view.contentEl, "img2md-write-lbl");
+    expect(lbl[0].textContent).toBe("Create note");
+  });
 });
 
 describe("ImgToMdView — Notiz anlegen", () => {
