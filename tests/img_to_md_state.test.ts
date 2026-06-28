@@ -138,6 +138,7 @@ describe("ImgToMdState — PDF-Karten", () => {
     expect(part.pdfs[0].pages.map(p => p.page)).toEqual([1, 3]);   // nur done
     expect(part.pdfs[0].failedPages).toEqual([2]);
     expect(part.pdfs[0].pending).toBe(false);
+    expect(part.pdfs[0].range).toEqual({ from: 1, to: 3 });        // GELAUFENER Bereich aus den Karten
   });
 
   it("partitionDoneCards markiert pending bei noch streamender Seite", () => {

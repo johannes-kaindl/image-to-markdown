@@ -276,14 +276,16 @@ export class ImgToMdView extends ItemView {
         copyBtn.addEventListener("click", () => this.deps.copyText(this.state.cards[i].text));
         refs.actionsEl = actions;
       }
-      if (card.status === "done" && !refs.writeBtn) {
+      // „Notiz anlegen" nur bei done UND wenn kein Lauf aktiv ist — sonst no-op'te ein Klick still,
+      // solange eine Schwester-Seite (PDF) noch streamt (writePdfGroup schiebt bei pending auf).
+      if (card.status === "done" && !this.running && !refs.writeBtn) {
         const wb = refs.actionsEl.createEl("button", { cls: "img2md-write" });
         const wbIcon = wb.createSpan({ cls: "img2md-write-icon" });
         setIcon(wbIcon, "file-plus");
         wb.createSpan({ cls: "img2md-write-lbl", text: t("view.createNote") });
         wb.addEventListener("click", () => void this.writeOne(i));
         refs.writeBtn = wb;
-      } else if (card.status !== "done" && refs.writeBtn) {
+      } else if ((card.status !== "done" || this.running) && refs.writeBtn) {
         refs.actionsEl.removeChild(refs.writeBtn);
         refs.writeBtn = undefined;
       }
@@ -397,7 +399,7 @@ export class ImgToMdView extends ItemView {
     const created = await this.deps.writePdf(
       path, g.raw, g.link,
       g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })),
-      g.item.existingTranscriptPath, g.item.embed, g.item.range,
+      g.item.existingTranscriptPath, g.item.embed, g.range,
     );
     if (!created) return;
     if (!g.item.existingTranscriptPath) g.item.existingTranscriptPath = created;

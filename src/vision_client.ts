@@ -130,7 +130,8 @@ export class VisionClient {
     if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
     const r = await streamSSE(res, onContent, onReasoning);
     // 200 mit Error-Body statt SSE (keine data:-Zeile, kein Inhalt) → echte Servermeldung heben.
-    if (!r.content.trim() && !/^data:/m.test(r.raw)) {
+    // /^\s*data:/m deckt sich mit parseSSE (das eingerückte data:-Zeilen toleriert).
+    if (!r.content.trim() && !/^\s*data:/m.test(r.raw)) {
       const envelope = parseErrorEnvelope(r.raw);
       if (envelope) throw new Error(envelope);
     }

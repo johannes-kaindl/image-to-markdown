@@ -517,4 +517,58 @@ describe("ImgToMdView — PDF", () => {
     expect(all(view.contentEl, "img2md-written").length).toBe(0); // unvollständig → nicht als angelegt markiert
     expect(all(view.contentEl, "img2md-retry").length).toBe(1);   // Fehler-Seite weiterhin retrybar
   });
+
+  it("Range-Edit NACH dem Lauf ändert die Schreib-Range nicht (kein Datenverlust)", async () => {
+    const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 5, range: { from: 1, to: 2 } }];
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => { onC("seite"); return { content: "seite", reasoning: "", model: "vm" }; };
+    let capturedRange: any = null; let capturedPages: any = null;
+    const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], _ow?: string, _embed?: boolean, range?: any) => { capturedRange = range; capturedPages = pages; return "doc (PDF transcript).md"; };
+    const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
+    await view.onOpen(); await view.run();          // läuft mit Range 1-2 → 2 Karten done
+    freshPdf[0].range = { from: 1, to: 1 };          // User verengt die Range NACH dem Lauf (live-mutables Item)
+    await view.writeAll();
+    expect(capturedRange).toEqual({ from: 1, to: 2 });            // Schreib-Range aus den Karten, NICHT item.range
+    expect(capturedPages.map((p: any) => p.page)).toEqual([1, 2]); // beide transkribierten Seiten erhalten
+  });
+
+  it("Retry-nach-Teil-Write: Override derselben Notiz, keine Dublette, am Ende vollständig", async () => {
+    const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } }];
+    let call = 0;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
+      call++;
+      if (call === 2) throw new Error("Vision HTTP 500");   // Seite 2 scheitert beim ersten Mal
+      onC("seite"); return { content: "seite", reasoning: "", model: "vm" };
+    };
+    const writeCalls: any[] = [];
+    const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], overwritePath?: string, _embed?: boolean, range?: any) => {
+      writeCalls.push({ pages: pages.map((p: any) => p.page), overwritePath, range });
+      return "doc (PDF transcript).md";
+    };
+    const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
+    await view.onOpen(); await view.run();
+    await view.writeAll();                                       // Teil-Write (Seite 2 fehlt)
+    expect(writeCalls[0]).toMatchObject({ pages: [1], overwritePath: undefined, range: { from: 1, to: 2 } });
+    expect(all(view.contentEl, "img2md-written").length).toBe(0);
+    expect(all(view.contentEl, "img2md-retry").length).toBe(1);
+    await view.retryOne(1);                                     // Seite 2 erneut → done
+    await view.writeAll();                                      // kompletter Override
+    expect(writeCalls[1]).toMatchObject({ pages: [1, 2], overwritePath: "doc (PDF transcript).md", range: { from: 1, to: 2 } });
+    expect(writeCalls.filter(c => !c.overwritePath).length).toBe(1);   // genau EINE Neuanlage → keine Dublette
+    expect(all(view.contentEl, "img2md-written").length).toBe(2);     // jetzt vollständig
+    expect(all(view.contentEl, "img2md-retry").length).toBe(0);
+  });
+
+  it("alle Seiten fehlgeschlagen: keine Notiz (writePdf 0×), beide Seiten retrybar", async () => {
+    const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } }];
+    const transcribeStream = async () => { throw new Error("Vision HTTP 500"); };
+    let writeCount = 0;
+    const writePdf = async () => { writeCount++; return "x.md"; };
+    const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
+    await view.onOpen(); await view.run();
+    await view.writeAll();
+    expect(writeCount).toBe(0);                                  // alles leer → keine reine Platzhalter-Notiz
+    expect(all(view.contentEl, "img2md-written").length).toBe(0);
+    expect(all(view.contentEl, "img2md-error").length).toBe(2);
+    expect(all(view.contentEl, "img2md-retry").length).toBe(2);
+  });
 });

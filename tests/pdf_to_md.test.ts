@@ -145,6 +145,34 @@ describe("writePdfTranscript", () => {
     expect(note).toContain("Page 2 — transcription failed");
     expect(note).toContain("Page 3 — transcription failed");
   });
+  it("Override + range: erholte Seite ersetzt Platzhalter, behält created, keine Neuanlage", async () => {
+    const notes = new Map<string, string>([
+      ["q.md", "![[doc.pdf]]"],
+      ["doc (PDF transcript).md", `---\nsource_pdf: "[[doc.pdf]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\npages: "1-3"\n---\n![[doc.pdf]]\n\n%% Page 1 %%\n\nA\n\n%% Page 2 %%\n\n**Page 2 — transcription failed**\n\n%% Page 3 %%\n\n**Page 3 — transcription failed**\n`],
+    ]);
+    const created: Record<string, string> = {};
+    const io: any = {
+      date: () => "2026-06-28",
+      readNote: async (p: string) => notes.get(p) ?? "",
+      writeNote: async (p: string, c: string) => { notes.set(p, c); },
+      createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
+      noteExists: (p: string) => notes.has(p),
+      resolveImage: (l: string) => ({ path: l, ext: "pdf" }),
+    };
+    // Seite 2 jetzt erholt (Retry), Seite 3 weiter fehlend — Produktionspfad: overwritePath UND range.
+    const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" }, [
+      { page: 1, content: "A", model: "vm" }, { page: 2, content: "B", model: "vm" },
+    ], "comment", "doc (PDF transcript).md", true, { range: { from: 1, to: 3 } });
+    expect(r.path).toBe("doc (PDF transcript).md");
+    expect(Object.keys(created)).toEqual([]);                       // kein createNote → keine Dublette
+    const note = notes.get("doc (PDF transcript).md")!;
+    expect(note).toContain("created: 2026-01-01");                  // created bleibt erhalten
+    expect(note).toContain('pages: "1-3"');
+    expect(note).toContain("A");
+    expect(note).toContain("B");                                    // Seite 2 jetzt vorhanden
+    expect(note).toContain("Page 3 — transcription failed");        // Seite 3 weiter Platzhalter
+    expect(note).not.toContain("Page 2 — transcription failed");    // Platzhalter 2 ersetzt
+  });
   it("Override: überschreibt bestehende PDF-Notiz, neue pages, Quelle unverändert", async () => {
     const notes = new Map<string, string>([
       ["q.md", "![[doc.pdf]]"],

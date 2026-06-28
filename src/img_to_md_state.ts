@@ -112,11 +112,14 @@ export interface PdfGroup {
   pages: { page: number; content: string; model: string }[];
   failedPages: number[];   // Seiten mit error-Status (für sichtbare Platzhalter in der Notiz)
   pending: boolean;        // mind. eine Seite streamt noch → Schreiben aufschieben
+  range: { from: number; to: number };   // tatsächlich GELAUFENER Bereich (aus den Karten), NICHT item.range
 }
 
 /** Gruppiert Karten: Bilder einzeln (done), PDF-Seiten nach embed-link (raw). `pages` enthält nur
  *  done-Seiten; `failedPages`/`pending` erfassen fehlgeschlagene bzw. noch laufende Seiten, damit die
- *  zusammengeführte Notiz ehrlich bleibt (kein stiller Gap). Behält Karten-Indizes. */
+ *  zusammengeführte Notiz ehrlich bleibt (kein stiller Gap). `range` = min/max der Karten-Seiten,
+ *  also der beim Lauf tatsächlich gewählte Bereich — bewusst NICHT `item.range`, das vom Range-Eingabe-
+ *  feld jederzeit live mutiert wird (sonst Datenverlust bei Range-Edit nach dem Lauf). Behält Indizes. */
 export function partitionDoneCards(cards: ImgCard[]): {
   images: { card: ImgCard; cardIndex: number }[];
   pdfs: PdfGroup[];
@@ -125,14 +128,17 @@ export function partitionDoneCards(cards: ImgCard[]): {
   const pdfMap = new Map<string, PdfGroup>();
   const ensurePdf = (card: ImgCard): PdfGroup => {
     let g = pdfMap.get(card.item.raw);
-    if (!g) { g = { raw: card.item.raw, link: card.item.link, item: card.item, cardIndices: [], pages: [], failedPages: [], pending: false }; pdfMap.set(card.item.raw, g); }
+    if (!g) { const pg = card.page ?? 1; g = { raw: card.item.raw, link: card.item.link, item: card.item, cardIndices: [], pages: [], failedPages: [], pending: false, range: { from: pg, to: pg } }; pdfMap.set(card.item.raw, g); }
     return g;
   };
   cards.forEach((card, cardIndex) => {
     if (card.item.kind === "pdf") {
       const g = ensurePdf(card);
-      if (card.status === "done") { g.cardIndices.push(cardIndex); g.pages.push({ page: card.page ?? 1, content: card.text, model: card.model }); }
-      else if (card.status === "error") g.failedPages.push(card.page ?? 1);
+      const pg = card.page ?? 1;
+      if (pg < g.range.from) g.range.from = pg;
+      if (pg > g.range.to) g.range.to = pg;
+      if (card.status === "done") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
+      else if (card.status === "error") g.failedPages.push(pg);
       else if (card.status === "streaming") g.pending = true;
       // "written": bereits geschrieben → neutral (kein Re-Add, kein Fehler).
     } else if (card.status === "done") {

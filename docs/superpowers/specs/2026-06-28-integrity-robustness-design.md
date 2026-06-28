@@ -71,6 +71,14 @@ vollständig aus.
 - Part B von #2 (Header-Diagnostik, Meta-Panel) — eigener Zyklus.
 - Block-statt-Platzhalter: Platzhalter ist nutzerfreundlicher (dauerhaft fehlschlagende Seite blockiert
   nicht die ganze Notiz) und bleibt ehrlich.
+- **`transcribeStream` `!ok`-Zweig hebt den Envelope nicht** (Asymmetrie zu `transcribe`): ein
+  streamendes 400 mit `{error:{message}}` zeigt nur „Vision HTTP 400". Bewusst — der streamende Body
+  würde beim Lesen konsumiert; der reale LM-Studio-Footgun ist der **200**-Fall (gehandhabt). Kein
+  Regress ggü. main.
+- **200-Stream, der den Fehler als `data: {error}`-Event liefert**, fällt auf generisches
+  „Empty transcript" zurück (`/^\s*data:/m` matcht → Envelope-Check übersprungen). Seltener Trigger;
+  pre-Feature-Verhalten identisch. Bei Bedarf: geparste SSE-data-Payloads bei leerem content auf einen
+  Envelope prüfen.
 
 ## DoD
 Alle bestehenden + neuen Tests grün (`vitest`), `tsc --noEmit` + `eslint` sauber, `build` ok, nach

@@ -42,6 +42,13 @@ describe("parseErrorEnvelope", () => {
     expect(parseErrorEnvelope("<html>oops</html>")).toBeNull();
     expect(parseErrorEnvelope("not json")).toBeNull();
   });
+  it("ignoriert top-level message/detail bei vorhandenen choices (kein Transkript-Verlust)", () => {
+    expect(parseErrorEnvelope('{"choices":[{"message":{"content":"x"}}],"message":"stray"}')).toBeNull();
+    expect(parseErrorEnvelope('{"choices":[],"detail":"stray"}')).toBeNull();
+  });
+  it("{error} gewinnt auch mit vorhandenen choices", () => {
+    expect(parseErrorEnvelope('{"choices":[],"error":{"message":"real error"}}')).toBe("real error");
+  });
 });
 
 describe("VisionClient (non-streaming, injizierter http)", () => {
