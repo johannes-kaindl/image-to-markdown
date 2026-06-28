@@ -357,6 +357,7 @@ export class ImgToMdView extends ItemView {
 
   async onClose(): Promise<void> {
     this.controller?.abort();
+    this.cardEls = [];
     this.contentEl.removeClass("img2md-root");
   }
 }

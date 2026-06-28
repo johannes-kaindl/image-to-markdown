@@ -204,11 +204,15 @@ describe("ImgToMdView — Transkribieren", () => {
     const transcribeStream = async (_sp: string, _it: ImgItem, onC: any, onR: any) => {
       call++;
       if (call === 1) { onR("r0"); onC("t0"); return { content: "t0", reasoning: "r0", model: "vm" }; }
-      // Karte 0 ist fertig: User klappt deren reasoning auf, dann streamt Karte 1.
+      // Karte 0 ist fertig: User klappt deren reasoning auf, dann streamt Karte 1 (inkl. eigenem reasoning).
+      // Zu diesem Zeitpunkt existiert nur das reasoning-Element von Karte 0 → [0] ist eindeutig Karte 0.
       all(viewRef.contentEl, "img2md-reasoning")[0].open = true;
+      onR("r1");   // Karte 1 bekommt ihren eigenen reasoning-Block (wird auto-collapsed sobald Content kommt)
       onC("t1");
+      // Jetzt gibt es zwei img2md-reasoning-Elemente (Karte 0, dann Karte 1 in DOM-Reihenfolge).
+      // [0] ist weiterhin Karte 0; deren .open darf nicht durch den Auto-Collapse von Karte 1 berührt worden sein.
       card0OpenDuringCard1 = all(viewRef.contentEl, "img2md-reasoning")[0].open;
-      return { content: "t1", reasoning: "", model: "vm" };
+      return { content: "t1", reasoning: "r1", model: "vm" };
     };
     const v = mkView({ scan: async () => ITEMS2, transcribeStream }); viewRef = v.view;
     await v.view.onOpen();
