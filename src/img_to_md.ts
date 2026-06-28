@@ -13,6 +13,18 @@ export function extOf(link: string): string {
   return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
 }
 
+/** Kürzt einen Namen mittig auf genau max Zeichen: "anfang…ende" (Ellipsis = 1 Zeichen).
+ *  name.length <= max bleibt unverändert; max <= 1 ergibt nur "…". Das Namensende
+ *  (inkl. Endung) bleibt soweit erhalten, wie der Tail-Anteil reicht. */
+export function truncateMiddle(name: string, max: number): string {
+  if (name.length <= max) return name;
+  if (max <= 1) return "…";
+  const keep = max - 1;
+  const head = Math.ceil(keep / 2);
+  const tail = Math.floor(keep / 2);
+  return name.slice(0, head) + "…" + name.slice(name.length - tail);
+}
+
 /** Klassifiziert eine Datei-Extension als Medientyp (Bild/PDF) oder null, wenn nicht transkribierbar. */
 export function classifySource(ext: string): "image" | "pdf" | null {
   const e = ext.toLowerCase();

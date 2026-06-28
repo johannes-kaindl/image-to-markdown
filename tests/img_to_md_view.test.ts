@@ -193,6 +193,16 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(openAfter).toBe(false);
   });
 
+  it("kürzt lange Dateinamen im Karten-Kopf (Ellipsis)", async () => {
+    const longItem: ImgItem = { raw: "", link: "9E894F8A-1C01-4CCF-96C9-AAB2A290C2CB-2026-06-28-14.23.34.jpeg", ext: "jpeg", supported: true, kind: "image" };
+    const { view } = mkView({ scan: async () => [longItem] });
+    await view.onOpen(); await view.run();
+    const head = all(view.contentEl, "img2md-card-head")[0].textContent ?? "";
+    expect(head).toContain("…");
+    expect(head).toContain("Image 1/1");
+    expect(head.length).toBeLessThan(longItem.link.length);   // deutlich kürzer als der volle Name
+  });
+
   it("Toggle einer fertigen Karte bleibt erhalten, während eine spätere Karte streamt", async () => {
     const ITEMS2: ImgItem[] = [
       { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },

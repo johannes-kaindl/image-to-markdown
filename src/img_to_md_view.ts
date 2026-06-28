@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { ImgToMdState, ImgItem, partitionDoneCards, actualModel } from "./img_to_md_state";
+import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
@@ -212,9 +213,10 @@ export class ImgToMdView extends ItemView {
     let refs = this.cardEls[i];
     if (!refs) {
       const cardEl = el.createDiv({ cls: "img2md-card" });
+      const name = truncateMiddle(this.basename(card.item.link), 32);
       const head = card.page != null
-        ? t("view.cardHeadPage", this.basename(card.item.link), card.page, card.total)
-        : t("view.cardHead", card.index, card.total, this.basename(card.item.link));
+        ? t("view.cardHeadPage", name, card.page, card.total)
+        : t("view.cardHead", card.index, card.total, name);
       const headEl = cardEl.createDiv({ cls: "img2md-card-head", text: head });
       refs = this.cardEls[i] = { cardEl, headEl, liveWas: false, autoCollapsed: false };
     }
