@@ -4,6 +4,21 @@ import { t } from "./i18n";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 
+interface CardRefs {
+  cardEl: HTMLElement;
+  headEl: HTMLElement;
+  reasoningDet?: HTMLDetailsElement;
+  reasoningSum?: HTMLElement;
+  reasoningBody?: HTMLElement;
+  textEl?: HTMLElement;
+  errorEl?: HTMLElement;
+  writtenEl?: HTMLElement;
+  actionsEl?: HTMLElement;
+  writeBtn?: HTMLElement;
+  liveWas: boolean;
+  autoCollapsed: boolean;
+}
+
 export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
   scan: (sourcePath: string) => Promise<ImgItem[]>;
@@ -28,6 +43,7 @@ export class ImgToMdView extends ItemView {
   private refreshBtn: HTMLElement | null = null;
   private listEl: HTMLElement | null = null;
   private cardsEl: HTMLElement | null = null;
+  private cardEls: CardRefs[] = [];
   private toggleBtn: HTMLElement | null = null;
   private runBtn: HTMLElement | null = null;
   private controller: AbortController | null = null;
@@ -126,7 +142,7 @@ export class ImgToMdView extends ItemView {
   async refresh(): Promise<void> {
     if (this.running) return;
     this.state.clearCards();
-    this.renderCards();
+    this.resetCards();
     await this.rescan();
   }
 
@@ -176,36 +192,84 @@ export class ImgToMdView extends ItemView {
     }
   }
 
-  private renderCards(): void {
-    const el = this.cardsEl; if (!el) return; el.empty();
-    for (let i = 0; i < this.state.cards.length; i++) {
-      const card = this.state.cards[i];
+  /** Voll-Reset: einziger Ort mit empty(). Legt die Teilbäume aller Karten neu an. */
+  private resetCards(): void {
+    const el = this.cardsEl; if (!el) return;
+    el.empty();
+    this.cardEls = [];
+    for (let i = 0; i < this.state.cards.length; i++) this.updateCard(i);
+  }
+
+  private updateAllCards(): void {
+    for (let i = 0; i < this.state.cards.length; i++) this.updateCard(i);
+  }
+
+  /** Idempotenter Sync EINER Karte auf ihren State: legt fehlende Knoten lazy an,
+   *  aktualisiert Texte via setText. Mehrfachaufruf mit gleichem State ist ein No-op. */
+  private updateCard(i: number): void {
+    const el = this.cardsEl; if (!el) return;
+    const card = this.state.cards[i]; if (!card) return;
+    let refs = this.cardEls[i];
+    if (!refs) {
       const cardEl = el.createDiv({ cls: "img2md-card" });
       const head = card.page != null
         ? t("view.cardHeadPage", this.basename(card.item.link), card.page, card.total)
         : t("view.cardHead", card.index, card.total, this.basename(card.item.link));
-      cardEl.createDiv({ cls: "img2md-card-head", text: head });
-      if (card.reasoning) {
-        const live = card.status === "streaming" && card.text === "";
+      const headEl = cardEl.createDiv({ cls: "img2md-card-head", text: head });
+      refs = this.cardEls[i] = { cardEl, headEl, liveWas: false, autoCollapsed: false };
+    }
+    const { cardEl } = refs;
+    const live = card.status === "streaming" && card.text === "";
+    // Reasoning-Block (lazy).
+    if (card.reasoning) {
+      if (!refs.reasoningDet) {
         const det = cardEl.createEl("details", { cls: "img2md-reasoning" });
         det.open = live;
-        det.createEl("summary", { cls: "img2md-reasoning-sum", text: live ? t("view.thinking") : t("view.thoughts") });
-        det.createDiv({ cls: "img2md-reasoning-body", text: card.reasoning });
+        const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
+        const body = det.createDiv({ cls: "img2md-reasoning-body" });
+        refs.reasoningDet = det; refs.reasoningSum = sum; refs.reasoningBody = body;
+        refs.liveWas = live;
       }
-      if (card.text) cardEl.createDiv({ cls: "img2md-text", text: card.text });
-      if (card.status === "error") cardEl.createDiv({ cls: "img2md-error", text: card.error ?? t("view.error") });
-      if (card.status === "written") {
-        const w = cardEl.createDiv({ cls: "img2md-written", text: t("view.created", card.writtenPath ?? "") });
-        w.addEventListener("click", () => { if (card.writtenPath) this.deps.openPath(card.writtenPath); });
+      refs.reasoningSum!.setText(live ? t("view.thinking") : t("view.thoughts"));
+      refs.reasoningBody!.setText(card.reasoning);
+      // Einmaliger Auto-Collapse beim Übergang live -> nicht-live; danach gehört .open dem User.
+      if (refs.liveWas && !live && !refs.autoCollapsed) {
+        refs.reasoningDet.open = false;
+        refs.autoCollapsed = true;
       }
-      if (card.text) {
+      refs.liveWas = live;
+    }
+    // Transkript-Text (lazy, inkrementell).
+    if (card.text) {
+      if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
+      refs.textEl.setText(card.text);
+    }
+    // Fehlerzeile (lazy, bei error).
+    if (card.status === "error" && !refs.errorEl) {
+      refs.errorEl = cardEl.createDiv({ cls: "img2md-error", text: card.error ?? t("view.error") });
+    }
+    // „angelegt"-Zeile (lazy, bei written).
+    if (card.status === "written" && !refs.writtenEl) {
+      const w = cardEl.createDiv({ cls: "img2md-written", text: t("view.created", card.writtenPath ?? "") });
+      w.addEventListener("click", () => { const c = this.state.cards[i]; if (c?.writtenPath) this.deps.openPath(c.writtenPath); });
+      refs.writtenEl = w;
+    }
+    // Aktionen (lazy, sobald Text da): Kopieren immer; „Notiz anlegen" nur bei done.
+    if (card.text) {
+      if (!refs.actionsEl) {
         const actions = cardEl.createDiv({ cls: "img2md-card-actions" });
         const copyBtn = actions.createEl("button", { cls: "img2md-copy clickable-icon", attr: { "aria-label": t("view.copyTranscript") } });
         setIcon(copyBtn, "copy");
-        copyBtn.addEventListener("click", () => this.deps.copyText(card.text));
-        if (card.status === "done") {
-          actions.createEl("button", { cls: "img2md-write", text: t("view.createNote") }).addEventListener("click", () => void this.writeOne(i));
-        }
+        copyBtn.addEventListener("click", () => this.deps.copyText(this.state.cards[i].text));
+        refs.actionsEl = actions;
+      }
+      if (card.status === "done" && !refs.writeBtn) {
+        const wb = refs.actionsEl.createEl("button", { cls: "img2md-write", text: t("view.createNote") });
+        wb.addEventListener("click", () => void this.writeOne(i));
+        refs.writeBtn = wb;
+      } else if (card.status !== "done" && refs.writeBtn) {
+        refs.actionsEl.removeChild(refs.writeBtn);
+        refs.writeBtn = undefined;
       }
     }
   }
@@ -220,7 +284,7 @@ export class ImgToMdView extends ItemView {
     const path = this.deps.getActivePath();
     if (!path) return;
     const cards = this.state.startCards();
-    this.renderCards();
+    this.resetCards();
     if (!cards.length) return;
     this.running = true; this.runBtn?.setText("Stop");
     this.controller = new AbortController();
@@ -229,8 +293,8 @@ export class ImgToMdView extends ItemView {
       try {
         const r = await this.deps.transcribeStream(
           path, cards[i].item,
-          (t) => { this.state.appendContent(i, t); this.renderCards(); },
-          (t) => { this.state.appendReasoning(i, t); this.renderCards(); },
+          (t) => { this.state.appendContent(i, t); this.updateCard(i); },
+          (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
           signal, cards[i].page,
         );
         cards[i].model = r.model;
@@ -239,7 +303,7 @@ export class ImgToMdView extends ItemView {
         if (signal.aborted) break;   // Stop gedrückt — Rest unten als „Abgebrochen" markieren
         this.state.setError(i, e instanceof Error ? e.message : String(e));
       }
-      this.renderCards();
+      this.updateCard(i);
     }
     // Nach Abbruch: noch nicht verarbeitete Karten kennzeichnen.
     for (let i = 0; i < cards.length; i++) if (cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
@@ -254,7 +318,7 @@ export class ImgToMdView extends ItemView {
       // angleichen und den Hinweis setzen; den eigenen Hinweis nur überschreiben, wenn actual gewonnen hat.
       if (this.deps.getModel() === actual) this.statusLabelEl?.setText(t("view.modelChanged", actual));
     }
-    this.renderCards();
+    this.updateAllCards();
   }
   async writeOne(i: number): Promise<void> {
     const path = this.deps.getActivePath();
@@ -270,7 +334,7 @@ export class ImgToMdView extends ItemView {
       const [created] = await this.deps.writeTranscripts(path, [{ item: card.item, content: card.text.trim(), model: card.model }]);
       if (created) this.state.markWritten(i, created);
     }
-    this.renderCards();
+    this.updateAllCards();
     await this.rescan();
   }
 
@@ -287,12 +351,13 @@ export class ImgToMdView extends ItemView {
       const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })), g.item.existingTranscriptPath, g.item.embed);
       if (created) g.cardIndices.forEach(i => this.state.markWritten(i, created));
     }
-    this.renderCards();
+    this.updateAllCards();
     await this.rescan();
   }
 
   async onClose(): Promise<void> {
     this.controller?.abort();
+    this.cardEls = [];
     this.contentEl.removeClass("img2md-root");
   }
 }

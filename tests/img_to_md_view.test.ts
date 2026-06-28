@@ -160,6 +160,83 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(errs[0].textContent).toContain("Aborted");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
   });
+
+  it("reasoning-Block klappt einmalig zu, sobald Content kommt", async () => {
+    let viewRef: any;
+    let openWhileThinking: boolean | null = null;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any, onR: any) => {
+      onR("denkt");
+      openWhileThinking = all(viewRef.contentEl, "img2md-reasoning")[0].open;  // true (thinking)
+      onC("Ergebnis");                                                          // live -> false
+      return { content: "Ergebnis", reasoning: "denkt", model: "vm" };
+    };
+    const v = mkView({ transcribeStream }); viewRef = v.view;
+    await v.view.onOpen();
+    await v.view.run();
+    expect(openWhileThinking).toBe(true);
+    expect(all(v.view.contentEl, "img2md-reasoning")[0].open).toBe(false);  // nach Content zugeklappt
+  });
+
+  it("User-Toggle des reasoning-Blocks bleibt: weitere Deltas setzen .open nicht zurück", async () => {
+    let viewRef: any;
+    let openAfter: boolean | null = null;
+    const transcribeStream = async (_sp: string, _it: ImgItem, _onC: any, onR: any) => {
+      onR("a");
+      all(viewRef.contentEl, "img2md-reasoning")[0].open = false;  // User klappt während Thinking zu
+      onR("b");                                                     // weiteres Reasoning-Delta
+      openAfter = all(viewRef.contentEl, "img2md-reasoning")[0].open;
+      return { content: "ok", reasoning: "ab", model: "vm" };
+    };
+    const v = mkView({ transcribeStream }); viewRef = v.view;
+    await v.view.onOpen();
+    await v.view.run();
+    expect(openAfter).toBe(false);
+  });
+
+  it("Toggle einer fertigen Karte bleibt erhalten, während eine spätere Karte streamt", async () => {
+    const ITEMS2: ImgItem[] = [
+      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
+      { raw: "![[c.png]]", link: "c.png", ext: "png", supported: true, kind: "image" },
+    ];
+    let viewRef: any;
+    let card0OpenDuringCard1: boolean | null = null;
+    let call = 0;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any, onR: any) => {
+      call++;
+      if (call === 1) { onR("r0"); onC("t0"); return { content: "t0", reasoning: "r0", model: "vm" }; }
+      // Karte 0 ist fertig: User klappt deren reasoning auf, dann streamt Karte 1 (inkl. eigenem reasoning).
+      // Zu diesem Zeitpunkt existiert nur das reasoning-Element von Karte 0 → [0] ist eindeutig Karte 0.
+      all(viewRef.contentEl, "img2md-reasoning")[0].open = true;
+      onR("r1");   // Karte 1 bekommt ihren eigenen reasoning-Block (wird auto-collapsed sobald Content kommt)
+      onC("t1");
+      // Jetzt gibt es zwei img2md-reasoning-Elemente (Karte 0, dann Karte 1 in DOM-Reihenfolge).
+      // [0] ist weiterhin Karte 0; deren .open darf nicht durch den Auto-Collapse von Karte 1 berührt worden sein.
+      card0OpenDuringCard1 = all(viewRef.contentEl, "img2md-reasoning")[0].open;
+      return { content: "t1", reasoning: "r1", model: "vm" };
+    };
+    const v = mkView({ scan: async () => ITEMS2, transcribeStream }); viewRef = v.view;
+    await v.view.onOpen();
+    await v.view.run();
+    expect(card0OpenDuringCard1).toBe(true);
+  });
+
+  it("rendert inkrementell: img2md-card-Knoten bleibt über Content-Deltas identisch", async () => {
+    let viewRef: any;
+    let sameNode: boolean | null = null;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
+      onC("Hal");
+      const first = all(viewRef.contentEl, "img2md-card")[0];
+      onC("lo");
+      const second = all(viewRef.contentEl, "img2md-card")[0];
+      sameNode = !!first && first === second;
+      return { content: "Hallo", reasoning: "", model: "vm" };
+    };
+    const v = mkView({ transcribeStream }); viewRef = v.view;
+    await v.view.onOpen();
+    await v.view.run();
+    expect(sameNode).toBe(true);
+    expect(all(v.view.contentEl, "img2md-text")[0].textContent).toBe("Hallo");
+  });
 });
 
 describe("ImgToMdView — Notiz anlegen", () => {
