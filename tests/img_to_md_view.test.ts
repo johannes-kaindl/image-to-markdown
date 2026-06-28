@@ -160,6 +160,24 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(errs[0].textContent).toContain("Aborted");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
   });
+
+  it("rendert inkrementell: img2md-card-Knoten bleibt über Content-Deltas identisch", async () => {
+    let viewRef: any;
+    let sameNode: boolean | null = null;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
+      onC("Hal");
+      const first = all(viewRef.contentEl, "img2md-card")[0];
+      onC("lo");
+      const second = all(viewRef.contentEl, "img2md-card")[0];
+      sameNode = !!first && first === second;
+      return { content: "Hallo", reasoning: "", model: "vm" };
+    };
+    const v = mkView({ transcribeStream }); viewRef = v.view;
+    await v.view.onOpen();
+    await v.view.run();
+    expect(sameNode).toBe(true);
+    expect(all(v.view.contentEl, "img2md-text")[0].textContent).toBe("Hallo");
+  });
 });
 
 describe("ImgToMdView — Notiz anlegen", () => {
