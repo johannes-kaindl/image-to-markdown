@@ -247,6 +247,18 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(sameNode).toBe(true);
     expect(all(v.view.contentEl, "img2md-text")[0].textContent).toBe("Hallo");
   });
+
+  it("reasoning-Block trägt ein brain-Icon getrennt vom Label-Text", async () => {
+    const v = mkView({ transcribeStream: async (_sp: string, _it: ImgItem, onC: any, onR: any) => { onR("denkt"); onC("Text"); return { content: "Text", reasoning: "denkt", model: "vm" }; } });
+    await v.view.onOpen(); await v.view.run();
+    const icons = all(v.view.contentEl, "img2md-reasoning-icon");
+    expect(icons.length).toBe(1);
+    expect(icons[0].getAttribute("data-icon")).toBe("brain");
+    const lbl = all(v.view.contentEl, "img2md-reasoning-lbl");
+    expect(lbl.length).toBe(1);
+    expect(lbl[0].textContent).toContain("Thoughts");   // EN-Label nach Content, ohne Emoji
+    expect(lbl[0].textContent).not.toContain("💭");
+  });
 });
 
 describe("ImgToMdView — Notiz anlegen", () => {

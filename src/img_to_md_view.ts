@@ -9,7 +9,7 @@ interface CardRefs {
   cardEl: HTMLElement;
   headEl: HTMLElement;
   reasoningDet?: HTMLDetailsElement;
-  reasoningSum?: HTMLElement;
+  reasoningLbl?: HTMLElement;
   reasoningBody?: HTMLElement;
   textEl?: HTMLElement;
   errorEl?: HTMLElement;
@@ -228,11 +228,14 @@ export class ImgToMdView extends ItemView {
         const det = cardEl.createEl("details", { cls: "img2md-reasoning" });
         det.open = live;
         const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
+        const icon = sum.createSpan({ cls: "img2md-reasoning-icon" });
+        setIcon(icon, "brain");
+        const lbl = sum.createSpan({ cls: "img2md-reasoning-lbl" });
         const body = det.createDiv({ cls: "img2md-reasoning-body" });
-        refs.reasoningDet = det; refs.reasoningSum = sum; refs.reasoningBody = body;
+        refs.reasoningDet = det; refs.reasoningLbl = lbl; refs.reasoningBody = body;
         refs.liveWas = live;
       }
-      refs.reasoningSum!.setText(live ? t("view.thinking") : t("view.thoughts"));
+      refs.reasoningLbl!.setText(live ? t("view.thinking") : t("view.thoughts"));
       refs.reasoningBody!.setText(card.reasoning);
       // Einmaliger Auto-Collapse beim Übergang live -> nicht-live; danach gehört .open dem User.
       if (refs.liveWas && !live && !refs.autoCollapsed) {

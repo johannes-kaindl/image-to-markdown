@@ -24,7 +24,9 @@
 .img2md-error { color: var(--text-error); font-size: 12px; }
 .img2md-written { color: var(--text-accent); font-size: 11px; cursor: pointer; margin-top: 4px; }
 .img2md-reasoning { font-size: 12px; margin: 2px 0; }
-.img2md-reasoning-sum { color: var(--text-muted); cursor: pointer; }
+.img2md-reasoning-sum { color: var(--text-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.img2md-reasoning-icon { display: inline-flex; align-items: center; }
+.img2md-reasoning-icon svg { width: 14px; height: 14px; }
 .img2md-reasoning-body { color: var(--text-faint); white-space: pre-wrap; font-style: italic; padding: 4px 0 4px 12px; border-left: 2px solid var(--background-modifier-border); }
 .img2md-card-actions { display: flex; gap: 4px; margin-top: 4px; }
 .img2md-copy.clickable-icon { color: var(--text-faint); padding: 2px 4px; height: auto; width: auto; }
