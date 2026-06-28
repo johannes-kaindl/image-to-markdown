@@ -134,6 +134,49 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(all(view.contentEl, "img2md-error")[0].textContent).toContain("Empty transcript");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
   });
+  it("Fehler-Karte zeigt einen Retry-Button; Klick re-läuft genau diese Karte → done", async () => {
+    let call = 0;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
+      call++;
+      if (call === 1) throw new Error("Vision HTTP 500");
+      onC("Zweiter Versuch"); return { content: "Zweiter Versuch", reasoning: "", model: "vm" };
+    };
+    const { view } = mkView({ transcribeStream });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-error").length).toBe(1);
+    const retry = all(view.contentEl, "img2md-retry");
+    expect(retry.length).toBe(1);
+    expect(retry[0].getAttribute("data-icon")).toBe("refresh-cw");
+    retry[0].click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(all(view.contentEl, "img2md-error").length).toBe(0);          // Fehler weg
+    expect(all(view.contentEl, "img2md-text")[0].textContent).toBe("Zweiter Versuch");
+    expect(all(view.contentEl, "img2md-write").length).toBe(1);          // jetzt anlegbar
+  });
+  it("'Fehlgeschlagene erneut' nur sichtbar bei Fehler-Karten, läuft alle Fehler erneut", async () => {
+    const twoItems: ImgItem[] = [
+      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
+      { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image" },
+    ];
+    let call = 0;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
+      call++;
+      if (call <= 2) throw new Error("Vision HTTP 500");   // beide erste Versuche scheitern
+      onC("ok"); return { content: "ok", reasoning: "", model: "vm" };
+    };
+    const retryAllVisible = (v: any) => !all(v.contentEl, "img2md-retry-all")[0].className.split(" ").includes("is-hidden");
+    const { view } = mkView({ scan: async () => twoItems, transcribeStream });
+    await view.onOpen();
+    expect(retryAllVisible(view)).toBe(false);   // vor dem Lauf versteckt
+    await view.run();
+    expect(all(view.contentEl, "img2md-error").length).toBe(2);
+    expect(retryAllVisible(view)).toBe(true);     // jetzt sichtbar
+    all(view.contentEl, "img2md-retry-all")[0].click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(all(view.contentEl, "img2md-error").length).toBe(0);
+    expect(all(view.contentEl, "img2md-text").length).toBe(2);
+    expect(retryAllVisible(view)).toBe(false);    // wieder versteckt, keine Fehler mehr
+  });
   it("Run-Button wird während des Laufs zu 'Stop'", async () => {
     let release: () => void = () => {};
     const transcribeStream = vi.fn(() => new Promise<{ content: string; reasoning: string; model: string }>(r => { release = () => r({ content: "x", reasoning: "", model: "vm" }); }));
@@ -450,5 +493,82 @@ describe("ImgToMdView — PDF", () => {
     expect(calls.written[0].map((p: any) => p.page)).toEqual([1, 2]);
     // beide Seiten-Karten als „angelegt" markiert (eine Notiz):
     expect(all(view.contentEl, "img2md-written").length).toBe(2);
+  });
+  it("fehlgeschlagene Seite: writePdf bekommt die volle Range; done-Seite bleibt 'done' (nicht angelegt)", async () => {
+    // Frisches Item (nicht das geteilte PDF_ITEMS) — writePdfGroup mutiert item.existingTranscriptPath.
+    const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } }];
+    let call = 0;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
+      call++;
+      if (call === 1) { onC("Seite eins"); return { content: "Seite eins", reasoning: "", model: "vm" }; }
+      throw new Error("Vision HTTP 500");   // Seite 2 scheitert
+    };
+    let capturedRange: any = null; let capturedPages: any = null;
+    const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], _ow?: string, _embed?: boolean, range?: any) => {
+      capturedPages = pages; capturedRange = range; return "doc (PDF transcript).md";
+    };
+    const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-error").length).toBe(1);
+    all(view.contentEl, "img2md-all")[0].click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(capturedRange).toEqual({ from: 1, to: 2 });            // volle gewählte Range
+    expect(capturedPages.map((p: any) => p.page)).toEqual([1]);   // nur die erfolgreiche Seite
+    expect(all(view.contentEl, "img2md-written").length).toBe(0); // unvollständig → nicht als angelegt markiert
+    expect(all(view.contentEl, "img2md-retry").length).toBe(1);   // Fehler-Seite weiterhin retrybar
+  });
+
+  it("Range-Edit NACH dem Lauf ändert die Schreib-Range nicht (kein Datenverlust)", async () => {
+    const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 5, range: { from: 1, to: 2 } }];
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => { onC("seite"); return { content: "seite", reasoning: "", model: "vm" }; };
+    let capturedRange: any = null; let capturedPages: any = null;
+    const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], _ow?: string, _embed?: boolean, range?: any) => { capturedRange = range; capturedPages = pages; return "doc (PDF transcript).md"; };
+    const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
+    await view.onOpen(); await view.run();          // läuft mit Range 1-2 → 2 Karten done
+    freshPdf[0].range = { from: 1, to: 1 };          // User verengt die Range NACH dem Lauf (live-mutables Item)
+    await view.writeAll();
+    expect(capturedRange).toEqual({ from: 1, to: 2 });            // Schreib-Range aus den Karten, NICHT item.range
+    expect(capturedPages.map((p: any) => p.page)).toEqual([1, 2]); // beide transkribierten Seiten erhalten
+  });
+
+  it("Retry-nach-Teil-Write: Override derselben Notiz, keine Dublette, am Ende vollständig", async () => {
+    const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } }];
+    let call = 0;
+    const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
+      call++;
+      if (call === 2) throw new Error("Vision HTTP 500");   // Seite 2 scheitert beim ersten Mal
+      onC("seite"); return { content: "seite", reasoning: "", model: "vm" };
+    };
+    const writeCalls: any[] = [];
+    const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], overwritePath?: string, _embed?: boolean, range?: any) => {
+      writeCalls.push({ pages: pages.map((p: any) => p.page), overwritePath, range });
+      return "doc (PDF transcript).md";
+    };
+    const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
+    await view.onOpen(); await view.run();
+    await view.writeAll();                                       // Teil-Write (Seite 2 fehlt)
+    expect(writeCalls[0]).toMatchObject({ pages: [1], overwritePath: undefined, range: { from: 1, to: 2 } });
+    expect(all(view.contentEl, "img2md-written").length).toBe(0);
+    expect(all(view.contentEl, "img2md-retry").length).toBe(1);
+    await view.retryOne(1);                                     // Seite 2 erneut → done
+    await view.writeAll();                                      // kompletter Override
+    expect(writeCalls[1]).toMatchObject({ pages: [1, 2], overwritePath: "doc (PDF transcript).md", range: { from: 1, to: 2 } });
+    expect(writeCalls.filter(c => !c.overwritePath).length).toBe(1);   // genau EINE Neuanlage → keine Dublette
+    expect(all(view.contentEl, "img2md-written").length).toBe(2);     // jetzt vollständig
+    expect(all(view.contentEl, "img2md-retry").length).toBe(0);
+  });
+
+  it("alle Seiten fehlgeschlagen: keine Notiz (writePdf 0×), beide Seiten retrybar", async () => {
+    const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } }];
+    const transcribeStream = async () => { throw new Error("Vision HTTP 500"); };
+    let writeCount = 0;
+    const writePdf = async () => { writeCount++; return "x.md"; };
+    const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
+    await view.onOpen(); await view.run();
+    await view.writeAll();
+    expect(writeCount).toBe(0);                                  // alles leer → keine reine Platzhalter-Notiz
+    expect(all(view.contentEl, "img2md-written").length).toBe(0);
+    expect(all(view.contentEl, "img2md-error").length).toBe(2);
+    expect(all(view.contentEl, "img2md-retry").length).toBe(2);
   });
 });

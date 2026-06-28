@@ -6,6 +6,27 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-06-28
+
+### Behoben
+
+- **Keine stillen Lücken mehr in PDF-Transkripten:** Schlug bei einem mehrseitigen PDF eine Seite fehl
+  (z.B. weil das lokale Modell mittendrin abbrach), verschwand sie bisher spurlos aus der
+  zusammengeführten Notiz — die Notiz sah vollständig aus, obwohl Seiten fehlten, und die
+  `pages`-Angabe war falsch. Jetzt erscheint an der Stelle ein sichtbarer Hinweis
+  („Seite N — Transkription fehlgeschlagen"), und der Seitenbereich im Frontmatter entspricht ehrlich
+  dem transkribierten Bereich.
+
+### Hinzugefügt
+
+- **Fehlgeschlagene Seiten erneut transkribieren:** Jede fehlgeschlagene Karte hat jetzt einen
+  „Erneut versuchen"-Knopf; im Fußbereich erscheint „Fehlgeschlagene erneut", sobald es Fehler gibt.
+  Eine erneut erfolgreiche Seite wird beim nächsten Anlegen sauber in dieselbe Notiz übernommen
+  (keine Dublette, nichts geht verloren).
+- **Klare Fehlermeldungen vom Vision-Server:** Antwortet der lokale Server mit einem Fehler im Body
+  (z.B. LM Studio: „model X is not loaded") statt eines echten HTTP-Fehlers, wird jetzt die echte
+  Meldung angezeigt statt eines generischen „leeres Transkript".
+
 ## [0.6.0] — 2026-06-28
 
 ### Geändert

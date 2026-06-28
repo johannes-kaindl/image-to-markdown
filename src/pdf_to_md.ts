@@ -21,8 +21,24 @@ function pageGap(sep: PdfPageSeparator): string {
   return "\n\n";
 }
 
-/** Nur die Seiten-Blöcke (ohne Frontmatter/Embed), getrennt gemäß separator. */
-export function buildPdfBody(pages: PdfPageTranscript[], separator: PdfPageSeparator): string {
+/** Sichtbarer Platzhalter für eine fehlgeschlagene/fehlende Seite — markiert die Lücke ehrlich
+ *  (statt sie still wegzulassen) und überlebt jeden Separator. */
+function pageFailedMarker(page: number): string { return `**${t("pdf.pageFailed", page)}**`; }
+
+/** Nur die Seiten-Blöcke (ohne Frontmatter/Embed), getrennt gemäß separator. Mit `range` wird über
+ *  den **gewählten** Seitenbereich iteriert und jede fehlende Seite als sichtbarer Platzhalter
+ *  eingefügt (kein stiller Gap); ohne `range` nur die Seiten mit Inhalt (Alt-Verhalten). */
+export function buildPdfBody(pages: PdfPageTranscript[], separator: PdfPageSeparator, range?: { from: number; to: number }): string {
+  if (range) {
+    const byPage = new Map<number, string>();
+    for (const p of pages) { const txt = p.text.trim(); if (txt) byPage.set(p.page, txt); }
+    const blocks: string[] = [];
+    for (let pg = range.from; pg <= range.to; pg++) {
+      const content = byPage.get(pg) ?? pageFailedMarker(pg);
+      blocks.push(`${pagePrefix(separator, pg)}${content}`);
+    }
+    return blocks.join(pageGap(separator));
+  }
   return pages
     .filter(p => p.text.trim())
     .map(p => `${pagePrefix(separator, p.page)}${p.text.trim()}`)
@@ -34,14 +50,14 @@ export function buildPdfBody(pages: PdfPageTranscript[], separator: PdfPageSepar
 export function buildPdfNote(o: {
   pdfLink: string; sourceName?: string; date: string; model: string;
   pages: PdfPageTranscript[]; rangeFrom: number; rangeTo: number;
-  separator: PdfPageSeparator;
+  separator: PdfPageSeparator; range?: { from: number; to: number };
 }): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const fm = ["---", `source_pdf: "[[${esc(o.pdfLink)}]]"`];
   if (o.sourceName !== undefined) fm.push(`source_note: "[[${esc(o.sourceName)}]]"`);
   fm.push(`created: ${o.date}`, `transcribed_by: "${esc(o.model)}"`, `pages: "${o.rangeFrom}-${o.rangeTo}"`, "---");
   const frontmatter = fm.join("\n");
-  const body = buildPdfBody(o.pages, o.separator);
+  const body = buildPdfBody(o.pages, o.separator, o.range);
   return `${frontmatter}\n![[${o.pdfLink}]]\n\n${body}\n`;
 }
 
@@ -57,16 +73,22 @@ export async function writePdfTranscript(
   separator: PdfPageSeparator,
   overwritePath?: string,
   embed = true,
-  opts?: { selfSource?: boolean; destDir?: string },
+  opts?: { selfSource?: boolean; destDir?: string; range?: { from: number; to: number } },
 ): Promise<{ path: string | null }> {
   const self = opts?.selfSource === true;
-  const kept = pages.filter(p => p.content.trim()).sort((a, b) => a.page - b.page);
-  if (!kept.length) return { path: null };
-  const model = kept.find(p => p.model)?.model ?? "";
-  const pagesStr = `${kept[0].page}-${kept[kept.length - 1].page}`;
+  const range = opts?.range;
+  const withContent = pages.filter(p => p.content.trim()).sort((a, b) => a.page - b.page);
+  if (!withContent.length) return { path: null };   // alles leer/fehlgeschlagen → keine reine Platzhalter-Notiz
+  const model = withContent.find(p => p.model)?.model ?? "";
+  // pages:-Frontmatter aus der GEWÄHLTEN Range (ehrlich), sonst aus den vorhandenen Seiten (Alt-Verhalten).
+  const rangeFrom = range ? range.from : withContent[0].page;
+  const rangeTo = range ? range.to : withContent[withContent.length - 1].page;
+  const pagesStr = `${rangeFrom}-${rangeTo}`;
+  // Bei range alle Seiten durchreichen (buildPdfBody füllt Lücken mit Platzhaltern); sonst nur Inhalt.
+  const bodyPages = (range ? pages : withContent).map(p => ({ page: p.page, text: p.content }));
   if (overwritePath) {
     const old = await io.readNote(overwritePath);
-    const body = buildPdfBody(kept.map(p => ({ page: p.page, text: p.content })), separator);
+    const body = buildPdfBody(bodyPages, separator, range);
     await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body, pages: pagesStr }));
     return { path: overwritePath };
   }
@@ -75,8 +97,7 @@ export async function writePdfTranscript(
   const notePath = transcriptNotePath(io, sourcePath, pdfPath, "pdf", opts?.destDir);
   const content = buildPdfNote({
     pdfLink: source.link, sourceName, date: io.date(), model,
-    pages: kept.map(p => ({ page: p.page, text: p.content })),
-    rangeFrom: kept[0].page, rangeTo: kept[kept.length - 1].page, separator,
+    pages: bodyPages, rangeFrom, rangeTo, separator, range,
   });
   await io.createNote(notePath, content);
   if (embed && !self) {

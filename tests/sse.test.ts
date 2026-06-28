@@ -94,4 +94,9 @@ describe("streamSSE", () => {
     ]), () => {}, () => {});
     expect(r.model).toBe("");
   });
+  it("liefert den kompletten Body als raw (für 200-Fehler-Body-Erkennung)", async () => {
+    const r = await streamSSE(streamRes(['{"error":{"message":"boom"}}']), () => {}, () => {});
+    expect(r.content).toBe("");
+    expect(r.raw).toBe('{"error":{"message":"boom"}}');
+  });
 });

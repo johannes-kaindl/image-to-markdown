@@ -90,6 +90,13 @@ export class ImgToMdState {
 
   setError(i: number, msg: string): void { const c = this.cards[i]; if (c) { c.status = "error"; c.error = msg; } }
   markWritten(i: number, path: string): void { const c = this.cards[i]; if (c) { c.status = "written"; c.writtenPath = path; } }
+  /** Setzt eine Karte für einen Retry zurück: leert Inhalt/Modell/Fehler, Status → streaming. */
+  resetCard(i: number): void {
+    const c = this.cards[i]; if (!c) return;
+    c.text = ""; c.reasoning = ""; c.model = ""; c.status = "streaming"; c.error = undefined; c.writtenPath = undefined;
+  }
+  /** Karten-Indizes mit Fehlerstatus (für „Fehlgeschlagene erneut"). */
+  failedCardIndices(): number[] { return this.cards.map((c, i) => ({ c, i })).filter(x => x.c.status === "error").map(x => x.i); }
   doneCardIndices(): number[] { return this.cards.map((c, i) => ({ c, i })).filter(x => x.c.status === "done").map(x => x.i); }
   clearCards(): void { this.cards = []; }
 }
@@ -100,21 +107,41 @@ export function actualModel(cards: ImgCard[]): string {
   return cards.find(c => c.model)?.model ?? "";
 }
 
-/** Gruppiert done-Karten: Bilder einzeln, PDF-Seiten nach embed-link (raw). Behält Karten-Indizes. */
+export interface PdfGroup {
+  raw: string; link: string; item: ImgItem; cardIndices: number[];
+  pages: { page: number; content: string; model: string }[];
+  failedPages: number[];   // Seiten mit error-Status (für sichtbare Platzhalter in der Notiz)
+  pending: boolean;        // mind. eine Seite streamt noch → Schreiben aufschieben
+  range: { from: number; to: number };   // tatsächlich GELAUFENER Bereich (aus den Karten), NICHT item.range
+}
+
+/** Gruppiert Karten: Bilder einzeln (done), PDF-Seiten nach embed-link (raw). `pages` enthält nur
+ *  done-Seiten; `failedPages`/`pending` erfassen fehlgeschlagene bzw. noch laufende Seiten, damit die
+ *  zusammengeführte Notiz ehrlich bleibt (kein stiller Gap). `range` = min/max der Karten-Seiten,
+ *  also der beim Lauf tatsächlich gewählte Bereich — bewusst NICHT `item.range`, das vom Range-Eingabe-
+ *  feld jederzeit live mutiert wird (sonst Datenverlust bei Range-Edit nach dem Lauf). Behält Indizes. */
 export function partitionDoneCards(cards: ImgCard[]): {
   images: { card: ImgCard; cardIndex: number }[];
-  pdfs: { raw: string; link: string; item: ImgItem; cardIndices: number[]; pages: { page: number; content: string; model: string }[] }[];
+  pdfs: PdfGroup[];
 } {
   const images: { card: ImgCard; cardIndex: number }[] = [];
-  const pdfMap = new Map<string, { raw: string; link: string; item: ImgItem; cardIndices: number[]; pages: { page: number; content: string; model: string }[] }>();
+  const pdfMap = new Map<string, PdfGroup>();
+  const ensurePdf = (card: ImgCard): PdfGroup => {
+    let g = pdfMap.get(card.item.raw);
+    if (!g) { const pg = card.page ?? 1; g = { raw: card.item.raw, link: card.item.link, item: card.item, cardIndices: [], pages: [], failedPages: [], pending: false, range: { from: pg, to: pg } }; pdfMap.set(card.item.raw, g); }
+    return g;
+  };
   cards.forEach((card, cardIndex) => {
-    if (card.status !== "done") return;
     if (card.item.kind === "pdf") {
-      let g = pdfMap.get(card.item.raw);
-      if (!g) { g = { raw: card.item.raw, link: card.item.link, item: card.item, cardIndices: [], pages: [] }; pdfMap.set(card.item.raw, g); }
-      g.cardIndices.push(cardIndex);
-      g.pages.push({ page: card.page ?? 1, content: card.text, model: card.model });
-    } else {
+      const g = ensurePdf(card);
+      const pg = card.page ?? 1;
+      if (pg < g.range.from) g.range.from = pg;
+      if (pg > g.range.to) g.range.to = pg;
+      if (card.status === "done") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
+      else if (card.status === "error") g.failedPages.push(pg);
+      else if (card.status === "streaming") g.pending = true;
+      // "written": bereits geschrieben → neutral (kein Re-Add, kein Fehler).
+    } else if (card.status === "done") {
       images.push({ card, cardIndex });
     }
   });
