@@ -15,6 +15,8 @@ interface CardRefs {
   writtenEl?: HTMLElement;
   actionsEl?: HTMLElement;
   writeBtn?: HTMLElement;
+  liveWas: boolean;
+  autoCollapsed: boolean;
 }
 
 export interface ImgToMdViewDeps {
@@ -214,11 +216,11 @@ export class ImgToMdView extends ItemView {
         ? t("view.cardHeadPage", this.basename(card.item.link), card.page, card.total)
         : t("view.cardHead", card.index, card.total, this.basename(card.item.link));
       const headEl = cardEl.createDiv({ cls: "img2md-card-head", text: head });
-      refs = this.cardEls[i] = { cardEl, headEl };
+      refs = this.cardEls[i] = { cardEl, headEl, liveWas: false, autoCollapsed: false };
     }
     const { cardEl } = refs;
     const live = card.status === "streaming" && card.text === "";
-    // Reasoning-Block (lazy). open wird hier NUR beim Anlegen gesetzt (Task 2 ergänzt den Auto-Collapse).
+    // Reasoning-Block (lazy).
     if (card.reasoning) {
       if (!refs.reasoningDet) {
         const det = cardEl.createEl("details", { cls: "img2md-reasoning" });
@@ -226,9 +228,16 @@ export class ImgToMdView extends ItemView {
         const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
         const body = det.createDiv({ cls: "img2md-reasoning-body" });
         refs.reasoningDet = det; refs.reasoningSum = sum; refs.reasoningBody = body;
+        refs.liveWas = live;
       }
       refs.reasoningSum!.setText(live ? t("view.thinking") : t("view.thoughts"));
       refs.reasoningBody!.setText(card.reasoning);
+      // Einmaliger Auto-Collapse beim Übergang live -> nicht-live; danach gehört .open dem User.
+      if (refs.liveWas && !live && !refs.autoCollapsed) {
+        refs.reasoningDet.open = false;
+        refs.autoCollapsed = true;
+      }
+      refs.liveWas = live;
     }
     // Transkript-Text (lazy, inkrementell).
     if (card.text) {
