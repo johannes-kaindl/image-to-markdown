@@ -75,6 +75,8 @@ const EN: Dict = {
   "view.copyTranscript": "Copy transcript",
   "view.createNote": "Create note",
   "view.aborted": "Aborted",
+  "view.retry": "Retry",
+  "view.retryAllFailed": "Retry failed",
   "view.pdfPages": "{0} · {1} pages",
   "view.pdfRangeFrom": "from page",
   "view.pdfRangeTo": "to page",
@@ -109,6 +111,7 @@ const EN: Dict = {
   "note.suffix.image": "(transcript)",
   "note.suffix.pdf": "(PDF transcript)",
   "pdf.pageHeading": "Page {0}",
+  "pdf.pageFailed": "Page {0} — transcription failed",
 };
 
 const DE: Dict = {
@@ -169,6 +172,8 @@ const DE: Dict = {
   "view.copyTranscript": "Transkript kopieren",
   "view.createNote": "Notiz anlegen",
   "view.aborted": "Abgebrochen",
+  "view.retry": "Erneut versuchen",
+  "view.retryAllFailed": "Fehlgeschlagene erneut",
   "view.pdfPages": "{0} · {1} Seiten",
   "view.pdfRangeFrom": "von Seite",
   "view.pdfRangeTo": "bis Seite",
@@ -203,6 +208,7 @@ const DE: Dict = {
   "note.suffix.image": "(Transkript)",
   "note.suffix.pdf": "(PDF-Transkript)",
   "pdf.pageHeading": "Seite {0}",
+  "pdf.pageFailed": "Seite {0} — Transkription fehlgeschlagen",
 };
 
 const STRINGS: Record<Lang, Dict> = { en: EN, de: DE };

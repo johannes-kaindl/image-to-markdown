@@ -125,6 +125,41 @@ describe("ImgToMdState — PDF-Karten", () => {
     expect(part.pdfs[0].link).toBe("doc.pdf");
     expect(part.pdfs[0].pages.map(p => p.page)).toEqual([1, 2, 3]);
     expect(part.pdfs[0].cardIndices.length).toBe(3);
+    expect(part.pdfs[0].failedPages).toEqual([]);
+    expect(part.pdfs[0].pending).toBe(false);
+  });
+
+  it("partitionDoneCards erfasst fehlgeschlagene Seiten als failedPages (kein stiller Gap)", () => {
+    const s = new ImgToMdState(); s.setItems([pdf]); s.startCards();   // 3 Seiten
+    s.appendContent(0, "A"); s.setDone(0);
+    s.setError(1, "Vision HTTP 500");        // Seite 2 fehlgeschlagen
+    s.appendContent(2, "C"); s.setDone(2);
+    const part = partitionDoneCards(s.cards);
+    expect(part.pdfs[0].pages.map(p => p.page)).toEqual([1, 3]);   // nur done
+    expect(part.pdfs[0].failedPages).toEqual([2]);
+    expect(part.pdfs[0].pending).toBe(false);
+  });
+
+  it("partitionDoneCards markiert pending bei noch streamender Seite", () => {
+    const s = new ImgToMdState(); s.setItems([pdf]); s.startCards();
+    s.appendContent(0, "A"); s.setDone(0);   // Seite 1 done, 2+3 noch streaming
+    const part = partitionDoneCards(s.cards);
+    expect(part.pdfs[0].pending).toBe(true);
+  });
+
+  it("resetCard leert Inhalt/Fehler und setzt Status auf streaming", () => {
+    const s = new ImgToMdState(); s.setItems(items); s.startCards();
+    s.appendContent(0, "x"); s.setError(0, "boom");
+    s.resetCard(0);
+    expect(s.cards[0]).toMatchObject({ text: "", reasoning: "", model: "", status: "streaming" });
+    expect(s.cards[0].error).toBeUndefined();
+  });
+
+  it("failedCardIndices liefert nur Fehler-Karten", () => {
+    const s = new ImgToMdState(); s.setItems(items); s.startCards();   // a.png + b.jpg
+    s.appendContent(0, "x"); s.setDone(0);
+    s.setError(1, "boom");
+    expect(s.failedCardIndices()).toEqual([1]);
   });
 });
 

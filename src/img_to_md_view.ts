@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { ImgToMdState, ImgItem, partitionDoneCards, actualModel } from "./img_to_md_state";
+import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 
@@ -25,7 +25,7 @@ export interface ImgToMdViewDeps {
   scan: (sourcePath: string) => Promise<ImgItem[]>;
   transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
   writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string }[]) => Promise<string[]>;
-  writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean) => Promise<string | null>;
+  writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }) => Promise<string | null>;
   connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;
   listModels: () => Promise<string[]>;
   getModel: () => string;
@@ -47,6 +47,7 @@ export class ImgToMdView extends ItemView {
   private cardEls: CardRefs[] = [];
   private toggleBtn: HTMLElement | null = null;
   private runBtn: HTMLElement | null = null;
+  private retryAllBtn: HTMLElement | null = null;
   private controller: AbortController | null = null;
   private running = false;
 
@@ -77,6 +78,8 @@ export class ImgToMdView extends ItemView {
     this.cardsEl = c.createDiv({ cls: "img2md-cards" });
     const foot = c.createDiv({ cls: "img2md-foot" });
     foot.createEl("button", { cls: "img2md-all", text: t("view.createAll") }).addEventListener("click", () => void this.writeAll());
+    this.retryAllBtn = foot.createEl("button", { cls: "img2md-retry-all is-hidden", text: t("view.retryAllFailed") });
+    this.retryAllBtn.addEventListener("click", () => void this.retryAll());
     await this.refreshStatus();
     await this.refreshModels();
     await this.rescan();
@@ -249,9 +252,14 @@ export class ImgToMdView extends ItemView {
       if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
       refs.textEl.setText(card.text);
     }
-    // Fehlerzeile (lazy, bei error).
+    // Fehlerzeile (lazy, bei error) — Meldung + Retry-Button (re-läuft genau diese Seite/Karte).
     if (card.status === "error" && !refs.errorEl) {
-      refs.errorEl = cardEl.createDiv({ cls: "img2md-error", text: card.error ?? t("view.error") });
+      const errLine = cardEl.createDiv({ cls: "img2md-error" });
+      errLine.createSpan({ cls: "img2md-error-msg", text: card.error ?? t("view.error") });
+      const retry = errLine.createEl("button", { cls: "img2md-retry clickable-icon", attr: { "aria-label": t("view.retry"), title: t("view.retry") } });
+      setIcon(retry, "refresh-cw");
+      retry.addEventListener("click", () => void this.retryOne(i));
+      refs.errorEl = errLine;
     }
     // „angelegt"-Zeile (lazy, bei written).
     if (card.status === "written" && !refs.writtenEl) {
@@ -280,6 +288,30 @@ export class ImgToMdView extends ItemView {
         refs.writeBtn = undefined;
       }
     }
+    this.updateRetryAll();
+  }
+
+  /** Footer-Button „Fehlgeschlagene erneut" nur einblenden, wenn es Fehler-Karten gibt. */
+  private updateRetryAll(): void {
+    const btn = this.retryAllBtn; if (!btn) return;
+    if (this.state.cards.some(c => c.status === "error")) btn.removeClass("is-hidden");
+    else btn.addClass("is-hidden");
+  }
+
+  /** Baut die DOM einer Karte für einen Retry frisch auf (an gleicher Stelle): verwirft alte
+   *  Knoten/Refs, legt nur den Kopf neu an; updateCard füllt den Rest beim Streamen. */
+  private resetCardDom(i: number): void {
+    const refs = this.cardEls[i];
+    const card = this.state.cards[i];
+    if (!refs || !card) { this.updateCard(i); return; }
+    refs.cardEl.empty();
+    const name = truncateMiddle(this.basename(card.item.link), 32);
+    const head = card.page != null
+      ? t("view.cardHeadPage", name, card.page, card.total)
+      : t("view.cardHead", card.index, card.total, name);
+    const headEl = refs.cardEl.createDiv({ cls: "img2md-card-head", text: head });
+    this.cardEls[i] = { cardEl: refs.cardEl, headEl, liveWas: false, autoCollapsed: false };
+    this.updateCard(i);
   }
 
   private onRunClick(): void {
@@ -294,18 +326,45 @@ export class ImgToMdView extends ItemView {
     const cards = this.state.startCards();
     this.resetCards();
     if (!cards.length) return;
+    await this.runIndices(path, cards.map((_, i) => i), false);
+  }
+
+  /** Re-läuft genau eine fehlgeschlagene Karte (per-Karte „Retry"). */
+  async retryOne(i: number): Promise<void> {
+    if (this.running) return;
+    const path = this.deps.getActivePath();
+    const card = this.state.cards[i];
+    if (!path || !card || card.status !== "error") return;
+    await this.runIndices(path, [i], true);
+  }
+
+  /** Re-läuft alle fehlgeschlagenen Karten („Fehlgeschlagene erneut"). */
+  async retryAll(): Promise<void> {
+    if (this.running) return;
+    const path = this.deps.getActivePath();
+    if (!path) return;
+    const idx = this.state.failedCardIndices();
+    if (!idx.length) return;
+    await this.runIndices(path, idx, true);
+  }
+
+  /** Gemeinsamer Transkriptions-Loop für run() und Retry. Bei isRetry werden die Ziel-Karten
+   *  zuvor zurückgesetzt (State + DOM in-place); sonst laufen frische Karten aus startCards. */
+  private async runIndices(path: string, indices: number[], isRetry: boolean): Promise<void> {
     this.running = true; this.runBtn?.setText("Stop");
     this.controller = new AbortController();
     const signal = this.controller.signal;
-    for (let i = 0; i < cards.length; i++) {
+    for (const i of indices) {
+      if (signal.aborted) break;
+      if (isRetry) { this.state.resetCard(i); this.resetCardDom(i); }
       try {
         const r = await this.deps.transcribeStream(
-          path, cards[i].item,
+          path, this.state.cards[i].item,
           (t) => { this.state.appendContent(i, t); this.updateCard(i); },
           (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
-          signal, cards[i].page,
+          signal, this.state.cards[i].page,
         );
-        cards[i].model = r.model;
+        this.state.cards[i].model = r.model;
         this.state.setDone(i);
       } catch (e) {
         if (signal.aborted) break;   // Stop gedrückt — Rest unten als „Abgebrochen" markieren
@@ -313,8 +372,8 @@ export class ImgToMdView extends ItemView {
       }
       this.updateCard(i);
     }
-    // Nach Abbruch: noch nicht verarbeitete Karten kennzeichnen.
-    for (let i = 0; i < cards.length; i++) if (cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
+    // Nach Abbruch: noch laufende Karten kennzeichnen (bei Retry sind nur die Ziel-Karten betroffen).
+    for (let i = 0; i < this.state.cards.length; i++) if (this.state.cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
     this.running = false; this.runBtn?.setText(t("view.transcribe"));
     this.controller = null;
     // Post-Sync: das real verwendete Modell (response.model) → Auswahl angleichen
@@ -328,16 +387,30 @@ export class ImgToMdView extends ItemView {
     }
     this.updateAllCards();
   }
+  /** Schreibt EINE PDF-Gruppe als zusammengeführte Notiz — ehrlich (gewählte Range + sichtbare
+   *  Platzhalter für fehlgeschlagene Seiten). Setzt nach dem ersten Anlegen existingTranscriptPath,
+   *  damit Folge-Writes (z.B. nach Retry) dieselbe Notiz überschreiben statt zu duplizieren. Markiert
+   *  Karten nur „angelegt", wenn vollständig — bei offenen Fehlern bleiben done-Karten „done", damit
+   *  ein späterer kompletter Override sie via Partition wieder einbezieht. */
+  private async writePdfGroup(path: string, g: PdfGroup): Promise<void> {
+    if (g.pending || !g.pages.length) return;
+    const created = await this.deps.writePdf(
+      path, g.raw, g.link,
+      g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })),
+      g.item.existingTranscriptPath, g.item.embed, g.item.range,
+    );
+    if (!created) return;
+    if (!g.item.existingTranscriptPath) g.item.existingTranscriptPath = created;
+    if (!g.failedPages.length) g.cardIndices.forEach(j => this.state.markWritten(j, created));
+  }
+
   async writeOne(i: number): Promise<void> {
     const path = this.deps.getActivePath();
     const card = this.state.cards[i];
     if (!path || !card || card.status !== "done") return;
     if (card.item.kind === "pdf") {
       const g = partitionDoneCards(this.state.cards).pdfs.find(x => x.raw === card.item.raw);
-      if (g) {
-        const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })), g.item.existingTranscriptPath, g.item.embed);
-        if (created) g.cardIndices.forEach(j => this.state.markWritten(j, created));
-      }
+      if (g) await this.writePdfGroup(path, g);
     } else {
       const [created] = await this.deps.writeTranscripts(path, [{ item: card.item, content: card.text.trim(), model: card.model }]);
       if (created) this.state.markWritten(i, created);
@@ -355,10 +428,7 @@ export class ImgToMdView extends ItemView {
       const paths = await this.deps.writeTranscripts(path, entries);
       part.images.forEach((x, k) => { if (paths[k]) this.state.markWritten(x.cardIndex, paths[k]); });
     }
-    for (const g of part.pdfs) {
-      const created = await this.deps.writePdf(path, g.raw, g.link, g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })), g.item.existingTranscriptPath, g.item.embed);
-      if (created) g.cardIndices.forEach(i => this.state.markWritten(i, created));
-    }
+    for (const g of part.pdfs) await this.writePdfGroup(path, g);
     this.updateAllCards();
     await this.rescan();
   }
