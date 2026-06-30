@@ -151,7 +151,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
           const scale = Platform.isMobile ? Math.min(this.settings.pdfRenderScale, 1.5) : this.settings.pdfRenderScale;
           const bytes = await this.app.vault.adapter.readBinary(filePath);
           if (this.settings.pdfUseTextLayer) {
-            const layerText = await extractPdfPageText(bytes, page ?? 1);
+            // Extraktions-Fehler (kaputter/partieller Text-Layer) → "" → Fallback auf Render+OCR,
+            // statt die Seite scheitern zu lassen (die das Vision-Modell evtl. gerettet hätte).
+            let layerText = "";
+            try { layerText = await extractPdfPageText(bytes, page ?? 1); } catch { layerText = ""; }
             if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
               const fmt = t("pdf.textLayerPrompt");
               try {

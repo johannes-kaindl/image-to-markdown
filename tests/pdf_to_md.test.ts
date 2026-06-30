@@ -11,6 +11,11 @@ describe("reconstructPdfText", () => {
   it("leere Item-Liste → ''", () => {
     expect(reconstructPdfText([])).toBe("");
   });
+  it("rechts-trimmt Zeilen, kollabiert Whitespace-Items, droppt str-lose Items", () => {
+    expect(reconstructPdfText([{ str: "X   ", hasEOL: true }, { str: "Y" }])).toBe("X\nY");
+    expect(reconstructPdfText([{ str: "X", hasEOL: true }, { str: "   ", hasEOL: true }, { str: "Y" }])).toBe("X\n\nY");
+    expect(reconstructPdfText([{ str: undefined as unknown as string, hasEOL: true }, { str: "Y" }])).toBe("Y");
+  });
 });
 
 describe("countNonWhitespace / Schwelle", () => {

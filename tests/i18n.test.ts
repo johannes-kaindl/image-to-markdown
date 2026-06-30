@@ -51,6 +51,12 @@ describe("i18n", () => {
     setLang("de"); expect(t("view.thisFile")).toBe("diese Datei");
   });
 
+  it("pdf.textLayerPrompt schärft den Wortlaut-Erhalt (EN/DE)", () => {
+    setLang("en"); expect(t("pdf.textLayerPrompt")).toContain("exact");
+    setLang("de"); expect(t("pdf.textLayerPrompt")).toContain("exakt");
+    setLang("en");
+  });
+
   it("EN/DE-Schlüssel sind deckungsgleich (keine fehlende Übersetzung)", () => {
     const en = Object.keys(STRINGS.en).sort();
     const de = Object.keys(STRINGS.de).sort();

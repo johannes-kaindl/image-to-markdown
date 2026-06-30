@@ -151,6 +151,16 @@ describe("VisionClient.transcribeTextStream (text-only)", () => {
     setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
     await expect(new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {})).rejects.toThrow("500");
   });
+  it("Fallback auf Konstruktor-Modell ohne model im Stream", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes(['data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n'])));
+    const r = await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {});
+    expect(r.model).toBe("vm");
+  });
+  it("leerer [DONE]-Stream wirft NICHT, liefert leeren content", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes(['data: [DONE]\n\n'])));
+    const r = await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {});
+    expect(r.content).toBe("");
+  });
 });
 
 describe("VisionClient.visionConfidence", () => {
