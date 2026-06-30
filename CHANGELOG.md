@@ -6,6 +6,13 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Born-digital PDFs nutzen den eingebetteten Text:** Hat eine PDF-Seite einen echten Text-Layer
+  (exportierte Folien, Paper, Text-PDFs), wird ihr exakter Text ans Modell geschickt und nach Markdown
+  formatiert — statt ein gerendertes Bild zu OCR'en. Schneller und ohne OCR-Fehler. Scan-/Figuren-Seiten
+  fallen automatisch aufs Vision-Modell zurück. Abschaltbar (Setting „Eingebetteten PDF-Text nutzen").
+
 ## [0.7.0] — 2026-06-30
 
 ### Hinzugefügt

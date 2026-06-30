@@ -14,6 +14,7 @@
 - Transkribiert **Bilder und PDFs** einer Notiz über ein beliebiges OpenAI-kompatibles lokales Vision-Modell
 - **Live-Streaming** in die Sidebar — das Markdown erscheint während der Modellgenerierung
 - **PDF-Seitenbereiche** — wählbare Seiten zum Transkribieren; pdf.js ist gebündelt, vollständig offline
+- **Born-digital PDFs** — Seiten mit echtem Text-Layer werden als exakter Text (kein Bild) ans Modell geschickt und nach Markdown formatiert: schneller und ohne OCR-Fehler; Scan-/Figuren-Seiten fallen aufs Vision-Modell zurück. In den Einstellungen abschaltbar
 - **Idempotent** — eine Transkript-Notiz pro Quelle, keine Duplikate; Neu-Transkription ist opt-in
 - **Zweisprachig** — Obsidians Spracheinstellung (English / Deutsch) steuert die Oberfläche automatisch
 - **Nicht-destruktiv** — Quellnotizen werden nie überschrieben; Embeds werden ersetzt, Originale bleiben erhalten
