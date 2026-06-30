@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-30
+
 ### Hinzugefügt
 
 - **Prompt-Presets:** Neben dem Modell-Picker in der Sidebar ein Preset-Wähler — „Standard" (dein
