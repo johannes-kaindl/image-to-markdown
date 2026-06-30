@@ -4,6 +4,7 @@ import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint } from "./
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
 import { findExistingTranscript, BacklinkLookup } from "./backlinks";
+import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel } from "./prompts";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
@@ -28,6 +29,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.settings = Object.assign({}, defaultSettings(), saved ?? {});
     const migratedEps = migrateEndpoints(saved);
     this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
+    if (!isPromptPreset(this.settings.promptPreset)) this.settings.promptPreset = "default";
     this.visionClient = new VisionClient(this.settings.visionEndpoints[0] ?? "", this.settings.visionModel);
     void this.resolveAndReconnect();
 
@@ -79,7 +81,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
-      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, this.settings.visionPrompt),
+      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt)),
       notify: (m) => { new Notice(m); },
     };
   }
@@ -152,11 +154,12 @@ export default class ImageToMarkdownPlugin extends Plugin {
         } else {
           dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
         }
+        const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
         try {
-          return await this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
+          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal);
         } catch (err) {
           await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, this.settings.visionPrompt, onContent, onReasoning, signal);
+          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal);
           throw err;
         }
       },
@@ -176,6 +179,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
       listModels: () => new VisionClient(this.activeEndpoint ?? this.settings.visionEndpoints[0] ?? "", "").listModels(),
       getModel: () => this.settings.visionModel,
       setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); void this.resolveAndReconnect(); },
+      listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
+      getPreset: () => this.settings.promptPreset,
+      setPreset: (id: string) => { this.settings.promptPreset = id; void this.saveSettings(); },
       openPath: this.openPath,
       copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },
     };
