@@ -52,4 +52,10 @@ describe("defaultSettings", () => {
     expect(s.pdfRenderScale).toBe(2.0);
     expect(s.pdfPageSeparator).toBe("comment");
   });
+  it("promptPreset ist 'default', visionPrompt unverändert vorhanden", () => {
+    const s = defaultSettings();
+    expect(s.promptPreset).toBe("default");
+    expect(typeof s.visionPrompt).toBe("string");
+    expect(s.visionPrompt.length).toBeGreaterThan(0);
+  });
 });
