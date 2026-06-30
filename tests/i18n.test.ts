@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { t, setLang, getLang, pickLang, defaultVisionPrompt } from "../src/i18n";
+import { t, setLang, getLang, pickLang, defaultVisionPrompt, STRINGS } from "../src/i18n";
 
 describe("i18n", () => {
   beforeEach(() => setLang("en"));
@@ -49,5 +49,11 @@ describe("i18n", () => {
   it("view.thisFile EN/DE", () => {
     setLang("en"); expect(t("view.thisFile")).toBe("this file");
     setLang("de"); expect(t("view.thisFile")).toBe("diese Datei");
+  });
+
+  it("EN/DE-Schlüssel sind deckungsgleich (keine fehlende Übersetzung)", () => {
+    const en = Object.keys(STRINGS.en).sort();
+    const de = Object.keys(STRINGS.de).sort();
+    expect(de).toEqual(en);
   });
 });

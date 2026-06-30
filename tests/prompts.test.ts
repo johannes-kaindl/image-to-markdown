@@ -20,13 +20,24 @@ describe("prompts — Labels & Built-in-Texte (EN+DE)", () => {
     expect(promptPresetLabel("nope")).toBe("nope");
     setLang("en");
   });
-  it("builtinPromptText: default → '', Built-ins nicht-leer in EN+DE", () => {
+  it("builtinPromptText: default & unbekannt → '', Built-ins nicht-leer in EN+DE", () => {
     expect(builtinPromptText("default")).toBe("");
+    expect(builtinPromptText("nope")).toBe("");   // unbekannte id leakt keinen rohen Key
     for (const lang of ["en", "de"] as const) {
       setLang(lang);
       for (const id of ["tables", "handwriting", "math", "code", "describe"]) {
         expect(builtinPromptText(id).length).toBeGreaterThan(10);
         expect(builtinPromptText(id)).not.toContain("preset.prompt.");   // kein fehlender Key
+      }
+    }
+    setLang("en");
+  });
+  it("promptPresetLabel: jedes Preset hat in EN+DE ein echtes Label (kein roher Key)", () => {
+    for (const lang of ["en", "de"] as const) {
+      setLang(lang);
+      for (const id of PROMPT_PRESETS) {
+        expect(promptPresetLabel(id).length).toBeGreaterThan(0);
+        expect(promptPresetLabel(id)).not.toContain("preset.label.");
       }
     }
     setLang("en");

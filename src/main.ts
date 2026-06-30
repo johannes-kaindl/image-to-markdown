@@ -181,7 +181,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); void this.resolveAndReconnect(); },
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
       getPreset: () => this.settings.promptPreset,
-      setPreset: (id: string) => { this.settings.promptPreset = id; void this.saveSettings(); },
+      setPreset: (id: string) => { this.settings.promptPreset = isPromptPreset(id) ? id : "default"; void this.saveSettings(); },
       openPath: this.openPath,
       copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },
     };

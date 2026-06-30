@@ -13,9 +13,10 @@ export function promptPresetLabel(id: string): string {
   return isPromptPreset(id) ? t(`preset.label.${id}`) : id;
 }
 
-/** Lokalisierter Built-in-Prompt-Text. "" für "default" (der nutzt den editierbaren Default-Text). */
+/** Lokalisierter Built-in-Prompt-Text. "" für "default" (nutzt den editierbaren Default-Text) und für
+ *  unbekannte ids (verhindert, dass ein roher i18n-Key als Prompt durchsickert). */
 export function builtinPromptText(id: string): string {
-  if (id === "default") return "";
+  if (id === "default" || !isPromptPreset(id)) return "";
   return t(`preset.prompt.${id}`);
 }
 

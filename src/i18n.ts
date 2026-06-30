@@ -255,7 +255,8 @@ const DE: Dict = {
   "pdf.pageFailed": "Seite {0} — Transkription fehlgeschlagen",
 };
 
-const STRINGS: Record<Lang, Dict> = { en: EN, de: DE };
+/** Exportiert für den EN/DE-Paritätstest; zur Laufzeit nur über t() lesen. */
+export const STRINGS: Record<Lang, Dict> = { en: EN, de: DE };
 
 /** Übersetzt key in der aktuellen Sprache; Fallback currentLang → en → key. {0},{1}… aus args. */
 export function t(key: string, ...args: (string | number)[]): string {
