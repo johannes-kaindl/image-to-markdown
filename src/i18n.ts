@@ -54,6 +54,8 @@ const EN: Dict = {
   "settings.pdfPageSep.rule": "Horizontal rule ---",
   "settings.pdfPageSep.pagebreak": "Page break (HTML, for export)",
   "settings.pdfPageSep.none": "None (seamless text)",
+  "settings.pdfUseTextLayer.name": "Use embedded PDF text",
+  "settings.pdfUseTextLayer.desc": "When a PDF page has a real text layer, send its exact text to the model to format as Markdown instead of OCR-ing a rendered image — faster and without OCR errors. Pages without enough text (scans, figures) fall back to the vision model.",
   "prompt.default":
     "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, " +
     "**emphasis**, lists and tables. Output only the Markdown, no comments.",
@@ -134,6 +136,10 @@ const EN: Dict = {
   "note.suffix.pdf": "(PDF transcript)",
   "pdf.pageHeading": "Page {0}",
   "pdf.pageFailed": "Page {0} — transcription failed",
+  "pdf.textLayerPrompt":
+    "Format the following text, extracted from a PDF page, into clean Markdown. Preserve the exact " +
+    "wording — do not rephrase, add or omit content; only add structure (headings, lists, tables, " +
+    "emphasis). Output only the Markdown, no comments.",
 };
 
 const DE: Dict = {
@@ -173,6 +179,8 @@ const DE: Dict = {
   "settings.pdfPageSep.rule": "Trennlinie ---",
   "settings.pdfPageSep.pagebreak": "Seitenumbruch (HTML, für Export)",
   "settings.pdfPageSep.none": "Keiner (nahtloser Text)",
+  "settings.pdfUseTextLayer.name": "Eingebetteten PDF-Text nutzen",
+  "settings.pdfUseTextLayer.desc": "Hat eine PDF-Seite einen echten Text-Layer, wird ihr exakter Text ans Modell geschickt und nach Markdown formatiert, statt ein gerendertes Bild zu OCR'en — schneller und ohne OCR-Fehler. Seiten ohne genug Text (Scans, Figuren) fallen aufs Vision-Modell zurück.",
   "prompt.default":
     "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, " +
     "**Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare.",
@@ -253,6 +261,10 @@ const DE: Dict = {
   "note.suffix.pdf": "(PDF-Transkript)",
   "pdf.pageHeading": "Seite {0}",
   "pdf.pageFailed": "Seite {0} — Transkription fehlgeschlagen",
+  "pdf.textLayerPrompt":
+    "Formatiere den folgenden, aus einer PDF-Seite extrahierten Text zu sauberem Markdown. Erhalte den " +
+    "Wortlaut exakt — formuliere nichts um, füge nichts hinzu, lass nichts weg; ergänze nur Struktur " +
+    "(Überschriften, Listen, Tabellen, Hervorhebungen). Gib nur das Markdown aus, keine Kommentare.",
 };
 
 /** Exportiert für den EN/DE-Paritätstest; zur Laufzeit nur über t() lesen. */

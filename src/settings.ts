@@ -38,6 +38,7 @@ export interface ImageToMarkdownSettings {
   pdfMaxPages: number;
   pdfRenderScale: number;
   pdfPageSeparator: PdfPageSeparator;
+  pdfUseTextLayer: boolean;
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -50,6 +51,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     pdfMaxPages: 25,
     pdfRenderScale: 2.0,
     pdfPageSeparator: "comment",
+    pdfUseTextLayer: true,
   };
 }
 
@@ -234,5 +236,11 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         d.setValue(this.plugin.settings.pdfPageSeparator);
         d.onChange(async (v: string) => { this.plugin.settings.pdfPageSeparator = v as PdfPageSeparator; await this.plugin.saveSettings(); });
       });
+
+    // ── PDF Text-Layer ──
+    new Setting(containerEl)
+      .setName(t("settings.pdfUseTextLayer.name")).setDesc(t("settings.pdfUseTextLayer.desc"))
+      .addToggle(tg => tg.setValue(this.plugin.settings.pdfUseTextLayer)
+        .onChange(async (v: boolean) => { this.plugin.settings.pdfUseTextLayer = v; await this.plugin.saveSettings(); }));
   }
 }

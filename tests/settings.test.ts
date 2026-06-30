@@ -58,4 +58,7 @@ describe("defaultSettings", () => {
     expect(typeof s.visionPrompt).toBe("string");
     expect(s.visionPrompt.length).toBeGreaterThan(0);
   });
+  it("pdfUseTextLayer ist default true", () => {
+    expect(defaultSettings().pdfUseTextLayer).toBe(true);
+  });
 });
