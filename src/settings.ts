@@ -34,6 +34,7 @@ export interface ImageToMarkdownSettings {
   visionEndpoints: string[];
   visionModel: string;
   visionPrompt: string;
+  promptPreset: string;
   pdfMaxPages: number;
   pdfRenderScale: number;
   pdfPageSeparator: PdfPageSeparator;
@@ -45,6 +46,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     visionEndpoints: ["http://localhost:8080"],
     visionModel: "",
     visionPrompt: defaultVisionPrompt(),
+    promptPreset: "default",
     pdfMaxPages: 25,
     pdfRenderScale: 2.0,
     pdfPageSeparator: "comment",

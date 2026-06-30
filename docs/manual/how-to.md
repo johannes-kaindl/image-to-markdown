@@ -18,14 +18,15 @@ the setup notes in the [README](../../README.md).
 3. [Reuse an existing transcript instead of re-transcribing](#reuse-an-existing-transcript-instead-of-re-transcribing)
 4. [Read the model's thinking](#read-the-models-thinking)
 5. [Change the transcription prompt](#change-the-transcription-prompt)
-6. [Point at LM Studio instead of MLX](#point-at-lm-studio-instead-of-mlx)
-7. [Handle iPhone / HEIC images](#handle-iphone--heic-images)
-8. [Pick or pin a specific model](#pick-or-pin-a-specific-model)
-9. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
-10. [Transcribe a PDF](#transcribe-a-pdf)
-11. [Transcribe a linked image or PDF (without an embed)](#transcribe-a-linked-image-or-pdf-without-an-embed)
-12. [Transcribe a standalone PDF or image file](#transcribe-a-standalone-pdf-or-image-file)
-13. [Configure multiple endpoints (home + on the road)](#configure-multiple-endpoints-home--on-the-road)
+6. [Switch the prompt preset](#switch-the-prompt-preset)
+7. [Point at LM Studio instead of MLX](#point-at-lm-studio-instead-of-mlx)
+8. [Handle iPhone / HEIC images](#handle-iphone--heic-images)
+9. [Pick or pin a specific model](#pick-or-pin-a-specific-model)
+10. [Check whether your model supports vision](#check-whether-your-model-supports-vision)
+11. [Transcribe a PDF](#transcribe-a-pdf)
+12. [Transcribe a linked image or PDF (without an embed)](#transcribe-a-linked-image-or-pdf-without-an-embed)
+13. [Transcribe a standalone PDF or image file](#transcribe-a-standalone-pdf-or-image-file)
+14. [Configure multiple endpoints (home + on the road)](#configure-multiple-endpoints-home--on-the-road)
 
 ---
 
@@ -146,7 +147,29 @@ Some examples of how you might change it:
 - **Style**: ask for a particular table or heading style, or to preserve line
   breaks exactly.
 
-Changes take effect on the next transcription run.
+Changes take effect on the next transcription run. The text area edits the
+**"Default"** preset — see the next section for the fixed built-in presets.
+
+---
+
+## Switch the prompt preset
+
+The sidebar has a preset picker next to the model dropdown. With a local vision
+model the prompt is the main quality lever, so switching the preset switches the
+transcription mode without editing any text.
+
+1. Open the **"IMG → MD"** sidebar (`scan-text` ribbon icon).
+2. Use the **preset dropdown** next to the model dropdown to pick a mode:
+   - **Default** — your editable prompt (the text area in settings, see above).
+   - **Tables → Markdown** — render tables as GitHub-Flavored Markdown tables.
+   - **Handwriting** — transcribe handwritten notes; illegible words marked `[?]`.
+   - **Math → LaTeX** — formulas as `$…$` / `$$…$$`.
+   - **Source code** — code in fenced code blocks, indentation preserved.
+   - **Describe image** — a prose description (alt text) instead of a verbatim transcript.
+3. Transcribe as usual. The choice is remembered (sticky) across runs and sessions.
+
+The built-in presets are fixed; only the **Default** preset's text is editable
+(in settings). The selection takes effect on the next transcription run.
 
 ---
 
