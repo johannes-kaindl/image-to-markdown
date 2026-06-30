@@ -14,6 +14,7 @@
 - Transcribes **images and PDFs** embedded in a note via any OpenAI-compatible local vision model
 - **Streaming live** into a sidebar — watch the Markdown appear as the model generates
 - **PDF page ranges** — pick which pages to transcribe; pdf.js is bundled, fully offline
+- **Born-digital PDFs** — pages with a real text layer are sent to the model as exact text (not an image) to format as Markdown: faster and without OCR errors; scanned/figure pages fall back to the vision model. Toggle in settings
 - **Idempotent** — one transcript note per source, no duplicates; re-transcribe is opt-in
 - **Bilingual** — Obsidian's language setting (English / Deutsch) drives the UI automatically
 - **Non-destructive** — source notes are never overwritten; embeds are replaced, originals untouched

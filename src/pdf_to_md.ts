@@ -3,6 +3,21 @@ import { t } from "./i18n";
 
 export interface PdfPageTranscript { page: number; text: string }
 
+/** Mindest-Zeichen (Nicht-Whitespace) im Text-Layer, ab denen eine PDF-Seite als born-digital gilt
+ *  und ihr exakter Text formatiert statt gerendert+OCR't wird. Darunter: Fallback aufs Vision-Modell. */
+export const PDF_TEXTLAYER_MIN_CHARS = 200;
+
+/** Nicht-Whitespace-Zeichen zählen (Schwellen-Check für den Text-Layer). Reine Funktion. */
+export function countNonWhitespace(s: string): number { return s.replace(/\s/g, "").length; }
+
+/** Rekonstruiert Lauftext aus pdf.js-Text-Items: Strings fügen, Zeilenumbruch bei hasEOL, Zeilen
+ *  rechts-trimmen, ≥3 Newlines → Absatz, Gesamt-trim. Mehrspalten = best-effort (Item-Reihenfolge). Rein. */
+export function reconstructPdfText(items: { str: string; hasEOL?: boolean }[]): string {
+  let out = "";
+  for (const it of items) { out += it.str ?? ""; if (it.hasEOL) out += "\n"; }
+  return out.replace(/[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /** Wie Seiten in der zusammengeführten Notiz getrennt werden. `comment` (Default) ist im
  *  Lesemodus unsichtbar und stört weder Outline noch Linter; `heading` injiziert ## Seite N. */
 export type PdfPageSeparator = "comment" | "heading" | "rule" | "pagebreak" | "none";

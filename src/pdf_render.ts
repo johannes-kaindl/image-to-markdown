@@ -1,5 +1,6 @@
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { PDF_WORKER_SRC } from "./pdf-worker-src.generated";
+import { reconstructPdfText } from "./pdf_to_md";
 
 let workerReady = false;
 
@@ -32,6 +33,23 @@ export async function renderPdfPage(bytes: ArrayBuffer, page: number, scale: num
     if (!ctx) throw new Error("2D-Canvas-Context nicht verfügbar");
     await pdfPage.render({ canvasContext: ctx, viewport }).promise;
     return canvas.toDataURL("image/png");
+  } finally { await doc.destroy(); }
+}
+
+/** Extrahiert den eingebetteten Text-Layer einer Seite (1-basiert) als rekonstruierten Lauftext.
+ *  "" wenn kein Text-Layer. DOM/pdf.js-Schicht; die Rekonstruktion ist rein (pdf_to_md). */
+export async function extractPdfPageText(bytes: ArrayBuffer, page: number): Promise<string> {
+  ensureWorker();
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
+  try {
+    const pdfPage = await doc.getPage(page);
+    const tc = await pdfPage.getTextContent();
+    const items: { str: string; hasEOL?: boolean }[] = [];
+    for (const it of tc.items) {
+      const o = it as { str?: unknown; hasEOL?: unknown };
+      if (typeof o.str === "string") items.push({ str: o.str, hasEOL: o.hasEOL === true });
+    }
+    return reconstructPdfText(items);
   } finally { await doc.destroy(); }
 }
 

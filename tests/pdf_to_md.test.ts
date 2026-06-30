@@ -1,5 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { buildPdfNote, writePdfTranscript, buildPdfBody } from "../src/pdf_to_md";
+import { buildPdfNote, writePdfTranscript, buildPdfBody, reconstructPdfText, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "../src/pdf_to_md";
+
+describe("reconstructPdfText", () => {
+  it("fügt Strings zusammen, Zeilenumbruch bei hasEOL", () => {
+    expect(reconstructPdfText([{ str: "Hallo " }, { str: "Welt", hasEOL: true }, { str: "Zeile 2" }])).toBe("Hallo Welt\nZeile 2");
+  });
+  it("kollabiert mehrere Leerzeilen + trimmt", () => {
+    expect(reconstructPdfText([{ str: "A", hasEOL: true }, { str: "", hasEOL: true }, { str: "", hasEOL: true }, { str: "B", hasEOL: true }])).toBe("A\n\nB");
+  });
+  it("leere Item-Liste → ''", () => {
+    expect(reconstructPdfText([])).toBe("");
+  });
+  it("rechts-trimmt Zeilen, kollabiert Whitespace-Items, droppt str-lose Items", () => {
+    expect(reconstructPdfText([{ str: "X   ", hasEOL: true }, { str: "Y" }])).toBe("X\nY");
+    expect(reconstructPdfText([{ str: "X", hasEOL: true }, { str: "   ", hasEOL: true }, { str: "Y" }])).toBe("X\n\nY");
+    expect(reconstructPdfText([{ str: undefined as unknown as string, hasEOL: true }, { str: "Y" }])).toBe("Y");
+  });
+});
+
+describe("countNonWhitespace / Schwelle", () => {
+  it("zählt Nicht-Whitespace-Zeichen", () => {
+    expect(countNonWhitespace("a b\nc\t")).toBe(3);
+    expect(countNonWhitespace("   \n\t ")).toBe(0);
+  });
+  it("PDF_TEXTLAYER_MIN_CHARS ist 200", () => {
+    expect(PDF_TEXTLAYER_MIN_CHARS).toBe(200);
+  });
+});
 
 describe("buildPdfNote", () => {
   it("Frontmatter + PDF-Embed oben + Heading-Sektionen in Reihenfolge", () => {

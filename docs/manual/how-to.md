@@ -304,6 +304,13 @@ page by page, as a single transcript note.
    written for the whole PDF, and the PDF embed in the source note is replaced by an embed of
    the new note.
 
+> **Born-digital PDFs (text layer):** With the **"Use embedded PDF text"** setting on (the default),
+> a page that already carries a real text layer — exported slides, papers, text PDFs — is not OCR'd
+> from a rendered image. Instead its exact text is sent to the model as plain text and only formatted
+> to Markdown: noticeably faster and free of OCR errors. Scanned or figure-only pages (too little text)
+> automatically fall back to the vision model, so mixed PDFs just work. Turn the setting off to always
+> render + OCR every page.
+
 The transcript note is non-destructive and idempotent: running it again on an already-transcribed
 PDF creates no duplicate.
 
