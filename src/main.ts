@@ -8,8 +8,8 @@ import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel } 
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
-import { pdfPageCount, renderPdfPage } from "./pdf_render";
-import { writePdfTranscript } from "./pdf_to_md";
+import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
+import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -150,6 +150,19 @@ export default class ImageToMarkdownPlugin extends Plugin {
           }
           const scale = Platform.isMobile ? Math.min(this.settings.pdfRenderScale, 1.5) : this.settings.pdfRenderScale;
           const bytes = await this.app.vault.adapter.readBinary(filePath);
+          if (this.settings.pdfUseTextLayer) {
+            const layerText = await extractPdfPageText(bytes, page ?? 1);
+            if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
+              const fmt = t("pdf.textLayerPrompt");
+              try {
+                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal);
+              } catch (err) {
+                await this.resolveAndReconnect();
+                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal);
+                throw err;
+              }
+            }
+          }
           dataUrl = await renderPdfPage(bytes, page ?? 1, scale);
         } else {
           dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
