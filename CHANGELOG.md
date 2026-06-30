@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-06-30
+
 ### Hinzugefügt
 
 - **Born-digital PDFs nutzen den eingebetteten Text:** Hat eine PDF-Seite einen echten Text-Layer
