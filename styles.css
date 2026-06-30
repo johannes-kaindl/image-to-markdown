@@ -43,6 +43,8 @@
 .img2md-linked { font-size: var(--font-ui-smaller); color: var(--text-muted); margin-left: 0.4em; }
 .img2md-model-row { display: flex; align-items: center; gap: 0.4em; margin-bottom: var(--size-4-2); }
 .img2md-model-row .img2md-model { flex: 1; }
+.img2md-preset { font-size: 12px; }
+.img2md-model-row .img2md-preset { flex: 1; }
 .img2md-model-status { display: inline-flex; align-items: center; color: var(--text-faint); flex: 0 0 auto; }
 .img2md-model-status.is-loaded { color: var(--text-success); }
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }

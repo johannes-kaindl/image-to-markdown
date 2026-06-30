@@ -30,6 +30,9 @@ export interface ImgToMdViewDeps {
   listModels: () => Promise<string[]>;
   getModel: () => string;
   setModel: (m: string) => void;
+  listPresets: () => { id: string; label: string }[];
+  getPreset: () => string;
+  setPreset: (id: string) => void;
   openPath: (p: string) => void;
   copyText: (t: string) => void;
 }
@@ -40,6 +43,7 @@ export class ImgToMdView extends ItemView {
   private statusIconEl: HTMLElement | null = null;
   private statusLabelEl: HTMLElement | null = null;
   private modelSel: HTMLSelectElement | null = null;
+  private presetSel: HTMLSelectElement | null = null;
   private modelStatusEl: HTMLElement | null = null;
   private refreshBtn: HTMLElement | null = null;
   private listEl: HTMLElement | null = null;
@@ -65,6 +69,10 @@ export class ImgToMdView extends ItemView {
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
     this.modelSel.addEventListener("change", () => this.deps.setModel(this.modelSel?.value ?? ""));
+    this.presetSel = modelRow.createEl("select", { cls: "img2md-preset dropdown" });
+    for (const p of this.deps.listPresets()) { const o = this.presetSel.createEl("option", { text: p.label }); o.value = p.id; }
+    this.presetSel.value = this.deps.getPreset();
+    this.presetSel.addEventListener("change", () => this.deps.setPreset(this.presetSel?.value ?? "default"));
     this.modelStatusEl = modelRow.createEl("span", { cls: "img2md-model-status" });
     this.refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
     setIcon(this.refreshBtn, "refresh-cw");

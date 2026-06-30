@@ -27,6 +27,9 @@ function mkView(over: any = {}) {
     listModels: over.listModels ?? (async () => []),
     getModel: over.getModel ?? (() => "vm"),
     setModel: over.setModel ?? vi.fn(),
+    listPresets: over.listPresets ?? (() => [{ id: "default", label: "Default" }, { id: "math", label: "Math → LaTeX" }]),
+    getPreset: over.getPreset ?? (() => "default"),
+    setPreset: over.setPreset ?? vi.fn(),
     openPath: (p: string) => calls.opened.push(p),
     copyText: over.copyText ?? ((t: string) => calls.copied.push(t)),
   };
@@ -78,6 +81,22 @@ describe("ImgToMdView — Gerüst + Liste", () => {
     btn().click();
     expect(btn().textContent).toBe("Select all");
     expect(all(view.contentEl, "img2md-check")[0].checked).toBe(false);
+  });
+  it("Preset-Dropdown rendert die Presets, Wert = getPreset, change ruft setPreset", async () => {
+    const setPreset = vi.fn();
+    const { view } = mkView({
+      getPreset: () => "math",
+      setPreset,
+      listPresets: () => [{ id: "default", label: "Default" }, { id: "math", label: "Math → LaTeX" }],
+    });
+    await view.onOpen();
+    const sel = all(view.contentEl, "img2md-preset")[0];
+    expect(sel).toBeTruthy();
+    expect((sel.children ?? []).map((o: any) => o.textContent)).toEqual(["Default", "Math → LaTeX"]);
+    expect(sel.value).toBe("math");
+    sel.value = "default";
+    (sel._listeners["change"] ?? []).forEach((cb: any) => cb());
+    expect(setPreset).toHaveBeenCalledWith("default");
   });
   it("Modell-Switcher ruft setModel bei Auswahl", async () => {
     const setModel = vi.fn();
