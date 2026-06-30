@@ -137,4 +137,27 @@ export class VisionClient {
     }
     return { content: r.content, reasoning: r.reasoning, model: r.model || this.model };
   }
+
+  /** Wie transcribeStream, aber sendet reinen TEXT (kein Bild) — für born-digital PDF-Seiten, deren
+   *  exakter Text-Layer extrahiert und vom Modell nur nach Markdown formatiert wird. */
+  async transcribeTextStream(
+    text: string, prompt: string,
+    onContent: (t: string) => void, onReasoning: (t: string) => void,
+    signal?: AbortSignal,
+  ): Promise<{ content: string; reasoning: string; model: string }> {
+    if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
+    const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: this.model, messages: [{ role: "user", content: `${prompt}\n\n${text}` }], stream: true }),
+      signal,
+    });
+    if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
+    const r = await streamSSE(res, onContent, onReasoning);
+    if (!r.content.trim() && !/^\s*data:/m.test(r.raw)) {
+      const envelope = parseErrorEnvelope(r.raw);
+      if (envelope) throw new Error(envelope);
+    }
+    return { content: r.content, reasoning: r.reasoning, model: r.model || this.model };
+  }
 }

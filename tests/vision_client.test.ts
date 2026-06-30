@@ -131,6 +131,28 @@ describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
   });
 });
 
+describe("VisionClient.transcribeTextStream (text-only)", () => {
+  it("streamt content, Body ist text-only (String-content, kein image_url)", async () => {
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_url, init) => { calls.push({ body: init?.body as string | undefined }); return Promise.resolve(streamRes(['data: {"model":"m","choices":[{"delta":{"content":"# A"}}]}\n\ndata: [DONE]\n\n'])); });
+    const got: string[] = [];
+    const r = await new VisionClient("http://x", "vm").transcribeTextStream("ROHTEXT", "Formatiere", t => got.push(t), () => {});
+    expect(got).toEqual(["# A"]);
+    expect(r).toEqual({ content: "# A", reasoning: "", model: "m" });
+    const body = JSON.parse(calls[0].body!) as { messages: { content: unknown }[]; stream: boolean };
+    expect(body.stream).toBe(true);
+    expect(body.messages[0].content).toBe("Formatiere\n\nROHTEXT");
+  });
+  it("wirft Servermeldung bei 200-Error-Body", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes(['{"error":{"message":"boom"}}'])));
+    await expect(new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {})).rejects.toThrow("boom");
+  });
+  it("wirft bei HTTP-Fehler", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
+    await expect(new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {})).rejects.toThrow("500");
+  });
+});
+
 describe("VisionClient.visionConfidence", () => {
   it("liefert 'confirmed' aus Ollama-Metadaten", async () => {
     mockHttp(() => ok({ capabilities: ["vision"] }));
