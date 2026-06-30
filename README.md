@@ -18,6 +18,7 @@
 - **Bilingual** — Obsidian's language setting (English / Deutsch) drives the UI automatically
 - **Non-destructive** — source notes are never overwritten; embeds are replaced, originals untouched
 - **Standalone files** — open a PDF or image directly in Obsidian and the sidebar treats *that file* as the source, no surrounding note required
+- **Prompt presets** — a sidebar picker next to the model: a "Default" preset (your editable prompt) plus fixed modes for tables → Markdown, handwriting, math → LaTeX, source code and image description; the choice is sticky. With a local vision model the prompt is the main quality lever
 - **Endpoint fallback list** — configure an ordered list of Vision endpoints; the plugin pings them in order and uses the first reachable one automatically, so a single synced config works across devices and networks
 
 ### In detail

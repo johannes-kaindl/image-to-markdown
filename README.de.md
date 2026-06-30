@@ -18,6 +18,7 @@
 - **Zweisprachig** — Obsidians Spracheinstellung (English / Deutsch) steuert die Oberfläche automatisch
 - **Nicht-destruktiv** — Quellnotizen werden nie überschrieben; Embeds werden ersetzt, Originale bleiben erhalten
 - **Eigenständige Dateien** — eine PDF oder ein Bild direkt in Obsidian öffnen, und die Sidebar behandelt *diese Datei* als Quelle — keine umgebende Notiz nötig
+- **Prompt-Presets** — ein Wähler neben dem Modell in der Sidebar: ein „Standard"-Preset (dein editierbarer Prompt) plus feste Modi für Tabellen → Markdown, Handschrift, Mathe → LaTeX, Quellcode und Bildbeschreibung; die Wahl bleibt erhalten. Bei einem lokalen Vision-Modell ist der Prompt der wichtigste Qualitätshebel
 - **Endpoint-Fallback-Liste** — eine geordnete Liste von Vision-Endpunkten konfigurieren; das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren automatisch — eine einzige gesyncte Config funktioniert auf allen Geräten und Netzen
 
 ### Im Detail

@@ -6,6 +6,14 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Prompt-Presets:** Neben dem Modell-Picker in der Sidebar ein Preset-Wähler — „Standard" (dein
+  editierbarer Prompt) plus feste Modi für **Tabellen → Markdown**, **Handschrift**, **Mathe → LaTeX**,
+  **Quellcode** und **Bild beschreiben**. Die Wahl bleibt erhalten (sticky). Bei einem lokalen
+  Vision-Modell ist der Prompt der wichtigste Qualitätshebel — die Presets schalten den Modus pro Lauf
+  ohne Settings-Umweg um.
+
 ## [0.6.1] — 2026-06-28
 
 ### Behoben
