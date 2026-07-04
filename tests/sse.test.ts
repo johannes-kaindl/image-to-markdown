@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseSSE, streamSSE } from "../src/sse";
+import { parseSSE } from "../src/vendor/kit/sse";
+import { streamSSE } from "../src/sse";
 
 function streamRes(chunks: string[]): any {
   let i = 0;
