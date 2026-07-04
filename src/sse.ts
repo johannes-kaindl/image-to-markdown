@@ -1,4 +1,4 @@
-import { ThinkSplitter } from "./think_splitter";
+import { ThinkSplitter } from "./vendor/kit/think";
 
 /** Akkumuliert OpenAI-SSE-Deltas (content + reasoning_content) aus einem (Teil-)Buffer;
  *  unvollständige letzte Zeile → rest. `model` = erstes im Buffer gesehenes Chunk-`model`-Feld.
