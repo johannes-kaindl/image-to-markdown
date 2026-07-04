@@ -36,7 +36,6 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
-    "obsidian-kit": "git+https://codeberg.org/jkaindl/obsidian-kit.git#0.2.0",
     "pdfjs-dist": "4.10.38"
   }
 }
