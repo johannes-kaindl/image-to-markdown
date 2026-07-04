@@ -1,8 +1,8 @@
 import { streamSSE } from "./sse";
 import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
-import { normalizeEndpoint, resolveActiveEndpoint } from "obsidian-kit/pure";
+import { normalizeEndpoint, resolveActiveEndpoint } from "./vendor/kit/endpoint";
 
-// normalizeEndpoint + resolveActiveEndpoint stammen aus obsidian-kit (entdoppelt) — hier
+// normalizeEndpoint + resolveActiveEndpoint sind aus obsidian-kit#0.3.0 vendored — hier
 // re-exportiert, damit main.ts/settings.ts/Tests sie weiterhin aus ./vision_client beziehen.
 export { normalizeEndpoint, resolveActiveEndpoint };
 
