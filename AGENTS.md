@@ -159,3 +159,10 @@ Stand 2026-06-23 — **Release 0.3.0**. Verbleibende bewusste, begründete Abwei
 Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Diátaxis-Manual `docs/manual/`), CORE-META-06 (`CONTRIBUTING.md`/`SECURITY.md`), CORE-META-09 (`README.de.md`), PROF-OBS-02 (`npm run deploy`), PROF-OBS-07 (UI-Lokalisierung EN/DE). Codeberg-`origin` + GitHub-Push-Mirror aktiv (CORE-GIT-01).
 
 Erfüllt mit 0.3.0 (2026-06-23): CORE-META-02/03 (Badge-Zeile/Hero + Feature-Screenshots) — README mit Badge 1.8.7, Aufnahme-Vertrag (Screenshots) auf aktuellen Stand (PDF-/Idempotenz-Shots, EN-UI, Slider).
+
+## Dach-Kontext (obsidian-plugins)
+
+Dieses Repo liegt unter dem Koordinations-Dach `/Users/Shared/code/obsidian-plugins/`.
+**Vor dem Lösen eines Problems:** `../AGENTS.md` (Kit-first-Regel) und `../REGISTRY.md`
+(Lösungs-Registry) prüfen — viele Probleme sind in Nachbar-Plugins oder im
+`obsidian-kit` bereits gelöst.

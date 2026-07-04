@@ -18,7 +18,7 @@ Quality-of-Life-Verbesserungen plus den einzigen harten Submission-Blocker:
    (für ein Vision-Transkriptions-Plugin ein zentrales Signal — Text-only-Modell → leere/kaputte
    Transkripte ohne Vorwarnung).
 
-QoL-Vorlage ist das Schwester-Plugin **vault-rag** (`/Users/Shared/code/vault-rag`), dessen
+QoL-Vorlage ist das Schwester-Plugin **vault-rag** (`/Users/Shared/code/obsidian-plugins/vault-rag`), dessen
 `src/capabilities.ts` + `src/settings.ts` die erprobten Muster liefern. Ansatz: **portieren,
 vision-fokussiert, „kopieren statt teilen"** (etablierter Präzedenzfall für `sse.ts`/`think_splitter.ts`).
 
