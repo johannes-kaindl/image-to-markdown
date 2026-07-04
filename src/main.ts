@@ -1,5 +1,6 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints } from "./settings";
+import { mergeSettings } from "./vendor/kit/settings";
 import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint } from "./vision_client";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
@@ -26,7 +27,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     setStreamFetch(obsidianStreamFetch);
     setLang(pickLang(getLanguage()));
     const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
-    this.settings = Object.assign({}, defaultSettings(), saved ?? {});
+    this.settings = mergeSettings(defaultSettings(), saved);
     const migratedEps = migrateEndpoints(saved);
     this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
     if (!isPromptPreset(this.settings.promptPreset)) this.settings.promptPreset = "default";
