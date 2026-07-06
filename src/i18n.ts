@@ -140,6 +140,10 @@ const EN: Dict = {
     "Format the following text, extracted from a PDF page, into clean Markdown. Preserve the exact " +
     "wording — do not rephrase, add or omit content; only add structure (headings, lists, tables, " +
     "emphasis). Output only the Markdown, no comments.",
+  "notice.overwriteSkipped": "Skipped — existing note kept",
+  "diff.modal.title": "Overwrite {0}?",
+  "diff.overwrite": "Overwrite",
+  "diff.cancel": "Cancel",
 };
 
 const DE: Dict = {
@@ -265,6 +269,10 @@ const DE: Dict = {
     "Formatiere den folgenden, aus einer PDF-Seite extrahierten Text zu sauberem Markdown. Erhalte den " +
     "Wortlaut exakt — formuliere nichts um, füge nichts hinzu, lass nichts weg; ergänze nur Struktur " +
     "(Überschriften, Listen, Tabellen, Hervorhebungen). Gib nur das Markdown aus, keine Kommentare.",
+  "notice.overwriteSkipped": "Übersprungen — bestehende Notiz behalten",
+  "diff.modal.title": "{0} überschreiben?",
+  "diff.overwrite": "Überschreiben",
+  "diff.cancel": "Abbrechen",
 };
 
 /** Exportiert für den EN/DE-Paritätstest; zur Laufzeit nur über t() lesen. */

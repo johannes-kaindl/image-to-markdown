@@ -62,4 +62,10 @@ describe("i18n", () => {
     const de = Object.keys(STRINGS.de).sort();
     expect(de).toEqual(en);
   });
+
+  it("Diff-Keys vorhanden (EN)", () => {
+    setLang("en");
+    expect(t("diff.overwrite")).toBe("Overwrite");
+    expect(t("diff.modal.title", "note")).toContain("note");
+  });
 });
