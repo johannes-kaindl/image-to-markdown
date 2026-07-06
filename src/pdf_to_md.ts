@@ -1,5 +1,6 @@
-import { ImgToMdIO, replaceEmbed, transcriptNotePath, basenameNoExt, rewriteTranscript } from "./img_to_md";
+import { ImgToMdIO, replaceEmbed, transcriptNotePath, basenameNoExt, rewriteTranscript, extractTranscriptBody } from "./img_to_md";
 import { t } from "./i18n";
+import { diffLines } from "./diff";
 
 export interface PdfPageTranscript { page: number; text: string }
 
@@ -88,7 +89,7 @@ export async function writePdfTranscript(
   separator: PdfPageSeparator,
   overwritePath?: string,
   embed = true,
-  opts?: { selfSource?: boolean; destDir?: string; range?: { from: number; to: number } },
+  opts?: { selfSource?: boolean; destDir?: string; range?: { from: number; to: number }; confirm?: boolean },
 ): Promise<{ path: string | null }> {
   const self = opts?.selfSource === true;
   const range = opts?.range;
@@ -104,6 +105,14 @@ export async function writePdfTranscript(
   if (overwritePath) {
     const old = await io.readNote(overwritePath);
     const body = buildPdfBody(bodyPages, separator, range);
+    if (opts?.confirm && io.confirmOverwrite) {
+      const diff = diffLines(extractTranscriptBody(old), body.trim());
+      const changed = diff.some(d => d.kind !== "ctx");
+      if (changed && !(await io.confirmOverwrite({ path: overwritePath, diff }))) {
+        io.notify(t("notice.overwriteSkipped"));
+        return { path: null };
+      }
+    }
     await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body, pages: pagesStr }));
     return { path: overwritePath };
   }

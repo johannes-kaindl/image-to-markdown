@@ -224,4 +224,45 @@ describe("writePdfTranscript", () => {
     expect(notes.get("doc (PDF transcript).md")).toContain("%% Page 1 %%");
     expect(notes.get("q.md")).toBe("![[doc.pdf]]");                 // kein Embed-Ersatz
   });
+
+  describe("confirmOverwrite-Gate", () => {
+    function ioWithConfirm(confirmOverwrite: (ctx: { path: string; diff: unknown[] }) => Promise<boolean>) {
+      const notes = new Map<string, string>([
+        ["q.md", "![[doc.pdf]]"],
+        ["doc (PDF transcript).md", `---\nsource_pdf: "[[doc.pdf]]"\ntranscribed_by: "alt"\npages: "1-1"\n---\n![[doc.pdf]]\n\nALT\n`],
+      ]);
+      const writes: string[] = [];
+      const io: any = {
+        date: () => "2026-06-29",
+        readNote: async (p: string) => notes.get(p) ?? "",
+        writeNote: async (p: string, c: string) => { writes.push(p); notes.set(p, c); },
+        createNote: async (p: string, c: string) => { notes.set(p, c); },
+        noteExists: (p: string) => notes.has(p),
+        resolveImage: (l: string) => ({ path: l, ext: "pdf" }),
+        notify: () => {},
+        confirmOverwrite,
+      };
+      return { io, notes, writes };
+    }
+
+    it("confirm=true, Callback liefert false → schreibt nicht, path null", async () => {
+      const { io, notes, writes } = ioWithConfirm(async () => false);
+      const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
+        [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
+        { range: { from: 1, to: 1 }, confirm: true });
+      expect(r.path).toBeNull();
+      expect(writes).not.toContain("doc (PDF transcript).md");
+      expect(notes.get("doc (PDF transcript).md")).toContain("ALT");   // unverändert
+    });
+
+    it("confirm=false (Flag) → kein Callback, schreibt direkt", async () => {
+      let called = false;
+      const { io } = ioWithConfirm(async () => { called = true; return false; });
+      const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
+        [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
+        { range: { from: 1, to: 1 }, confirm: false });
+      expect(called).toBe(false);
+      expect(r.path).toBe("doc (PDF transcript).md");
+    });
+  });
 });
