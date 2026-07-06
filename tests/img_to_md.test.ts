@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody } from "../src/img_to_md";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -307,6 +307,19 @@ describe("rewriteTranscript", () => {
     const out = rewriteTranscript(old, { model: "neu", sourceLink: "d.pdf", body: "Y", pages: "1-5" });
     expect(out).toContain('pages: "1-5"');
     expect(out).not.toContain('pages: "1-2"');
+  });
+});
+
+describe("extractTranscriptBody", () => {
+  it("strippt Frontmatter + Embed-Zeile, gibt reinen Body", () => {
+    const note = `---\nsource_image: "[[b.png]]"\ntranscribed_by: "vm"\n---\n![[b.png]]\n\nZeile 1\nZeile 2\n`;
+    expect(extractTranscriptBody(note)).toBe("Zeile 1\nZeile 2");
+  });
+  it("ohne Frontmatter → nur Embed-Zeile strippen", () => {
+    expect(extractTranscriptBody(`![[b.png]]\n\nNur Text`)).toBe("Nur Text");
+  });
+  it("ohne Embed-Zeile → Body unverändert (getrimmt)", () => {
+    expect(extractTranscriptBody(`Kein Embed hier\n`)).toBe("Kein Embed hier");
   });
 });
 

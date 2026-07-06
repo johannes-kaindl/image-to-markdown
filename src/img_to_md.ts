@@ -99,6 +99,15 @@ export function rewriteTranscript(old: string, o: { model: string; sourceLink: s
   return `---\n${frontmatter}\n---\n![[${o.sourceLink}]]\n\n${o.body}\n`;
 }
 
+/** Extrahiert den reinen Transkript-Text: entfernt das ---…----Frontmatter und die führende
+ *  ![[…]]-Embed-Zeile (samt Leerzeile). Für den Diff — Frontmatter (transcribed_by/pages) und die
+ *  unveränderte Embed-Zeile sind Rauschen. */
+export function extractTranscriptBody(note: string): string {
+  let s = note.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  s = s.replace(/^!\[\[[^\]]*\]\]\n?/, "");
+  return s.trim();
+}
+
 /** Ersetzt alle Vorkommen des Bild-Embeds (literal) durch einen Embed der neuen Notiz. */
 export function replaceEmbed(content: string, raw: string, newBasename: string): string {
   return content.split(raw).join(`![[${newBasename}]]`);
