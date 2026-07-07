@@ -225,7 +225,7 @@ describe("writePdfTranscript", () => {
     expect(notes.get("q.md")).toBe("![[doc.pdf]]");                 // kein Embed-Ersatz
   });
 
-  describe("confirmOverwrite-Gate", () => {
+  describe("confirmOverwrite-Gate (content-aware, v1.1)", () => {
     function ioWithConfirm(confirmOverwrite: (ctx: { path: string; diff: unknown[] }) => Promise<boolean>) {
       const notes = new Map<string, string>([
         ["q.md", "![[doc.pdf]]"],
@@ -245,24 +245,48 @@ describe("writePdfTranscript", () => {
       return { io, notes, writes };
     }
 
-    it("confirm=true, Callback liefert false → schreibt nicht, path null", async () => {
+    it("kein knownBody (Erstberührung), Callback liefert false → schreibt nicht, path/body null", async () => {
       const { io, notes, writes } = ioWithConfirm(async () => false);
       const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
         [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
-        { range: { from: 1, to: 1 }, confirm: true });
+        { range: { from: 1, to: 1 } });
       expect(r.path).toBeNull();
+      expect(r.body).toBeNull();
       expect(writes).not.toContain("doc (PDF transcript).md");
-      expect(notes.get("doc (PDF transcript).md")).toContain("ALT");   // unverändert
+      expect(notes.get("doc (PDF transcript).md")).toContain("ALT");
     });
 
-    it("confirm=false (Flag) → kein Callback, schreibt direkt", async () => {
+    it("knownBody === on-disk-Body (Retry-Continuation) → kein Callback, schreibt direkt", async () => {
       let called = false;
       const { io } = ioWithConfirm(async () => { called = true; return false; });
       const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
         [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
-        { range: { from: 1, to: 1 }, confirm: false });
+        { range: { from: 1, to: 1 }, knownBody: "ALT" });
       expect(called).toBe(false);
       expect(r.path).toBe("doc (PDF transcript).md");
+      // separator="comment" → Body enthält den Seiten-Marker (siehe Kommentar im nächsten Test).
+      expect(r.body).toBe("%% Page 1 %%\n\nNEU");
+    });
+
+    it("knownBody ≠ on-disk-Body (manueller Edit dazwischen) → re-gated, Callback aufgerufen", async () => {
+      let seen: any = null;
+      const { io, notes } = ioWithConfirm(async (ctx) => { seen = ctx; return true; });
+      const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
+        [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
+        { range: { from: 1, to: 1 }, knownBody: "ANDERS" });
+      expect(seen).not.toBeNull();
+      // Body wird mit separator="comment" gebaut → enthält den Seiten-Marker "%% Page 1 %%" + Leerzeile
+      // vor dem eigentlichen Inhalt (buildPdfBody/pagePrefix, unverändert seit v1). Der Brief-Entwurf
+      // hatte hier nur "ALT"→"NEU" erwartet; das wäre nur mit separator="none" korrekt. Angepasst an
+      // das tatsächliche (korrekte) Verhalten von buildPdfBody, siehe Task-3-Report.
+      expect(seen.diff).toEqual([
+        { kind: "del", text: "ALT" },
+        { kind: "add", text: "%% Page 1 %%" },
+        { kind: "add", text: "" },
+        { kind: "add", text: "NEU" },
+      ]);
+      expect(r.path).toBe("doc (PDF transcript).md");
+      expect(notes.get("doc (PDF transcript).md")).toContain("NEU");
     });
   });
 });

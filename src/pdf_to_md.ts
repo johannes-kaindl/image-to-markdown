@@ -89,12 +89,12 @@ export async function writePdfTranscript(
   separator: PdfPageSeparator,
   overwritePath?: string,
   embed = true,
-  opts?: { selfSource?: boolean; destDir?: string; range?: { from: number; to: number }; confirm?: boolean },
-): Promise<{ path: string | null }> {
+  opts?: { selfSource?: boolean; destDir?: string; range?: { from: number; to: number }; knownBody?: string },
+): Promise<{ path: string | null; body: string | null }> {
   const self = opts?.selfSource === true;
   const range = opts?.range;
   const withContent = pages.filter(p => p.content.trim()).sort((a, b) => a.page - b.page);
-  if (!withContent.length) return { path: null };   // alles leer/fehlgeschlagen → keine reine Platzhalter-Notiz
+  if (!withContent.length) return { path: null, body: null };   // alles leer/fehlgeschlagen → keine reine Platzhalter-Notiz
   const model = withContent.find(p => p.model)?.model ?? "";
   // pages:-Frontmatter aus der GEWÄHLTEN Range (ehrlich), sonst aus den vorhandenen Seiten (Alt-Verhalten).
   const rangeFrom = range ? range.from : withContent[0].page;
@@ -102,19 +102,20 @@ export async function writePdfTranscript(
   const pagesStr = `${rangeFrom}-${rangeTo}`;
   // Bei range alle Seiten durchreichen (buildPdfBody füllt Lücken mit Platzhaltern); sonst nur Inhalt.
   const bodyPages = (range ? pages : withContent).map(p => ({ page: p.page, text: p.content }));
+  const body = buildPdfBody(bodyPages, separator, range);
   if (overwritePath) {
     const old = await io.readNote(overwritePath);
-    const body = buildPdfBody(bodyPages, separator, range);
-    if (opts?.confirm && io.confirmOverwrite) {
+    const alreadyMatches = opts?.knownBody !== undefined && extractTranscriptBody(old) === opts.knownBody;
+    if (!alreadyMatches && io.confirmOverwrite) {
       const diff = diffLines(extractTranscriptBody(old), body.trim());
       const changed = diff.some(d => d.kind !== "ctx");
       if (changed && !(await io.confirmOverwrite({ path: overwritePath, diff }))) {
         io.notify(t("notice.overwriteSkipped"));
-        return { path: null };
+        return { path: null, body: null };
       }
     }
     await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body, pages: pagesStr }));
-    return { path: overwritePath };
+    return { path: overwritePath, body: body.trim() };
   }
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
   const pdfPath = self ? sourcePath : (io.resolveImage(source.link, sourcePath)?.path ?? source.link);
@@ -129,5 +130,5 @@ export async function writePdfTranscript(
     const replaced = replaceEmbed(before, source.raw, basenameNoExt(notePath));
     if (replaced !== before) await io.writeNote(sourcePath, replaced);
   }
-  return { path: notePath };
+  return { path: notePath, body: body.trim() };
 }
