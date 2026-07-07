@@ -88,7 +88,7 @@ export function buildTranscriptNote(o: { imageLink: string; sourceName?: string;
  *  und den Body. Quelle/Quellnotiz/created bleiben damit unverändert. */
 export function rewriteTranscript(old: string, o: { model: string; sourceLink: string; body: string; pages?: string }): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
-  const fm = /^---\n([\s\S]*?)\n---/.exec(old);
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(old);
   // Fallback nur theoretisch — Override wirkt ausschließlich auf unsere Transkript-Notizen, die immer Frontmatter haben.
   let frontmatter = fm ? fm[1] : `transcribed_by: "${esc(o.model)}"`;
   frontmatter = frontmatter.replace(/^transcribed_by:.*$/m, `transcribed_by: "${esc(o.model)}"`);
@@ -104,8 +104,8 @@ export function rewriteTranscript(old: string, o: { model: string; sourceLink: s
  *  ![[…]]-Embed-Zeile (samt Leerzeile). Für den Diff — Frontmatter (transcribed_by/pages) und die
  *  unveränderte Embed-Zeile sind Rauschen. */
 export function extractTranscriptBody(note: string): string {
-  let s = note.replace(/^---\n[\s\S]*?\n---\n?/, "");
-  s = s.replace(/^!\[\[[^\]]*\]\]\n?/, "");
+  let s = note.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  s = s.replace(/^!\[\[[^\]]*\]\]\r?\n?/, "");
   return s.trim();
 }
 

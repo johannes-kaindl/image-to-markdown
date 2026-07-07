@@ -359,6 +359,15 @@ describe("rewriteTranscript", () => {
     expect(out).toContain('pages: "1-5"');
     expect(out).not.toContain('pages: "1-2"');
   });
+  it("CRLF-Notiz: erhält Frontmatter trotz \\r\\n (kein Datenverlust)", () => {
+    const old = `---\r\nsource_image: "[[b.png]]"\r\nsource_note: "[[Quelle]]"\r\ncreated: 2026-01-01\r\ntranscribed_by: "alt"\r\n---\r\n![[b.png]]\r\n\r\nALTER TEXT\r\n`;
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEUER TEXT" });
+    expect(out).toContain('source_image: "[[b.png]]"');
+    expect(out).toContain('source_note: "[[Quelle]]"');
+    expect(out).toContain("created: 2026-01-01");
+    expect(out).toContain('transcribed_by: "neu"');
+    expect(out).not.toContain('transcribed_by: "alt"');
+  });
 });
 
 describe("extractTranscriptBody", () => {
@@ -371,6 +380,10 @@ describe("extractTranscriptBody", () => {
   });
   it("ohne Embed-Zeile → Body unverändert (getrimmt)", () => {
     expect(extractTranscriptBody(`Kein Embed hier\n`)).toBe("Kein Embed hier");
+  });
+  it("CRLF-Notiz: strippt Frontmatter + Embed-Zeile trotz \\r\\n", () => {
+    const note = `---\r\nsource_image: "[[b.png]]"\r\ntranscribed_by: "vm"\r\n---\r\n![[b.png]]\r\n\r\nZeile 1\r\nZeile 2\r\n`;
+    expect(extractTranscriptBody(note)).toBe("Zeile 1\r\nZeile 2");
   });
 });
 
