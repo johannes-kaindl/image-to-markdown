@@ -181,7 +181,7 @@ export interface ImgToMdIO {
  *  kein replaceEmbed, keine source_note, Ablage unter opts.destDir. */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; confirm?: boolean }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; knownBody?: string }[],
   opts?: { selfSource?: boolean; destDir?: string },
 ): Promise<{ paths: (string | null)[] }> {
   const self = opts?.selfSource === true;
@@ -195,7 +195,8 @@ export async function writeTranscripts(
     if (!transcript) { paths.push(null); continue; }
     if (e.overwritePath) {
       const old = await io.readNote(e.overwritePath);
-      if (e.confirm && io.confirmOverwrite) {
+      const alreadyMatches = e.knownBody !== undefined && extractTranscriptBody(old) === e.knownBody;
+      if (!alreadyMatches && io.confirmOverwrite) {
         const diff = diffLines(extractTranscriptBody(old), transcript);
         const changed = diff.some(d => d.kind !== "ctx");
         if (changed && !(await io.confirmOverwrite({ path: e.overwritePath, diff }))) {
