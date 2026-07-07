@@ -78,8 +78,10 @@
 .img2md-diff-line { display: flex; gap: var(--size-4-1); white-space: pre-wrap; }
 .img2md-diff-marker { width: 1ch; flex: 0 0 auto; color: var(--text-faint); }
 .img2md-diff-add { background: var(--background-modifier-success); color: var(--text-normal); }
-.img2md-diff-add .img2md-diff-marker { color: var(--text-success); }
 .img2md-diff-del { background: var(--background-modifier-error); color: var(--text-normal); }
-.img2md-diff-del .img2md-diff-marker { color: var(--text-error); }
+/* Marker auf add/del in Normaltext-Farbe + fett: farbunabhängiges +/-/-Signal, das nicht mit
+   dem gleichfarbigen Hintergrund verschmilzt (a11y bei Rot-Grün-Schwäche). */
+.img2md-diff-add .img2md-diff-marker,
+.img2md-diff-del .img2md-diff-marker { color: var(--text-normal); font-weight: var(--font-bold); }
 .img2md-diff-ctx { color: var(--text-muted); }
 .img2md-diff-actions { display: flex; justify-content: flex-end; gap: var(--size-4-2); margin-top: var(--size-4-2); }

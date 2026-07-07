@@ -6,13 +6,16 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-07-07
+
 ### Hinzugefügt
 
 - **Diff vor dem Überschreiben:** Überschreibt eine Transkription eine bereits vorhandene
   Transkript-Notiz (opt-in „Override"), zeigt ein Dialog vorher einen zeilenweisen Diff (alt ↔ neu)
   und lässt dich bestätigen oder abbrechen — ein Sicherheitsnetz für die einzige Operation, die
   vorhandene Notizen ersetzt. Abbrechen lässt die alte Notiz unangetastet. In-Session-Wiederholungen
-  (z. B. fehlgeschlagene PDF-Seiten nachtragen) laufen weiterhin ohne Rückfrage.
+  (z. B. fehlgeschlagene PDF-Seiten nachtragen) laufen weiterhin ohne Rückfrage. Die `+`/`-`-Marker
+  im Diff sind farbunabhängig lesbar (Barrierefreiheit bei Rot-Grün-Sehschwäche).
 
 ## [0.8.0] — 2026-06-30
 
