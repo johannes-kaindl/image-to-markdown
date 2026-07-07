@@ -1,5 +1,6 @@
 import { t } from "./i18n";
 import type { ImgItem } from "./img_to_md_state";
+import { diffLines, type DiffLine } from "./diff";
 
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
@@ -99,6 +100,15 @@ export function rewriteTranscript(old: string, o: { model: string; sourceLink: s
   return `---\n${frontmatter}\n---\n![[${o.sourceLink}]]\n\n${o.body}\n`;
 }
 
+/** Extrahiert den reinen Transkript-Text: entfernt das ---…----Frontmatter und die führende
+ *  ![[…]]-Embed-Zeile (samt Leerzeile). Für den Diff — Frontmatter (transcribed_by/pages) und die
+ *  unveränderte Embed-Zeile sind Rauschen. */
+export function extractTranscriptBody(note: string): string {
+  let s = note.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  s = s.replace(/^!\[\[[^\]]*\]\]\n?/, "");
+  return s.trim();
+}
+
 /** Ersetzt alle Vorkommen des Bild-Embeds (literal) durch einen Embed der neuen Notiz. */
 export function replaceEmbed(content: string, raw: string, newBasename: string): string {
   return content.split(raw).join(`![[${newBasename}]]`);
@@ -159,6 +169,7 @@ export interface ImgToMdIO {
   readImageDataUrl(path: string, ext: string): Promise<string>;
   transcribe(dataUrl: string): Promise<{ content: string; model: string }>;
   notify(msg: string): void;
+  confirmOverwrite?(ctx: { path: string; diff: DiffLine[] }): Promise<boolean>;
 }
 
 /** Schreibt mehrere Transkripte gebündelt: im Nicht-selfSource-Pfad Quelle EINMAL lesen,
@@ -170,20 +181,29 @@ export interface ImgToMdIO {
  *  kein replaceEmbed, keine source_note, Ablage unter opts.destDir. */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; confirm?: boolean }[],
   opts?: { selfSource?: boolean; destDir?: string },
-): Promise<{ paths: string[] }> {
+): Promise<{ paths: (string | null)[] }> {
   const self = opts?.selfSource === true;
   const destDir = opts?.destDir;
   const before = self ? "" : await io.readNote(sourcePath);
   let content = before;
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
-  const paths: string[] = [];
+  const paths: (string | null)[] = [];
   for (const e of entries) {
     const transcript = e.content.trim();
-    if (!transcript) continue;
+    if (!transcript) { paths.push(null); continue; }
     if (e.overwritePath) {
       const old = await io.readNote(e.overwritePath);
+      if (e.confirm && io.confirmOverwrite) {
+        const diff = diffLines(extractTranscriptBody(old), transcript);
+        const changed = diff.some(d => d.kind !== "ctx");
+        if (changed && !(await io.confirmOverwrite({ path: e.overwritePath, diff }))) {
+          io.notify(t("notice.overwriteSkipped"));
+          paths.push(null);
+          continue;
+        }
+      }
       await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: transcript }));
       paths.push(e.overwritePath);
       continue;

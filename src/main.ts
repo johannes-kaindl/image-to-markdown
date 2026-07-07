@@ -11,6 +11,7 @@ import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
 import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
+import { DiffModal } from "./diff_modal";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -84,6 +85,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
       transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt)),
       notify: (m) => { new Notice(m); },
+      confirmOverwrite: (ctx) => new Promise<boolean>((resolve) => new DiffModal(this.app, ctx.path, ctx.diff, resolve).open()),
     };
   }
 
@@ -183,13 +185,13 @@ export default class ImageToMarkdownPlugin extends Plugin {
       writeTranscripts: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
         const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
-        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed })), { selfSource: self, destDir });
+        const { paths } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed, confirm: e.confirm })), { selfSource: self, destDir });
         return paths;
       },
-      writePdf: async (sourcePath, raw, link, pages, overwritePath, embed, range) => {
+      writePdf: async (sourcePath, raw, link, pages, overwritePath, embed, range, confirm) => {
         const self = classifySource(extOf(sourcePath)) !== null;
         const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
-        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir, range });
+        const { path } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir, range, confirm });
         return path;
       },
       connectionStatus: async () => { await this.resolveAndReconnect(); return { ok: this.activeEndpoint !== null, endpoint: this.activeEndpoint }; },

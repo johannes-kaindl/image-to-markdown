@@ -24,8 +24,8 @@ export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
   scan: (sourcePath: string) => Promise<ImgItem[]>;
   transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
-  writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string }[]) => Promise<string[]>;
-  writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }) => Promise<string | null>;
+  writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; confirm?: boolean }[]) => Promise<(string | null)[]>;
+  writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }, confirm?: boolean) => Promise<string | null>;
   connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;
   listModels: () => Promise<string[]>;
   getModel: () => string;
@@ -54,6 +54,10 @@ export class ImgToMdView extends ItemView {
   private retryAllBtn: HTMLElement | null = null;
   private controller: AbortController | null = null;
   private running = false;
+  /** Notizen-Pfade, die diese Session bereits selbst geschrieben hat — Diff-Confirm-Gate feuert
+   *  nur beim ERSTEN Override einer aus dem Scan vorgefundenen (fremden) Notiz, nicht bei
+   *  session-eigenen Folge-Writes (z.B. PDF-Retry, der dieselbe Notiz erneut überschreibt). */
+  private sessionOwned = new Set<string>();
 
   constructor(leaf: WorkspaceLeaf, private deps: ImgToMdViewDeps) { super(leaf); }
   getViewType(): string { return VIEW_TYPE_IMGMD; }
@@ -404,12 +408,15 @@ export class ImgToMdView extends ItemView {
    *  ein späterer kompletter Override sie via Partition wieder einbezieht. */
   private async writePdfGroup(path: string, g: PdfGroup): Promise<void> {
     if (g.pending || !g.pages.length) return;
+    const op = g.item.existingTranscriptPath;
+    const confirm = !!op && !this.sessionOwned.has(op);
     const created = await this.deps.writePdf(
       path, g.raw, g.link,
       g.pages.map(p => ({ page: p.page, content: p.content.trim(), model: p.model })),
-      g.item.existingTranscriptPath, g.item.embed, g.range,
+      g.item.existingTranscriptPath, g.item.embed, g.range, confirm,
     );
     if (!created) return;
+    this.sessionOwned.add(created);
     if (!g.item.existingTranscriptPath) g.item.existingTranscriptPath = created;
     if (!g.failedPages.length) g.cardIndices.forEach(j => this.state.markWritten(j, created));
   }
@@ -422,8 +429,10 @@ export class ImgToMdView extends ItemView {
       const g = partitionDoneCards(this.state.cards).pdfs.find(x => x.raw === card.item.raw);
       if (g) await this.writePdfGroup(path, g);
     } else {
-      const [created] = await this.deps.writeTranscripts(path, [{ item: card.item, content: card.text.trim(), model: card.model }]);
-      if (created) this.state.markWritten(i, created);
+      const op = card.item.existingTranscriptPath;
+      const confirm = !!op && !this.sessionOwned.has(op);
+      const [created] = await this.deps.writeTranscripts(path, [{ item: card.item, content: card.text.trim(), model: card.model, confirm }]);
+      if (created) { this.sessionOwned.add(created); this.state.markWritten(i, created); }
     }
     this.updateAllCards();
     await this.rescan();
@@ -434,9 +443,12 @@ export class ImgToMdView extends ItemView {
     if (!path) return;
     const part = partitionDoneCards(this.state.cards);
     if (part.images.length) {
-      const entries = part.images.map(x => ({ item: x.card.item, content: x.card.text.trim(), model: x.card.model }));
+      const entries = part.images.map(x => {
+        const op = x.card.item.existingTranscriptPath;
+        return { item: x.card.item, content: x.card.text.trim(), model: x.card.model, confirm: !!op && !this.sessionOwned.has(op) };
+      });
       const paths = await this.deps.writeTranscripts(path, entries);
-      part.images.forEach((x, k) => { if (paths[k]) this.state.markWritten(x.cardIndex, paths[k]); });
+      part.images.forEach((x, k) => { const p = paths[k]; if (p) { this.sessionOwned.add(p); this.state.markWritten(x.cardIndex, p); } });
     }
     for (const g of part.pdfs) await this.writePdfGroup(path, g);
     this.updateAllCards();

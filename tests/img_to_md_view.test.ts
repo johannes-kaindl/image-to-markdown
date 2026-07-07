@@ -339,7 +339,7 @@ describe("ImgToMdView — Notiz anlegen", () => {
     all(view.contentEl, "img2md-write")[0].click();
     await Promise.resolve(); await Promise.resolve();
     expect(calls.written.length).toBe(1);
-    expect(calls.written[0]).toEqual([{ item: ITEMS[0], content: "Hallo", model: "vm" }]);
+    expect(calls.written[0]).toEqual([{ item: ITEMS[0], content: "Hallo", model: "vm", confirm: false }]);
     expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("foto.md");
   });
   it("'angelegt'-Zeile öffnet die Notiz per Klick", async () => {
@@ -589,5 +589,43 @@ describe("ImgToMdView — PDF", () => {
     expect(all(view.contentEl, "img2md-written").length).toBe(0);
     expect(all(view.contentEl, "img2md-error").length).toBe(2);
     expect(all(view.contentEl, "img2md-retry").length).toBe(2);
+  });
+});
+
+describe("ImgToMdView — Diff-Confirm (Task 7)", () => {
+  it("Override-Erst-Write setzt confirm=true; Folge-Retry confirm=false (session-owned)", async () => {
+    const item: ImgItem = { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "b (transcript).md" };
+    const confirms: (boolean | undefined)[] = [];
+    const { view } = mkView({
+      scan: async () => [item],
+      writeTranscripts: async (_sp: string, entries: any[]) => { confirms.push(entries[0].confirm); return ["b (transcript).md"]; },
+    });
+    await view.onOpen();
+    // Override-Item: default abgewählt (existingTranscriptPath) → wie im bestehenden "vorhandenes
+    // Transkript"-Test erst selektieren (Checkbox-change), bevor run() die Karte erzeugt.
+    const cb = all(view.contentEl, "img2md-check")[0];
+    (cb._listeners["change"] ?? []).forEach((h: any) => h());
+    await view.run();
+    await view.writeOne(0);
+    (view as any).state.cards[0].status = "done";   // simulierter zweiter Write derselben Notiz
+    await view.writeOne(0);
+    expect(confirms).toEqual([true, false]);
+  });
+
+  it("PDF-Override reicht confirm=true beim ersten Write, false beim Retry", async () => {
+    const item: ImgItem = { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 1, range: { from: 1, to: 1 }, existingTranscriptPath: "doc (PDF transcript).md" };
+    const confirms: (boolean | undefined)[] = [];
+    const writePdf = async (_sp: string, _raw: string, _link: string, _pages: any[], _ow?: string, _embed?: boolean, _range?: any, confirm?: boolean) => {
+      confirms.push(confirm); return "doc (PDF transcript).md";
+    };
+    const { view } = mkView({ scan: async () => [item], writePdf });
+    await view.onOpen();
+    const cb = all(view.contentEl, "img2md-check")[0];
+    (cb._listeners["change"] ?? []).forEach((h: any) => h());
+    await view.run();
+    await view.writeAll();
+    (view as any).state.cards[0].status = "done";   // simulierter zweiter Write derselben Notiz
+    await view.writeAll();
+    expect(confirms).toEqual([true, false]);
   });
 });

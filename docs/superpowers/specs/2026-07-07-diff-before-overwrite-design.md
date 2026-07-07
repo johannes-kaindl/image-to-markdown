@@ -173,3 +173,19 @@ aufrufende Schicht:
 | `src/i18n.ts` | Modal-/Notice-Keys EN/DE |
 | `styles.css` | `.img2md-diff-*` |
 | `tests/*` | diff, extractTranscriptBody, Override-Gates, View-Wiring, i18n-Parität |
+
+## Bekannte Einschränkung — v1.1-Follow-up (2026-07-07)
+
+Der finale Whole-Branch-Review (Opus) fand einen engen, bewusst für v1 akzeptierten Randfall:
+`sessionOwned` (die Menge der in dieser Session vom Plugin geschriebenen Notizen, die den Diff-Gate
+überspringen) gilt **view-global**, nicht pro Transkriptions-Lauf. Folge: Wird eine bereits
+überschriebene Notiz N **manuell editiert** und danach **dieselbe Quelle in derselben View-Session
+erneut transkribiert + geschrieben**, überspringt der Gate den Diff (N ist „session-owned") → die
+manuellen Edits werden still überschrieben.
+
+Entspricht dem v1-Design-Wortlaut, überschreitet aber die „nur In-Session-Retry"-Intent. **v1.1-Fix
+(geplant):** content-aware Gate — statt nur den Pfad zu merken, den zuletzt vom Plugin geschriebenen
+Inhalt je Pfad vorhalten (`Map<pfad, inhalt>`) und **re-gaten, wenn der on-disk-Inhalt davon
+abweicht**. Dabei den reibungslosen PDF-Partial-Failure-Retry (mehrere Writes derselben Notiz in
+einem Lauf) nachweislich nicht regressieren. Zusätzlich mitnehmen: CRLF-Diff-Fidelity in
+`extractTranscriptBody` (Frontmatter/Embed-Strip `\r?\n`-tolerant, wie `stripFrontmatter`).

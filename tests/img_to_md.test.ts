@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody } from "../src/img_to_md";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -150,7 +150,7 @@ describe("writeTranscripts", () => {
   it("leeres Transkript → diese Notiz wird übersprungen", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]] });
     const r = await writeTranscripts(io, "q.md", [{ raw: "![[foto.jpg]]", link: "foto.jpg", content: "   ", model: "vm" }]);
-    expect(r.paths).toEqual([]);
+    expect(r.paths).toEqual([null]);
     expect(Object.keys(created)).toEqual([]);
     expect(notes.get("q.md")).toBe("![[foto.jpg]]");   // unverändert, kein Write
   });
@@ -184,6 +184,57 @@ describe("writeTranscripts", () => {
     expect(notes.get("b (transcript).md")).toContain("created: 2026-01-01");
     expect(notes.get("b (transcript).md")).toContain('transcribed_by: "neu"');
     expect(notes.get("q.md")).toBe("![[b.png]]");  // kein Embed-Ersatz
+  });
+
+  it("Override mit confirmOverwrite=true → schreibt", async () => {
+    const { io, notes } = fakeIO({ notes: [
+      ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
+    ] });
+    let seen: any = null;
+    io.confirmOverwrite = async (ctx: any) => { seen = ctx; return true; };
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", confirm: true },
+    ]);
+    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(seen.path).toBe("b (transcript).md");
+    expect(seen.diff).toEqual([{ kind: "del", text: "ALT" }, { kind: "add", text: "NEU" }]);
+    expect(notes.get("b (transcript).md")).toContain("NEU");
+  });
+  it("Override mit confirmOverwrite=false → schreibt NICHT, paths[i]=null", async () => {
+    const { io, notes } = fakeIO({ notes: [
+      ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
+    ] });
+    io.confirmOverwrite = async () => false;
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", confirm: true },
+    ]);
+    expect(r.paths).toEqual([null]);
+    expect(notes.get("b (transcript).md")).toContain("ALT");   // unverändert, kein Write
+  });
+  it("Override mit confirm=false (Flag) → kein Callback, schreibt direkt", async () => {
+    const { io, notes } = fakeIO({ notes: [
+      ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
+    ] });
+    let called = false;
+    io.confirmOverwrite = async () => { called = true; return false; };
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", confirm: false },
+    ]);
+    expect(called).toBe(false);
+    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(notes.get("b (transcript).md")).toContain("NEU");
+  });
+  it("identischer Body → kein Callback, schreibt", async () => {
+    const { io, notes } = fakeIO({ notes: [
+      ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nGLEICH`],
+    ] });
+    let called = false;
+    io.confirmOverwrite = async () => { called = true; return true; };
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "![[b.png]]", link: "b.png", content: "GLEICH", model: "neu", overwritePath: "b (transcript).md", confirm: true },
+    ]);
+    expect(called).toBe(false);
+    expect(r.paths).toEqual(["b (transcript).md"]);
   });
 
   it("selfSource: schreibt unter destDir, kein source_note, kein Quell-Read/-Write", async () => {
@@ -307,6 +358,19 @@ describe("rewriteTranscript", () => {
     const out = rewriteTranscript(old, { model: "neu", sourceLink: "d.pdf", body: "Y", pages: "1-5" });
     expect(out).toContain('pages: "1-5"');
     expect(out).not.toContain('pages: "1-2"');
+  });
+});
+
+describe("extractTranscriptBody", () => {
+  it("strippt Frontmatter + Embed-Zeile, gibt reinen Body", () => {
+    const note = `---\nsource_image: "[[b.png]]"\ntranscribed_by: "vm"\n---\n![[b.png]]\n\nZeile 1\nZeile 2\n`;
+    expect(extractTranscriptBody(note)).toBe("Zeile 1\nZeile 2");
+  });
+  it("ohne Frontmatter → nur Embed-Zeile strippen", () => {
+    expect(extractTranscriptBody(`![[b.png]]\n\nNur Text`)).toBe("Nur Text");
+  });
+  it("ohne Embed-Zeile → Body unverändert (getrimmt)", () => {
+    expect(extractTranscriptBody(`Kein Embed hier\n`)).toBe("Kein Embed hier");
   });
 });
 
