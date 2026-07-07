@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-07-07
+
 ### Behoben
 
 - **Diff-Gate übersieht manuelle Notiz-Edits nicht mehr:** Wird eine bereits überschriebene
