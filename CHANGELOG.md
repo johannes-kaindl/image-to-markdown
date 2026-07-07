@@ -6,6 +6,17 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Diff-Gate übersieht manuelle Notiz-Edits nicht mehr:** Wird eine bereits überschriebene
+  Transkript-Notiz von Hand bearbeitet und dieselbe Quelle danach in derselben Sitzung erneut
+  überschrieben, erscheint der Diff-Dialog jetzt wieder (statt die Änderungen still zu verwerfen).
+  Der Gate vergleicht dafür den tatsächlichen Notiz-Inhalt statt nur zu merken, ob die Notiz in
+  dieser Sitzung schon einmal angefasst wurde.
+- **CRLF-Notizen verlieren beim Überschreiben kein Frontmatter mehr:** Notizen mit
+  Windows-Zeilenenden (`\r\n`) behalten jetzt `source_image`/`source_note`/`created` beim Override,
+  statt sie durch einen stillen Fallback zu verlieren.
+
 ## [0.9.0] — 2026-07-07
 
 ### Hinzugefügt
