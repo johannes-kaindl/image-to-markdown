@@ -88,7 +88,7 @@ export function buildTranscriptNote(o: { imageLink: string; sourceName?: string;
  *  und den Body. Quelle/Quellnotiz/created bleiben damit unverändert. */
 export function rewriteTranscript(old: string, o: { model: string; sourceLink: string; body: string; pages?: string }): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
-  const fm = /^---\n([\s\S]*?)\n---/.exec(old);
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(old);
   // Fallback nur theoretisch — Override wirkt ausschließlich auf unsere Transkript-Notizen, die immer Frontmatter haben.
   let frontmatter = fm ? fm[1] : `transcribed_by: "${esc(o.model)}"`;
   frontmatter = frontmatter.replace(/^transcribed_by:.*$/m, `transcribed_by: "${esc(o.model)}"`);
@@ -104,8 +104,8 @@ export function rewriteTranscript(old: string, o: { model: string; sourceLink: s
  *  ![[…]]-Embed-Zeile (samt Leerzeile). Für den Diff — Frontmatter (transcribed_by/pages) und die
  *  unveränderte Embed-Zeile sind Rauschen. */
 export function extractTranscriptBody(note: string): string {
-  let s = note.replace(/^---\n[\s\S]*?\n---\n?/, "");
-  s = s.replace(/^!\[\[[^\]]*\]\]\n?/, "");
+  let s = note.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  s = s.replace(/^!\[\[[^\]]*\]\]\r?\n?/, "");
   return s.trim();
 }
 
@@ -181,7 +181,7 @@ export interface ImgToMdIO {
  *  kein replaceEmbed, keine source_note, Ablage unter opts.destDir. */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; confirm?: boolean }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; knownBody?: string }[],
   opts?: { selfSource?: boolean; destDir?: string },
 ): Promise<{ paths: (string | null)[] }> {
   const self = opts?.selfSource === true;
@@ -195,7 +195,8 @@ export async function writeTranscripts(
     if (!transcript) { paths.push(null); continue; }
     if (e.overwritePath) {
       const old = await io.readNote(e.overwritePath);
-      if (e.confirm && io.confirmOverwrite) {
+      const alreadyMatches = e.knownBody !== undefined && extractTranscriptBody(old) === e.knownBody;
+      if (!alreadyMatches && io.confirmOverwrite) {
         const diff = diffLines(extractTranscriptBody(old), transcript);
         const changed = diff.some(d => d.kind !== "ctx");
         if (changed && !(await io.confirmOverwrite({ path: e.overwritePath, diff }))) {

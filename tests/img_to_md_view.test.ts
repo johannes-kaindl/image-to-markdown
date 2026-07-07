@@ -22,7 +22,7 @@ function mkView(over: any = {}) {
     scan: over.scan ?? (async () => ITEMS),
     transcribeStream: over.transcribeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("Hal"); onContent("lo"); return { content: "Hallo", reasoning: "", model: "vm" }; }),
     writeTranscripts: over.writeTranscripts ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_: any, i: number) => `note-${i}.md`); }),
-    writePdf: over.writePdf ?? (async (_sp: string, _raw: string, _link: string, _pages: any[]) => { calls.written.push(_pages); return "doc (PDF transcript).md"; }),
+    writePdf: over.writePdf ?? (async (_sp: string, _raw: string, _link: string, _pages: any[]) => { calls.written.push(_pages); return { path: "doc (PDF transcript).md", body: "body" }; }),
     connectionStatus: over.connectionStatus ?? (async () => ({ ok: true, endpoint: "http://localhost:1234" })),
     listModels: over.listModels ?? (async () => []),
     getModel: over.getModel ?? (() => "vm"),
@@ -339,7 +339,7 @@ describe("ImgToMdView — Notiz anlegen", () => {
     all(view.contentEl, "img2md-write")[0].click();
     await Promise.resolve(); await Promise.resolve();
     expect(calls.written.length).toBe(1);
-    expect(calls.written[0]).toEqual([{ item: ITEMS[0], content: "Hallo", model: "vm", confirm: false }]);
+    expect(calls.written[0]).toEqual([{ item: ITEMS[0], content: "Hallo", model: "vm", knownBody: undefined }]);
     expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("foto.md");
   });
   it("'angelegt'-Zeile öffnet die Notiz per Klick", async () => {
@@ -524,7 +524,7 @@ describe("ImgToMdView — PDF", () => {
     };
     let capturedRange: any = null; let capturedPages: any = null;
     const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], _ow?: string, _embed?: boolean, range?: any) => {
-      capturedPages = pages; capturedRange = range; return "doc (PDF transcript).md";
+      capturedPages = pages; capturedRange = range; return { path: "doc (PDF transcript).md", body: "body" };
     };
     const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
     await view.onOpen(); await view.run();
@@ -541,7 +541,7 @@ describe("ImgToMdView — PDF", () => {
     const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 5, range: { from: 1, to: 2 } }];
     const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => { onC("seite"); return { content: "seite", reasoning: "", model: "vm" }; };
     let capturedRange: any = null; let capturedPages: any = null;
-    const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], _ow?: string, _embed?: boolean, range?: any) => { capturedRange = range; capturedPages = pages; return "doc (PDF transcript).md"; };
+    const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], _ow?: string, _embed?: boolean, range?: any) => { capturedRange = range; capturedPages = pages; return { path: "doc (PDF transcript).md", body: "body" }; };
     const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
     await view.onOpen(); await view.run();          // läuft mit Range 1-2 → 2 Karten done
     freshPdf[0].range = { from: 1, to: 1 };          // User verengt die Range NACH dem Lauf (live-mutables Item)
@@ -561,7 +561,7 @@ describe("ImgToMdView — PDF", () => {
     const writeCalls: any[] = [];
     const writePdf = async (_sp: string, _raw: string, _link: string, pages: any[], overwritePath?: string, _embed?: boolean, range?: any) => {
       writeCalls.push({ pages: pages.map((p: any) => p.page), overwritePath, range });
-      return "doc (PDF transcript).md";
+      return { path: "doc (PDF transcript).md", body: "body" };
     };
     const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
     await view.onOpen(); await view.run();
@@ -581,7 +581,7 @@ describe("ImgToMdView — PDF", () => {
     const freshPdf: ImgItem[] = [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } }];
     const transcribeStream = async () => { throw new Error("Vision HTTP 500"); };
     let writeCount = 0;
-    const writePdf = async () => { writeCount++; return "x.md"; };
+    const writePdf = async () => { writeCount++; return { path: "x.md", body: "body" }; };
     const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
     await view.onOpen(); await view.run();
     await view.writeAll();
@@ -592,13 +592,13 @@ describe("ImgToMdView — PDF", () => {
   });
 });
 
-describe("ImgToMdView — Diff-Confirm (Task 7)", () => {
-  it("Override-Erst-Write setzt confirm=true; Folge-Retry confirm=false (session-owned)", async () => {
+describe("ImgToMdView — Diff-Confirm + Content-aware Gate (v1.1)", () => {
+  it("Override-Erst-Write: kein knownBody; Folge-Retry: knownBody = zuletzt geschriebener Body", async () => {
     const item: ImgItem = { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "b (transcript).md" };
-    const confirms: (boolean | undefined)[] = [];
+    const knownBodies: (string | undefined)[] = [];
     const { view } = mkView({
       scan: async () => [item],
-      writeTranscripts: async (_sp: string, entries: any[]) => { confirms.push(entries[0].confirm); return ["b (transcript).md"]; },
+      writeTranscripts: async (_sp: string, entries: any[]) => { knownBodies.push(entries[0].knownBody); return ["b (transcript).md"]; },
     });
     await view.onOpen();
     // Override-Item: default abgewählt (existingTranscriptPath) → wie im bestehenden "vorhandenes
@@ -609,14 +609,15 @@ describe("ImgToMdView — Diff-Confirm (Task 7)", () => {
     await view.writeOne(0);
     (view as any).state.cards[0].status = "done";   // simulierter zweiter Write derselben Notiz
     await view.writeOne(0);
-    expect(confirms).toEqual([true, false]);
+    expect(knownBodies).toEqual([undefined, "Hallo"]);   // "Hallo" = card.text aus dem transcribeStream-Default
   });
 
-  it("PDF-Override reicht confirm=true beim ersten Write, false beim Retry", async () => {
+  it("PDF-Override: kein knownBody beim ersten Write; Retry bekommt den von writePdf zurückgegebenen body", async () => {
     const item: ImgItem = { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 1, range: { from: 1, to: 1 }, existingTranscriptPath: "doc (PDF transcript).md" };
-    const confirms: (boolean | undefined)[] = [];
-    const writePdf = async (_sp: string, _raw: string, _link: string, _pages: any[], _ow?: string, _embed?: boolean, _range?: any, confirm?: boolean) => {
-      confirms.push(confirm); return "doc (PDF transcript).md";
+    const knownBodies: (string | undefined)[] = [];
+    const writePdf = async (_sp: string, _raw: string, _link: string, _pages: any[], _ow?: string, _embed?: boolean, _range?: any, knownBody?: string) => {
+      knownBodies.push(knownBody);
+      return { path: "doc (PDF transcript).md", body: "PDF-BODY" };
     };
     const { view } = mkView({ scan: async () => [item], writePdf });
     await view.onOpen();
@@ -626,6 +627,6 @@ describe("ImgToMdView — Diff-Confirm (Task 7)", () => {
     await view.writeAll();
     (view as any).state.cards[0].status = "done";   // simulierter zweiter Write derselben Notiz
     await view.writeAll();
-    expect(confirms).toEqual([true, false]);
+    expect(knownBodies).toEqual([undefined, "PDF-BODY"]);
   });
 });

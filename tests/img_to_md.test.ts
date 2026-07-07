@@ -186,52 +186,67 @@ describe("writeTranscripts", () => {
     expect(notes.get("q.md")).toBe("![[b.png]]");  // kein Embed-Ersatz
   });
 
-  it("Override mit confirmOverwrite=true → schreibt", async () => {
+  it("Override ohne knownBody (Erstberührung), confirmOverwrite liefert true → schreibt", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
     ] });
     let seen: any = null;
     io.confirmOverwrite = async (ctx: any) => { seen = ctx; return true; };
     const r = await writeTranscripts(io, "q.md", [
-      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", confirm: true },
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md" },
     ]);
     expect(r.paths).toEqual(["b (transcript).md"]);
     expect(seen.path).toBe("b (transcript).md");
     expect(seen.diff).toEqual([{ kind: "del", text: "ALT" }, { kind: "add", text: "NEU" }]);
     expect(notes.get("b (transcript).md")).toContain("NEU");
   });
-  it("Override mit confirmOverwrite=false → schreibt NICHT, paths[i]=null", async () => {
+  it("Override ohne knownBody, confirmOverwrite liefert false → schreibt NICHT, paths[i]=null", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
     ] });
     io.confirmOverwrite = async () => false;
     const r = await writeTranscripts(io, "q.md", [
-      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", confirm: true },
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md" },
     ]);
     expect(r.paths).toEqual([null]);
-    expect(notes.get("b (transcript).md")).toContain("ALT");   // unverändert, kein Write
+    expect(notes.get("b (transcript).md")).toContain("ALT");
   });
-  it("Override mit confirm=false (Flag) → kein Callback, schreibt direkt", async () => {
+  it("Override mit knownBody === on-disk-Body (Retry-Continuation) → kein Callback, schreibt direkt", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
     ] });
     let called = false;
     io.confirmOverwrite = async () => { called = true; return false; };
     const r = await writeTranscripts(io, "q.md", [
-      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", confirm: false },
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", knownBody: "ALT" },
     ]);
     expect(called).toBe(false);
     expect(r.paths).toEqual(["b (transcript).md"]);
     expect(notes.get("b (transcript).md")).toContain("NEU");
   });
-  it("identischer Body → kein Callback, schreibt", async () => {
+  it("Override mit knownBody ≠ on-disk-Body (manueller Edit dazwischen) → re-gated, Callback aufgerufen", async () => {
+    const { io, notes } = fakeIO({ notes: [
+      ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nMANUELL BEARBEITET`],
+    ] });
+    let seen: any = null;
+    io.confirmOverwrite = async (ctx: any) => { seen = ctx; return true; };
+    const r = await writeTranscripts(io, "q.md", [
+      // knownBody "ALT" = was das Plugin zuletzt geschrieben hat; on-disk weicht ab (User hat editiert)
+      { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", knownBody: "ALT" },
+    ]);
+    expect(seen).not.toBeNull();
+    expect(seen.diff).toEqual([{ kind: "del", text: "MANUELL BEARBEITET" }, { kind: "add", text: "NEU" }]);
+    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(notes.get("b (transcript).md")).toContain("NEU");
+  });
+  it("identischer Body (Erstberührung) → kein Callback, schreibt", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nGLEICH`],
     ] });
     let called = false;
     io.confirmOverwrite = async () => { called = true; return true; };
     const r = await writeTranscripts(io, "q.md", [
-      { raw: "![[b.png]]", link: "b.png", content: "GLEICH", model: "neu", overwritePath: "b (transcript).md", confirm: true },
+      { raw: "![[b.png]]", link: "b.png", content: "GLEICH", model: "neu", overwritePath: "b (transcript).md" },
     ]);
     expect(called).toBe(false);
     expect(r.paths).toEqual(["b (transcript).md"]);
@@ -359,6 +374,15 @@ describe("rewriteTranscript", () => {
     expect(out).toContain('pages: "1-5"');
     expect(out).not.toContain('pages: "1-2"');
   });
+  it("CRLF-Notiz: erhält Frontmatter trotz \\r\\n (kein Datenverlust)", () => {
+    const old = `---\r\nsource_image: "[[b.png]]"\r\nsource_note: "[[Quelle]]"\r\ncreated: 2026-01-01\r\ntranscribed_by: "alt"\r\n---\r\n![[b.png]]\r\n\r\nALTER TEXT\r\n`;
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEUER TEXT" });
+    expect(out).toContain('source_image: "[[b.png]]"');
+    expect(out).toContain('source_note: "[[Quelle]]"');
+    expect(out).toContain("created: 2026-01-01");
+    expect(out).toContain('transcribed_by: "neu"');
+    expect(out).not.toContain('transcribed_by: "alt"');
+  });
 });
 
 describe("extractTranscriptBody", () => {
@@ -371,6 +395,10 @@ describe("extractTranscriptBody", () => {
   });
   it("ohne Embed-Zeile → Body unverändert (getrimmt)", () => {
     expect(extractTranscriptBody(`Kein Embed hier\n`)).toBe("Kein Embed hier");
+  });
+  it("CRLF-Notiz: strippt Frontmatter + Embed-Zeile trotz \\r\\n", () => {
+    const note = `---\r\nsource_image: "[[b.png]]"\r\ntranscribed_by: "vm"\r\n---\r\n![[b.png]]\r\n\r\nZeile 1\r\nZeile 2\r\n`;
+    expect(extractTranscriptBody(note)).toBe("Zeile 1\r\nZeile 2");
   });
 });
 
