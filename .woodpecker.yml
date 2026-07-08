@@ -1,0 +1,17 @@
+when:
+  - event: push
+    branch: main
+  - event: tag
+
+steps:
+  mirror-to-github:
+    image: alpine/git:latest
+    environment:
+      GITHUB_TOKEN:
+        from_secret: github_token
+      GITHUB_REPO:
+        from_secret: github_repo
+    commands:
+      - git remote add github "https://x-access-token:$${GITHUB_TOKEN}@github.com/$${GITHUB_REPO}.git"
+      - git push github HEAD:main --force
+      - git push github --tags
