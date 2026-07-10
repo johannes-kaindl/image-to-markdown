@@ -89,19 +89,35 @@ console.log(`release: ${target} fertig.`);
 
 // --- Helfer ---
 function mirrorToGithub(tag, branch) {
-  if (!sh("git", ["remote"]).split("\n").includes("github")) {
+  let remotes;
+  try {
+    remotes = sh("git", ["remote"]).split("\n");
+  } catch (err) {
+    console.error(`release: ⚠️ 'git remote' fehlgeschlagen (${err?.message ?? err}) — GitHub-Mirror übersprungen.`);
+    return;
+  }
+  if (!remotes.includes("github")) {
     console.warn(`release: ⚠️ kein 'github'-Remote — GitHub-Mirror übersprungen. `
       + `Einmalig einrichten: git remote add github git@github.com:<owner>/<repo>.git`);
     return;
   }
-  if (dryRun) { console.log(`[dry-run] git push github HEAD:${branch} && git push github ${tag}`); return; }
+  if (dryRun) { console.log(`[dry-run] git push github ${tag} && git push github HEAD:${branch}`); return; }
+  // GIT_TERMINAL_PROMPT=0: bei fehlender Auth sauber fehlschlagen statt interaktiv zu blockieren.
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+  // Tag ZUERST — er triggert die release.yml-Action (kritischer Pfad). Getrennte try/catch,
+  // damit ein fehlschlagender Branch-Push (z.B. non-fast-forward) den Tag-Push NICHT verschluckt.
   try {
-    execFileSync("git", ["push", "github", `HEAD:${branch}`], { stdio: "inherit" });
-    execFileSync("git", ["push", "github", tag], { stdio: "inherit" });
-    console.log(`release: GitHub-Mirror aktualisiert (Branch ${branch} + Tag ${tag}).`);
-  } catch {
-    console.error(`release: ⚠️ GitHub-Push fehlgeschlagen — Store-Release entsteht erst nach `
-      + `manuellem: git push github HEAD:${branch} && git push github ${tag}`);
+    execFileSync("git", ["push", "github", tag], { stdio: "inherit", env });
+    console.log(`release: GitHub-Tag ${tag} gepusht (triggert Store-Release).`);
+  } catch (err) {
+    console.error(`release: ⚠️ GitHub-Tag-Push fehlgeschlagen (${err?.message ?? err}) — `
+      + `Store-Release entsteht erst nach manuellem: git push github ${tag}`);
+  }
+  try {
+    execFileSync("git", ["push", "github", `HEAD:${branch}`], { stdio: "inherit", env });
+  } catch (err) {
+    console.error(`release: ⚠️ GitHub-Branch-Push (${branch}) fehlgeschlagen (${err?.message ?? err}) — `
+      + `Tag ist bereits gepusht; Branch ggf. manuell: git push github HEAD:${branch}`);
   }
 }
 function rewriteChangelog(version) {
