@@ -1,6 +1,7 @@
 // scripts/release.mjs
 // Ein-Befehl-Release (PROF-OBS-09): bump → changelog → commit → tag → push (Codeberg) →
-// build → Codeberg-Release. Das GitHub-Release entsteht eigenständig über den Mirror→Action.
+// build → Codeberg-Release → GitHub-Mirror (Dual-Push). Der Tag auf GitHub triggert die
+// release.yml-Action → Obsidian-Community-Store-Release.
 //   npm run release 0.8.0               # vollständiger Release
 //   npm run release -- 0.8.0 --dry-run  # nur loggen, nichts schreiben/pushen
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -77,9 +78,32 @@ if (dryRun) {
   const out = await createCodebergRelease({ fetch, token, repo, tag: target, notes, assets });
   console.log(`release: Codeberg-Release ${out.htmlUrl}`);
 }
-console.log(`release: ${target} fertig. GitHub-Release folgt automatisch via Mirror→Action.`);
+
+// 9. GitHub-Mirror (Dual-Push): Codeberg (origin) ist die Quelle, GitHub ist Downstream —
+// der Tag dort triggert die release.yml-Action → Community-Store-Release. Non-fatal: schlägt
+// der Push fehl, bleibt der Codeberg-Release gültig und der Store-Release wird per Hinweis
+// manuell nachgezogen. Steht außerhalb des !tagExists-Guards → läuft auch im Resume-Pfad.
+mirrorToGithub(target, defaultBranch);
+
+console.log(`release: ${target} fertig.`);
 
 // --- Helfer ---
+function mirrorToGithub(tag, branch) {
+  if (!sh("git", ["remote"]).split("\n").includes("github")) {
+    console.warn(`release: ⚠️ kein 'github'-Remote — GitHub-Mirror übersprungen. `
+      + `Einmalig einrichten: git remote add github git@github.com:<owner>/<repo>.git`);
+    return;
+  }
+  if (dryRun) { console.log(`[dry-run] git push github HEAD:${branch} && git push github ${tag}`); return; }
+  try {
+    execFileSync("git", ["push", "github", `HEAD:${branch}`], { stdio: "inherit" });
+    execFileSync("git", ["push", "github", tag], { stdio: "inherit" });
+    console.log(`release: GitHub-Mirror aktualisiert (Branch ${branch} + Tag ${tag}).`);
+  } catch {
+    console.error(`release: ⚠️ GitHub-Push fehlgeschlagen — Store-Release entsteht erst nach `
+      + `manuellem: git push github HEAD:${branch} && git push github ${tag}`);
+  }
+}
 function rewriteChangelog(version) {
   const path = "CHANGELOG.md";
   const date = new Date().toISOString().slice(0, 10);
