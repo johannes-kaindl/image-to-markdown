@@ -13,15 +13,15 @@ export class DiffModal extends Modal {
   private oldBody: string;
   constructor(app: App, private path: string, private diff: DiffLine[], private onResolve: (body: string | null) => void) {
     super(app);
-    this.selected = groupHunks(diff).map(() => true); // Default: alle Hunks übernehmen
-    this.oldBody = applySelection(diff, groupHunks(diff).map(() => false)); // alter Body (für No-op-Vergleich)
+    const hunks = groupHunks(diff);
+    this.selected = hunks.map(() => true); // Default: alle Hunks übernehmen
+    this.oldBody = applySelection(diff, hunks.map(() => false)); // alter Body (für No-op-Vergleich)
   }
   onOpen(): void {
     const { contentEl } = this;
     contentEl.addClass("img2md-diff-modal");
     contentEl.createEl("h3", { text: t("diff.modal.title", basename(this.path)) });
     const box = contentEl.createDiv({ cls: "img2md-diff" });
-    const hunks = groupHunks(this.diff);
     let hunkIdx = 0;
     let i = 0;
     while (i < this.diff.length) {
@@ -44,7 +44,6 @@ export class DiffModal extends Modal {
         i++;
       }
     }
-    void hunks; // Hunk-Zahl == hunkIdx (Konsistenzanker)
     const btns = contentEl.createDiv({ cls: "img2md-diff-actions" });
     const cancel = btns.createEl("button", { text: t("diff.cancel") });
     cancel.addEventListener("click", () => { this.finish(null); });
