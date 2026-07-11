@@ -218,3 +218,50 @@ describe("VisionClient.ping / listModels", () => {
     expect(await new VisionClient("http://x", "vm").listModels()).toEqual([]);
   });
 });
+
+describe("VisionClient — suppressThinking Body-Merge", () => {
+  const SUPPRESS = { reasoning_effort: "none", chat_template_kwargs: { enable_thinking: false }, reasoning_budget: 0 };
+
+  it("transcribe: suppressThinking=true spleißt die Suppress-Params ein", async () => {
+    const calls = mockHttp(() => ok({ choices: [{ message: { content: "x" } }] }));
+    await new VisionClient("http://x", "vm").transcribe("d", "p", { suppressThinking: true });
+    const body = JSON.parse(calls[0].body!) as Record<string, unknown>;
+    expect(body.reasoning_effort).toBe("none");
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(body.reasoning_budget).toBe(0);
+  });
+  it("transcribe: Default (kein opts) lässt den Body frei von Suppress-Params", async () => {
+    const calls = mockHttp(() => ok({ choices: [{ message: { content: "x" } }] }));
+    await new VisionClient("http://x", "vm").transcribe("d", "p");
+    const body = JSON.parse(calls[0].body!) as Record<string, unknown>;
+    expect("reasoning_effort" in body).toBe(false);
+    expect("chat_template_kwargs" in body).toBe(false);
+    expect("reasoning_budget" in body).toBe(false);
+  });
+
+  it("transcribeStream: suppressThinking=true → Suppress-Params im Body", async () => {
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {}, undefined, { suppressThinking: true });
+    expect(JSON.parse(calls[0].body!)).toMatchObject(SUPPRESS);
+  });
+  it("transcribeStream: Default → keine Suppress-Params", async () => {
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
+    expect("reasoning_effort" in JSON.parse(calls[0].body!)).toBe(false);
+  });
+
+  it("transcribeTextStream: suppressThinking=true → Suppress-Params im Body", async () => {
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {}, undefined, { suppressThinking: true });
+    expect(JSON.parse(calls[0].body!)).toMatchObject(SUPPRESS);
+  });
+  it("transcribeTextStream: Default → keine Suppress-Params", async () => {
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {});
+    expect("reasoning_effort" in JSON.parse(calls[0].body!)).toBe(false);
+  });
+});
