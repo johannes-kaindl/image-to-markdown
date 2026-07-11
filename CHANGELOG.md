@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-07-11
+
 ### Behoben
 
 - **Schmalere Seitenleiste:** Modellauswahl, Preset und der Thinking-Schalter drängten sich in einer
