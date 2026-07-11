@@ -75,18 +75,21 @@ export class ImgToMdView extends ItemView {
     this.statusIconEl = this.statusEl.createSpan({ cls: "img2md-status-icon" });
     this.statusLabelEl = this.statusEl.createSpan({ cls: "img2md-status-label" });
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
+    // Zeile 1: Modell (volle Breite für lange Namen) + Status + Refresh.
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
     this.modelSel.addEventListener("change", () => { this.deps.setModel(this.modelSel?.value ?? ""); this.renderThinkToggle(); });
-    this.presetSel = modelRow.createEl("select", { cls: "img2md-preset dropdown" });
-    for (const p of this.deps.listPresets()) { const o = this.presetSel.createEl("option", { text: p.label }); o.value = p.id; }
-    this.presetSel.value = this.deps.getPreset();
-    this.presetSel.addEventListener("change", () => this.deps.setPreset(this.presetSel?.value ?? "default"));
     this.modelStatusEl = modelRow.createEl("span", { cls: "img2md-model-status" });
     this.refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
     setIcon(this.refreshBtn, "refresh-cw");
     this.refreshBtn.addEventListener("click", () => void this.refreshModels(true));
-    this.thinkToggleEl = modelRow.createEl("button", { cls: "img2md-think-toggle clickable-icon" });
+    // Zeile 2: Preset + Thinking-Toggle (teilen sich die Breite → Sidebar bleibt schmal).
+    const presetRow = c.createDiv({ cls: "img2md-preset-row" });
+    this.presetSel = presetRow.createEl("select", { cls: "img2md-preset dropdown" });
+    for (const p of this.deps.listPresets()) { const o = this.presetSel.createEl("option", { text: p.label }); o.value = p.id; }
+    this.presetSel.value = this.deps.getPreset();
+    this.presetSel.addEventListener("change", () => this.deps.setPreset(this.presetSel?.value ?? "default"));
+    this.thinkToggleEl = presetRow.createEl("button", { cls: "img2md-think-toggle clickable-icon" });
     this.thinkToggleEl.addEventListener("click", () => {
       if (thinkToggleView(this.deps.getModel(), this.deps.getSuppress()).disabled) return;
       this.deps.setSuppress(!this.deps.getSuppress());
