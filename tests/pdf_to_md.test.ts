@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildPdfNote, writePdfTranscript, buildPdfBody, reconstructPdfText, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "../src/pdf_to_md";
+import { applySelection, DiffLine } from "../src/diff";
 
 describe("reconstructPdfText", () => {
   it("fügt Strings zusammen, Zeilenumbruch bei hasEOL", () => {
@@ -226,7 +227,7 @@ describe("writePdfTranscript", () => {
   });
 
   describe("confirmOverwrite-Gate (content-aware, v1.1)", () => {
-    function ioWithConfirm(confirmOverwrite: (ctx: { path: string; diff: unknown[] }) => Promise<boolean>) {
+    function ioWithConfirm(confirmOverwrite: (ctx: { path: string; diff: DiffLine[] }) => Promise<string | null>) {
       const notes = new Map<string, string>([
         ["q.md", "![[doc.pdf]]"],
         ["doc (PDF transcript).md", `---\nsource_pdf: "[[doc.pdf]]"\ntranscribed_by: "alt"\npages: "1-1"\n---\n![[doc.pdf]]\n\nALT\n`],
@@ -245,8 +246,8 @@ describe("writePdfTranscript", () => {
       return { io, notes, writes };
     }
 
-    it("kein knownBody (Erstberührung), Callback liefert false → schreibt nicht, path/body null", async () => {
-      const { io, notes, writes } = ioWithConfirm(async () => false);
+    it("kein knownBody (Erstberührung), Callback liefert null → schreibt nicht, path/body null", async () => {
+      const { io, notes, writes } = ioWithConfirm(async () => null);
       const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
         [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
         { range: { from: 1, to: 1 } });
@@ -258,7 +259,7 @@ describe("writePdfTranscript", () => {
 
     it("knownBody === on-disk-Body (Retry-Continuation) → kein Callback, schreibt direkt", async () => {
       let called = false;
-      const { io } = ioWithConfirm(async () => { called = true; return false; });
+      const { io } = ioWithConfirm(async () => { called = true; return null; });
       const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
         [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
         { range: { from: 1, to: 1 }, knownBody: "ALT" });
@@ -270,7 +271,7 @@ describe("writePdfTranscript", () => {
 
     it("knownBody ≠ on-disk-Body (manueller Edit dazwischen) → re-gated, Callback aufgerufen", async () => {
       let seen: any = null;
-      const { io, notes } = ioWithConfirm(async (ctx) => { seen = ctx; return true; });
+      const { io, notes } = ioWithConfirm(async (ctx) => { seen = ctx; return applySelection(ctx.diff, []); });
       const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
         [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
         { range: { from: 1, to: 1 }, knownBody: "ANDERS" });
@@ -287,6 +288,16 @@ describe("writePdfTranscript", () => {
       ]);
       expect(r.path).toBe("doc (PDF transcript).md");
       expect(notes.get("doc (PDF transcript).md")).toContain("NEU");
+    });
+
+    it("Callback liefert gemergten Body → genau der wird geschrieben + zurückgegeben", async () => {
+      const { io, notes } = ioWithConfirm(async () => "MERGED");
+      const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" },
+        [{ page: 1, content: "NEU", model: "vm" }], "comment", "doc (PDF transcript).md", true,
+        { range: { from: 1, to: 1 } });
+      expect(r.path).toBe("doc (PDF transcript).md");
+      expect(r.body).toBe("MERGED");
+      expect(notes.get("doc (PDF transcript).md")).toContain("MERGED");
     });
   });
 });

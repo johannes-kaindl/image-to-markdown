@@ -25,7 +25,7 @@ export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
   scan: (sourcePath: string) => Promise<ImgItem[]>;
   transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
-  writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; knownBody?: string }[]) => Promise<(string | null)[]>;
+  writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; knownBody?: string }[]) => Promise<{ path: string | null; body: string | null }[]>;
   writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }, knownBody?: string) => Promise<{ path: string | null; body: string | null }>;
   connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;
   listModels: () => Promise<string[]>;
@@ -463,8 +463,8 @@ export class ImgToMdView extends ItemView {
       const op = card.item.existingTranscriptPath;
       const knownBody = op ? this.sessionOwned.get(op) : undefined;
       const transcript = card.text.trim();
-      const [created] = await this.deps.writeTranscripts(path, [{ item: card.item, content: transcript, model: card.model, knownBody }]);
-      if (created) { this.sessionOwned.set(created, transcript); this.state.markWritten(i, created); }
+      const [res] = await this.deps.writeTranscripts(path, [{ item: card.item, content: transcript, model: card.model, knownBody }]);
+      if (res?.path) { this.sessionOwned.set(res.path, res.body ?? transcript); this.state.markWritten(i, res.path); }
     }
     this.updateAllCards();
     await this.rescan();
@@ -480,8 +480,8 @@ export class ImgToMdView extends ItemView {
         const op = x.card.item.existingTranscriptPath;
         return { item: x.card.item, content: transcripts[k], model: x.card.model, knownBody: op ? this.sessionOwned.get(op) : undefined };
       });
-      const paths = await this.deps.writeTranscripts(path, entries);
-      part.images.forEach((x, k) => { const p = paths[k]; if (p) { this.sessionOwned.set(p, transcripts[k]); this.state.markWritten(x.cardIndex, p); } });
+      const results = await this.deps.writeTranscripts(path, entries);
+      part.images.forEach((x, k) => { const r = results[k]; if (r?.path) { this.sessionOwned.set(r.path, r.body ?? transcripts[k]); this.state.markWritten(x.cardIndex, r.path); } });
     }
     for (const g of part.pdfs) await this.writePdfGroup(path, g);
     this.updateAllCards();

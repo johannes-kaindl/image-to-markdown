@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody } from "../src/img_to_md";
+import { applySelection } from "../src/diff";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -142,7 +143,7 @@ describe("writeTranscripts", () => {
       { raw: "![[foto.jpg]]", link: "foto.jpg", content: "# A", model: "vm" },
       { raw: "![[bild.png]]", link: "bild.png", content: "# B", model: "vm" },
     ]);
-    expect(r.paths).toEqual(["foto (transcript).md", "bild (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["foto (transcript).md", "bild (transcript).md"]);
     expect(created["foto (transcript).md"]).toContain("# A");
     expect(created["foto (transcript).md"]).toContain('transcribed_by: "vm"');
     expect(notes.get("q.md")).toBe("a ![[foto (transcript)]] b ![[bild (transcript)]]");
@@ -150,7 +151,7 @@ describe("writeTranscripts", () => {
   it("leeres Transkript → diese Notiz wird übersprungen", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]] });
     const r = await writeTranscripts(io, "q.md", [{ raw: "![[foto.jpg]]", link: "foto.jpg", content: "   ", model: "vm" }]);
-    expect(r.paths).toEqual([null]);
+    expect(r.results.map(x => x.path)).toEqual([null]);
     expect(Object.keys(created)).toEqual([]);
     expect(notes.get("q.md")).toBe("![[foto.jpg]]");   // unverändert, kein Write
   });
@@ -160,14 +161,14 @@ describe("writeTranscripts", () => {
       { raw: "![[a/foto.jpg]]", link: "a/foto.jpg", content: "A", model: "m" },
       { raw: "![[b/foto.jpg]]", link: "b/foto.jpg", content: "B", model: "m" },
     ]);
-    expect(r.paths).toEqual(["foto (transcript).md", "foto (transcript)-2.md"]);
+    expect(r.results.map(x => x.path)).toEqual(["foto (transcript).md", "foto (transcript)-2.md"]);
   });
   it("embed:false legt Notiz an, lässt den Quell-Link aber unverändert", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "siehe [[scan.png]] dazu"]] });
     const r = await writeTranscripts(io, "q.md", [
       { raw: "[[scan.png]]", link: "scan.png", content: "# T", model: "vm", embed: false },
     ]);
-    expect(r.paths).toEqual(["scan (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["scan (transcript).md"]);
     expect(created["scan (transcript).md"]).toContain("# T");
     expect(notes.get("q.md")).toBe("siehe [[scan.png]] dazu");   // Quelle unangetastet
   });
@@ -179,36 +180,36 @@ describe("writeTranscripts", () => {
     const r = await writeTranscripts(io, "q.md", [
       { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md" },
     ]);
-    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["b (transcript).md"]);
     expect(notes.get("b (transcript).md")).toContain("NEU");
     expect(notes.get("b (transcript).md")).toContain("created: 2026-01-01");
     expect(notes.get("b (transcript).md")).toContain('transcribed_by: "neu"');
     expect(notes.get("q.md")).toBe("![[b.png]]");  // kein Embed-Ersatz
   });
 
-  it("Override ohne knownBody (Erstberührung), confirmOverwrite liefert true → schreibt", async () => {
+  it("Override ohne knownBody (Erstberührung), confirmOverwrite liefert Body (accept-all) → schreibt", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
     ] });
     let seen: any = null;
-    io.confirmOverwrite = async (ctx: any) => { seen = ctx; return true; };
+    io.confirmOverwrite = async (ctx: any) => { seen = ctx; return applySelection(ctx.diff, []); };
     const r = await writeTranscripts(io, "q.md", [
       { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md" },
     ]);
-    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["b (transcript).md"]);
     expect(seen.path).toBe("b (transcript).md");
     expect(seen.diff).toEqual([{ kind: "del", text: "ALT" }, { kind: "add", text: "NEU" }]);
     expect(notes.get("b (transcript).md")).toContain("NEU");
   });
-  it("Override ohne knownBody, confirmOverwrite liefert false → schreibt NICHT, paths[i]=null", async () => {
+  it("Override ohne knownBody, confirmOverwrite liefert null → schreibt NICHT, paths[i]=null", async () => {
     const { io, notes } = fakeIO({ notes: [
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
     ] });
-    io.confirmOverwrite = async () => false;
+    io.confirmOverwrite = async () => null;
     const r = await writeTranscripts(io, "q.md", [
       { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md" },
     ]);
-    expect(r.paths).toEqual([null]);
+    expect(r.results.map(x => x.path)).toEqual([null]);
     expect(notes.get("b (transcript).md")).toContain("ALT");
   });
   it("Override mit knownBody === on-disk-Body (Retry-Continuation) → kein Callback, schreibt direkt", async () => {
@@ -216,12 +217,12 @@ describe("writeTranscripts", () => {
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT`],
     ] });
     let called = false;
-    io.confirmOverwrite = async () => { called = true; return false; };
+    io.confirmOverwrite = async () => { called = true; return null; };
     const r = await writeTranscripts(io, "q.md", [
       { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", knownBody: "ALT" },
     ]);
     expect(called).toBe(false);
-    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["b (transcript).md"]);
     expect(notes.get("b (transcript).md")).toContain("NEU");
   });
   it("Override mit knownBody ≠ on-disk-Body (manueller Edit dazwischen) → re-gated, Callback aufgerufen", async () => {
@@ -229,14 +230,14 @@ describe("writeTranscripts", () => {
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nMANUELL BEARBEITET`],
     ] });
     let seen: any = null;
-    io.confirmOverwrite = async (ctx: any) => { seen = ctx; return true; };
+    io.confirmOverwrite = async (ctx: any) => { seen = ctx; return applySelection(ctx.diff, []); };
     const r = await writeTranscripts(io, "q.md", [
       // knownBody "ALT" = was das Plugin zuletzt geschrieben hat; on-disk weicht ab (User hat editiert)
       { raw: "![[b.png]]", link: "b.png", content: "NEU", model: "neu", overwritePath: "b (transcript).md", knownBody: "ALT" },
     ]);
     expect(seen).not.toBeNull();
     expect(seen.diff).toEqual([{ kind: "del", text: "MANUELL BEARBEITET" }, { kind: "add", text: "NEU" }]);
-    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["b (transcript).md"]);
     expect(notes.get("b (transcript).md")).toContain("NEU");
   });
   it("identischer Body (Erstberührung) → kein Callback, schreibt", async () => {
@@ -244,12 +245,25 @@ describe("writeTranscripts", () => {
       ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nGLEICH`],
     ] });
     let called = false;
-    io.confirmOverwrite = async () => { called = true; return true; };
+    io.confirmOverwrite = async () => { called = true; return "GLEICH"; };
     const r = await writeTranscripts(io, "q.md", [
       { raw: "![[b.png]]", link: "b.png", content: "GLEICH", model: "neu", overwritePath: "b (transcript).md" },
     ]);
     expect(called).toBe(false);
-    expect(r.paths).toEqual(["b (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["b (transcript).md"]);
+  });
+
+  it("confirmOverwrite liefert gemergten Body → genau der wird geschrieben + zurückgegeben", async () => {
+    const { io, notes } = fakeIO({ notes: [
+      ["b (transcript).md", `---\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nalt\nX\nc`],
+    ] });
+    io.confirmOverwrite = async () => "MERGED";
+    const r = await writeTranscripts(io, "q.md", [
+      { raw: "![[b.jpg]]", link: "b.jpg", content: "neu", model: "vm", overwritePath: "b (transcript).md" },
+    ]);
+    expect(r.results[0].path).toBe("b (transcript).md");
+    expect(r.results[0].body).toBe("MERGED");
+    expect(notes.get("b (transcript).md")).toContain("MERGED"); // rewriteTranscript hat MERGED als Body geschrieben
   });
 
   it("selfSource: schreibt unter destDir, kein source_note, kein Quell-Read/-Write", async () => {
@@ -261,7 +275,7 @@ describe("writeTranscripts", () => {
       { raw: "", link: "scan.png", content: "Hallo", model: "vm", embed: false },
     ], { selfSource: true, destDir: "Transkripte" });
 
-    expect(r.paths).toEqual(["Transkripte/scan (transcript).md"]);
+    expect(r.results.map(x => x.path)).toEqual(["Transkripte/scan (transcript).md"]);
     const note = notes.get("Transkripte/scan (transcript).md");
     expect(note).toContain('source_image: "[[scan.png]]"');
     expect(note).not.toContain("source_note");

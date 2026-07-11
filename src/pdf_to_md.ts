@@ -106,16 +106,17 @@ export async function writePdfTranscript(
   if (overwritePath) {
     const old = await io.readNote(overwritePath);
     const alreadyMatches = opts?.knownBody !== undefined && extractTranscriptBody(old) === opts.knownBody;
+    let bodyToWrite = body.trim();
     if (!alreadyMatches && io.confirmOverwrite) {
       const diff = diffLines(extractTranscriptBody(old), body.trim());
-      const changed = diff.some(d => d.kind !== "ctx");
-      if (changed && !(await io.confirmOverwrite({ path: overwritePath, diff }))) {
-        io.notify(t("notice.overwriteSkipped"));
-        return { path: null, body: null };
+      if (diff.some(d => d.kind !== "ctx")) {
+        const chosen = await io.confirmOverwrite({ path: overwritePath, diff });
+        if (chosen === null) { io.notify(t("notice.overwriteSkipped")); return { path: null, body: null }; }
+        bodyToWrite = chosen;
       }
     }
-    await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body, pages: pagesStr }));
-    return { path: overwritePath, body: body.trim() };
+    await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body: bodyToWrite, pages: pagesStr }));
+    return { path: overwritePath, body: bodyToWrite };
   }
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
   const pdfPath = self ? sourcePath : (io.resolveImage(source.link, sourcePath)?.path ?? source.link);
