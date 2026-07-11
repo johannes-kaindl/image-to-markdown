@@ -6,6 +6,13 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Schmalere Seitenleiste:** Modellauswahl, Preset und der Thinking-Schalter drängten sich in einer
+  Zeile und zwangen die Seitenleiste unnötig breit. Die Modellauswahl bekommt jetzt eine eigene Zeile
+  (Platz für lange Modellnamen), Preset und Thinking-Schalter teilen sich die Zeile darunter — die
+  Seitenleiste bleibt schmal.
+
 ## [0.10.0] — 2026-07-11
 
 ### Hinzugefügt
