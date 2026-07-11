@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-07-11
+
 ### Hinzugefügt
 
 - **Thinking-Toggle in der Seitenleiste:** Ein Schalter neben der Modellauswahl schaltet das
