@@ -22,7 +22,7 @@ function mkView(over: any = {}) {
     getActivePath: over.getActivePath ?? (() => "q.md"),
     scan: over.scan ?? (async () => ITEMS),
     transcribeStream: over.transcribeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("Hal"); onContent("lo"); return { content: "Hallo", reasoning: "", model: "vm" }; }),
-    writeTranscripts: over.writeTranscripts ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_: any, i: number) => `note-${i}.md`); }),
+    writeTranscripts: over.writeTranscripts ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((e: any, i: number) => ({ path: `note-${i}.md`, body: e.content })); }),
     writePdf: over.writePdf ?? (async (_sp: string, _raw: string, _link: string, _pages: any[]) => { calls.written.push(_pages); return { path: "doc (PDF transcript).md", body: "body" }; }),
     connectionStatus: over.connectionStatus ?? (async () => ({ ok: true, endpoint: "http://localhost:1234" })),
     listModels: over.listModels ?? (async () => []),
@@ -337,7 +337,7 @@ describe("ImgToMdView — Transkribieren", () => {
 
 describe("ImgToMdView — Notiz anlegen", () => {
   it("'Notiz anlegen' ruft writeTranscripts mit einem Eintrag, Karte → angelegt", async () => {
-    const { view, calls } = mkView({ writeTranscripts: async (_sp: string, entries: any[]) => { calls.written.push(entries); return ["foto.md"]; } });
+    const { view, calls } = mkView({ writeTranscripts: async (_sp: string, entries: any[]) => { calls.written.push(entries); return [{ path: "foto.md", body: entries[0].content }]; } });
     await view.onOpen(); await view.run();
     all(view.contentEl, "img2md-write")[0].click();
     await Promise.resolve(); await Promise.resolve();
@@ -346,7 +346,7 @@ describe("ImgToMdView — Notiz anlegen", () => {
     expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("foto.md");
   });
   it("'angelegt'-Zeile öffnet die Notiz per Klick", async () => {
-    const { view, calls } = mkView({ writeTranscripts: async () => ["foto.md"] });
+    const { view, calls } = mkView({ writeTranscripts: async () => [{ path: "foto.md", body: null }] });
     await view.onOpen(); await view.run();
     await view.writeOne(0);
     all(view.contentEl, "img2md-written")[0].click();
@@ -357,7 +357,7 @@ describe("ImgToMdView — Notiz anlegen", () => {
       { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
       { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image" },
     ];
-    const { view, calls } = mkView({ scan: async () => twoItems, writeTranscripts: async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_: any, i: number) => `n-${i}.md`); } });
+    const { view, calls } = mkView({ scan: async () => twoItems, writeTranscripts: async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((e: any, i: number) => ({ path: `n-${i}.md`, body: e.content })); } });
     await view.onOpen(); await view.run();
     all(view.contentEl, "img2md-all")[0].click();
     await Promise.resolve(); await Promise.resolve();
@@ -367,7 +367,7 @@ describe("ImgToMdView — Notiz anlegen", () => {
   });
   it("nach Schreiben wird neu gescannt (scan erneut aufgerufen)", async () => {
     const scan = vi.fn(async () => ITEMS);
-    const { view } = mkView({ scan, writeTranscripts: async () => ["foto.md"] });
+    const { view } = mkView({ scan, writeTranscripts: async () => [{ path: "foto.md", body: null }] });
     await view.onOpen();          // scan #1
     await view.run();
     await view.writeOne(0);       // scan #2 (rescan nach Schreiben)
@@ -601,7 +601,7 @@ describe("ImgToMdView — Diff-Confirm + Content-aware Gate (v1.1)", () => {
     const knownBodies: (string | undefined)[] = [];
     const { view } = mkView({
       scan: async () => [item],
-      writeTranscripts: async (_sp: string, entries: any[]) => { knownBodies.push(entries[0].knownBody); return ["b (transcript).md"]; },
+      writeTranscripts: async (_sp: string, entries: any[]) => { knownBodies.push(entries[0].knownBody); return [{ path: "b (transcript).md", body: entries[0].content }]; },
     });
     await view.onOpen();
     // Override-Item: default abgewählt (existingTranscriptPath) → wie im bestehenden "vorhandenes

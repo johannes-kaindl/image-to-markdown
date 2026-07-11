@@ -169,7 +169,7 @@ export interface ImgToMdIO {
   readImageDataUrl(path: string, ext: string): Promise<string>;
   transcribe(dataUrl: string): Promise<{ content: string; model: string }>;
   notify(msg: string): void;
-  confirmOverwrite?(ctx: { path: string; diff: DiffLine[] }): Promise<boolean>;
+  confirmOverwrite?(ctx: { path: string; diff: DiffLine[] }): Promise<string | null>;
 }
 
 /** Schreibt mehrere Transkripte gebündelt: im Nicht-selfSource-Pfad Quelle EINMAL lesen,
@@ -183,40 +183,40 @@ export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
   entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; knownBody?: string }[],
   opts?: { selfSource?: boolean; destDir?: string },
-): Promise<{ paths: (string | null)[] }> {
+): Promise<{ results: { path: string | null; body: string | null }[] }> {
   const self = opts?.selfSource === true;
   const destDir = opts?.destDir;
   const before = self ? "" : await io.readNote(sourcePath);
   let content = before;
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
-  const paths: (string | null)[] = [];
+  const results: { path: string | null; body: string | null }[] = [];
   for (const e of entries) {
     const transcript = e.content.trim();
-    if (!transcript) { paths.push(null); continue; }
+    if (!transcript) { results.push({ path: null, body: null }); continue; }
     if (e.overwritePath) {
       const old = await io.readNote(e.overwritePath);
       const alreadyMatches = e.knownBody !== undefined && extractTranscriptBody(old) === e.knownBody;
+      let bodyToWrite = transcript;
       if (!alreadyMatches && io.confirmOverwrite) {
         const diff = diffLines(extractTranscriptBody(old), transcript);
-        const changed = diff.some(d => d.kind !== "ctx");
-        if (changed && !(await io.confirmOverwrite({ path: e.overwritePath, diff }))) {
-          io.notify(t("notice.overwriteSkipped"));
-          paths.push(null);
-          continue;
+        if (diff.some(d => d.kind !== "ctx")) {
+          const chosen = await io.confirmOverwrite({ path: e.overwritePath, diff });
+          if (chosen === null) { io.notify(t("notice.overwriteSkipped")); results.push({ path: null, body: null }); continue; }
+          bodyToWrite = chosen;
         }
       }
-      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: transcript }));
-      paths.push(e.overwritePath);
+      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: bodyToWrite }));
+      results.push({ path: e.overwritePath, body: bodyToWrite });
       continue;
     }
     const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
     const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", destDir);
     await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
     if (!self && e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
-    paths.push(newPath);
+    results.push({ path: newPath, body: transcript });
   }
   if (!self && content !== before) await io.writeNote(sourcePath, content);
-  return { paths };
+  return { results };
 }
 
 /** Transkribiert die EMBEDS einer Notiz nach Markdown (Command/Kontextmenü-Pfad), legt je Bild eine
@@ -249,8 +249,8 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
     if (!res.content.trim()) { io.notify(t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
     entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model, embed: e.embed });
   }
-  const { paths } = await writeTranscripts(io, sourcePath, entries);
-  const base = t(paths.length === 1 ? "core.transcribed.one" : "core.transcribed.other", paths.length);
+  const { results } = await writeTranscripts(io, sourcePath, entries);
+  const base = t(results.length === 1 ? "core.transcribed.one" : "core.transcribed.other", results.length);
   io.notify(`${base}${skipped ? t("core.skippedSuffix", skipped) : ""}.`);
-  return { transcribed: paths.length, skipped };
+  return { transcribed: results.length, skipped };
 }
