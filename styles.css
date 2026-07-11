@@ -47,6 +47,10 @@
 .img2md-model-row .img2md-preset { flex: 1; }
 .img2md-model-status { display: inline-flex; align-items: center; color: var(--text-faint); flex: 0 0 auto; }
 .img2md-model-status.is-loaded { color: var(--text-success); }
+.img2md-think-toggle.clickable-icon { display: inline-flex; align-items: center; gap: 0.25em; padding: 2px 6px; height: auto; width: auto; flex: 0 0 auto; font-size: 12px; color: var(--text-muted); }
+.img2md-think-toggle.clickable-icon svg { width: 14px; height: 14px; }
+.img2md-think-toggle.is-off { color: var(--text-faint); }
+.img2md-think-toggle.is-disabled { color: var(--text-faint); opacity: 0.7; cursor: default; }
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }

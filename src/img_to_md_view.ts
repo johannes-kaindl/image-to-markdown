@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
+import { thinkToggleView } from "./reasoning_toggle";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 
@@ -33,6 +34,8 @@ export interface ImgToMdViewDeps {
   listPresets: () => { id: string; label: string }[];
   getPreset: () => string;
   setPreset: (id: string) => void;
+  getSuppress: () => boolean;
+  setSuppress: (v: boolean) => void;
   openPath: (p: string) => void;
   copyText: (t: string) => void;
 }
@@ -46,6 +49,7 @@ export class ImgToMdView extends ItemView {
   private presetSel: HTMLSelectElement | null = null;
   private modelStatusEl: HTMLElement | null = null;
   private refreshBtn: HTMLElement | null = null;
+  private thinkToggleEl: HTMLElement | null = null;
   private listEl: HTMLElement | null = null;
   private cardsEl: HTMLElement | null = null;
   private cardEls: CardRefs[] = [];
@@ -73,7 +77,7 @@ export class ImgToMdView extends ItemView {
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
-    this.modelSel.addEventListener("change", () => this.deps.setModel(this.modelSel?.value ?? ""));
+    this.modelSel.addEventListener("change", () => { this.deps.setModel(this.modelSel?.value ?? ""); this.renderThinkToggle(); });
     this.presetSel = modelRow.createEl("select", { cls: "img2md-preset dropdown" });
     for (const p of this.deps.listPresets()) { const o = this.presetSel.createEl("option", { text: p.label }); o.value = p.id; }
     this.presetSel.value = this.deps.getPreset();
@@ -82,6 +86,12 @@ export class ImgToMdView extends ItemView {
     this.refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
     setIcon(this.refreshBtn, "refresh-cw");
     this.refreshBtn.addEventListener("click", () => void this.refreshModels(true));
+    this.thinkToggleEl = modelRow.createEl("button", { cls: "img2md-think-toggle clickable-icon" });
+    this.thinkToggleEl.addEventListener("click", () => {
+      if (thinkToggleView(this.deps.getModel(), this.deps.getSuppress()).disabled) return;
+      this.deps.setSuppress(!this.deps.getSuppress());
+      this.renderThinkToggle();
+    });
     const head = c.createDiv({ cls: "img2md-head" });
     this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: t("view.deselectAll") });
     this.toggleBtn.addEventListener("click", () => { this.state.toggleAll(); this.renderList(); });
@@ -136,6 +146,7 @@ export class ImgToMdView extends ItemView {
     this.refreshBtn?.removeClass("is-loading");
     // Bei manuellem Refresh ohne Modellwechsel ein kurzes „N Modelle geladen" — sonst bliebe der Klick unsichtbar.
     if (userTriggered && !realigned) this.statusLabelEl?.setText(t("view.modelsLoaded", models.length));
+    this.renderThinkToggle();
   }
 
   /** Status-Icon neben dem Dropdown. Die Form (circle-check vs. circle-slash) trägt die
@@ -146,6 +157,21 @@ export class ImgToMdView extends ItemView {
     const loaded = !!cur && models.includes(cur);
     if (loaded) { el.addClass("is-loaded"); setIcon(el, "circle-check"); el.setAttribute("title", t("view.modelLoaded")); }
     else { el.removeClass("is-loaded"); setIcon(el, "circle-slash"); el.setAttribute("title", t("view.modelNotLoaded")); }
+  }
+
+  /** Rendert den Thinking-Toggle aus (Modell, Suppress-Flag). brain-Icon + Zustands-Label;
+   *  Bedeutung über Text + Zustand, nicht Farbe allein (WCAG 1.4.1). */
+  private renderThinkToggle(): void {
+    const btn = this.thinkToggleEl; if (!btn) return;
+    const v = thinkToggleView(this.deps.getModel(), this.deps.getSuppress());
+    btn.empty();
+    const icon = btn.createSpan({ cls: "img2md-think-icon" });
+    setIcon(icon, "brain");
+    btn.createSpan({ cls: "img2md-think-lbl", text: t(v.labelKey) });
+    btn.removeClass("is-off"); btn.removeClass("is-disabled");
+    if (v.cls) btn.addClass(v.cls);
+    btn.setAttribute("aria-label", t(v.labelKey));
+    btn.setAttribute("title", t(v.labelKey));
   }
 
   async rescan(): Promise<void> {

@@ -83,7 +83,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
-      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt)),
+      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), { suppressThinking: this.settings.suppressThinking }),
       notify: (m) => { new Notice(m); },
       confirmOverwrite: (ctx) => new Promise<boolean>((resolve) => new DiffModal(this.app, ctx.path, ctx.diff, resolve).open()),
     };
@@ -161,10 +161,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
             if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
               const fmt = t("pdf.textLayerPrompt");
               try {
-                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal);
+                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
               } catch (err) {
                 await this.resolveAndReconnect();
-                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal);
+                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
                 throw err;
               }
             }
@@ -175,10 +175,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
         }
         const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
         try {
-          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal);
+          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
         } catch (err) {
           await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal);
+          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
           throw err;
         }
       },
@@ -201,6 +201,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
       getPreset: () => this.settings.promptPreset,
       setPreset: (id: string) => { this.settings.promptPreset = isPromptPreset(id) ? id : "default"; void this.saveSettings(); },
+      getSuppress: () => this.settings.suppressThinking,
+      setSuppress: (v: boolean) => { this.settings.suppressThinking = v; void this.saveSettings(); },
       openPath: this.openPath,
       copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },
     };
