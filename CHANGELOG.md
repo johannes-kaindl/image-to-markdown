@@ -6,6 +6,14 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Thinking-Toggle in der Seitenleiste:** Ein Schalter neben der Modellauswahl schaltet das
+  „Nachdenken" (Reasoning) von Hybrid-Modellen ab — praktisch, wenn ein großes Reasoning-Modell
+  sonst lange denkt und man das Ergebnis schneller braucht. Der Zustand bleibt erhalten
+  (Standard: an). Modelle, die sich nicht abschalten lassen (z. B. gpt-oss/harmony), zeigen
+  „immer an" und bleiben unverändert.
+
 ## [0.9.1] — 2026-07-07
 
 ### Behoben
