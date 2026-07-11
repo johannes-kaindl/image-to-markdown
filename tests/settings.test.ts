@@ -61,4 +61,7 @@ describe("defaultSettings", () => {
   it("pdfUseTextLayer ist default true", () => {
     expect(defaultSettings().pdfUseTextLayer).toBe(true);
   });
+  it("Default ist false (Thinking an)", () => {
+    expect(defaultSettings().suppressThinking).toBe(false);
+  });
 });

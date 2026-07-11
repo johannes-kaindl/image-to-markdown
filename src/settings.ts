@@ -39,6 +39,7 @@ export interface ImageToMarkdownSettings {
   pdfRenderScale: number;
   pdfPageSeparator: PdfPageSeparator;
   pdfUseTextLayer: boolean;
+  suppressThinking: boolean;
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -52,6 +53,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     pdfRenderScale: 2.0,
     pdfPageSeparator: "comment",
     pdfUseTextLayer: true,
+    suppressThinking: false,
   };
 }
 
