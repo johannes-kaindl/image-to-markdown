@@ -172,6 +172,7 @@ export class ImgToMdView extends ItemView {
     if (v.cls) btn.addClass(v.cls);
     btn.setAttribute("aria-label", t(v.labelKey));
     btn.setAttribute("title", t(v.labelKey));
+    if (v.disabled) btn.setAttribute("aria-disabled", "true"); else btn.removeAttribute("aria-disabled");
   }
 
   async rescan(): Promise<void> {

@@ -12,6 +12,7 @@ import { setLang, pickLang, t } from "./i18n";
 import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
 import { DiffModal } from "./diff_modal";
+import { effectiveSuppress } from "./reasoning_toggle";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -83,7 +84,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
-      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), { suppressThinking: this.settings.suppressThinking }),
+      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) }),
       notify: (m) => { new Notice(m); },
       confirmOverwrite: (ctx) => new Promise<boolean>((resolve) => new DiffModal(this.app, ctx.path, ctx.diff, resolve).open()),
     };
@@ -161,10 +162,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
             if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
               const fmt = t("pdf.textLayerPrompt");
               try {
-                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
+                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
               } catch (err) {
                 await this.resolveAndReconnect();
-                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
+                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
                 throw err;
               }
             }
@@ -175,10 +176,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
         }
         const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
         try {
-          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
+          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
         } catch (err) {
           await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: this.settings.suppressThinking });
+          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
           throw err;
         }
       },

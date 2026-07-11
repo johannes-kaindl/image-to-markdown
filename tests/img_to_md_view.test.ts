@@ -665,6 +665,7 @@ describe("ImgToMdView — Thinking-Toggle", () => {
     const [btn] = all(view.contentEl, "img2md-think-toggle");
     expect(btn.textContent).toContain("Thinking: always on");
     expect(String(btn.className)).toContain("is-disabled");
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
     btn.click();
     expect(setSuppress).not.toHaveBeenCalled();
   });
