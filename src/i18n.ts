@@ -145,8 +145,9 @@ const EN: Dict = {
     "emphasis). Output only the Markdown, no comments.",
   "notice.overwriteSkipped": "Skipped — existing note kept",
   "diff.modal.title": "Overwrite {0}?",
-  "diff.overwrite": "Overwrite",
+  "diff.overwrite": "Apply",
   "diff.cancel": "Cancel",
+  "diff.hunk.aria": "Apply change {0}",
 };
 
 const DE: Dict = {
@@ -277,8 +278,9 @@ const DE: Dict = {
     "(Überschriften, Listen, Tabellen, Hervorhebungen). Gib nur das Markdown aus, keine Kommentare.",
   "notice.overwriteSkipped": "Übersprungen — bestehende Notiz behalten",
   "diff.modal.title": "{0} überschreiben?",
-  "diff.overwrite": "Überschreiben",
+  "diff.overwrite": "Übernehmen",
   "diff.cancel": "Abbrechen",
+  "diff.hunk.aria": "Änderung {0} übernehmen",
 };
 
 /** Exportiert für den EN/DE-Paritätstest; zur Laufzeit nur über t() lesen. */

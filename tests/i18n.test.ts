@@ -77,7 +77,14 @@ describe("i18n", () => {
 
   it("Diff-Keys vorhanden (EN)", () => {
     setLang("en");
-    expect(t("diff.overwrite")).toBe("Overwrite");
+    expect(t("diff.overwrite")).toBe("Apply");
     expect(t("diff.modal.title", "note")).toContain("note");
+    expect(t("diff.hunk.aria", "1")).toBe("Apply change 1");
+  });
+
+  it("Diff-Keys vorhanden (DE)", () => {
+    setLang("de");
+    expect(t("diff.overwrite")).toBe("Übernehmen");
+    expect(t("diff.hunk.aria", "1")).toBe("Änderung 1 übernehmen");
   });
 });

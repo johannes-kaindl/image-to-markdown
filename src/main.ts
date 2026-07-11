@@ -12,7 +12,6 @@ import { setLang, pickLang, t } from "./i18n";
 import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
 import { DiffModal } from "./diff_modal";
-import { applySelection } from "./diff";
 import { effectiveSuppress } from "./reasoning_toggle";
 
 export default class ImageToMarkdownPlugin extends Plugin {
@@ -87,8 +86,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
       transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) }),
       notify: (m) => { new Notice(m); },
-      confirmOverwrite: (ctx) => new Promise<string | null>((resolve) =>
-        new DiffModal(this.app, ctx.path, ctx.diff, (ok) => resolve(ok ? applySelection(ctx.diff, []) : null)).open()),
+      confirmOverwrite: (ctx) => new Promise<string | null>((resolve) => new DiffModal(this.app, ctx.path, ctx.diff, resolve).open()),
     };
   }
 
