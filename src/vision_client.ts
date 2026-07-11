@@ -1,6 +1,7 @@
 import { streamSSE } from "./sse";
 import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
 import { normalizeEndpoint, resolveActiveEndpoint } from "./vendor/kit/endpoint";
+import { suppressParams } from "./vendor/kit/reasoning";
 
 // normalizeEndpoint + resolveActiveEndpoint sind aus obsidian-kit#0.3.0 vendored — hier
 // re-exportiert, damit main.ts/settings.ts/Tests sie weiterhin aus ./vision_client beziehen.
@@ -83,11 +84,11 @@ export class VisionClient {
   }
 
   /** Non-streaming /v1/chat/completions-Call. Modell autoritativ aus der Response. */
-  async transcribe(dataUrl: string, prompt: string): Promise<{ content: string; model: string }> {
+  async transcribe(dataUrl: string, prompt: string, opts?: { suppressThinking?: boolean }): Promise<{ content: string; model: string }> {
     const res = await http()(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: false }),
+      body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: false, ...suppressParams(opts?.suppressThinking ?? false) }),
     });
     // LM Studio & Co. liefern Fehler teils als HTTP 200 mit {error:{message}} → echte Meldung heben
     // statt sie als „leeres Transkript" zu verschlucken (siehe AGENTS.md-Gotcha).
@@ -118,13 +119,13 @@ export class VisionClient {
   async transcribeStream(
     dataUrl: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
-    signal?: AbortSignal,
+    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
   ): Promise<{ content: string; reasoning: string; model: string }> {
     if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
     const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: true }),
+      body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
       signal,
     });
     if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
@@ -143,13 +144,13 @@ export class VisionClient {
   async transcribeTextStream(
     text: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
-    signal?: AbortSignal,
+    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
   ): Promise<{ content: string; reasoning: string; model: string }> {
     if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
     const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: this.model, messages: [{ role: "user", content: `${prompt}\n\n${text}` }], stream: true }),
+      body: JSON.stringify({ model: this.model, messages: [{ role: "user", content: `${prompt}\n\n${text}` }], stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
       signal,
     });
     if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);

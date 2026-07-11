@@ -63,6 +63,18 @@ describe("i18n", () => {
     expect(de).toEqual(en);
   });
 
+  it("thinking-toggle Keys EN/DE", () => {
+    setLang("en");
+    expect(t("view.thinkingOn")).toBe("Thinking: on");
+    expect(t("view.thinkingOff")).toBe("Thinking: off");
+    expect(t("view.thinkingAlways")).toBe("Thinking: always on");
+    setLang("de");
+    expect(t("view.thinkingOn")).toBe("Thinking: an");
+    expect(t("view.thinkingOff")).toBe("Thinking: aus");
+    expect(t("view.thinkingAlways")).toBe("Thinking: immer an");
+    setLang("en");
+  });
+
   it("Diff-Keys vorhanden (EN)", () => {
     setLang("en");
     expect(t("diff.overwrite")).toBe("Overwrite");

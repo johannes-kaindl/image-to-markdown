@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { ImgToMdView, VIEW_TYPE_IMGMD } from "../src/img_to_md_view";
 import { ImgItem } from "../src/img_to_md_state";
 import { makeFakeApp } from "./__mocks__/obsidian";
+import { setLang } from "../src/i18n";
 
 function all(el: any, cls: string): any[] {
   const out: any[] = [];
@@ -30,6 +31,8 @@ function mkView(over: any = {}) {
     listPresets: over.listPresets ?? (() => [{ id: "default", label: "Default" }, { id: "math", label: "Math → LaTeX" }]),
     getPreset: over.getPreset ?? (() => "default"),
     setPreset: over.setPreset ?? vi.fn(),
+    getSuppress: over.getSuppress ?? (() => false),
+    setSuppress: over.setSuppress ?? vi.fn(),
     openPath: (p: string) => calls.opened.push(p),
     copyText: over.copyText ?? ((t: string) => calls.copied.push(t)),
   };
@@ -628,5 +631,42 @@ describe("ImgToMdView — Diff-Confirm + Content-aware Gate (v1.1)", () => {
     (view as any).state.cards[0].status = "done";   // simulierter zweiter Write derselben Notiz
     await view.writeAll();
     expect(knownBodies).toEqual([undefined, "PDF-BODY"]);
+  });
+});
+
+describe("ImgToMdView — Thinking-Toggle", () => {
+  it("normales Modell, nicht unterdrückt → Label 'Thinking: on', klickbar", async () => {
+    setLang("en");
+    const { view } = mkView({ getModel: () => "qwen3:8b", getSuppress: () => false });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "img2md-think-toggle");
+    expect(btn.textContent).toContain("Thinking: on");
+    expect(String(btn.className)).not.toContain("is-off");
+  });
+
+  it("Klick flippt Suppress und re-rendert das Label", async () => {
+    setLang("en");
+    let sup = false;
+    const setSuppress = vi.fn((v: boolean) => { sup = v; });
+    const { view } = mkView({ getModel: () => "qwen3:8b", getSuppress: () => sup, setSuppress });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "img2md-think-toggle");
+    btn.click();
+    expect(setSuppress).toHaveBeenCalledWith(true);
+    expect(btn.textContent).toContain("Thinking: off");
+    expect(String(btn.className)).toContain("is-off");
+  });
+
+  it("immer-an-Modell → 'Thinking: always on', Klick ändert nichts", async () => {
+    setLang("en");
+    const setSuppress = vi.fn();
+    const { view } = mkView({ getModel: () => "gpt-oss:20b", getSuppress: () => false, setSuppress });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "img2md-think-toggle");
+    expect(btn.textContent).toContain("Thinking: always on");
+    expect(String(btn.className)).toContain("is-disabled");
+    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    btn.click();
+    expect(setSuppress).not.toHaveBeenCalled();
   });
 });
