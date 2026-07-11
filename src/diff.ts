@@ -29,3 +29,44 @@ export function diffLines(oldText: string, newText: string): DiffLine[] {
   while (j < m) { out.push({ kind: "add", text: b[j] }); j++; }
   return out;
 }
+
+export type Hunk = { lines: DiffLine[]; startIndex: number };
+
+/** Gruppiert die flache Diff-Liste in Hunks: jeder maximale Block zusammenhängender
+ *  add/del-Zeilen (durch ctx getrennt) wird EIN Hunk. ctx-Zeilen gehören keinem Hunk.
+ *  startIndex = Index der ersten Hunk-Zeile in `diff`. */
+export function groupHunks(diff: DiffLine[]): Hunk[] {
+  const hunks: Hunk[] = [];
+  let cur: DiffLine[] | null = null;
+  let start = 0;
+  for (let i = 0; i < diff.length; i++) {
+    if (diff[i].kind === "ctx") {
+      if (cur) { hunks.push({ lines: cur, startIndex: start }); cur = null; }
+    } else {
+      if (!cur) { cur = []; start = i; }
+      cur.push(diff[i]);
+    }
+  }
+  if (cur) hunks.push({ lines: cur, startIndex: start });
+  return hunks;
+}
+
+/** Baut den Body aus Diff + Hunk-Auswahl: ctx immer; Hunk selektiert → add-Zeilen (neu),
+ *  deselektiert → del-Zeilen (alt). `selected[k]` gehört zum k-ten Hunk (groupHunks-Reihenfolge);
+ *  fehlt der Eintrag, gilt true (= übernehmen). Rückgabe join("\n"). */
+export function applySelection(diff: DiffLine[], selected: boolean[]): string {
+  const takeAdd = new Set<number>();
+  groupHunks(diff).forEach((h, k) => { if (selected[k] !== false) takeAdd.add(h.startIndex); });
+  const out: string[] = [];
+  let i = 0;
+  while (i < diff.length) {
+    if (diff[i].kind === "ctx") { out.push(diff[i].text); i++; continue; }
+    const take = takeAdd.has(i); // i ist ein Hunk-Start (startIndex)
+    while (i < diff.length && diff[i].kind !== "ctx") {
+      if (take && diff[i].kind === "add") out.push(diff[i].text);
+      if (!take && diff[i].kind === "del") out.push(diff[i].text);
+      i++;
+    }
+  }
+  return out.join("\n");
+}
