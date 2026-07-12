@@ -6,6 +6,22 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Selektiver Diff-Apply:** Der Überschreiben-Dialog zeigt jetzt vor jeder Änderungsstelle eine
+  Checkbox. Standardmäßig sind alle angehakt (Bestätigen übernimmt wie bisher alles) — du kannst aber
+  gezielt einzelne Änderungen abwählen, um an dieser Stelle die alte Fassung zu behalten. So mischst
+  du pro Notiz die guten neuen und die bewährten alten Zeilen, statt nur „alles oder nichts". Wählst
+  du jede Änderung ab, bleibt die Notiz unverändert (es wird nichts geschrieben).
+
+### Behoben
+
+- **Verschobener Vergleich im Überschreiben-Dialog:** Hatte der Obsidian-Linter eine Leerzeile zwischen
+  Frontmatter und Bild-/PDF-Einbettung eingefügt, blieb die Einbettungszeile fälschlich im Vergleich
+  hängen — dadurch war der gesamte Zeilenvergleich um eine Zeile verschoben und stellte falsche
+  Textstellen gegenüber. Die Einbettung wird jetzt unabhängig von solchen Leerzeilen zuverlässig
+  ausgeblendet, der Vergleich richtet sich wieder korrekt aus.
+
 ## [0.10.1] — 2026-07-11
 
 ### Behoben
