@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-07-12
+
 ### Hinzugefügt
 
 - **Ergebnisse überstehen einen Notizwechsel:** Ein fertig transkribiertes, noch nicht übernommenes
