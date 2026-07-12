@@ -58,6 +58,7 @@ export class ImgToMdView extends ItemView {
   private toggleBtn: HTMLElement | null = null;
   private runBtn: HTMLElement | null = null;
   private retryAllBtn: HTMLElement | null = null;
+  private clearBtn: HTMLElement | null = null;
   private controller: AbortController | null = null;
   private running = false;
   private cardsSourcePath: string | null = null;
@@ -109,6 +110,13 @@ export class ImgToMdView extends ItemView {
     foot.createEl("button", { cls: "img2md-all", text: t("view.createAll") }).addEventListener("click", () => void this.writeAll());
     this.retryAllBtn = foot.createEl("button", { cls: "img2md-retry-all is-hidden", text: t("view.retryAllFailed") });
     this.retryAllBtn.addEventListener("click", () => void this.retryAll());
+    this.clearBtn = foot.createEl("button", { cls: "img2md-clear is-hidden", text: t("view.clearResults") });
+    this.clearBtn.addEventListener("click", () => {
+      this.state.clearCards();
+      this.resetCards();
+      if (this.cardsSourcePath) this.deps.cardCache.clear(this.cardsSourcePath);
+      this.updateAllCards();
+    });
     await this.refreshStatus();
     await this.refreshModels();
     await this.rescan();
@@ -210,6 +218,7 @@ export class ImgToMdView extends ItemView {
   private restoreCardsFor(path: string | null): void {
     const cached = path ? this.deps.cardCache.load(path) : undefined;
     if (cached) { this.state.cards = cached; this.resetCards(); }
+    else this.updateRetryAll();   // kein Cache-Treffer → Footer-Buttons (retryAll/clear) trotzdem an leere Kartenliste angleichen
     this.cardsSourcePath = path;
   }
 
@@ -269,6 +278,7 @@ export class ImgToMdView extends ItemView {
 
   private updateAllCards(): void {
     for (let i = 0; i < this.state.cards.length; i++) this.updateCard(i);
+    this.updateRetryAll();   // auch bei leerer Kartenliste ausführen (sonst bleibt retryAllBtn/clearBtn sichtbar hängen)
   }
 
   /** Idempotenter Sync EINER Karte auf ihren State: legt fehlende Knoten lazy an,
@@ -361,6 +371,7 @@ export class ImgToMdView extends ItemView {
     const btn = this.retryAllBtn; if (!btn) return;
     if (this.state.cards.some(c => c.status === "error")) btn.removeClass("is-hidden");
     else btn.addClass("is-hidden");
+    this.clearBtn?.toggleClass("is-hidden", this.state.cards.length === 0);
   }
 
   /** Baut die DOM einer Karte für einen Retry frisch auf (an gleicher Stelle): verwirft alte

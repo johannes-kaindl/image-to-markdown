@@ -697,4 +697,16 @@ describe("ImgToMdView — Pending-Ergebnis-Persistenz", () => {
     await second.view.onOpen();
     expect(all(second.view.contentEl, "img2md-card").length).toBeGreaterThan(0);
   });
+  it("Clear-Button leert Karten + Cache-Eintrag", async () => {
+    const cache = new CardCache();
+    const { view } = mkView({ cardCache: cache });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-card").length).toBeGreaterThan(0);
+    const clearBtn = all(view.contentEl, "img2md-clear")[0];
+    expect(clearBtn).toBeTruthy();
+    clearBtn.dispatchEvent(new Event("click"));
+    expect(all(view.contentEl, "img2md-card").length).toBe(0);
+    expect(cache.load("q.md")).toBeUndefined();
+    expect(String(clearBtn.className).split(" ")).toContain("is-hidden");
+  });
 });
