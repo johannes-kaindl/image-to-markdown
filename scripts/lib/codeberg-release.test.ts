@@ -53,16 +53,55 @@ describe("createCodebergRelease", () => {
     expect(deletes.some((u) => u.includes("/releases/9/assets/5"))).toBe(true);
   });
 
-  it("wirft, wenn das Anlegen fehlschlägt", async () => {
+  it("retryt transientes 500 beim Anlegen und liefert dann das Release", async () => {
+    let posts = 0;
     const fetch = vi.fn(async (url: string, init: any = {}) => {
       if (url.endsWith("/repos/o/r") && init.method === "PATCH") return res(true);
       if (url.includes("/releases/tags/")) return res(false);
-      if (url.endsWith("/releases") && init.method === "POST") return res(false, "boom", 500);
+      if (url.endsWith("/releases") && init.method === "POST") {
+        posts++;
+        return posts <= 2 ? res(false, "", 500) : res(true, { id: 7, html_url: "h", assets: [] });
+      }
+      return res(false);
+    });
+
+    const out = await createCodebergRelease({
+      fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n", assets: [], sleep: async () => {},
+    });
+    expect(out).toEqual({ id: 7, htmlUrl: "h" });
+    expect(posts).toBe(3); // 2× 500 + 1× 201
+  });
+
+  it("retryt auch bei geworfenem Netzfehler beim Anlegen", async () => {
+    let posts = 0;
+    const fetch = vi.fn(async (url: string, init: any = {}) => {
+      if (url.endsWith("/repos/o/r") && init.method === "PATCH") return res(true);
+      if (url.includes("/releases/tags/")) return res(false);
+      if (url.endsWith("/releases") && init.method === "POST") {
+        if (++posts === 1) throw new Error("ECONNRESET");
+        return res(true, { id: 9, html_url: "h9", assets: [] });
+      }
+      return res(false);
+    });
+
+    const out = await createCodebergRelease({
+      fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n", assets: [], sleep: async () => {},
+    });
+    expect(out.id).toBe(9);
+  });
+
+  it("wirft nach `retries` Versuchen, wenn das Anlegen dauerhaft 500 liefert", async () => {
+    let posts = 0;
+    const fetch = vi.fn(async (url: string, init: any = {}) => {
+      if (url.endsWith("/repos/o/r") && init.method === "PATCH") return res(true);
+      if (url.includes("/releases/tags/")) return res(false);
+      if (url.endsWith("/releases") && init.method === "POST") { posts++; return res(false, "boom", 500); }
       return res(false);
     });
 
     await expect(createCodebergRelease({
-      fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n", assets: [],
+      fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n", assets: [], retries: 3, sleep: async () => {},
     })).rejects.toThrow(/500/);
+    expect(posts).toBe(3);
   });
 });
