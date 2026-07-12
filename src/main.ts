@@ -5,6 +5,7 @@ import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint } from "./
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
 import { findExistingTranscript, BacklinkLookup } from "./backlinks";
+import { DEFAULT_FM_MAP } from "./frontmatter_map";
 import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel } from "./prompts";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
@@ -101,6 +102,14 @@ export default class ImageToMarkdownPlugin extends Plugin {
         return (cache?.frontmatterLinks ?? []).map(fl => ({ key: fl.key, link: fl.link }));
       },
       resolveLink: (link, fromPath) => this.app.metadataCache.getFirstLinkpathDest(link, fromPath)?.path ?? null,
+      frontmatterValue: (notePath, key) => {
+        const f = this.app.vault.getAbstractFileByPath(notePath);
+        if (!(f instanceof TFile)) return null;
+        const cache = this.app.metadataCache.getFileCache(f);
+        if (!cache?.frontmatter) return null;
+        const value: unknown = cache.frontmatter[key];
+        return typeof value === "string" ? value : null;
+      },
     };
   }
 
@@ -111,7 +120,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const lookup = this.backlinkLookup();
         const cls = classifySource(extOf(sourcePath));
         if (cls) {   // aktive Datei IST ein Bild/PDF → Selbst-Quelle
-          const existingTranscriptPath = findExistingTranscript(lookup, sourcePath) ?? undefined;
+          const existingTranscriptPath = findExistingTranscript(lookup, sourcePath, DEFAULT_FM_MAP) ?? undefined;
           let pageCount: number | undefined;
           if (cls === "pdf") {
             try { pageCount = await pdfPageCount(await this.app.vault.adapter.readBinary(sourcePath)); } catch { pageCount = 0; }
@@ -126,7 +135,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         for (const e of findImageEmbeds(content)) {
           if (seen.has(e.link)) continue; seen.add(e.link);
           const resolved = this.app.metadataCache.getFirstLinkpathDest(e.link, sourcePath);
-          const existingTranscriptPath = resolved ? (findExistingTranscript(lookup, resolved.path) ?? undefined) : undefined;
+          const existingTranscriptPath = resolved ? (findExistingTranscript(lookup, resolved.path, DEFAULT_FM_MAP) ?? undefined) : undefined;
           if (e.kind === "pdf") {
             let pageCount = 0;
             if (resolved) {
