@@ -112,6 +112,7 @@ export class ImgToMdView extends ItemView {
     this.retryAllBtn.addEventListener("click", () => void this.retryAll());
     this.clearBtn = foot.createEl("button", { cls: "img2md-clear is-hidden", text: t("view.clearResults") });
     this.clearBtn.addEventListener("click", () => {
+      if (this.running) return;   // während eines Laufs kein Clear (Button ist dann ohnehin verborgen)
       this.state.clearCards();
       this.resetCards();
       if (this.cardsSourcePath) this.deps.cardCache.clear(this.cardsSourcePath);
@@ -371,7 +372,7 @@ export class ImgToMdView extends ItemView {
     const btn = this.retryAllBtn; if (!btn) return;
     if (this.state.cards.some(c => c.status === "error")) btn.removeClass("is-hidden");
     else btn.addClass("is-hidden");
-    this.clearBtn?.toggleClass("is-hidden", this.state.cards.length === 0);
+    this.clearBtn?.toggleClass("is-hidden", this.state.cards.length === 0 || this.running);
   }
 
   /** Baut die DOM einer Karte für einen Retry frisch auf (an gleicher Stelle): verwirft alte
@@ -400,8 +401,9 @@ export class ImgToMdView extends ItemView {
     const path = this.deps.getActivePath();
     if (!path) return;
     const cards = this.state.startCards();
-    this.cardsSourcePath = this.deps.getActivePath();
+    this.cardsSourcePath = path;
     this.resetCards();
+    this.updateRetryAll();   // Footer-Sichtbarkeit auch im Leer-Fall (nichts ausgewählt) synchron halten
     if (!cards.length) return;
     await this.runIndices(path, cards.map((_, i) => i), false);
   }
