@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-07-12
+
 ### Hinzugefügt
 
 - **Selektiver Diff-Apply:** Der Überschreiben-Dialog zeigt jetzt vor jeder Änderungsstelle eine
