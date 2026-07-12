@@ -6,7 +6,7 @@ import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
 import { findExistingTranscript, BacklinkLookup } from "./backlinks";
 import { DEFAULT_FM_MAP } from "./frontmatter_map";
-import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel } from "./prompts";
+import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, normalizePreset } from "./prompts";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
 import { setLang, pickLang, t } from "./i18n";
@@ -35,7 +35,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.settings = mergeSettings(defaultSettings(), saved);
     const migratedEps = migrateEndpoints(saved);
     this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
-    if (!isPromptPreset(this.settings.promptPreset)) this.settings.promptPreset = "default";
+    this.settings.promptPreset = normalizePreset(this.settings.promptPreset);
     this.visionClient = new VisionClient(this.settings.visionEndpoints[0] ?? "", this.settings.visionModel);
     void this.resolveAndReconnect();
 

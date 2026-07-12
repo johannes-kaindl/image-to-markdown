@@ -64,7 +64,6 @@ const EN: Dict = {
   "preset.label.handwriting": "Handwriting",
   "preset.label.math": "Math → LaTeX",
   "preset.label.code": "Source code",
-  "preset.label.describe": "Describe image",
   "preset.prompt.tables":
     "Transcribe the image to Markdown. Render every table as a GitHub-Flavored Markdown table " +
     "(pipes with a header separator row), preserving all rows, columns and cell text exactly. " +
@@ -78,9 +77,6 @@ const EN: Dict = {
   "preset.prompt.code":
     "Transcribe the image to Markdown. Put source code into fenced code blocks (```), preserving " +
     "indentation, line breaks and symbols exactly. Output only the Markdown, no comments.",
-  "preset.prompt.describe":
-    "Describe the image in clear prose suitable as alt text: what it shows, its key elements and any " +
-    "visible text. Summarize rather than transcribe verbatim. Output only the description, no comments.",
   "view.deselectAll": "Deselect all",
   "view.selectAll": "Select all",
   "view.transcribe": "Transcribe",
@@ -199,7 +195,6 @@ const DE: Dict = {
   "preset.label.handwriting": "Handschrift",
   "preset.label.math": "Mathe → LaTeX",
   "preset.label.code": "Quellcode",
-  "preset.label.describe": "Bild beschreiben",
   "preset.prompt.tables":
     "Transkribiere das Bild nach Markdown. Gib jede Tabelle als GitHub-Flavored-Markdown-Tabelle aus " +
     "(Pipes mit Trennzeile nach dem Kopf) und erhalte alle Zeilen, Spalten und Zellinhalte exakt. " +
@@ -213,9 +208,6 @@ const DE: Dict = {
   "preset.prompt.code":
     "Transkribiere das Bild nach Markdown. Setze Quellcode in umzäunte Codeblöcke (```) und erhalte " +
     "Einrückung, Zeilenumbrüche und Symbole exakt. Gib nur das Markdown aus, keine Kommentare.",
-  "preset.prompt.describe":
-    "Beschreibe das Bild in klarer Prosa, geeignet als Alt-Text: was es zeigt, seine Kernelemente und " +
-    "sichtbaren Text. Fasse zusammen, statt wörtlich zu transkribieren. Gib nur die Beschreibung aus, keine Kommentare.",
   "view.deselectAll": "Alle abwählen",
   "view.selectAll": "Alle auswählen",
   "view.transcribe": "Transkribieren",
