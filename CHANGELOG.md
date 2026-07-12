@@ -6,6 +6,15 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Ergebnisse überstehen einen Notizwechsel:** Ein fertig transkribiertes, noch nicht übernommenes
+  Ergebnis in der Seitenleiste geht nicht mehr verloren, wenn du zwischendurch die Notiz wechselst,
+  die Seitenleiste zuklappst oder eine andere Ansicht öffnest. Kommst du in derselben Sitzung zur
+  Quelle zurück, ist das vorläufige Ergebnis wieder da (pro Quelldatei gemerkt). Ein neuer Button
+  **„Ergebnisse verwerfen"** räumt es explizit weg; ein erneutes Transkribieren derselben Quelle
+  ersetzt es. Nach einem Obsidian-Neustart ist es weg (die Quelle liegt ja vor → neu transkribieren).
+
 ## [0.11.0] — 2026-07-12
 
 ### Hinzugefügt
