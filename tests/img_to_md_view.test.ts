@@ -709,4 +709,28 @@ describe("ImgToMdView — Pending-Ergebnis-Persistenz", () => {
     expect(cache.load("q.md")).toBeUndefined();
     expect(String(clearBtn.className).split(" ")).toContain("is-hidden");
   });
+
+  // Zurrt die Referenz-Kopplung fest (CardCache.save/restore ohne Copy): persistiert onClose mitten
+  // im Lauf eine „streaming"-Karte, heilt die laufende Abort-Cleanup dieselben Objekte in-place zu
+  // „error" — beim Reopen darf keine dauerhaft „streaming"-hängende Karte auftauchen. Ein defensiver
+  // Deep-Copy in CardCache.save würde diesen Test brechen (bewusst).
+  it("onClose während eines Laufs: gecachte Karte heilt zu 'error' (kein hängendes 'streaming')", async () => {
+    const cache = new CardCache();
+    const oneItem: ImgItem[] = [{ raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" }];
+    const { view } = mkView({
+      cardCache: cache,
+      scan: async () => oneItem,
+      // hängt bis zum Abort, wirft dann → runIndices-catch/Post-Loop markiert die Karte als „error"
+      transcribeStream: (_sp: string, _it: ImgItem, _oc: any, _or: any, signal: AbortSignal) =>
+        new Promise((_res, rej) => { signal.addEventListener("abort", () => rej(new Error("aborted"))); }),
+    });
+    await view.onOpen();
+    const runP = view.run();       // hängt im Streaming (kein await)
+    await Promise.resolve();       // Lauf anlaufen lassen (running=true, Karte streaming)
+    await view.onClose();          // persistCards (streaming) + abort()
+    await runP;                    // Rejection settlen lassen → Self-Heal
+    const cached = cache.load("q.md");
+    expect(cached?.length).toBe(1);
+    expect(cached?.[0].status).toBe("error");
+  });
 });
