@@ -13,11 +13,13 @@ import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
 import { DiffModal } from "./diff_modal";
 import { effectiveSuppress } from "./reasoning_toggle";
+import { CardCache } from "./card_cache";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
   visionClient!: VisionClient;
   activeEndpoint: string | null = null;
+  private pendingCards = new CardCache();
 
   private openPath = (p: string): void => {
     const f = this.app.vault.getAbstractFileByPath(p);
@@ -206,6 +208,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       setSuppress: (v: boolean) => { this.settings.suppressThinking = v; void this.saveSettings(); },
       openPath: this.openPath,
       copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },
+      cardCache: this.pendingCards,
     };
   }
 

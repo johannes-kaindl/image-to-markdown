@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { ImgToMdView, VIEW_TYPE_IMGMD } from "../src/img_to_md_view";
 import { ImgItem } from "../src/img_to_md_state";
+import { CardCache } from "../src/card_cache";
 import { makeFakeApp } from "./__mocks__/obsidian";
 import { setLang } from "../src/i18n";
 
@@ -35,6 +36,7 @@ function mkView(over: any = {}) {
     setSuppress: over.setSuppress ?? vi.fn(),
     openPath: (p: string) => calls.opened.push(p),
     copyText: over.copyText ?? ((t: string) => calls.copied.push(t)),
+    cardCache: over.cardCache ?? new CardCache(),
   };
   const view = new ImgToMdView({ app: makeFakeApp() } as any, deps);
   return { view, calls, deps };
@@ -668,5 +670,43 @@ describe("ImgToMdView — Thinking-Toggle", () => {
     expect(btn.getAttribute("aria-disabled")).toBe("true");
     btn.click();
     expect(setSuppress).not.toHaveBeenCalled();
+  });
+});
+
+describe("ImgToMdView — Pending-Ergebnis-Persistenz", () => {
+  it("Notiz wechseln und zurück → Karten wieder da", async () => {
+    let active = "q.md";
+    const cache = new CardCache();
+    const { view } = mkView({ getActivePath: () => active, cardCache: cache });
+    await view.onOpen();
+    await view.run();                                   // erzeugt Karten für q.md ("Hallo")
+    expect(all(view.contentEl, "img2md-card").length).toBeGreaterThan(0);
+    active = "other.md"; await view.refresh();          // Notizwechsel → sichern + leer scannen
+    expect(cache.load("q.md")?.length).toBeGreaterThan(0);
+    expect(all(view.contentEl, "img2md-card").length).toBe(0);
+    active = "q.md"; await view.refresh();              // zurück → wiederherstellen
+    expect(all(view.contentEl, "img2md-card").length).toBeGreaterThan(0);
+  });
+  it("View schließen/öffnen → Karten wieder da (gleicher Cache)", async () => {
+    const cache = new CardCache();
+    const first = mkView({ cardCache: cache });
+    await first.view.onOpen(); await first.view.run();
+    await first.view.onClose();
+    expect(cache.load("q.md")?.length).toBeGreaterThan(0);
+    const second = mkView({ cardCache: cache });        // neue View-Instanz, gleicher Plugin-Cache
+    await second.view.onOpen();
+    expect(all(second.view.contentEl, "img2md-card").length).toBeGreaterThan(0);
+  });
+  it("Clear-Button leert Karten + Cache-Eintrag", async () => {
+    const cache = new CardCache();
+    const { view } = mkView({ cardCache: cache });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-card").length).toBeGreaterThan(0);
+    const clearBtn = all(view.contentEl, "img2md-clear")[0];
+    expect(clearBtn).toBeTruthy();
+    clearBtn.dispatchEvent(new Event("click"));
+    expect(all(view.contentEl, "img2md-card").length).toBe(0);
+    expect(cache.load("q.md")).toBeUndefined();
+    expect(String(clearBtn.className).split(" ")).toContain("is-hidden");
   });
 });

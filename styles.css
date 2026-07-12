@@ -56,6 +56,8 @@
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }
 .img2md-retry-all.is-hidden { display: none; }
+.img2md-clear { margin-left: auto; }
+.img2md-clear.is-hidden { display: none; }
 
 /* Settings-QoL */
 .img2md-prompt-textarea { width: 100%; min-height: 8rem; resize: vertical; }

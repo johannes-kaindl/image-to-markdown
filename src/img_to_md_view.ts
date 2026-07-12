@@ -3,6 +3,7 @@ import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel } from
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 import { thinkToggleView } from "./reasoning_toggle";
+import { CardCache } from "./card_cache";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 
@@ -38,6 +39,7 @@ export interface ImgToMdViewDeps {
   setSuppress: (v: boolean) => void;
   openPath: (p: string) => void;
   copyText: (t: string) => void;
+  cardCache: CardCache;
 }
 
 export class ImgToMdView extends ItemView {
@@ -56,8 +58,10 @@ export class ImgToMdView extends ItemView {
   private toggleBtn: HTMLElement | null = null;
   private runBtn: HTMLElement | null = null;
   private retryAllBtn: HTMLElement | null = null;
+  private clearBtn: HTMLElement | null = null;
   private controller: AbortController | null = null;
   private running = false;
+  private cardsSourcePath: string | null = null;
   /** Notizen-Pfade, die diese Session bereits selbst geschrieben hat, gemappt auf den zuletzt
    *  geschriebenen Transkript-Body — Diff-Confirm-Gate feuert beim ERSTEN Override einer aus dem
    *  Scan vorgefundenen (fremden) Notiz UND erneut, wenn der on-disk-Body inzwischen vom zuletzt
@@ -106,9 +110,18 @@ export class ImgToMdView extends ItemView {
     foot.createEl("button", { cls: "img2md-all", text: t("view.createAll") }).addEventListener("click", () => void this.writeAll());
     this.retryAllBtn = foot.createEl("button", { cls: "img2md-retry-all is-hidden", text: t("view.retryAllFailed") });
     this.retryAllBtn.addEventListener("click", () => void this.retryAll());
+    this.clearBtn = foot.createEl("button", { cls: "img2md-clear is-hidden", text: t("view.clearResults") });
+    this.clearBtn.addEventListener("click", () => {
+      if (this.running) return;   // während eines Laufs kein Clear (Button ist dann ohnehin verborgen)
+      this.state.clearCards();
+      this.resetCards();
+      if (this.cardsSourcePath) this.deps.cardCache.clear(this.cardsSourcePath);
+      this.updateAllCards();
+    });
     await this.refreshStatus();
     await this.refreshModels();
     await this.rescan();
+    this.restoreCardsFor(this.deps.getActivePath());
   }
 
   async refreshStatus(): Promise<void> {
@@ -185,12 +198,29 @@ export class ImgToMdView extends ItemView {
     this.renderList();
   }
 
-  /** Aktive Notiz gewechselt → Karten der alten Notiz verwerfen + neu scannen. */
+  /** Aktive Notiz gewechselt → Karten der alten Notiz sichern, verwerfen + neu scannen,
+   *  Karten der neuen Quelle (falls vorhanden) wiederherstellen. */
   async refresh(): Promise<void> {
     if (this.running) return;
+    this.persistCards();
     this.state.clearCards();
     this.resetCards();
     await this.rescan();
+    this.restoreCardsFor(this.deps.getActivePath());
+  }
+
+  /** Aktuelle Karten unter ihrer Quelle im Cache sichern (No-op ohne bekannte Quelle). */
+  private persistCards(): void {
+    if (this.cardsSourcePath) this.deps.cardCache.save(this.cardsSourcePath, this.state.cards);
+  }
+
+  /** Gecachte Karten für `path` (falls vorhanden) übernehmen + neu rendern; merkt sich `path`
+   *  in jedem Fall als aktuelle Karten-Quelle (für den nächsten persistCards-Aufruf). */
+  private restoreCardsFor(path: string | null): void {
+    const cached = path ? this.deps.cardCache.load(path) : undefined;
+    if (cached) { this.state.cards = cached; this.resetCards(); }
+    else this.updateRetryAll();   // kein Cache-Treffer → Footer-Buttons (retryAll/clear) trotzdem an leere Kartenliste angleichen
+    this.cardsSourcePath = path;
   }
 
   private basename(link: string): string { return link.split("/").pop() ?? link; }
@@ -249,6 +279,7 @@ export class ImgToMdView extends ItemView {
 
   private updateAllCards(): void {
     for (let i = 0; i < this.state.cards.length; i++) this.updateCard(i);
+    this.updateRetryAll();   // auch bei leerer Kartenliste ausführen (sonst bleibt retryAllBtn/clearBtn sichtbar hängen)
   }
 
   /** Idempotenter Sync EINER Karte auf ihren State: legt fehlende Knoten lazy an,
@@ -341,6 +372,7 @@ export class ImgToMdView extends ItemView {
     const btn = this.retryAllBtn; if (!btn) return;
     if (this.state.cards.some(c => c.status === "error")) btn.removeClass("is-hidden");
     else btn.addClass("is-hidden");
+    this.clearBtn?.toggleClass("is-hidden", this.state.cards.length === 0 || this.running);
   }
 
   /** Baut die DOM einer Karte für einen Retry frisch auf (an gleicher Stelle): verwirft alte
@@ -369,7 +401,9 @@ export class ImgToMdView extends ItemView {
     const path = this.deps.getActivePath();
     if (!path) return;
     const cards = this.state.startCards();
+    this.cardsSourcePath = path;
     this.resetCards();
+    this.updateRetryAll();   // Footer-Sichtbarkeit auch im Leer-Fall (nichts ausgewählt) synchron halten
     if (!cards.length) return;
     await this.runIndices(path, cards.map((_, i) => i), false);
   }
@@ -489,6 +523,7 @@ export class ImgToMdView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.persistCards();
     this.controller?.abort();
     this.cardEls = [];
     this.contentEl.removeClass("img2md-root");
