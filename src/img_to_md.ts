@@ -105,7 +105,9 @@ export function rewriteTranscript(old: string, o: { model: string; sourceLink: s
  *  unveränderte Embed-Zeile sind Rauschen. */
 export function extractTranscriptBody(note: string): string {
   let s = note.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
-  s = s.replace(/^!\[\[[^\]]*\]\]\r?\n?/, "");
+  // `^\s*` toleriert Leerzeilen zwischen Frontmatter und Embed — der Obsidian-Linter fügt dort
+  // eine ein, sonst bliebe das Embed im Body hängen und der Diff wäre um die Embed-Zeile verschoben.
+  s = s.replace(/^\s*!\[\[[^\]]*\]\]\r?\n?/, "");
   return s.trim();
 }
 

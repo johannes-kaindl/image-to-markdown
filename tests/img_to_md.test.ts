@@ -414,6 +414,15 @@ describe("extractTranscriptBody", () => {
     const note = `---\r\nsource_image: "[[b.png]]"\r\ntranscribed_by: "vm"\r\n---\r\n![[b.png]]\r\n\r\nZeile 1\r\nZeile 2\r\n`;
     expect(extractTranscriptBody(note)).toBe("Zeile 1\r\nZeile 2");
   });
+  it("Linter-Leerzeile zwischen Frontmatter und Embed → Embed trotzdem strippen", () => {
+    // Obsidian-Linter fügt eine Leerzeile nach dem Frontmatter ein → Embed steht nicht mehr direkt danach.
+    const note = `---\ntitle: X\nsource_pdf: "[[a/b/Safari.pdf]]"\n---\n\n![[a/b/Safari.pdf]]\n\n%% Seite 1 %%\n# V-MARKT\n`;
+    expect(extractTranscriptBody(note)).toBe("%% Seite 1 %%\n# V-MARKT");
+  });
+  it("Linter-Leerzeile (CRLF) zwischen Frontmatter und Embed → Embed trotzdem strippen", () => {
+    const note = `---\r\ntitle: X\r\nsource_pdf: "[[a/b/Safari.pdf]]"\r\n---\r\n\r\n![[a/b/Safari.pdf]]\r\n\r\n%% Seite 1 %%\r\n# V-MARKT\r\n`;
+    expect(extractTranscriptBody(note)).toBe("%% Seite 1 %%\r\n# V-MARKT");
+  });
 });
 
 describe("buildSelfSourceItem", () => {
