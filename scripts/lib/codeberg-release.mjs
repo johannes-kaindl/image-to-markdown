@@ -9,7 +9,29 @@
 
 const API = "https://codeberg.org/api/v1";
 
-export async function createCodebergRelease({ fetch, token, repo, tag, notes, assets }) {
+/** Standard-Backoff: exponentiell 1s,2s,4s,8s… gedeckelt bei 8s. */
+const defaultSleep = (attempt) => new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** (attempt - 1), 8000)));
+
+/** Ruft `doFetch()` und wiederholt bei transientem 5xx ODER geworfenem Netzfehler — der
+ *  Codeberg-Release-POST-Endpoint liefert sporadisch HTTP 500 (belegt: 0.10.0/0.10.1/0.11.0),
+ *  ist beim nächsten Versuch aber ok. 4xx (echte Fehler) werden NICHT wiederholt. Nach `retries`
+ *  Versuchen fällt die letzte Antwort/der letzte Fehler durch → der Resume-Pfad in release.mjs greift. */
+async function fetchWithRetry(doFetch, retries, sleep) {
+  for (let attempt = 1; ; attempt++) {
+    let res;
+    try {
+      res = await doFetch();
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      await sleep(attempt);
+      continue;
+    }
+    if (res.status < 500 || attempt >= retries) return res;
+    await sleep(attempt);
+  }
+}
+
+export async function createCodebergRelease({ fetch, token, repo, tag, notes, assets, retries = 5, sleep = defaultSleep }) {
   const auth = { Authorization: `token ${token}` };
   const jsonHeaders = { ...auth, "Content-Type": "application/json" };
 
@@ -27,11 +49,11 @@ export async function createCodebergRelease({ fetch, token, repo, tag, notes, as
   if (existing.ok) {
     release = await existing.json();
   } else {
-    const created = await fetch(`${API}/repos/${repo}/releases`, {
+    const created = await fetchWithRetry(() => fetch(`${API}/repos/${repo}/releases`, {
       method: "POST",
       headers: jsonHeaders,
       body: JSON.stringify({ tag_name: tag, name: tag, body: notes, draft: false, prerelease: false }),
-    });
+    }), retries, sleep);
     if (!created.ok) {
       throw new Error(`Codeberg-Release anlegen fehlgeschlagen (${created.status}): ${await created.text()}`);
     }
