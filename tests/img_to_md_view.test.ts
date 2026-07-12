@@ -791,14 +791,19 @@ describe("ImgToMdView — Beschreiben-Modus: Lauf + Karte", () => {
     expect(all(view.contentEl, "img2md-text")[0].textContent).toBe("Ein Foto.");
   });
 
-  it("fertige Beschreiben-Karte zeigt Kategorie-Select (Taxonomie) + Tags-Input, keine 'Create note'-Beschriftung", async () => {
+  it("fertige Beschreiben-Karte zeigt Kategorie-Input (Taxonomie als Datalist-Vorschlag) + Tags-Input, keine 'Create note'-Beschriftung", async () => {
     const { view } = mkView({ initialMode: "describe" });
     await view.onOpen(); await view.run();
-    const sel = all(view.contentEl, "img2md-category");
-    expect(sel.length).toBe(1);
-    const options = (sel[0] as any).children.map((o: any) => o.value);
+    const input = all(view.contentEl, "img2md-category");
+    expect(input.length).toBe(1);
+    expect((input[0] as any).tagName).toBe("INPUT");
+    expect((input[0] as any).value).toBe("Foto");
+    // Taxonomie ist über eine <datalist> verknüpft (Vorschlag, keine Beschränkung — Spec §2).
+    expect((input[0] as any).getAttribute("list")).toBeTruthy();
+    const dl = all(view.contentEl, "img2md-category-list");
+    expect(dl.length).toBe(1);
+    const options = (dl[0] as any).children.map((o: any) => o.value);
     expect(options).toEqual(["Foto", "Diagramm"]);
-    expect((sel[0] as any).value).toBe("Foto");
     const tags = all(view.contentEl, "img2md-tags");
     expect(tags.length).toBe(1);
     expect((tags[0] as any).value).toBe("a, b");
@@ -806,40 +811,49 @@ describe("ImgToMdView — Beschreiben-Modus: Lauf + Karte", () => {
     expect(lbl[0].textContent).toBe("Save description");
   });
 
-  it("unbekannte Kategorie landet als Extra-Option im Select (nichts geht verloren)", async () => {
+  it("unbekannte Modell-Kategorie landet in tags, Kategorie-Feld bleibt leer (parseDescription-Verhalten unverändert)", async () => {
     const raw = "CATEGORY: Unbekannt\nTAGS: x\n---\nText.";
     const describeStream = async (_sp: string, _it: ImgItem, onContent: any) => { onContent(raw); return { raw, reasoning: "", model: "vm" }; };
     const { view } = mkView({ initialMode: "describe", describeStream });
     await view.onOpen(); await view.run();
-    const sel = all(view.contentEl, "img2md-category")[0] as any;
-    // parseDescription: unbekannte Kategorie → category=null, landet in tags — Select bleibt auf "" (kein Treffer).
-    expect(sel.value).toBe("");
+    const input = all(view.contentEl, "img2md-category")[0] as any;
+    // parseDescription: unbekannte Kategorie → category=null, landet in tags — Feld bleibt leer (kein Treffer).
+    expect(input.value).toBe("");
     const tags = all(view.contentEl, "img2md-tags")[0] as any;
     expect(tags.value).toContain("Unbekannt");
   });
 
-  it("Kategorie-Select-Änderung schreibt in card.category, Tags-Input-Änderung in card.tags", async () => {
+  it("Kategorie-Eingabe akzeptiert freien Text außerhalb der Taxonomie und schreibt ihn in card.category (Spec §2: Dropdown der Taxonomie + freie Eingabe)", async () => {
     const { view } = mkView({ initialMode: "describe" });
     await view.onOpen(); await view.run();
-    const sel = all(view.contentEl, "img2md-category")[0] as any;
-    sel.value = "Diagramm";
-    sel.dispatchEvent(new Event("change"));
+    const input = all(view.contentEl, "img2md-category")[0] as any;
+    input.value = "Handschriftliche Notiz";   // NICHT in der Taxonomie ["Foto", "Diagramm"]
+    input.dispatchEvent(new Event("change"));
+    expect((view as any).state.cards[0].category).toBe("Handschriftliche Notiz");
     const tags = all(view.contentEl, "img2md-tags")[0] as any;
     tags.value = "x, y, z";
     tags.dispatchEvent(new Event("change"));
-    expect((view as any).state.cards[0].category).toBe("Diagramm");
     expect((view as any).state.cards[0].tags).toEqual(["x", "y", "z"]);
   });
 
-  it("'Beschreibung speichern' ruft writeDescriptions mit editierter Kategorie/Tags, Karte → angelegt", async () => {
+  it("leere Kategorie-Eingabe setzt card.category auf null (nicht leerer String)", async () => {
+    const { view } = mkView({ initialMode: "describe" });
+    await view.onOpen(); await view.run();
+    const input = all(view.contentEl, "img2md-category")[0] as any;
+    input.value = "";
+    input.dispatchEvent(new Event("change"));
+    expect((view as any).state.cards[0].category).toBeNull();
+  });
+
+  it("'Beschreibung speichern' ruft writeDescriptions mit einer taxonomie-fremden, frei eingegebenen Kategorie, Karte → angelegt", async () => {
     const { view, calls } = mkView({ initialMode: "describe" });
     await view.onOpen(); await view.run();
-    const sel = all(view.contentEl, "img2md-category")[0] as any;
-    sel.value = "Diagramm"; sel.dispatchEvent(new Event("change"));
+    const input = all(view.contentEl, "img2md-category")[0] as any;
+    input.value = "Handschriftliche Notiz"; input.dispatchEvent(new Event("change"));
     all(view.contentEl, "img2md-write")[0].click();
     await Promise.resolve(); await Promise.resolve();
     expect(calls.written.length).toBe(1);
-    expect(calls.written[0]).toEqual([{ item: ITEMS[0], category: "Diagramm", tags: ["a", "b"], prose: "Ein Foto.", model: "vm" }]);
+    expect(calls.written[0]).toEqual([{ item: ITEMS[0], category: "Handschriftliche Notiz", tags: ["a", "b"], prose: "Ein Foto.", model: "vm" }]);
     expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("desc-0.md");
   });
 
@@ -865,6 +879,28 @@ describe("ImgToMdView — Beschreiben-Modus: Lauf + Karte", () => {
     await view.onOpen(); await view.run();
     expect(all(view.contentEl, "img2md-error")[0].textContent).toContain("Empty transcript");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
+  });
+});
+
+describe("ImgToMdView — Retry nach Moduswechsel (Karte behält ihren ursprünglichen Lauf-Modus)", () => {
+  it("Beschreiben-Karte scheitert, Moduswechsel zu Transkribieren, Retry läuft weiterhin als Beschreiben (nicht die stale globale Auswahl)", async () => {
+    let describeCalls = 0;
+    const describeStream = async (_sp: string, _it: ImgItem, onContent: any) => {
+      describeCalls++;
+      if (describeCalls === 1) throw new Error("Vision HTTP 500");
+      onContent(DESCRIBE_RAW); return { raw: DESCRIBE_RAW, reasoning: "", model: "vm" };
+    };
+    const transcribeStream = vi.fn();
+    const { view } = mkView({ initialMode: "describe", describeStream, transcribeStream });
+    await view.onOpen(); await view.run();          // erster Versuch (Beschreiben) scheitert
+    expect(all(view.contentEl, "img2md-error").length).toBe(1);
+    all(view.contentEl, "img2md-mode-btn")[0].click();   // globaler Umschalter zurück zu Transkribieren
+    expect(all(view.contentEl, "img2md-run")[0].textContent).toBe("Transcribe");
+    await view.retryOne(0);
+    expect(describeCalls).toBe(2);                  // Retry lief erneut über describeStream
+    expect(transcribeStream).not.toHaveBeenCalled(); // NICHT über die inzwischen umgeschaltete globale Auswahl
+    expect(all(view.contentEl, "img2md-error").length).toBe(0);
+    expect(all(view.contentEl, "img2md-text")[0].textContent).toBe("Ein Foto.");
   });
 });
 

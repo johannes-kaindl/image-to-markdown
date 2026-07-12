@@ -150,16 +150,20 @@ export function partitionDoneCards(cards: ImgCard[]): {
     return g;
   };
   cards.forEach((card, cardIndex) => {
+    // Beschreiben-Karten (Bild ODER PDF-Seite) fließen gar nicht erst in pdfMap/images ein — sonst
+    // entstünde für eine done-PDF-Seite im Beschreiben-Modus eine leere PdfGroup (ensurePdf legt sie
+    // sonst unconditional an), die zwar nie Seiten enthält, aber unnötig in `pdfs` auftaucht.
+    if (card.mode === "description") return;
     if (card.item.kind === "pdf") {
       const g = ensurePdf(card);
       const pg = card.page ?? 1;
       if (pg < g.range.from) g.range.from = pg;
       if (pg > g.range.to) g.range.to = pg;
-      if (card.status === "done" && card.mode !== "description") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
+      if (card.status === "done") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
       else if (card.status === "error") g.failedPages.push(pg);
       else if (card.status === "streaming") g.pending = true;
       // "written": bereits geschrieben → neutral (kein Re-Add, kein Fehler).
-    } else if (card.status === "done" && card.mode !== "description") {
+    } else if (card.status === "done") {
       images.push({ card, cardIndex });
     }
   });

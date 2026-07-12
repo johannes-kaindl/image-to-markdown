@@ -21,8 +21,7 @@ interface CardRefs {
   actionsEl?: HTMLElement;
   writeBtn?: HTMLElement;
   catRow?: HTMLElement;
-  categorySel?: HTMLSelectElement;
-  categoryValues?: Set<string>;
+  categoryInput?: HTMLInputElement;
   tagsInput?: HTMLInputElement;
   liveWas: boolean;
   autoCollapsed: boolean;
@@ -401,16 +400,19 @@ export class ImgToMdView extends ItemView {
       refs.writtenEl = w;
     }
     // Kategorie/Tags-Zeile (nur Beschreiben-Karten, sobald fertig) — editierbar vor dem Speichern
-    // (der „assistierte" Teil, siehe Spec §4). Select = Taxonomie + die evtl. vom Modell gelieferte,
-    // taxonomie-fremde Kategorie als Extra-Option (freie Eingabe bleibt möglich, nichts geht verloren).
+    // (der „assistierte" Teil, siehe Spec §4). Spec §2 verlangt "Dropdown der Taxonomie + freie
+    // Eingabe": ein Text-Input mit Taxonomie-Datalist als Vorschlag, aber frei überschreibbar — die
+    // vom Modell vorgeschlagene Kategorie ist ein Vorschlag, kein Zwang.
     if (card.mode === "description" && card.status === "done") {
       if (!refs.catRow) {
         const row = cardEl.createDiv({ cls: "img2md-cat-row" });
-        const sel = row.createEl("select", { cls: "img2md-category dropdown" });
-        sel.setAttribute("aria-label", t("view.category"));
-        const taxonomy = this.deps.getTaxonomy();
-        for (const cat of taxonomy) { const o = sel.createEl("option", { text: cat }); o.value = cat; }
-        sel.addEventListener("change", () => { const c = this.state.cards[i]; if (c) c.category = sel.value || null; });
+        const dlId = `img2md-cat-dl-${i}`;
+        const input = row.createEl("input", { cls: "img2md-category", attr: { list: dlId } });
+        input.type = "text";
+        input.setAttribute("aria-label", t("view.category"));
+        const datalist = row.createEl("datalist", { cls: "img2md-category-list", attr: { id: dlId } });
+        for (const cat of this.deps.getTaxonomy()) { const o = datalist.createEl("option", { text: cat }); o.value = cat; }
+        input.addEventListener("change", () => { const c = this.state.cards[i]; if (c) c.category = input.value.trim() || null; });
         const tagsInput = row.createEl("input", { cls: "img2md-tags" });
         tagsInput.type = "text";
         tagsInput.setAttribute("aria-label", t("view.tags"));
@@ -418,21 +420,9 @@ export class ImgToMdView extends ItemView {
           const c = this.state.cards[i]; if (!c) return;
           c.tags = tagsInput.value.split(",").map(s => s.trim()).filter(Boolean);
         });
-        refs.catRow = row; refs.categorySel = sel; refs.tagsInput = tagsInput; refs.categoryValues = new Set(taxonomy);
+        refs.catRow = row; refs.categoryInput = input; refs.tagsInput = tagsInput;
       }
-      const sel = refs.categorySel!;
-      const cat = card.category ?? "";
-      // card.category ist normalerweise entweder ein Taxonomie-Wert oder null (parseDescription
-      // verschiebt eine unbekannte Modell-Kategorie nach tags, siehe describe.ts) — die freie Achse
-      // ist bewusst tags, nicht category (Spec §2 Hybrid-Kategorien). Diese Ergänzung ist defensiv
-      // für den Fall, dass category künftig doch mal einen taxonomie-fremden Wert trägt (nichts wird
-      // verworfen). Eigene Merkliste statt DOM-Introspektion (sel.options), da createEl in Tests ein
-      // leichtgewichtiges Fake-Element liefert.
-      if (cat && !refs.categoryValues!.has(cat)) {
-        const o = sel.createEl("option", { text: cat }); o.value = cat;
-        refs.categoryValues!.add(cat);
-      }
-      sel.value = cat;
+      refs.categoryInput!.value = card.category ?? "";
       refs.tagsInput!.value = (card.tags ?? []).join(", ");
     }
     // Aktionen (lazy, sobald Text da): Kopieren immer; „Notiz anlegen"/„Beschreibung speichern" nur bei done.
@@ -530,14 +520,21 @@ export class ImgToMdView extends ItemView {
     this.running = true; this.runBtn?.setText("Stop");
     this.controller = new AbortController();
     const signal = this.controller.signal;
-    const describing = this.deps.getMode() === "describe";
+    const defaultDescribing = this.deps.getMode() === "describe";
     for (const i of indices) {
       if (signal.aborted) break;
       if (isRetry) { this.state.resetCard(i); this.resetCardDom(i); }
+      const card = this.state.cards[i];
+      // Modus-Routing je Karte: eine bereits gelaufene Karte (card.mode gesetzt — z.B. nach einem
+      // fehlgeschlagenen Beschreiben-Lauf) behält ihren ursprünglichen Modus über einen Retry hinweg,
+      // auch wenn der globale Umschalter zwischenzeitlich umgesprungen ist. Frische Karten (mode noch
+      // unbekannt) folgen dem aktuellen globalen Modus.
+      const describing = card.mode === "description" ? true : card.mode === "transcript" ? false : defaultDescribing;
       try {
         if (describing) {
+          card.mode = "description";   // vor dem Await setzen: auch der Fehlerpfad kennt so die Absicht (Retry-Routing)
           const r = await this.deps.describeStream(
-            path, this.state.cards[i].item,
+            path, card.item,
             (t) => { this.state.appendContent(i, t); this.updateCard(i); },
             (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
             signal,
@@ -545,13 +542,14 @@ export class ImgToMdView extends ItemView {
           const parsed = parseDescription(r.raw, this.deps.getTaxonomy());
           this.state.setDescribed(i, parsed, r.model);
         } else {
+          card.mode = "transcript";
           const r = await this.deps.transcribeStream(
-            path, this.state.cards[i].item,
+            path, card.item,
             (t) => { this.state.appendContent(i, t); this.updateCard(i); },
             (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
-            signal, this.state.cards[i].page,
+            signal, card.page,
           );
-          this.state.cards[i].model = r.model;
+          card.model = r.model;
           this.state.setDone(i);
         }
       } catch (e) {

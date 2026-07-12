@@ -178,6 +178,26 @@ describe("ImgToMdState — PDF-Karten", () => {
   });
 });
 
+describe("ImgToMdState — PDF-Karten im Beschreiben-Modus", () => {
+  const descPdf: ImgItem = { raw: "![[desc.pdf]]", link: "desc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 1, range: { from: 1, to: 1 } };
+  const txPdf: ImgItem = { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 1, range: { from: 1, to: 1 } };
+
+  it("partitionDoneCards schließt done PDF-Karten mit mode 'description' aus (kein Transkript-Merge); normale PDF-Karten laufen weiter über den Transkript-Pfad", () => {
+    const cards: ImgCard[] = [
+      { item: descPdf, index: 1, total: 2, page: 1, text: "Ein Foto in einem PDF.", reasoning: "", model: "m", status: "done", mode: "description", category: "Foto", tags: ["x"] },
+      { item: txPdf, index: 2, total: 2, page: 1, text: "Transkribierter Text", reasoning: "", model: "m", status: "done" },
+    ];
+    const part = partitionDoneCards(cards);
+    // Beschreiben-Karte darf keine PdfGroup erzeugen (separater writeDescriptions-Pfad, siehe Correctness-Fix).
+    expect(part.pdfs.some(g => g.link === "desc.pdf")).toBe(false);
+    // Normale PDF-Karte routet unverändert über den Transkript-Pfad.
+    expect(part.pdfs.length).toBe(1);
+    expect(part.pdfs[0].link).toBe("doc.pdf");
+    expect(part.pdfs[0].pages.map(p => p.content)).toEqual(["Transkribierter Text"]);
+    expect(part.images).toEqual([]);
+  });
+});
+
 function mkCard(model: string): ImgCard {
   return { item: items[0], index: 1, total: 1, text: "x", reasoning: "", model, status: "done" };
 }
