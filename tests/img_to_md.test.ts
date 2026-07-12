@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody, buildDescriptionNote, descriptionNotePath, writeDescriptions } from "../src/img_to_md";
 import { applySelection } from "../src/diff";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
@@ -110,6 +110,34 @@ describe("buildTranscriptNote", () => {
   });
 });
 
+describe("buildDescriptionNote", () => {
+  it("buildDescriptionNote: no embed, kind description, category + tags", () => {
+    const note = buildDescriptionNote(
+      { imageLink: "img.png", sourceName: "Quelle", date: "2026-07-12", model: "m", category: "Diagramm", tags: ["arch", "x"], prose: "Ein Diagramm." },
+      DEFAULT_FM_MAP,
+    );
+    expect(note).toBe(
+      `---\nsource_image: "[[img.png]]"\nsource_note: "[[Quelle]]"\nkind: description\ncategory: Diagramm\ntags: [arch, x]\ndescribed_by: "m"\ncreated: 2026-07-12\n---\nEin Diagramm.\n`,
+    );
+    expect(note).not.toContain("![[");
+  });
+  it("buildDescriptionNote: omits category/tags when empty", () => {
+    const note = buildDescriptionNote({ imageLink: "i.png", date: "2026-07-12", model: "m", category: null, tags: [], prose: "x" }, DEFAULT_FM_MAP);
+    expect(note).not.toContain("category:");
+    expect(note).not.toContain("tags:");
+  });
+  it("ohne sourceName → keine source_note-Zeile", () => {
+    const note = buildDescriptionNote({ imageLink: "scan.png", date: "2026-06-25", model: "vm", category: null, tags: [], prose: "x" }, DEFAULT_FM_MAP);
+    expect(note).not.toContain("source_note");
+  });
+  it("honors a custom mapping (key + kind value)", () => {
+    const map = { ...DEFAULT_FM_MAP, sourceImage: "quelle_bild", kindKey: "type", kindDescription: "📝 Beschreibung" };
+    const note = buildDescriptionNote({ imageLink: "img.png", date: "2026-07-12", model: "m", category: null, tags: [], prose: "x" }, map);
+    expect(note).toContain(`quelle_bild: "[[img.png]]"`);
+    expect(note).toContain(`type: 📝 Beschreibung`);
+  });
+});
+
 describe("replaceEmbed", () => {
   it("ersetzt alle Vorkommen literal durch Notiz-Embed", () => {
     expect(replaceEmbed("a ![[foto.jpg]] b ![[foto.jpg]]", "![[foto.jpg]]", "foto")).toBe("a ![[foto]] b ![[foto]]");
@@ -137,6 +165,20 @@ describe("transcriptNotePath", () => {
     const io = { noteExists: () => false };
     expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "Transkripte")).toBe("Transkripte/scan (PDF transcript).md");
     expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "")).toBe("scan (PDF transcript).md");
+  });
+});
+
+describe("descriptionNotePath", () => {
+  it("legt neben die Quellnotiz, Basename + lokalisierter Suffix, Kollisions-Zähler", () => {
+    const exists = new Set(["dir/foto (description).md"]);
+    const io = { noteExists: (p: string) => exists.has(p) };
+    expect(descriptionNotePath(io, "dir/quelle.md", "dir/img/foto.png")).toBe("dir/foto (description)-2.md");
+    expect(descriptionNotePath(io, "quelle.md", "foto.png")).toBe("foto (description).md");
+  });
+
+  it("destDir überschreibt das Verzeichnis der Quellnotiz", () => {
+    const io = { noteExists: () => false };
+    expect(descriptionNotePath(io, "Anhänge/scan.png", "Anhänge/scan.png", "Beschreibungen")).toBe("Beschreibungen/scan (description).md");
   });
 });
 
@@ -304,6 +346,44 @@ describe("writeTranscripts", () => {
     expect(note).not.toContain("source_note");
     expect(reads).not.toContain("Anhänge/scan.png");   // Quelldatei nie gelesen
     expect(notes.has("Anhänge/scan.png")).toBe(false); // und nie geschrieben
+  });
+});
+
+describe("writeDescriptions", () => {
+  it("legt pro Eintrag eine Notiz an, kein Read/Write auf der Quelle, kein replaceEmbed", async () => {
+    const { io, created, notes } = fakeIO({ notes: [["q.md", "a ![[foto.jpg]] b"]] });
+    const r = await writeDescriptions(io, "q.md", [
+      { link: "foto.jpg", category: "Diagramm", tags: ["arch"], prose: "Ein Diagramm.", model: "vm" },
+    ]);
+    expect(r.results.map(x => x.path)).toEqual(["foto (description).md"]);
+    expect(created["foto (description).md"]).toContain("Ein Diagramm.");
+    expect(created["foto (description).md"]).toContain('described_by: "vm"');
+    expect(created["foto (description).md"]).not.toContain("![[");
+    expect(notes.get("q.md")).toBe("a ![[foto.jpg]] b");   // Quelle unangetastet
+  });
+  it("leere prose → { path: null }, keine Notiz angelegt", async () => {
+    const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]] });
+    const r = await writeDescriptions(io, "q.md", [
+      { link: "foto.jpg", category: null, tags: [], prose: "   ", model: "vm" },
+    ]);
+    expect(r.results).toEqual([{ path: null }]);
+    expect(Object.keys(created)).toEqual([]);
+  });
+  it("selfSource: schreibt unter destDir, kein source_note, kein Quell-Read/-Write", async () => {
+    const reads: string[] = [];
+    const { io, notes } = fakeIO({
+      readNote: async (p: string) => { reads.push(p); return ""; },
+    });
+    const r = await writeDescriptions(io, "Anhänge/scan.png", [
+      { link: "scan.png", category: null, tags: [], prose: "Hallo", model: "vm" },
+    ], { selfSource: true, destDir: "Beschreibungen" });
+
+    expect(r.results.map(x => x.path)).toEqual(["Beschreibungen/scan (description).md"]);
+    const note = notes.get("Beschreibungen/scan (description).md");
+    expect(note).toContain('source_image: "[[scan.png]]"');
+    expect(note).not.toContain("source_note");
+    expect(reads).not.toContain("Anhänge/scan.png");
+    expect(notes.has("Anhänge/scan.png")).toBe(false);
   });
 });
 

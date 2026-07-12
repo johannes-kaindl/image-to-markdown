@@ -138,6 +138,7 @@ const EN: Dict = {
   "cap.none": "No vision",
   "note.suffix.image": "(transcript)",
   "note.suffix.pdf": "(PDF transcript)",
+  "note.suffix.description": "(description)",
   "pdf.pageHeading": "Page {0}",
   "pdf.pageFailed": "Page {0} — transcription failed",
   "pdf.textLayerPrompt":
@@ -272,6 +273,7 @@ const DE: Dict = {
   "cap.none": "Keine Vision",
   "note.suffix.image": "(Transkript)",
   "note.suffix.pdf": "(PDF-Transkript)",
+  "note.suffix.description": "(Beschreibung)",
   "pdf.pageHeading": "Seite {0}",
   "pdf.pageFailed": "Seite {0} — Transkription fehlgeschlagen",
   "pdf.textLayerPrompt":

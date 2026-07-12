@@ -92,6 +92,24 @@ export function buildTranscriptNote(
   return lines.join("\n");
 }
 
+/** Baut die Beschreibungs-Notiz: Frontmatter-Ref (aus `map`) + Prosa. Embed-frei (KEIN führendes
+ *  `![[…]]` — anders als buildTranscriptNote, die Beschreibung ersetzt kein Bild, sondern beschreibt
+ *  es als Alt-Text-Quelle). `category` nur bei nicht-null, `tags` nur bei nicht-leerer Liste
+ *  (YAML-Flow-Liste `[a, b]`). `map` defaultet auf DEFAULT_FM_MAP. */
+export function buildDescriptionNote(
+  o: { imageLink: string; sourceName?: string; date: string; model: string; category: string | null; tags: string[]; prose: string },
+  map: FrontmatterMap = DEFAULT_FM_MAP,
+): string {
+  const esc = (s: string) => s.replace(/"/g, '\\"');   // YAML-Doppelquote-String — schützt vor Frontmatter-Bruch
+  const lines = ["---", `${map.sourceImage}: "[[${esc(o.imageLink)}]]"`];
+  if (o.sourceName !== undefined) lines.push(`${map.sourceNote}: "[[${esc(o.sourceName)}]]"`);
+  lines.push(`${map.kindKey}: ${map.kindDescription}`);
+  if (o.category !== null) lines.push(`${map.category}: ${o.category}`);
+  if (o.tags.length > 0) lines.push(`${map.tags}: [${o.tags.join(", ")}]`);
+  lines.push(`${map.authorDescribed}: "${esc(o.model)}"`, `${map.created}: ${o.date}`, "---", o.prose, "");
+  return lines.join("\n");
+}
+
 /** Override: erhält das komplette Frontmatter der alten Notiz UNVERÄNDERT (ergänzt kein `kind` —
  *  minimaler Eingriff), ersetzt nur den gemappten Autor-Key (+ pages bei PDF) und den Body.
  *  Quelle/Quellnotiz/created bleiben damit unverändert. `map` defaultet auf DEFAULT_FM_MAP. */
@@ -176,6 +194,13 @@ export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourc
   return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
 }
 
+/** Pfad für die Beschreibungs-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
+ *  Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
+export function descriptionNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, destDir?: string): string {
+  const base = `${basenameNoExt(imagePath)} ${t("note.suffix.description")}`;
+  return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
+}
+
 export interface ImgToMdIO {
   date: () => string;
   readNote(path: string): Promise<string>;
@@ -234,6 +259,32 @@ export async function writeTranscripts(
     results.push({ path: newPath, body: transcript });
   }
   if (!self && content !== before) await io.writeNote(sourcePath, content);
+  return { results };
+}
+
+/** Schreibt mehrere Beschreibungen: pro Eintrag eine embed-freie Notiz anlegen (buildDescriptionNote).
+ *  Embed-frei per Definition — anders als writeTranscripts KEIN readNote/writeNote auf der Quelle,
+ *  KEIN replaceEmbed, KEIN Override/Diff (Beschreibungen ersetzen keinen Bild-Embed). Leere `prose`
+ *  wird übersprungen. selfSource: Quelle ist eine Binärdatei — Ablage unter opts.destDir, keine
+ *  source_note. */
+export async function writeDescriptions(
+  io: ImgToMdIO, sourcePath: string,
+  entries: { link: string; category: string | null; tags: string[]; prose: string; model: string }[],
+  opts?: { selfSource?: boolean; destDir?: string; map?: FrontmatterMap },
+): Promise<{ results: { path: string | null }[] }> {
+  const self = opts?.selfSource === true;
+  const destDir = opts?.destDir;
+  const map = opts?.map ?? DEFAULT_FM_MAP;
+  const sourceName = self ? undefined : basenameNoExt(sourcePath);
+  const results: { path: string | null }[] = [];
+  for (const e of entries) {
+    const prose = e.prose.trim();
+    if (!prose) { results.push({ path: null }); continue; }
+    const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
+    const newPath = descriptionNotePath(io, sourcePath, imagePath, destDir);
+    await io.createNote(newPath, buildDescriptionNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, category: e.category, tags: e.tags, prose }, map));
+    results.push({ path: newPath });
+  }
   return { results };
 }
 
