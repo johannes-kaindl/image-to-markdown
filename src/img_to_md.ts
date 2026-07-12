@@ -106,7 +106,10 @@ export function buildDescriptionNote(
   lines.push(`${map.kindKey}: ${map.kindDescription}`);
   if (o.category !== null) lines.push(`${map.category}: ${o.category}`);
   if (o.tags.length > 0) lines.push(`${map.tags}: [${o.tags.join(", ")}]`);
-  lines.push(`${map.authorDescribed}: "${esc(o.model)}"`, `${map.created}: ${o.date}`, "---", o.prose, "");
+  // Bild-Embed oben im Body (wie die Transkript-Notiz) → die Beschreibungs-Notiz zeigt das Bild
+  // („Karteikarte"). Die Prosa bleibt im Body, weil vault-rag nur den Body indexiert (der Chunker
+  // strippt das Frontmatter) — eine Beschreibung nur im Frontmatter wäre nicht auffindbar.
+  lines.push(`${map.authorDescribed}: "${esc(o.model)}"`, `${map.created}: ${o.date}`, "---", `![[${o.imageLink}]]`, "", o.prose, "");
   return lines.join("\n");
 }
 

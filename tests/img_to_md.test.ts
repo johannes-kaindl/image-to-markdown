@@ -111,15 +111,17 @@ describe("buildTranscriptNote", () => {
 });
 
 describe("buildDescriptionNote", () => {
-  it("buildDescriptionNote: no embed, kind description, category + tags", () => {
+  it("buildDescriptionNote: image embed in body, kind description, category + tags", () => {
     const note = buildDescriptionNote(
       { imageLink: "img.png", sourceName: "Quelle", date: "2026-07-12", model: "m", category: "Diagramm", tags: ["arch", "x"], prose: "Ein Diagramm." },
       DEFAULT_FM_MAP,
     );
     expect(note).toBe(
-      `---\nsource_image: "[[img.png]]"\nsource_note: "[[Quelle]]"\nkind: description\ncategory: Diagramm\ntags: [arch, x]\ndescribed_by: "m"\ncreated: 2026-07-12\n---\nEin Diagramm.\n`,
+      `---\nsource_image: "[[img.png]]"\nsource_note: "[[Quelle]]"\nkind: description\ncategory: Diagramm\ntags: [arch, x]\ndescribed_by: "m"\ncreated: 2026-07-12\n---\n![[img.png]]\n\nEin Diagramm.\n`,
     );
-    expect(note).not.toContain("![[");
+    // Bild-Embed im Body: die Beschreibungs-Notiz zeigt das Bild („Karteikarte"). Die Prosa bleibt
+    // im Body (nicht im Frontmatter), weil vault-rag nur den Body indexiert (chunker strippt Frontmatter).
+    expect(note).toContain("![[img.png]]");
   });
   it("buildDescriptionNote: omits category/tags when empty", () => {
     const note = buildDescriptionNote({ imageLink: "i.png", date: "2026-07-12", model: "m", category: null, tags: [], prose: "x" }, DEFAULT_FM_MAP);
@@ -358,8 +360,8 @@ describe("writeDescriptions", () => {
     expect(r.results.map(x => x.path)).toEqual(["foto (description).md"]);
     expect(created["foto (description).md"]).toContain("Ein Diagramm.");
     expect(created["foto (description).md"]).toContain('described_by: "vm"');
-    expect(created["foto (description).md"]).not.toContain("![[");
-    expect(notes.get("q.md")).toBe("a ![[foto.jpg]] b");   // Quelle unangetastet
+    expect(created["foto (description).md"]).toContain("![[foto.jpg]]");   // Bild-Embed in der Notiz (Karteikarte)
+    expect(notes.get("q.md")).toBe("a ![[foto.jpg]] b");   // Quelle unangetastet (kein replaceEmbed)
   });
   it("leere prose → { path: null }, keine Notiz angelegt", async () => {
     const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]] });
