@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import type { ParsedDescription } from "./describe";
 
 export interface ImgItem {
   raw: string;
@@ -9,6 +10,7 @@ export interface ImgItem {
   pageCount?: number;
   range?: { from: number; to: number };
   existingTranscriptPath?: string;
+  existingDescriptionPath?: string;
   embed?: boolean;   // false = reiner Link (Quelltext bleibt); fehlt/true = Embed (heutiges Verhalten)
   selfSource?: boolean;   // true = die aktive Datei selbst ist die Quelle (embed dann immer false)
 }
@@ -26,6 +28,9 @@ export interface ImgCard {
   page?: number;
   error?: string;
   writtenPath?: string;
+  mode?: "transcript" | "description";
+  category?: string | null;
+  tags?: string[];
 }
 
 /** Reine View-Buchhaltung für die IMG→MD-Sidebar: Bild-Auswahl + Ergebnis-Karten.
@@ -88,6 +93,17 @@ export class ImgToMdState {
     else { c.status = "error"; c.error = t("core.emptyTranscript"); }
   }
 
+  setDescribed(i: number, parsed: ParsedDescription, model: string): void {
+    const c = this.cards[i]; if (!c) return;
+    c.text = parsed.prose;
+    c.category = parsed.category;
+    c.tags = parsed.tags;
+    c.mode = "description";
+    c.model = model;
+    if (parsed.prose.trim()) c.status = "done";
+    else { c.status = "error"; c.error = t("core.emptyTranscript"); }
+  }
+
   setError(i: number, msg: string): void { const c = this.cards[i]; if (c) { c.status = "error"; c.error = msg; } }
   markWritten(i: number, path: string): void { const c = this.cards[i]; if (c) { c.status = "written"; c.writtenPath = path; } }
   /** Setzt eine Karte für einen Retry zurück: leert Inhalt/Modell/Fehler, Status → streaming. */
@@ -119,7 +135,9 @@ export interface PdfGroup {
  *  done-Seiten; `failedPages`/`pending` erfassen fehlgeschlagene bzw. noch laufende Seiten, damit die
  *  zusammengeführte Notiz ehrlich bleibt (kein stiller Gap). `range` = min/max der Karten-Seiten,
  *  also der beim Lauf tatsächlich gewählte Bereich — bewusst NICHT `item.range`, das vom Range-Eingabe-
- *  feld jederzeit live mutiert wird (sonst Datenverlust bei Range-Edit nach dem Lauf). Behält Indizes. */
+ *  feld jederzeit live mutiert wird (sonst Datenverlust bei Range-Edit nach dem Lauf). Behält Indizes.
+ *  Beschreiben-Karten (`mode === "description"`) fließen NICHT ein — sie gehören zum separaten
+ *  writeDescriptions-Pfad (eigene Notiz-Form, kein Transkript-Merge). */
 export function partitionDoneCards(cards: ImgCard[]): {
   images: { card: ImgCard; cardIndex: number }[];
   pdfs: PdfGroup[];
@@ -132,6 +150,10 @@ export function partitionDoneCards(cards: ImgCard[]): {
     return g;
   };
   cards.forEach((card, cardIndex) => {
+    // Beschreiben-Karten (Bild ODER PDF-Seite) fließen gar nicht erst in pdfMap/images ein — sonst
+    // entstünde für eine done-PDF-Seite im Beschreiben-Modus eine leere PdfGroup (ensurePdf legt sie
+    // sonst unconditional an), die zwar nie Seiten enthält, aber unnötig in `pdfs` auftaucht.
+    if (card.mode === "description") return;
     if (card.item.kind === "pdf") {
       const g = ensurePdf(card);
       const pg = card.page ?? 1;

@@ -1,15 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { PROMPT_PRESETS, isPromptPreset, promptPresetLabel, builtinPromptText, resolvePromptText } from "../src/prompts";
+import { PROMPT_PRESETS, isPromptPreset, promptPresetLabel, builtinPromptText, resolvePromptText, normalizePreset } from "../src/prompts";
 import { setLang, defaultVisionPrompt } from "../src/i18n";
 
 describe("prompts — Registry", () => {
   it("PROMPT_PRESETS beginnt mit default, enthält die 5 Built-ins", () => {
     expect(PROMPT_PRESETS[0]).toBe("default");
-    expect([...PROMPT_PRESETS]).toEqual(["default", "tables", "handwriting", "math", "code", "describe"]);
+    expect([...PROMPT_PRESETS]).toEqual(["default", "tables", "handwriting", "math", "code"]);
   });
   it("isPromptPreset erkennt bekannte/unbekannte ids", () => {
     expect(isPromptPreset("math")).toBe(true);
     expect(isPromptPreset("nope")).toBe(false);
+  });
+  it("normalizePreset maps the removed describe preset to default", () => {
+    expect(normalizePreset("describe")).toBe("default");
+    expect(normalizePreset("bogus")).toBe("default");
+    expect(normalizePreset("math")).toBe("math");
   });
 });
 
@@ -25,7 +30,7 @@ describe("prompts — Labels & Built-in-Texte (EN+DE)", () => {
     expect(builtinPromptText("nope")).toBe("");   // unbekannte id leakt keinen rohen Key
     for (const lang of ["en", "de"] as const) {
       setLang(lang);
-      for (const id of ["tables", "handwriting", "math", "code", "describe"]) {
+      for (const id of ["tables", "handwriting", "math", "code"]) {
         expect(builtinPromptText(id).length).toBeGreaterThan(10);
         expect(builtinPromptText(id)).not.toContain("preset.prompt.");   // kein fehlender Key
       }

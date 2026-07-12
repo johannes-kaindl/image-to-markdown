@@ -162,6 +162,40 @@ describe("ImgToMdState — PDF-Karten", () => {
     s.setError(1, "boom");
     expect(s.failedCardIndices()).toEqual([1]);
   });
+  it("setDescribed fills prose/category/tags and marks done", () => {
+    const s = new ImgToMdState();
+    s.setItems([{ raw: "", link: "i.png", ext: "png", supported: true, kind: "image" }]);
+    s.startCards();
+    s.setDescribed(0, { category: "Diagramm", tags: ["a"], prose: "Ein Diagramm." }, "m");
+    expect(s.cards[0]).toMatchObject({ text: "Ein Diagramm.", category: "Diagramm", tags: ["a"], mode: "description", status: "done", model: "m" });
+  });
+  it("setDescribed with empty prose marks error", () => {
+    const s = new ImgToMdState();
+    s.setItems([{ raw: "", link: "i.png", ext: "png", supported: true, kind: "image" }]);
+    s.startCards();
+    s.setDescribed(0, { category: null, tags: [], prose: "  " }, "m");
+    expect(s.cards[0].status).toBe("error");
+  });
+});
+
+describe("ImgToMdState — PDF-Karten im Beschreiben-Modus", () => {
+  const descPdf: ImgItem = { raw: "![[desc.pdf]]", link: "desc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 1, range: { from: 1, to: 1 } };
+  const txPdf: ImgItem = { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 1, range: { from: 1, to: 1 } };
+
+  it("partitionDoneCards schließt done PDF-Karten mit mode 'description' aus (kein Transkript-Merge); normale PDF-Karten laufen weiter über den Transkript-Pfad", () => {
+    const cards: ImgCard[] = [
+      { item: descPdf, index: 1, total: 2, page: 1, text: "Ein Foto in einem PDF.", reasoning: "", model: "m", status: "done", mode: "description", category: "Foto", tags: ["x"] },
+      { item: txPdf, index: 2, total: 2, page: 1, text: "Transkribierter Text", reasoning: "", model: "m", status: "done" },
+    ];
+    const part = partitionDoneCards(cards);
+    // Beschreiben-Karte darf keine PdfGroup erzeugen (separater writeDescriptions-Pfad, siehe Correctness-Fix).
+    expect(part.pdfs.some(g => g.link === "desc.pdf")).toBe(false);
+    // Normale PDF-Karte routet unverändert über den Transkript-Pfad.
+    expect(part.pdfs.length).toBe(1);
+    expect(part.pdfs[0].link).toBe("doc.pdf");
+    expect(part.pdfs[0].pages.map(p => p.content)).toEqual(["Transkribierter Text"]);
+    expect(part.images).toEqual([]);
+  });
 });
 
 function mkCard(model: string): ImgCard {

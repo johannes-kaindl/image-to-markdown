@@ -1,6 +1,7 @@
 import { t } from "./i18n";
 import type { ImgItem } from "./img_to_md_state";
 import { diffLines, type DiffLine } from "./diff";
+import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
@@ -75,27 +76,59 @@ export function findImageEmbeds(content: string): ImageEmbed[] {
   return out;
 }
 
-/** Baut die Transkript-Notiz: Frontmatter-Ref + Foto-Embed oben + Transkript. */
-export function buildTranscriptNote(o: { imageLink: string; sourceName?: string; date: string; model: string; transcript: string }): string {
+/** Baut die Transkript-Notiz: Frontmatter-Ref (aus `map`) + Foto-Embed oben + Transkript. Additive
+ *  `kind`-Zeile (map.kindKey/map.kindTranscript) nach source_note (bzw. source_image ohne sourceName).
+ *  `map` defaultet auf DEFAULT_FM_MAP — bestehende Direktaufrufer (z. B. pdf_to_md.ts via rewriteTranscript)
+ *  bleiben ohne Änderung kompatibel. */
+export function buildTranscriptNote(
+  o: { imageLink: string; sourceName?: string; date: string; model: string; transcript: string },
+  map: FrontmatterMap = DEFAULT_FM_MAP,
+): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');   // YAML-Doppelquote-String — schützt vor Frontmatter-Bruch
-  const lines = ["---", `source_image: "[[${esc(o.imageLink)}]]"`];
-  if (o.sourceName !== undefined) lines.push(`source_note: "[[${esc(o.sourceName)}]]"`);
-  lines.push(`created: ${o.date}`, `transcribed_by: "${esc(o.model)}"`, "---", `![[${o.imageLink}]]`, "", o.transcript, "");
+  const lines = ["---", `${map.sourceImage}: "[[${esc(o.imageLink)}]]"`];
+  if (o.sourceName !== undefined) lines.push(`${map.sourceNote}: "[[${esc(o.sourceName)}]]"`);
+  lines.push(`${map.kindKey}: ${map.kindTranscript}`);
+  lines.push(`${map.created}: ${o.date}`, `${map.authorTranscribed}: "${esc(o.model)}"`, "---", `![[${o.imageLink}]]`, "", o.transcript, "");
   return lines.join("\n");
 }
 
-/** Override: erhält das komplette Frontmatter der alten Notiz, ersetzt transcribed_by (+ pages bei PDF)
- *  und den Body. Quelle/Quellnotiz/created bleiben damit unverändert. */
-export function rewriteTranscript(old: string, o: { model: string; sourceLink: string; body: string; pages?: string }): string {
+/** Baut die Beschreibungs-Notiz: Frontmatter-Ref (aus `map`) + Prosa. Embed-frei (KEIN führendes
+ *  `![[…]]` — anders als buildTranscriptNote, die Beschreibung ersetzt kein Bild, sondern beschreibt
+ *  es als Alt-Text-Quelle). `category` nur bei nicht-null, `tags` nur bei nicht-leerer Liste
+ *  (YAML-Flow-Liste `[a, b]`). `map` defaultet auf DEFAULT_FM_MAP. */
+export function buildDescriptionNote(
+  o: { imageLink: string; sourceName?: string; date: string; model: string; category: string | null; tags: string[]; prose: string },
+  map: FrontmatterMap = DEFAULT_FM_MAP,
+): string {
+  const esc = (s: string) => s.replace(/"/g, '\\"');   // YAML-Doppelquote-String — schützt vor Frontmatter-Bruch
+  const lines = ["---", `${map.sourceImage}: "[[${esc(o.imageLink)}]]"`];
+  if (o.sourceName !== undefined) lines.push(`${map.sourceNote}: "[[${esc(o.sourceName)}]]"`);
+  lines.push(`${map.kindKey}: ${map.kindDescription}`);
+  if (o.category !== null) lines.push(`${map.category}: ${o.category}`);
+  if (o.tags.length > 0) lines.push(`${map.tags}: [${o.tags.join(", ")}]`);
+  lines.push(`${map.authorDescribed}: "${esc(o.model)}"`, `${map.created}: ${o.date}`, "---", o.prose, "");
+  return lines.join("\n");
+}
+
+/** Override: erhält das komplette Frontmatter der alten Notiz UNVERÄNDERT (ergänzt kein `kind` —
+ *  minimaler Eingriff), ersetzt nur den gemappten Autor-Key (+ pages bei PDF) und den Body.
+ *  Quelle/Quellnotiz/created bleiben damit unverändert. `map` defaultet auf DEFAULT_FM_MAP. */
+export function rewriteTranscript(
+  old: string,
+  o: { model: string; sourceLink: string; body: string; pages?: string },
+  map: FrontmatterMap = DEFAULT_FM_MAP,
+): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
+  const kEsc = (k: string) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");   // Key defensiv escapen (Regex-Metazeichen)
   const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(old);
   // Fallback nur theoretisch — Override wirkt ausschließlich auf unsere Transkript-Notizen, die immer Frontmatter haben.
-  let frontmatter = fm ? fm[1] : `transcribed_by: "${esc(o.model)}"`;
-  frontmatter = frontmatter.replace(/^transcribed_by:.*$/m, `transcribed_by: "${esc(o.model)}"`);
+  let frontmatter = fm ? fm[1] : `${map.authorTranscribed}: "${esc(o.model)}"`;
+  frontmatter = frontmatter.replace(new RegExp(`^${kEsc(map.authorTranscribed)}:.*$`, "m"), `${map.authorTranscribed}: "${esc(o.model)}"`);
   if (o.pages !== undefined) {
-    frontmatter = /^pages:.*$/m.test(frontmatter)
-      ? frontmatter.replace(/^pages:.*$/m, `pages: "${o.pages}"`)
-      : `${frontmatter}\npages: "${o.pages}"`;
+    const pagesRe = new RegExp(`^${kEsc(map.pages)}:.*$`, "m");
+    frontmatter = pagesRe.test(frontmatter)
+      ? frontmatter.replace(pagesRe, `${map.pages}: "${o.pages}"`)
+      : `${frontmatter}\n${map.pages}: "${o.pages}"`;
   }
   return `---\n${frontmatter}\n---\n![[${o.sourceLink}]]\n\n${o.body}\n`;
 }
@@ -161,6 +194,13 @@ export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourc
   return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
 }
 
+/** Pfad für die Beschreibungs-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
+ *  Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
+export function descriptionNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, destDir?: string): string {
+  const base = `${basenameNoExt(imagePath)} ${t("note.suffix.description")}`;
+  return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
+}
+
 export interface ImgToMdIO {
   date: () => string;
   readNote(path: string): Promise<string>;
@@ -184,10 +224,11 @@ export interface ImgToMdIO {
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
   entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; knownBody?: string }[],
-  opts?: { selfSource?: boolean; destDir?: string },
+  opts?: { selfSource?: boolean; destDir?: string; map?: FrontmatterMap },
 ): Promise<{ results: { path: string | null; body: string | null }[] }> {
   const self = opts?.selfSource === true;
   const destDir = opts?.destDir;
+  const map = opts?.map ?? DEFAULT_FM_MAP;
   const before = self ? "" : await io.readNote(sourcePath);
   let content = before;
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
@@ -207,13 +248,13 @@ export async function writeTranscripts(
           bodyToWrite = chosen;
         }
       }
-      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: bodyToWrite }));
+      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: bodyToWrite }, map));
       results.push({ path: e.overwritePath, body: bodyToWrite });
       continue;
     }
     const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
     const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", destDir);
-    await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }));
+    await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }, map));
     if (!self && e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     results.push({ path: newPath, body: transcript });
   }
@@ -221,11 +262,37 @@ export async function writeTranscripts(
   return { results };
 }
 
+/** Schreibt mehrere Beschreibungen: pro Eintrag eine embed-freie Notiz anlegen (buildDescriptionNote).
+ *  Embed-frei per Definition — anders als writeTranscripts KEIN readNote/writeNote auf der Quelle,
+ *  KEIN replaceEmbed, KEIN Override/Diff (Beschreibungen ersetzen keinen Bild-Embed). Leere `prose`
+ *  wird übersprungen. selfSource: Quelle ist eine Binärdatei — Ablage unter opts.destDir, keine
+ *  source_note. */
+export async function writeDescriptions(
+  io: ImgToMdIO, sourcePath: string,
+  entries: { link: string; category: string | null; tags: string[]; prose: string; model: string }[],
+  opts?: { selfSource?: boolean; destDir?: string; map?: FrontmatterMap },
+): Promise<{ results: { path: string | null }[] }> {
+  const self = opts?.selfSource === true;
+  const destDir = opts?.destDir;
+  const map = opts?.map ?? DEFAULT_FM_MAP;
+  const sourceName = self ? undefined : basenameNoExt(sourcePath);
+  const results: { path: string | null }[] = [];
+  for (const e of entries) {
+    const prose = e.prose.trim();
+    if (!prose) { results.push({ path: null }); continue; }
+    const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
+    const newPath = descriptionNotePath(io, sourcePath, imagePath, destDir);
+    await io.createNote(newPath, buildDescriptionNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, category: e.category, tags: e.tags, prose }, map));
+    results.push({ path: newPath });
+  }
+  return { results };
+}
+
 /** Transkribiert die EMBEDS einer Notiz nach Markdown (Command/Kontextmenü-Pfad), legt je Bild eine
  *  Notiz an und ersetzt den Bild-Embed durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
  *  Reine Links (embed:false) werden hier bewusst übersprungen — sie sind ein Sidebar-Feature mit
  *  Backlink-Idempotenz (Etappe 1); ohne diesen Schutz würde der Command Re-Transkriptions-Dubletten erzeugen. */
-export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onlyRaw?: string }): Promise<{ transcribed: number; skipped: number }> {
+export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onlyRaw?: string; map?: FrontmatterMap }): Promise<{ transcribed: number; skipped: number }> {
   const content = await io.readNote(sourcePath);
   let embeds = findImageEmbeds(content).filter(e => e.embed);
   if (opts?.onlyRaw) embeds = embeds.filter(e => e.raw === opts.onlyRaw);
@@ -251,7 +318,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
     if (!res.content.trim()) { io.notify(t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
     entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model, embed: e.embed });
   }
-  const { results } = await writeTranscripts(io, sourcePath, entries);
+  const { results } = await writeTranscripts(io, sourcePath, entries, { map: opts?.map });
   const base = t(results.length === 1 ? "core.transcribed.one" : "core.transcribed.other", results.length);
   io.notify(`${base}${skipped ? t("core.skippedSuffix", skipped) : ""}.`);
   return { transcribed: results.length, skipped };

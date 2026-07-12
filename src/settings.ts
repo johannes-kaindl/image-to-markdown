@@ -4,6 +4,7 @@ import { VisionClient, normalizeEndpoint } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
 import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
+import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 
 /** Endpoint-Liste aus geladenen Settings: vorhandene visionEndpoints (leere gefiltert),
  *  sonst der alte Einzel-visionEndpoint als 1-Element-Liste, sonst leer. Reiner Helfer. */
@@ -40,6 +41,10 @@ export interface ImageToMarkdownSettings {
   pdfPageSeparator: PdfPageSeparator;
   pdfUseTextLayer: boolean;
   suppressThinking: boolean;
+  describeTaxonomy: string[];
+  frontmatterMap: FrontmatterMap;
+  describeDestDir?: string;
+  mode: "transcribe" | "describe";
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -54,7 +59,25 @@ export function defaultSettings(): ImageToMarkdownSettings {
     pdfPageSeparator: "comment",
     pdfUseTextLayer: true,
     suppressThinking: false,
+    describeTaxonomy: ["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"],
+    frontmatterMap: { ...DEFAULT_FM_MAP },
+    mode: "transcribe",
   };
+}
+
+/** Wendet die Bearbeitung eines Taxonomie-Felds auf die Liste an — analog `applyEndpointEdit`
+ *  (siehe dort für die blur-statt-onChange-Begründung). Reiner Helfer. */
+export function applyTaxonomyEdit(list: string[], index: number, value: string, isAdder: boolean): string[] {
+  return applyEndpointEdit(list, index, value, isAdder);
+}
+
+/** Frontmatter-Mapping aus geladenen Settings: fehlende Keys werden aus DEFAULT_FM_MAP
+ *  aufgefüllt. Load-bearing wegen des Shallow-Merges in mergeSettings() (vendor/kit/settings.ts):
+ *  ein gespeichertes Teil-`frontmatterMap` ersetzt per Object.assign das GESAMTE Default-Objekt,
+ *  nicht nur die vorhandenen Keys — ohne diesen Backfill blieben neu hinzugekommene Keys
+ *  `undefined`, sobald data.json ein älteres/unvollständiges Mapping enthält. */
+export function fmMapFromSettings(s: { frontmatterMap?: Partial<FrontmatterMap> }): FrontmatterMap {
+  return { ...DEFAULT_FM_MAP, ...(s.frontmatterMap ?? {}) };
 }
 
 // 1x1-PNG-Fallback, falls Canvas/DOM nicht verfügbar (z.B. Test-Umgebung ohne 2d-Context).
@@ -244,5 +267,72 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       .setName(t("settings.pdfUseTextLayer.name")).setDesc(t("settings.pdfUseTextLayer.desc"))
       .addToggle(tg => tg.setValue(this.plugin.settings.pdfUseTextLayer)
         .onChange(async (v: boolean) => { this.plugin.settings.pdfUseTextLayer = v; await this.plugin.saveSettings(); }));
+
+    // ── Beschreibungs-Taxonomie (geordnete Kategorie-Liste, gleiches blur-Muster wie Endpunkte) ──
+    new Setting(containerEl).setName(t("settings.taxonomy.heading")).setHeading();
+    const taxonomy = this.plugin.settings.describeTaxonomy;
+    const taxonomyRows = [...taxonomy, ""];   // leeres Zusatzfeld am Ende
+    taxonomyRows.forEach((value, i) => {
+      const isAdder = i >= taxonomy.length;
+      const s = new Setting(containerEl);
+      if (i === 0) s.setName(t("settings.taxonomy.name")).setDesc(t("settings.taxonomy.desc"));
+      s.addText(tx => {
+        tx.setPlaceholder(isAdder ? t("settings.taxonomy.addPlaceholder") : "").setValue(value);
+        // Listen-Mutation NUR bei blur — siehe applyEndpointEdit-Kommentar oben.
+        tx.inputEl.addEventListener("blur", () => {
+          const before = this.plugin.settings.describeTaxonomy;
+          const updated = applyTaxonomyEdit(before, i, tx.getValue(), isAdder);
+          if (updated.length === before.length && updated.every((e, k) => e === before[k])) return;   // unverändert → kein Re-Render
+          this.plugin.settings.describeTaxonomy = updated;
+          void this.plugin.saveSettings().then(() => this.render());
+        });
+      });
+      if (!isAdder) {
+        s.addExtraButton(b => b
+          .setIcon("trash-2")
+          .setTooltip(t("settings.taxonomy.remove"))
+          .onClick(() => {
+            this.plugin.settings.describeTaxonomy = applyTaxonomyEdit(this.plugin.settings.describeTaxonomy, i, "", false);
+            void this.plugin.saveSettings().then(() => this.render());
+          }));
+      }
+    });
+
+    // ── Frontmatter-Mapping (ein Textfeld je Key + die zwei Diskriminator-Wertfelder) ──
+    new Setting(containerEl).setName(t("settings.fmMap.heading")).setHeading();
+    new Setting(containerEl).setDesc(t("settings.fmMap.desc"));
+    const fmFields: Array<[keyof FrontmatterMap, string]> = [
+      ["sourceImage", "settings.fmMap.sourceImage"],
+      ["sourcePdf", "settings.fmMap.sourcePdf"],
+      ["sourceNote", "settings.fmMap.sourceNote"],
+      ["category", "settings.fmMap.category"],
+      ["tags", "settings.fmMap.tags"],
+      ["authorTranscribed", "settings.fmMap.authorTranscribed"],
+      ["authorDescribed", "settings.fmMap.authorDescribed"],
+      ["created", "settings.fmMap.created"],
+      ["pages", "settings.fmMap.pages"],
+      ["kindKey", "settings.fmMap.kindKey"],
+      ["kindTranscript", "settings.fmMap.kindTranscript"],
+      ["kindDescription", "settings.fmMap.kindDescription"],
+    ];
+    // Über fmMapFromSettings lesen, nicht direkt this.plugin.settings.frontmatterMap: nach dem
+    // Shallow-Merge-Laden (mergeSettings) kann Letzteres bei älterem/unvollständigem data.json
+    // noch Lücken haben, bis der erste Edit sie schließt — sonst zeigt das Feld "undefined".
+    const currentFmMap = fmMapFromSettings(this.plugin.settings);
+    for (const [field, labelKey] of fmFields) {
+      new Setting(containerEl)
+        .setName(t(labelKey))
+        .addText(tx => tx
+          .setPlaceholder(DEFAULT_FM_MAP[field])
+          .setValue(currentFmMap[field])
+          .onChange(async (v: string) => {
+            const trimmed = v.trim();
+            this.plugin.settings.frontmatterMap = {
+              ...fmMapFromSettings(this.plugin.settings),
+              [field]: trimmed || DEFAULT_FM_MAP[field],
+            };
+            await this.plugin.saveSettings();
+          }));
+    }
   }
 }

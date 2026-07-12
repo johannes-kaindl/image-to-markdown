@@ -2,10 +2,16 @@ import { t, defaultVisionPrompt } from "./i18n";
 
 /** Verfügbare Prompt-Presets. Reihenfolge = Dropdown-Reihenfolge; "default" zuerst.
  *  "default" nutzt den editierbaren settings.visionPrompt; die übrigen sind feste Built-ins. */
-export const PROMPT_PRESETS = ["default", "tables", "handwriting", "math", "code", "describe"] as const;
+export const PROMPT_PRESETS = ["default", "tables", "handwriting", "math", "code"] as const;
 
 export function isPromptPreset(id: string): boolean {
   return (PROMPT_PRESETS as readonly string[]).includes(id);
+}
+
+/** Migriert alte/unbekannte Presets (zB. entferntes "describe") nach "default".
+ *  Bekannte Presets bleiben erhalten. */
+export function normalizePreset(id: string): string {
+  return isPromptPreset(id) ? id : "default";
 }
 
 /** Lokalisiertes Label fürs Dropdown; Fallback = id (unbekannt). */

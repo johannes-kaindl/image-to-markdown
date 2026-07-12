@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { defaultSettings, migrateEndpoints, applyEndpointEdit } from "../src/settings";
+import { defaultSettings, migrateEndpoints, applyEndpointEdit, applyTaxonomyEdit, fmMapFromSettings } from "../src/settings";
+import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("migrateEndpoints", () => {
   it("alter Einzel-Endpoint → Liste", () => {
@@ -63,5 +64,30 @@ describe("defaultSettings", () => {
   });
   it("Default ist false (Thinking an)", () => {
     expect(defaultSettings().suppressThinking).toBe(false);
+  });
+  it("liefert eine sinnvolle Taxonomie und das Standard-Frontmatter-Mapping", () => {
+    const s = defaultSettings();
+    expect(s.describeTaxonomy).toContain("Diagramm");
+    expect(s.describeTaxonomy).toEqual(["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"]);
+    expect(s.frontmatterMap).toEqual(DEFAULT_FM_MAP);
+  });
+});
+
+describe("applyTaxonomyEdit", () => {
+  it("fügt hinzu, bearbeitet und entfernt Einträge (analog applyEndpointEdit)", () => {
+    expect(applyTaxonomyEdit(["Foto"], 0, "", false)).toEqual([]);
+    expect(applyTaxonomyEdit(["Foto"], 1, "Neu", true)).toEqual(["Foto", "Neu"]);
+    expect(applyTaxonomyEdit(["Foto", "Diagramm"], 0, "Bild", false)).toEqual(["Bild", "Diagramm"]);
+  });
+});
+
+describe("fmMapFromSettings", () => {
+  it("füllt fehlende Keys aus DEFAULT_FM_MAP auf (Shallow-Merge-Vorwärtskompatibilität)", () => {
+    const merged = fmMapFromSettings({ frontmatterMap: { sourceImage: "x" } } as any);
+    expect(merged.sourcePdf).toBe("source_pdf");
+    expect(merged.sourceImage).toBe("x");
+  });
+  it("ohne frontmatterMap → komplettes DEFAULT_FM_MAP", () => {
+    expect(fmMapFromSettings({} as any)).toEqual(DEFAULT_FM_MAP);
   });
 });

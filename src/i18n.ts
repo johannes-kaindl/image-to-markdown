@@ -56,6 +56,25 @@ const EN: Dict = {
   "settings.pdfPageSep.none": "None (seamless text)",
   "settings.pdfUseTextLayer.name": "Use embedded PDF text",
   "settings.pdfUseTextLayer.desc": "When a PDF page has a real text layer, send its exact text to the model to format as Markdown instead of OCR-ing a rendered image — faster and without OCR errors. Pages without enough text (scans, figures) fall back to the vision model.",
+  "settings.taxonomy.heading": "Description categories",
+  "settings.taxonomy.name": "Categories",
+  "settings.taxonomy.desc": "Offered to the model as the fixed set of categories in describe mode. One per field.",
+  "settings.taxonomy.addPlaceholder": "add another category…",
+  "settings.taxonomy.remove": "Remove category",
+  "settings.fmMap.heading": "Frontmatter mapping",
+  "settings.fmMap.desc": "Frontmatter key names written into generated notes. Change with care — existing notes keep their old keys (Phase 1b will offer a vault-wide migration).",
+  "settings.fmMap.sourceImage": "Source image key",
+  "settings.fmMap.sourcePdf": "Source PDF key",
+  "settings.fmMap.sourceNote": "Source note key",
+  "settings.fmMap.category": "Category key",
+  "settings.fmMap.tags": "Tags key",
+  "settings.fmMap.authorTranscribed": "Transcribed-by key",
+  "settings.fmMap.authorDescribed": "Described-by key",
+  "settings.fmMap.created": "Created key",
+  "settings.fmMap.pages": "Pages key",
+  "settings.fmMap.kindKey": "Kind key",
+  "settings.fmMap.kindTranscript": "Kind value: transcript",
+  "settings.fmMap.kindDescription": "Kind value: description",
   "prompt.default":
     "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, " +
     "**emphasis**, lists and tables. Output only the Markdown, no comments.",
@@ -64,7 +83,6 @@ const EN: Dict = {
   "preset.label.handwriting": "Handwriting",
   "preset.label.math": "Math → LaTeX",
   "preset.label.code": "Source code",
-  "preset.label.describe": "Describe image",
   "preset.prompt.tables":
     "Transcribe the image to Markdown. Render every table as a GitHub-Flavored Markdown table " +
     "(pipes with a header separator row), preserving all rows, columns and cell text exactly. " +
@@ -78,12 +96,16 @@ const EN: Dict = {
   "preset.prompt.code":
     "Transcribe the image to Markdown. Put source code into fenced code blocks (```), preserving " +
     "indentation, line breaks and symbols exactly. Output only the Markdown, no comments.",
-  "preset.prompt.describe":
-    "Describe the image in clear prose suitable as alt text: what it shows, its key elements and any " +
-    "visible text. Summarize rather than transcribe verbatim. Output only the description, no comments.",
   "view.deselectAll": "Deselect all",
   "view.selectAll": "Select all",
   "view.transcribe": "Transcribe",
+  "view.describe": "Describe",
+  "view.modeTranscribe": "Transcribe",
+  "view.modeDescribe": "Describe",
+  "view.category": "Category",
+  "view.tags": "Tags",
+  "view.descriptionExists": "✓ description exists",
+  "view.saveDescription": "Save description",
   "view.createAll": "Create all",
   "view.checking": "Vision LLM: checking…",
   "view.connected": "Vision LLM connected",
@@ -138,6 +160,7 @@ const EN: Dict = {
   "cap.none": "No vision",
   "note.suffix.image": "(transcript)",
   "note.suffix.pdf": "(PDF transcript)",
+  "note.suffix.description": "(description)",
   "pdf.pageHeading": "Page {0}",
   "pdf.pageFailed": "Page {0} — transcription failed",
   "pdf.textLayerPrompt":
@@ -190,6 +213,25 @@ const DE: Dict = {
   "settings.pdfPageSep.none": "Keiner (nahtloser Text)",
   "settings.pdfUseTextLayer.name": "Eingebetteten PDF-Text nutzen",
   "settings.pdfUseTextLayer.desc": "Hat eine PDF-Seite einen echten Text-Layer, wird ihr exakter Text ans Modell geschickt und nach Markdown formatiert, statt ein gerendertes Bild zu OCR'en — schneller und ohne OCR-Fehler. Seiten ohne genug Text (Scans, Figuren) fallen aufs Vision-Modell zurück.",
+  "settings.taxonomy.heading": "Beschreibungs-Kategorien",
+  "settings.taxonomy.name": "Kategorien",
+  "settings.taxonomy.desc": "Werden dem Modell im Beschreiben-Modus als feste Kategorien angeboten. Ein Feld pro Kategorie.",
+  "settings.taxonomy.addPlaceholder": "weitere Kategorie…",
+  "settings.taxonomy.remove": "Kategorie entfernen",
+  "settings.fmMap.heading": "Frontmatter-Mapping",
+  "settings.fmMap.desc": "Frontmatter-Key-Namen, die in erzeugte Notizen geschrieben werden. Vorsichtig ändern — bestehende Notizen behalten ihre alten Keys (Phase 1b bietet eine vaultweite Migration).",
+  "settings.fmMap.sourceImage": "Key: Quellbild",
+  "settings.fmMap.sourcePdf": "Key: Quell-PDF",
+  "settings.fmMap.sourceNote": "Key: Quellnotiz",
+  "settings.fmMap.category": "Key: Kategorie",
+  "settings.fmMap.tags": "Key: Tags",
+  "settings.fmMap.authorTranscribed": "Key: transkribiert-von",
+  "settings.fmMap.authorDescribed": "Key: beschrieben-von",
+  "settings.fmMap.created": "Key: erstellt",
+  "settings.fmMap.pages": "Key: Seiten",
+  "settings.fmMap.kindKey": "Key: Art",
+  "settings.fmMap.kindTranscript": "Wert für Art: Transkript",
+  "settings.fmMap.kindDescription": "Wert für Art: Beschreibung",
   "prompt.default":
     "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, " +
     "**Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare.",
@@ -198,7 +240,6 @@ const DE: Dict = {
   "preset.label.handwriting": "Handschrift",
   "preset.label.math": "Mathe → LaTeX",
   "preset.label.code": "Quellcode",
-  "preset.label.describe": "Bild beschreiben",
   "preset.prompt.tables":
     "Transkribiere das Bild nach Markdown. Gib jede Tabelle als GitHub-Flavored-Markdown-Tabelle aus " +
     "(Pipes mit Trennzeile nach dem Kopf) und erhalte alle Zeilen, Spalten und Zellinhalte exakt. " +
@@ -212,12 +253,16 @@ const DE: Dict = {
   "preset.prompt.code":
     "Transkribiere das Bild nach Markdown. Setze Quellcode in umzäunte Codeblöcke (```) und erhalte " +
     "Einrückung, Zeilenumbrüche und Symbole exakt. Gib nur das Markdown aus, keine Kommentare.",
-  "preset.prompt.describe":
-    "Beschreibe das Bild in klarer Prosa, geeignet als Alt-Text: was es zeigt, seine Kernelemente und " +
-    "sichtbaren Text. Fasse zusammen, statt wörtlich zu transkribieren. Gib nur die Beschreibung aus, keine Kommentare.",
   "view.deselectAll": "Alle abwählen",
   "view.selectAll": "Alle auswählen",
   "view.transcribe": "Transkribieren",
+  "view.describe": "Beschreiben",
+  "view.modeTranscribe": "Transkribieren",
+  "view.modeDescribe": "Beschreiben",
+  "view.category": "Kategorie",
+  "view.tags": "Tags",
+  "view.descriptionExists": "✓ Beschreibung vorhanden",
+  "view.saveDescription": "Beschreibung speichern",
   "view.createAll": "Alle anlegen",
   "view.checking": "Vision-LLM: prüfe…",
   "view.connected": "Vision-LLM verbunden",
@@ -272,6 +317,7 @@ const DE: Dict = {
   "cap.none": "Keine Vision",
   "note.suffix.image": "(Transkript)",
   "note.suffix.pdf": "(PDF-Transkript)",
+  "note.suffix.description": "(Beschreibung)",
   "pdf.pageHeading": "Seite {0}",
   "pdf.pageFailed": "Seite {0} — Transkription fehlgeschlagen",
   "pdf.textLayerPrompt":

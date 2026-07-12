@@ -8,6 +8,13 @@
 .img2md-status.is-error .img2md-status-icon { color: var(--text-error); }
 .img2md-status.is-checking .img2md-status-icon { color: var(--text-muted); }
 .img2md-model { width: 100%; flex: 0 0 auto; font-size: 12px; }
+/* Modus-Umschalter (Segmented-Control): Zustand über Form (gefüllter Hintergrund) + aria-pressed,
+   nicht nur Farbe (WCAG 1.4.1). */
+.img2md-mode-row { display: flex; flex: 0 0 auto; margin-bottom: var(--size-4-2); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); overflow: hidden; }
+.img2md-mode-btn { flex: 1 1 50%; font-size: 12px; padding: 4px 0; background: var(--background-secondary); color: var(--text-muted); border: none; border-radius: 0; box-shadow: none; }
+.img2md-mode-btn:hover { color: var(--text-normal); }
+.img2md-mode-btn.is-active { background: var(--interactive-accent); color: var(--text-on-accent); }
+.img2md-mode-btn.is-active:hover { background: var(--interactive-accent-hover); }
 .img2md-head { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; margin-bottom: var(--size-4-2); }
 .img2md-toggle { font-size: 12px; }
 .img2md-list { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; max-height: 30vh; overflow-y: auto; margin-bottom: var(--size-4-2); }
@@ -38,6 +45,12 @@
 .img2md-write { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 .img2md-write-icon { display: inline-flex; align-items: center; }
 .img2md-write-icon svg { width: 14px; height: 14px; }
+/* Kategorie/Tags-Zeile (Beschreiben-Karte, editierbar vor dem Speichern). Kategorie ist ein
+   Text-Input mit Taxonomie-Datalist (Vorschlag, keine Beschränkung) — Spec §2 "Dropdown der
+   Taxonomie + freie Eingabe". */
+.img2md-cat-row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.img2md-category { font-size: 12px; flex: 1 1 40%; min-width: 0; background: var(--background-primary); color: var(--text-normal); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); padding: 2px 6px; }
+.img2md-tags { font-size: 12px; flex: 1 1 auto; min-width: 0; background: var(--background-primary); color: var(--text-normal); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); padding: 2px 6px; }
 .img2md-exists { color: var(--text-accent); font-size: 11px; margin-left: 4px; }
 .img2md-exists-open { color: var(--text-accent); font-size: 11px; margin-left: 4px; cursor: pointer; text-decoration: underline; }
 .img2md-linked { font-size: var(--font-ui-smaller); color: var(--text-muted); margin-left: 0.4em; }
