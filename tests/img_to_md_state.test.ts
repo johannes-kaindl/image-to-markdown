@@ -162,6 +162,20 @@ describe("ImgToMdState — PDF-Karten", () => {
     s.setError(1, "boom");
     expect(s.failedCardIndices()).toEqual([1]);
   });
+  it("setDescribed fills prose/category/tags and marks done", () => {
+    const s = new ImgToMdState();
+    s.setItems([{ raw: "", link: "i.png", ext: "png", supported: true, kind: "image" }]);
+    s.startCards();
+    s.setDescribed(0, { category: "Diagramm", tags: ["a"], prose: "Ein Diagramm." }, "m");
+    expect(s.cards[0]).toMatchObject({ text: "Ein Diagramm.", category: "Diagramm", tags: ["a"], mode: "description", status: "done", model: "m" });
+  });
+  it("setDescribed with empty prose marks error", () => {
+    const s = new ImgToMdState();
+    s.setItems([{ raw: "", link: "i.png", ext: "png", supported: true, kind: "image" }]);
+    s.startCards();
+    s.setDescribed(0, { category: null, tags: [], prose: "  " }, "m");
+    expect(s.cards[0].status).toBe("error");
+  });
 });
 
 function mkCard(model: string): ImgCard {

@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import type { ParsedDescription } from "./describe";
 
 export interface ImgItem {
   raw: string;
@@ -26,6 +27,9 @@ export interface ImgCard {
   page?: number;
   error?: string;
   writtenPath?: string;
+  mode?: "transcript" | "description";
+  category?: string | null;
+  tags?: string[];
 }
 
 /** Reine View-Buchhaltung für die IMG→MD-Sidebar: Bild-Auswahl + Ergebnis-Karten.
@@ -85,6 +89,17 @@ export class ImgToMdState {
   setDone(i: number): void {
     const c = this.cards[i]; if (!c) return;
     if (c.text.trim()) c.status = "done";
+    else { c.status = "error"; c.error = t("core.emptyTranscript"); }
+  }
+
+  setDescribed(i: number, parsed: ParsedDescription, model: string): void {
+    const c = this.cards[i]; if (!c) return;
+    c.text = parsed.prose;
+    c.category = parsed.category;
+    c.tags = parsed.tags;
+    c.mode = "description";
+    c.model = model;
+    if (parsed.prose.trim()) c.status = "done";
     else { c.status = "error"; c.error = t("core.emptyTranscript"); }
   }
 
