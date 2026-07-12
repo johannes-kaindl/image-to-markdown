@@ -1,11 +1,10 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
-import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints } from "./settings";
+import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
 import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint } from "./vision_client";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
-import { DEFAULT_FM_MAP } from "./frontmatter_map";
 import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, normalizePreset } from "./prompts";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
@@ -76,6 +75,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   private mimeOf(ext: string): string { const e = ext.toLowerCase(); return e === "jpg" ? "jpeg" : e; }
 
+  // Kein Caching: die Settings-UI mutiert this.settings live, jeder Aufruf muss den aktuellen Stand lesen.
+  private fmMap() { return fmMapFromSettings(this.settings); }
+
   private makeImgIO(): ImgToMdIO {
     return {
       date: () => new Date().toISOString().slice(0, 10),
@@ -121,8 +123,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const lookup = this.backlinkLookup();
         const cls = classifySource(extOf(sourcePath));
         if (cls) {   // aktive Datei IST ein Bild/PDF → Selbst-Quelle
-          const existingTranscriptPath = findExistingTranscript(lookup, sourcePath, DEFAULT_FM_MAP) ?? undefined;
-          const existingDescriptionPath = findExistingDescription(lookup, sourcePath, DEFAULT_FM_MAP) ?? undefined;
+          const existingTranscriptPath = findExistingTranscript(lookup, sourcePath, this.fmMap()) ?? undefined;
+          const existingDescriptionPath = findExistingDescription(lookup, sourcePath, this.fmMap()) ?? undefined;
           let pageCount: number | undefined;
           if (cls === "pdf") {
             try { pageCount = await pdfPageCount(await this.app.vault.adapter.readBinary(sourcePath)); } catch { pageCount = 0; }
@@ -138,8 +140,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
         for (const e of findImageEmbeds(content)) {
           if (seen.has(e.link)) continue; seen.add(e.link);
           const resolved = this.app.metadataCache.getFirstLinkpathDest(e.link, sourcePath);
-          const existingTranscriptPath = resolved ? (findExistingTranscript(lookup, resolved.path, DEFAULT_FM_MAP) ?? undefined) : undefined;
-          const existingDescriptionPath = resolved ? (findExistingDescription(lookup, resolved.path, DEFAULT_FM_MAP) ?? undefined) : undefined;
+          const existingTranscriptPath = resolved ? (findExistingTranscript(lookup, resolved.path, this.fmMap()) ?? undefined) : undefined;
+          const existingDescriptionPath = resolved ? (findExistingDescription(lookup, resolved.path, this.fmMap()) ?? undefined) : undefined;
           if (e.kind === "pdf") {
             let pageCount = 0;
             if (resolved) {
@@ -201,13 +203,13 @@ export default class ImageToMarkdownPlugin extends Plugin {
       writeTranscripts: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
         const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
-        const { results } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed, knownBody: e.knownBody })), { selfSource: self, destDir });
+        const { results } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed, knownBody: e.knownBody })), { selfSource: self, destDir, map: this.fmMap() });
         return results;
       },
       writePdf: async (sourcePath, raw, link, pages, overwritePath, embed, range, knownBody) => {
         const self = classifySource(extOf(sourcePath)) !== null;
         const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
-        const { path, body } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir, range, knownBody });
+        const { path, body } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir, range, knownBody, map: this.fmMap() });
         return { path, body };
       },
       describeStream: async (sourcePath, item, onContent, onReasoning, signal) => {
@@ -250,7 +252,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const { results } = await writeDescriptions(
           this.makeImgIO(), sourcePath,
           entries.map(e => ({ link: e.item.link, category: e.category, tags: e.tags, prose: e.prose, model: e.model })),
-          { selfSource: self, destDir },
+          { selfSource: self, destDir, map: this.fmMap() },
         );
         return results;
       },
