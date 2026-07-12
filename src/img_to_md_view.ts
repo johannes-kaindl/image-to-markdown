@@ -3,6 +3,7 @@ import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel } from
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 import { thinkToggleView } from "./reasoning_toggle";
+import { CardCache } from "./card_cache";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 
@@ -38,6 +39,7 @@ export interface ImgToMdViewDeps {
   setSuppress: (v: boolean) => void;
   openPath: (p: string) => void;
   copyText: (t: string) => void;
+  cardCache: CardCache;
 }
 
 export class ImgToMdView extends ItemView {
@@ -58,6 +60,7 @@ export class ImgToMdView extends ItemView {
   private retryAllBtn: HTMLElement | null = null;
   private controller: AbortController | null = null;
   private running = false;
+  private cardsSourcePath: string | null = null;
   /** Notizen-Pfade, die diese Session bereits selbst geschrieben hat, gemappt auf den zuletzt
    *  geschriebenen Transkript-Body — Diff-Confirm-Gate feuert beim ERSTEN Override einer aus dem
    *  Scan vorgefundenen (fremden) Notiz UND erneut, wenn der on-disk-Body inzwischen vom zuletzt
@@ -109,6 +112,7 @@ export class ImgToMdView extends ItemView {
     await this.refreshStatus();
     await this.refreshModels();
     await this.rescan();
+    this.restoreCardsFor(this.deps.getActivePath());
   }
 
   async refreshStatus(): Promise<void> {
@@ -185,12 +189,28 @@ export class ImgToMdView extends ItemView {
     this.renderList();
   }
 
-  /** Aktive Notiz gewechselt → Karten der alten Notiz verwerfen + neu scannen. */
+  /** Aktive Notiz gewechselt → Karten der alten Notiz sichern, verwerfen + neu scannen,
+   *  Karten der neuen Quelle (falls vorhanden) wiederherstellen. */
   async refresh(): Promise<void> {
     if (this.running) return;
+    this.persistCards();
     this.state.clearCards();
     this.resetCards();
     await this.rescan();
+    this.restoreCardsFor(this.deps.getActivePath());
+  }
+
+  /** Aktuelle Karten unter ihrer Quelle im Cache sichern (No-op ohne bekannte Quelle). */
+  private persistCards(): void {
+    if (this.cardsSourcePath) this.deps.cardCache.save(this.cardsSourcePath, this.state.cards);
+  }
+
+  /** Gecachte Karten für `path` (falls vorhanden) übernehmen + neu rendern; merkt sich `path`
+   *  in jedem Fall als aktuelle Karten-Quelle (für den nächsten persistCards-Aufruf). */
+  private restoreCardsFor(path: string | null): void {
+    const cached = path ? this.deps.cardCache.load(path) : undefined;
+    if (cached) { this.state.cards = cached; this.resetCards(); }
+    this.cardsSourcePath = path;
   }
 
   private basename(link: string): string { return link.split("/").pop() ?? link; }
@@ -369,6 +389,7 @@ export class ImgToMdView extends ItemView {
     const path = this.deps.getActivePath();
     if (!path) return;
     const cards = this.state.startCards();
+    this.cardsSourcePath = this.deps.getActivePath();
     this.resetCards();
     if (!cards.length) return;
     await this.runIndices(path, cards.map((_, i) => i), false);
@@ -489,6 +510,7 @@ export class ImgToMdView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.persistCards();
     this.controller?.abort();
     this.cardEls = [];
     this.contentEl.removeClass("img2md-root");
