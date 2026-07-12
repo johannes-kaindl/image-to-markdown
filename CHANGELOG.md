@@ -8,6 +8,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [0.13.0] — 2026-07-12
 
+## [0.13.0] — 2026-07-12
+
 ### Hinzugefügt
 
 - **Bild-Beschreibungs-Modus:** Neben „Transkribieren" gibt es jetzt einen Modus **„Beschreiben"**
