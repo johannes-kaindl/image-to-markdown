@@ -1,6 +1,7 @@
 import { ImgToMdIO, replaceEmbed, transcriptNotePath, basenameNoExt, rewriteTranscript, extractTranscriptBody } from "./img_to_md";
 import { t } from "./i18n";
 import { diffLines } from "./diff";
+import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 
 export interface PdfPageTranscript { page: number; text: string }
 
@@ -61,17 +62,20 @@ export function buildPdfBody(pages: PdfPageTranscript[], separator: PdfPageSepar
     .join(pageGap(separator));
 }
 
-/** Baut die PDF-Transkript-Notiz: Frontmatter + PDF-Embed oben + je nicht-leere Seite ein Block,
- *  getrennt gemäß `separator`. */
+/** Baut die PDF-Transkript-Notiz: Frontmatter-Ref (aus `map`) + PDF-Embed oben + je nicht-leere
+ *  Seite ein Block, getrennt gemäß `separator`. Additive `kind`-Zeile (map.kindKey/map.kindTranscript)
+ *  nach source_note (bzw. source_pdf ohne sourceName). Mit `DEFAULT_FM_MAP` ist der Output
+ *  byte-identisch zu vorher bis auf diese eine Zeile. */
 export function buildPdfNote(o: {
   pdfLink: string; sourceName?: string; date: string; model: string;
   pages: PdfPageTranscript[]; rangeFrom: number; rangeTo: number;
   separator: PdfPageSeparator; range?: { from: number; to: number };
-}): string {
+}, map: FrontmatterMap): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
-  const fm = ["---", `source_pdf: "[[${esc(o.pdfLink)}]]"`];
-  if (o.sourceName !== undefined) fm.push(`source_note: "[[${esc(o.sourceName)}]]"`);
-  fm.push(`created: ${o.date}`, `transcribed_by: "${esc(o.model)}"`, `pages: "${o.rangeFrom}-${o.rangeTo}"`, "---");
+  const fm = ["---", `${map.sourcePdf}: "[[${esc(o.pdfLink)}]]"`];
+  if (o.sourceName !== undefined) fm.push(`${map.sourceNote}: "[[${esc(o.sourceName)}]]"`);
+  fm.push(`${map.kindKey}: ${map.kindTranscript}`);
+  fm.push(`${map.created}: ${o.date}`, `${map.authorTranscribed}: "${esc(o.model)}"`, `${map.pages}: "${o.rangeFrom}-${o.rangeTo}"`, "---");
   const frontmatter = fm.join("\n");
   const body = buildPdfBody(o.pages, o.separator, o.range);
   return `${frontmatter}\n![[${o.pdfLink}]]\n\n${body}\n`;
@@ -89,10 +93,11 @@ export async function writePdfTranscript(
   separator: PdfPageSeparator,
   overwritePath?: string,
   embed = true,
-  opts?: { selfSource?: boolean; destDir?: string; range?: { from: number; to: number }; knownBody?: string },
+  opts?: { selfSource?: boolean; destDir?: string; range?: { from: number; to: number }; knownBody?: string; map?: FrontmatterMap },
 ): Promise<{ path: string | null; body: string | null }> {
   const self = opts?.selfSource === true;
   const range = opts?.range;
+  const map = opts?.map ?? DEFAULT_FM_MAP;
   const withContent = pages.filter(p => p.content.trim()).sort((a, b) => a.page - b.page);
   if (!withContent.length) return { path: null, body: null };   // alles leer/fehlgeschlagen → keine reine Platzhalter-Notiz
   const model = withContent.find(p => p.model)?.model ?? "";
@@ -115,7 +120,7 @@ export async function writePdfTranscript(
         bodyToWrite = chosen;
       }
     }
-    await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body: bodyToWrite, pages: pagesStr }));
+    await io.writeNote(overwritePath, rewriteTranscript(old, { model, sourceLink: source.link, body: bodyToWrite, pages: pagesStr }, map));
     return { path: overwritePath, body: bodyToWrite };
   }
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
@@ -124,7 +129,7 @@ export async function writePdfTranscript(
   const content = buildPdfNote({
     pdfLink: source.link, sourceName, date: io.date(), model,
     pages: bodyPages, rangeFrom, rangeTo, separator, range,
-  });
+  }, map);
   await io.createNote(notePath, content);
   if (embed && !self) {
     const before = await io.readNote(sourcePath);

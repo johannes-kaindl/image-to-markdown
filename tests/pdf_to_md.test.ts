@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildPdfNote, writePdfTranscript, buildPdfBody, reconstructPdfText, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "../src/pdf_to_md";
 import { applySelection, DiffLine } from "../src/diff";
+import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("reconstructPdfText", () => {
   it("fügt Strings zusammen, Zeilenumbruch bei hasEOL", () => {
@@ -31,9 +32,10 @@ describe("countNonWhitespace / Schwelle", () => {
 
 describe("buildPdfNote", () => {
   it("Frontmatter + PDF-Embed oben + Heading-Sektionen in Reihenfolge", () => {
-    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Quelle", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "heading", pages: [{ page: 1, text: "# A" }, { page: 2, text: "# B" }] });
+    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Quelle", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "heading", pages: [{ page: 1, text: "# A" }, { page: 2, text: "# B" }] }, DEFAULT_FM_MAP);
     expect(note).toContain('source_pdf: "[[doc.pdf]]"');
     expect(note).toContain('source_note: "[[Quelle]]"');
+    expect(note).toContain("kind: transcript");
     expect(note).toContain('transcribed_by: "vm"');
     expect(note).toContain('pages: "1-2"');
     expect(note).toContain("![[doc.pdf]]");
@@ -43,37 +45,58 @@ describe("buildPdfNote", () => {
     expect(note.indexOf("## Page 1")).toBeLessThan(note.indexOf("## Page 2"));
   });
   it("comment-Separator (Default): %% Page N %%, keine Überschrift", () => {
-    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "comment", pages: [{ page: 1, text: "A" }, { page: 2, text: "B" }] });
+    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "comment", pages: [{ page: 1, text: "A" }, { page: 2, text: "B" }] }, DEFAULT_FM_MAP);
     expect(note).toContain("%% Page 1 %%");
     expect(note).toContain("%% Page 2 %%");
     expect(note).not.toContain("## Page");
   });
   it("rule-Separator: --- zwischen Seiten, keine Marker", () => {
-    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "rule", pages: [{ page: 1, text: "A" }, { page: 2, text: "B" }] });
+    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "rule", pages: [{ page: 1, text: "A" }, { page: 2, text: "B" }] }, DEFAULT_FM_MAP);
     expect(note).toContain("\n\n---\n\n");
     expect(note).not.toContain("## Page");
     expect(note).not.toContain("%%");
   });
   it("none-Separator: nahtlos, keine Marker/Trenner", () => {
-    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "none", pages: [{ page: 1, text: "A" }, { page: 2, text: "B" }] });
+    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "none", pages: [{ page: 1, text: "A" }, { page: 2, text: "B" }] }, DEFAULT_FM_MAP);
     expect(note).toContain("A\n\nB");
     expect(note).not.toContain("## Page");
     expect(note).not.toContain("%%");
   });
   it("überspringt leere Seiten", () => {
-    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "heading", pages: [{ page: 1, text: "   " }, { page: 2, text: "X" }] });
+    const note = buildPdfNote({ pdfLink: "doc.pdf", sourceName: "Q", date: "2026-06-22", model: "vm", rangeFrom: 1, rangeTo: 2, separator: "heading", pages: [{ page: 1, text: "   " }, { page: 2, text: "X" }] }, DEFAULT_FM_MAP);
     expect(note).not.toContain("## Page 1");
     expect(note).toContain("## Page 2");
   });
   it("escaped Anführungszeichen im Frontmatter", () => {
-    const note = buildPdfNote({ pdfLink: 'd"c.pdf', sourceName: 'Q"x', date: "2026-06-22", model: 'v"m', rangeFrom: 1, rangeTo: 1, separator: "comment", pages: [{ page: 1, text: "x" }] });
+    const note = buildPdfNote({ pdfLink: 'd"c.pdf', sourceName: 'Q"x', date: "2026-06-22", model: 'v"m', rangeFrom: 1, rangeTo: 1, separator: "comment", pages: [{ page: 1, text: "x" }] }, DEFAULT_FM_MAP);
     expect(note).toContain('source_pdf: "[[d\\"c.pdf]]"');
     expect(note).toContain('transcribed_by: "v\\"m"');
   });
   it("ohne sourceName → keine source_note-Zeile", () => {
-    const note = buildPdfNote({ pdfLink: "doc.pdf", date: "2026-06-25", model: "vm", rangeFrom: 1, rangeTo: 1, separator: "comment", pages: [{ page: 1, text: "x" }] });
+    const note = buildPdfNote({ pdfLink: "doc.pdf", date: "2026-06-25", model: "vm", rangeFrom: 1, rangeTo: 1, separator: "comment", pages: [{ page: 1, text: "x" }] }, DEFAULT_FM_MAP);
     expect(note).toContain('source_pdf: "[[doc.pdf]]"');
     expect(note).not.toContain("source_note");
+  });
+  it("mit DEFAULT_FM_MAP byte-identisch zu heute bis auf additive kind-Zeile (nach source_note, vor created)", () => {
+    const note = buildPdfNote(
+      { pdfLink: "doc.pdf", sourceName: "Quelle", date: "2026-07-12", model: "m", rangeFrom: 1, rangeTo: 1, separator: "none", pages: [{ page: 1, text: "Hallo" }] },
+      DEFAULT_FM_MAP,
+    );
+    expect(note).toBe(
+      `---\nsource_pdf: "[[doc.pdf]]"\nsource_note: "[[Quelle]]"\nkind: transcript\ncreated: 2026-07-12\ntranscribed_by: "m"\npages: "1-1"\n---\n![[doc.pdf]]\n\nHallo\n`,
+    );
+  });
+  it("honors a custom mapping (key + kind value)", () => {
+    const map = { ...DEFAULT_FM_MAP, sourcePdf: "quelle_pdf", kindKey: "type", kindTranscript: "📄 T" };
+    const note = buildPdfNote({ pdfLink: "doc.pdf", date: "2026-07-12", model: "m", rangeFrom: 1, rangeTo: 1, separator: "none", pages: [{ page: 1, text: "x" }] }, map);
+    expect(note).toContain(`quelle_pdf: "[[doc.pdf]]"`);
+    expect(note).toContain(`type: 📄 T`);
+  });
+  it("ohne sourceName → kind-Zeile nach source_pdf (statt source_note)", () => {
+    const note = buildPdfNote({ pdfLink: "scan.pdf", date: "2026-06-25", model: "vm", rangeFrom: 1, rangeTo: 1, separator: "none", pages: [{ page: 1, text: "x" }] }, DEFAULT_FM_MAP);
+    const lines = note.split("\n");
+    expect(lines[1]).toBe('source_pdf: "[[scan.pdf]]"');
+    expect(lines[2]).toBe("kind: transcript");
   });
 });
 
