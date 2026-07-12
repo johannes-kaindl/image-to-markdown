@@ -6,6 +6,28 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-07-12
+
+### Hinzugefügt
+
+- **Bild-Beschreibungs-Modus:** Neben „Transkribieren" gibt es jetzt einen Modus **„Beschreiben"**
+  (Umschalter oben in der Seitenleiste). Statt Text aus einem Bild zu ziehen, erzeugt er eine
+  **Beschreibung** — ideal für textarme Bilder (Fotos, Diagramme, Whiteboards), damit du sie über
+  die Suche (z. B. vault-rag) **wiederfindest**, obwohl kein Text drinsteht. Die Beschreibungs-Notiz
+  ist **nicht-destruktiv** (dein Bild in der Quellnotiz bleibt unangetastet), zeigt **Bild und
+  Beschreibung zusammen** (Karteikarte) und trägt eine **Kategorie** (aus einer konfigurierbaren
+  Taxonomie) plus freie **Tags** — beides in der Karte editierbar, bevor du speicherst. Transkript
+  und Beschreibung zum selben Bild können unabhängig **koexistieren**.
+- **Konfigurierbares Frontmatter-Mapping:** Alle Frontmatter-Schlüssel der erzeugten Notizen (und der
+  Typ-Wert) lassen sich in den Einstellungen an dein eigenes Vault-Schema anpassen (z. B. `kind` →
+  `type`) — gilt einheitlich für Transkript-, PDF- und Beschreibungs-Notizen. *(Nachträgliches
+  vaultweites Umbenennen bestehender Notizen folgt in einem späteren Release.)*
+
+### Geändert
+
+- Das frühere Prompt-Preset „Bild beschreiben" ist entfallen — sein Zweck lebt jetzt erstklassig im
+  neuen Beschreiben-Modus (alte Einstellung wird automatisch auf „Standard" migriert).
+
 ## [0.12.0] — 2026-07-12
 
 ### Hinzugefügt
