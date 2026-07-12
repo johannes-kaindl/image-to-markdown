@@ -452,6 +452,15 @@ describe("runImgToMd", () => {
     expect(Object.keys(created)).toEqual([]);
     expect(notices.some(n => n.includes("sidebar"))).toBe(true);
   });
+  it("threadet opts.map: eigene Frontmatter-Keys statt DEFAULT_FM_MAP", async () => {
+    const map = { ...DEFAULT_FM_MAP, sourceImage: "quelle_bild", kindKey: "type", kindTranscript: "📄 T" };
+    const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]] });
+    await runImgToMd(io, "q.md", { map });
+    const note = created["foto (transcript).md"];
+    expect(note).toContain("quelle_bild:");
+    expect(note).toContain("type: 📄 T");
+    expect(note).not.toContain(`${DEFAULT_FM_MAP.sourceImage}:`);
+  });
 });
 
 describe("classifySource", () => {

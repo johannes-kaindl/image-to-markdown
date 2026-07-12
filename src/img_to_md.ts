@@ -292,7 +292,7 @@ export async function writeDescriptions(
  *  Notiz an und ersetzt den Bild-Embed durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
  *  Reine Links (embed:false) werden hier bewusst übersprungen — sie sind ein Sidebar-Feature mit
  *  Backlink-Idempotenz (Etappe 1); ohne diesen Schutz würde der Command Re-Transkriptions-Dubletten erzeugen. */
-export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onlyRaw?: string }): Promise<{ transcribed: number; skipped: number }> {
+export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onlyRaw?: string; map?: FrontmatterMap }): Promise<{ transcribed: number; skipped: number }> {
   const content = await io.readNote(sourcePath);
   let embeds = findImageEmbeds(content).filter(e => e.embed);
   if (opts?.onlyRaw) embeds = embeds.filter(e => e.raw === opts.onlyRaw);
@@ -318,7 +318,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
     if (!res.content.trim()) { io.notify(t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
     entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model, embed: e.embed });
   }
-  const { results } = await writeTranscripts(io, sourcePath, entries);
+  const { results } = await writeTranscripts(io, sourcePath, entries, { map: opts?.map });
   const base = t(results.length === 1 ? "core.transcribed.one" : "core.transcribed.other", results.length);
   io.notify(`${base}${skipped ? t("core.skippedSuffix", skipped) : ""}.`);
   return { transcribed: results.length, skipped };

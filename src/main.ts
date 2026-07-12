@@ -46,7 +46,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.addCommand({ id: "transcribe-active-note", name: t("cmd.transcribeActive"), callback: () => {
       const f = this.app.workspace.getActiveFile();
       if (!f) { new Notice(t("notice.noActiveNote")); return; }
-      void runImgToMd(this.makeImgIO(), f.path);
+      void runImgToMd(this.makeImgIO(), f.path, { map: this.fmMap() });
     } });
     this.registerEvent(this.app.workspace.on("editor-menu", (menu: Menu, editor: Editor) => {
       const cur = editor.getCursor();
@@ -61,7 +61,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         if (start >= 0 && cur.ch >= start && cur.ch <= start + e.raw.length) { chosen = e; break; }
       }
       const raw = chosen.raw;
-      menu.addItem(item => item.setTitle("Image → Markdown").setIcon("scan-text").onClick(() => void runImgToMd(this.makeImgIO(), f.path, { onlyRaw: raw })));
+      menu.addItem(item => item.setTitle("Image → Markdown").setIcon("scan-text").onClick(() => void runImgToMd(this.makeImgIO(), f.path, { onlyRaw: raw, map: this.fmMap() })));
     }));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshImgViews()));
   }

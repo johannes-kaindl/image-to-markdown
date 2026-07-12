@@ -60,7 +60,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     pdfUseTextLayer: true,
     suppressThinking: false,
     describeTaxonomy: ["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"],
-    frontmatterMap: DEFAULT_FM_MAP,
+    frontmatterMap: { ...DEFAULT_FM_MAP },
     mode: "transcribe",
   };
 }
