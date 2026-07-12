@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody } from "../src/img_to_md";
 import { applySelection } from "../src/diff";
+import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("stripFrontmatter", () => {
   it("entfernt führenden YAML-Block", () => {
@@ -66,24 +67,46 @@ describe("findImageEmbeds", () => {
 
 describe("buildTranscriptNote", () => {
   it("baut Frontmatter + Foto-Embed oben + Transkript", () => {
-    const note = buildTranscriptNote({ imageLink: "foto.jpg", sourceName: "Notiz", date: "2026-06-20", model: "vm", transcript: "# H\nAbsatz" });
+    const note = buildTranscriptNote({ imageLink: "foto.jpg", sourceName: "Notiz", date: "2026-06-20", model: "vm", transcript: "# H\nAbsatz" }, DEFAULT_FM_MAP);
     expect(note).toContain('source_image: "[[foto.jpg]]"');
     expect(note).toContain('source_note: "[[Notiz]]"');
+    expect(note).toContain("kind: transcript");
     expect(note).toContain("created: 2026-06-20");
     expect(note).toContain('transcribed_by: "vm"');
     expect(note).toContain("![[foto.jpg]]");
     expect(note.indexOf("![[foto.jpg]]")).toBeLessThan(note.indexOf("# H"));
   });
   it("escaped Anführungszeichen im Frontmatter", () => {
-    const note = buildTranscriptNote({ imageLink: 'fo"to.jpg', sourceName: 'No"tiz', date: "2026-06-20", model: 'v"m', transcript: "x" });
+    const note = buildTranscriptNote({ imageLink: 'fo"to.jpg', sourceName: 'No"tiz', date: "2026-06-20", model: 'v"m', transcript: "x" }, DEFAULT_FM_MAP);
     expect(note).toContain('source_image: "[[fo\\"to.jpg]]"');
     expect(note).toContain('source_note: "[[No\\"tiz]]"');
     expect(note).toContain('transcribed_by: "v\\"m"');
   });
   it("ohne sourceName → keine source_note-Zeile", () => {
-    const note = buildTranscriptNote({ imageLink: "scan.png", date: "2026-06-25", model: "vm", transcript: "x" });
+    const note = buildTranscriptNote({ imageLink: "scan.png", date: "2026-06-25", model: "vm", transcript: "x" }, DEFAULT_FM_MAP);
     expect(note).toContain('source_image: "[[scan.png]]"');
     expect(note).not.toContain("source_note");
+  });
+  it("mit DEFAULT_FM_MAP byte-identisch zu heute bis auf additive kind-Zeile (nach source_note, vor created)", () => {
+    const note = buildTranscriptNote(
+      { imageLink: "img.png", sourceName: "Quelle", date: "2026-07-12", model: "m", transcript: "Hallo" },
+      DEFAULT_FM_MAP,
+    );
+    expect(note).toBe(
+      `---\nsource_image: "[[img.png]]"\nsource_note: "[[Quelle]]"\nkind: transcript\ncreated: 2026-07-12\ntranscribed_by: "m"\n---\n![[img.png]]\n\nHallo\n`,
+    );
+  });
+  it("honors a custom mapping (key + kind value)", () => {
+    const map = { ...DEFAULT_FM_MAP, sourceImage: "quelle_bild", kindKey: "type", kindTranscript: "📄 Transkript" };
+    const note = buildTranscriptNote({ imageLink: "img.png", date: "2026-07-12", model: "m", transcript: "x" }, map);
+    expect(note).toContain(`quelle_bild: "[[img.png]]"`);
+    expect(note).toContain(`type: 📄 Transkript`);
+  });
+  it("ohne sourceName → kind-Zeile nach source_image (statt source_note)", () => {
+    const note = buildTranscriptNote({ imageLink: "scan.png", date: "2026-06-25", model: "vm", transcript: "x" }, DEFAULT_FM_MAP);
+    const lines = note.split("\n");
+    expect(lines[1]).toBe('source_image: "[[scan.png]]"');
+    expect(lines[2]).toBe("kind: transcript");
   });
 });
 
@@ -371,7 +394,7 @@ describe("classifySource", () => {
 describe("rewriteTranscript", () => {
   it("erhält source_*/source_note/created, ersetzt transcribed_by + Body, kein doppeltes Frontmatter", () => {
     const old = `---\nsource_image: "[[b.png]]"\nsource_note: "[[Quelle]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALTER TEXT\n`;
-    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEUER TEXT" });
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEUER TEXT" }, DEFAULT_FM_MAP);
     expect(out).toContain('source_image: "[[b.png]]"');
     expect(out).toContain('source_note: "[[Quelle]]"');
     expect(out).toContain("created: 2026-01-01");
@@ -382,20 +405,38 @@ describe("rewriteTranscript", () => {
     expect(out).not.toContain("ALTER TEXT");
     expect(out.match(/^---$/gm)?.length).toBe(2);
   });
+  it("fügt KEIN kind hinzu (minimaler Eingriff, altes Frontmatter bleibt sonst unverändert)", () => {
+    const old = `---\nsource_image: "[[b.png]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\n---\n![[b.png]]\n\nALT\n`;
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEU" }, DEFAULT_FM_MAP);
+    expect(out).not.toContain("kind:");
+  });
   it("ersetzt vorhandenes pages bei PDF-Override", () => {
     const old = `---\nsource_pdf: "[[d.pdf]]"\ncreated: 2026-01-01\ntranscribed_by: "alt"\npages: "1-2"\n---\n![[d.pdf]]\n\nX\n`;
-    const out = rewriteTranscript(old, { model: "neu", sourceLink: "d.pdf", body: "Y", pages: "1-5" });
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "d.pdf", body: "Y", pages: "1-5" }, DEFAULT_FM_MAP);
     expect(out).toContain('pages: "1-5"');
     expect(out).not.toContain('pages: "1-2"');
   });
   it("CRLF-Notiz: erhält Frontmatter trotz \\r\\n (kein Datenverlust)", () => {
     const old = `---\r\nsource_image: "[[b.png]]"\r\nsource_note: "[[Quelle]]"\r\ncreated: 2026-01-01\r\ntranscribed_by: "alt"\r\n---\r\n![[b.png]]\r\n\r\nALTER TEXT\r\n`;
-    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEUER TEXT" });
+    const out = rewriteTranscript(old, { model: "neu", sourceLink: "b.png", body: "NEUER TEXT" }, DEFAULT_FM_MAP);
     expect(out).toContain('source_image: "[[b.png]]"');
     expect(out).toContain('source_note: "[[Quelle]]"');
     expect(out).toContain("created: 2026-01-01");
     expect(out).toContain('transcribed_by: "neu"');
     expect(out).not.toContain('transcribed_by: "alt"');
+  });
+  it("replaces the mapped author key (CRLF preserved)", () => {
+    const old = `---\r\nsource_image: "[[i.png]]"\r\ntranscribed_by: "old"\r\n---\r\n![[i.png]]\r\n\r\nAlt`;
+    const out = rewriteTranscript(old, { model: "new", sourceLink: "i.png", body: "Neu" }, DEFAULT_FM_MAP);
+    expect(out).toContain(`transcribed_by: "new"`);
+    expect(out).not.toContain(`"old"`);
+  });
+  it("honors a custom author key mapping", () => {
+    const map = { ...DEFAULT_FM_MAP, authorTranscribed: "erfasst_von" };
+    const old = `---\nsource_image: "[[i.png]]"\nerfasst_von: "old"\n---\n![[i.png]]\n\nAlt`;
+    const out = rewriteTranscript(old, { model: "new", sourceLink: "i.png", body: "Neu" }, map);
+    expect(out).toContain(`erfasst_von: "new"`);
+    expect(out).not.toContain(`"old"`);
   });
 });
 
