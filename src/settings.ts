@@ -44,6 +44,7 @@ export interface ImageToMarkdownSettings {
   describeTaxonomy: string[];
   frontmatterMap: FrontmatterMap;
   describeDestDir?: string;
+  mode: "transcribe" | "describe";
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -60,6 +61,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     suppressThinking: false,
     describeTaxonomy: ["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"],
     frontmatterMap: DEFAULT_FM_MAP,
+    mode: "transcribe",
   };
 }
 

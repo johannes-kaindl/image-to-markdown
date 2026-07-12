@@ -4,8 +4,10 @@ import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 import { thinkToggleView } from "./reasoning_toggle";
 import { CardCache } from "./card_cache";
+import { parseDescription } from "./describe";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
+export type ViewMode = "transcribe" | "describe";
 
 interface CardRefs {
   cardEl: HTMLElement;
@@ -18,6 +20,10 @@ interface CardRefs {
   writtenEl?: HTMLElement;
   actionsEl?: HTMLElement;
   writeBtn?: HTMLElement;
+  catRow?: HTMLElement;
+  categorySel?: HTMLSelectElement;
+  categoryValues?: Set<string>;
+  tagsInput?: HTMLInputElement;
   liveWas: boolean;
   autoCollapsed: boolean;
 }
@@ -28,6 +34,17 @@ export interface ImgToMdViewDeps {
   transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
   writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; knownBody?: string }[]) => Promise<{ path: string | null; body: string | null }[]>;
   writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }, knownBody?: string) => Promise<{ path: string | null; body: string | null }>;
+  /** Modus des „Los"-Buttons (Transkribieren ⇄ Beschreiben). Rein Lauf-Typ-Steuerung — Bild-Auswahl
+   *  und Karten-Rendering bleiben pro Karte an `card.mode` (aus setDone/setDescribed), nicht an diesem
+   *  globalen Schalter, damit ein Moduswechsel mitten im Lauf keine bestehenden Karten umdeutet. */
+  getMode: () => ViewMode;
+  setMode: (m: ViewMode) => void;
+  /** Wie transcribeStream, aber für den Beschreiben-Modus: liefert nur den Rohtext (`raw`) — das
+   *  Parsen (CATEGORY:/TAGS:/Prosa) übernimmt die View via parseDescription. Kein page-Parameter
+   *  (Beschreiben zielt auf Einzelbilder, nicht auf mehrseitige PDF-Läufe). */
+  describeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ raw: string; reasoning: string; model: string }>;
+  getTaxonomy: () => string[];
+  writeDescriptions: (sourcePath: string, entries: { item: ImgItem; category: string | null; tags: string[]; prose: string; model: string }[]) => Promise<{ path: string | null }[]>;
   connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;
   listModels: () => Promise<string[]>;
   getModel: () => string;
@@ -56,6 +73,8 @@ export class ImgToMdView extends ItemView {
   private cardsEl: HTMLElement | null = null;
   private cardEls: CardRefs[] = [];
   private toggleBtn: HTMLElement | null = null;
+  private modeTranscribeBtn: HTMLElement | null = null;
+  private modeDescribeBtn: HTMLElement | null = null;
   private runBtn: HTMLElement | null = null;
   private retryAllBtn: HTMLElement | null = null;
   private clearBtn: HTMLElement | null = null;
@@ -99,10 +118,18 @@ export class ImgToMdView extends ItemView {
       this.deps.setSuppress(!this.deps.getSuppress());
       this.renderThinkToggle();
     });
+    // Modus-Umschalter (Segmented-Control): steuert nur den Lauf-Typ des „Los"-Buttons — Bild-Auswahl/
+    // Karten bleiben unverändert, ein Wechsel mitten im Lauf ist gesperrt (this.running-Guard in setMode).
+    const modeRow = c.createDiv({ cls: "img2md-mode-row" });
+    this.modeTranscribeBtn = modeRow.createEl("button", { cls: "img2md-mode-btn", text: t("view.modeTranscribe") });
+    this.modeTranscribeBtn.addEventListener("click", () => this.setMode("transcribe"));
+    this.modeDescribeBtn = modeRow.createEl("button", { cls: "img2md-mode-btn", text: t("view.modeDescribe") });
+    this.modeDescribeBtn.addEventListener("click", () => this.setMode("describe"));
+    this.renderModeSwitch();
     const head = c.createDiv({ cls: "img2md-head" });
     this.toggleBtn = head.createEl("button", { cls: "img2md-toggle", text: t("view.deselectAll") });
     this.toggleBtn.addEventListener("click", () => { this.state.toggleAll(); this.renderList(); });
-    this.runBtn = head.createEl("button", { cls: "img2md-run mod-cta", text: t("view.transcribe") });
+    this.runBtn = head.createEl("button", { cls: "img2md-run mod-cta", text: this.runLabel() });
     this.runBtn.addEventListener("click", () => this.onRunClick());
     this.listEl = c.createDiv({ cls: "img2md-list" });
     this.cardsEl = c.createDiv({ cls: "img2md-cards" });
@@ -191,6 +218,30 @@ export class ImgToMdView extends ItemView {
     if (v.disabled) btn.setAttribute("aria-disabled", "true"); else btn.removeAttribute("aria-disabled");
   }
 
+  /** Label des „Los"-Buttons — folgt dem aktuellen Modus (nicht dem "Stop"-Zustand während des Laufs,
+   *  der wird separat in runIndices() gesetzt). */
+  private runLabel(): string { return t(this.deps.getMode() === "describe" ? "view.describe" : "view.transcribe"); }
+
+  /** Aktiv-Zustand der Modus-Buttons synchronisieren (Form + aria-pressed, nicht nur Farbe — WCAG 1.4.1). */
+  private renderModeSwitch(): void {
+    const mode = this.deps.getMode();
+    this.modeTranscribeBtn?.toggleClass("is-active", mode === "transcribe");
+    this.modeDescribeBtn?.toggleClass("is-active", mode === "describe");
+    this.modeTranscribeBtn?.setAttribute("aria-pressed", String(mode === "transcribe"));
+    this.modeDescribeBtn?.setAttribute("aria-pressed", String(mode === "describe"));
+  }
+
+  /** Moduswechsel: während eines Laufs gesperrt (bestehende Karten dürfen nicht umgedeutet werden).
+   *  Re-rendert Button-Label + Liste (die Idempotenz-Zeile je Bild hängt vom Modus ab). */
+  private setMode(m: ViewMode): void {
+    if (this.running) return;
+    if (this.deps.getMode() === m) return;
+    this.deps.setMode(m);
+    this.renderModeSwitch();
+    this.runBtn?.setText(this.runLabel());
+    this.renderList();
+  }
+
   async rescan(): Promise<void> {
     const path = this.deps.getActivePath();
     const items = path ? await this.deps.scan(path) : [];
@@ -260,7 +311,15 @@ export class ImgToMdView extends ItemView {
       }
       if (item.selfSource) row.createEl("span", { cls: "img2md-linked", text: t("view.thisFile") });
       else if (item.embed === false) row.createEl("span", { cls: "img2md-linked", text: t("view.linked") });
-      if (item.existingTranscriptPath) {
+      // Idempotenz-Zeile: eigene Achse je Modus (Transkript vs. Beschreibung existieren unabhängig
+      // voneinander — siehe findExistingTranscript/findExistingDescription).
+      if (this.deps.getMode() === "describe") {
+        if (item.existingDescriptionPath) {
+          row.createEl("span", { cls: "img2md-exists", text: t("view.descriptionExists") });
+          const open = row.createEl("a", { cls: "img2md-exists-open", text: t("view.open") });
+          open.addEventListener("click", () => this.deps.openPath(item.existingDescriptionPath!));
+        }
+      } else if (item.existingTranscriptPath) {
         row.createEl("span", { cls: "img2md-exists", text: t("view.transcriptExists") });
         const open = row.createEl("a", { cls: "img2md-exists-open", text: t("view.open") });
         open.addEventListener("click", () => this.deps.openPath(item.existingTranscriptPath!));
@@ -341,7 +400,42 @@ export class ImgToMdView extends ItemView {
       w.addEventListener("click", () => { const c = this.state.cards[i]; if (c?.writtenPath) this.deps.openPath(c.writtenPath); });
       refs.writtenEl = w;
     }
-    // Aktionen (lazy, sobald Text da): Kopieren immer; „Notiz anlegen" nur bei done.
+    // Kategorie/Tags-Zeile (nur Beschreiben-Karten, sobald fertig) — editierbar vor dem Speichern
+    // (der „assistierte" Teil, siehe Spec §4). Select = Taxonomie + die evtl. vom Modell gelieferte,
+    // taxonomie-fremde Kategorie als Extra-Option (freie Eingabe bleibt möglich, nichts geht verloren).
+    if (card.mode === "description" && card.status === "done") {
+      if (!refs.catRow) {
+        const row = cardEl.createDiv({ cls: "img2md-cat-row" });
+        const sel = row.createEl("select", { cls: "img2md-category dropdown" });
+        sel.setAttribute("aria-label", t("view.category"));
+        const taxonomy = this.deps.getTaxonomy();
+        for (const cat of taxonomy) { const o = sel.createEl("option", { text: cat }); o.value = cat; }
+        sel.addEventListener("change", () => { const c = this.state.cards[i]; if (c) c.category = sel.value || null; });
+        const tagsInput = row.createEl("input", { cls: "img2md-tags" });
+        tagsInput.type = "text";
+        tagsInput.setAttribute("aria-label", t("view.tags"));
+        tagsInput.addEventListener("change", () => {
+          const c = this.state.cards[i]; if (!c) return;
+          c.tags = tagsInput.value.split(",").map(s => s.trim()).filter(Boolean);
+        });
+        refs.catRow = row; refs.categorySel = sel; refs.tagsInput = tagsInput; refs.categoryValues = new Set(taxonomy);
+      }
+      const sel = refs.categorySel!;
+      const cat = card.category ?? "";
+      // card.category ist normalerweise entweder ein Taxonomie-Wert oder null (parseDescription
+      // verschiebt eine unbekannte Modell-Kategorie nach tags, siehe describe.ts) — die freie Achse
+      // ist bewusst tags, nicht category (Spec §2 Hybrid-Kategorien). Diese Ergänzung ist defensiv
+      // für den Fall, dass category künftig doch mal einen taxonomie-fremden Wert trägt (nichts wird
+      // verworfen). Eigene Merkliste statt DOM-Introspektion (sel.options), da createEl in Tests ein
+      // leichtgewichtiges Fake-Element liefert.
+      if (cat && !refs.categoryValues!.has(cat)) {
+        const o = sel.createEl("option", { text: cat }); o.value = cat;
+        refs.categoryValues!.add(cat);
+      }
+      sel.value = cat;
+      refs.tagsInput!.value = (card.tags ?? []).join(", ");
+    }
+    // Aktionen (lazy, sobald Text da): Kopieren immer; „Notiz anlegen"/„Beschreibung speichern" nur bei done.
     if (card.text) {
       if (!refs.actionsEl) {
         const actions = cardEl.createDiv({ cls: "img2md-card-actions" });
@@ -350,14 +444,15 @@ export class ImgToMdView extends ItemView {
         copyBtn.addEventListener("click", () => this.deps.copyText(this.state.cards[i].text));
         refs.actionsEl = actions;
       }
-      // „Notiz anlegen" nur bei done UND wenn kein Lauf aktiv ist — sonst no-op'te ein Klick still,
+      // Schreiben nur bei done UND wenn kein Lauf aktiv ist — sonst no-op'te ein Klick still,
       // solange eine Schwester-Seite (PDF) noch streamt (writePdfGroup schiebt bei pending auf).
       if (card.status === "done" && !this.running && !refs.writeBtn) {
+        const isDescription = card.mode === "description";
         const wb = refs.actionsEl.createEl("button", { cls: "img2md-write" });
         const wbIcon = wb.createSpan({ cls: "img2md-write-icon" });
         setIcon(wbIcon, "file-plus");
-        wb.createSpan({ cls: "img2md-write-lbl", text: t("view.createNote") });
-        wb.addEventListener("click", () => void this.writeOne(i));
+        wb.createSpan({ cls: "img2md-write-lbl", text: t(isDescription ? "view.saveDescription" : "view.createNote") });
+        wb.addEventListener("click", () => void (isDescription ? this.writeDescriptionOne(i) : this.writeOne(i)));
         refs.writeBtn = wb;
       } else if ((card.status !== "done" || this.running) && refs.writeBtn) {
         refs.actionsEl.removeChild(refs.writeBtn);
@@ -427,24 +522,38 @@ export class ImgToMdView extends ItemView {
     await this.runIndices(path, idx, true);
   }
 
-  /** Gemeinsamer Transkriptions-Loop für run() und Retry. Bei isRetry werden die Ziel-Karten
-   *  zuvor zurückgesetzt (State + DOM in-place); sonst laufen frische Karten aus startCards. */
+  /** Gemeinsamer Lauf-Loop für run() und Retry — verzweigt je aktuellem Modus zwischen Transkribieren
+   *  (transcribeStream → setDone) und Beschreiben (describeStream → parseDescription → setDescribed).
+   *  Bei isRetry werden die Ziel-Karten zuvor zurückgesetzt (State + DOM in-place); sonst laufen
+   *  frische Karten aus startCards. */
   private async runIndices(path: string, indices: number[], isRetry: boolean): Promise<void> {
     this.running = true; this.runBtn?.setText("Stop");
     this.controller = new AbortController();
     const signal = this.controller.signal;
+    const describing = this.deps.getMode() === "describe";
     for (const i of indices) {
       if (signal.aborted) break;
       if (isRetry) { this.state.resetCard(i); this.resetCardDom(i); }
       try {
-        const r = await this.deps.transcribeStream(
-          path, this.state.cards[i].item,
-          (t) => { this.state.appendContent(i, t); this.updateCard(i); },
-          (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
-          signal, this.state.cards[i].page,
-        );
-        this.state.cards[i].model = r.model;
-        this.state.setDone(i);
+        if (describing) {
+          const r = await this.deps.describeStream(
+            path, this.state.cards[i].item,
+            (t) => { this.state.appendContent(i, t); this.updateCard(i); },
+            (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
+            signal,
+          );
+          const parsed = parseDescription(r.raw, this.deps.getTaxonomy());
+          this.state.setDescribed(i, parsed, r.model);
+        } else {
+          const r = await this.deps.transcribeStream(
+            path, this.state.cards[i].item,
+            (t) => { this.state.appendContent(i, t); this.updateCard(i); },
+            (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
+            signal, this.state.cards[i].page,
+          );
+          this.state.cards[i].model = r.model;
+          this.state.setDone(i);
+        }
       } catch (e) {
         if (signal.aborted) break;   // Stop gedrückt — Rest unten als „Abgebrochen" markieren
         this.state.setError(i, e instanceof Error ? e.message : String(e));
@@ -453,7 +562,7 @@ export class ImgToMdView extends ItemView {
     }
     // Nach Abbruch: noch laufende Karten kennzeichnen (bei Retry sind nur die Ziel-Karten betroffen).
     for (let i = 0; i < this.state.cards.length; i++) if (this.state.cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
-    this.running = false; this.runBtn?.setText(t("view.transcribe"));
+    this.running = false; this.runBtn?.setText(this.runLabel());
     this.controller = null;
     // Post-Sync: das real verwendete Modell (response.model) → Auswahl angleichen
     const actual = actualModel(this.state.cards);
@@ -504,9 +613,29 @@ export class ImgToMdView extends ItemView {
     await this.rescan();
   }
 
+  /** Speichert EINE fertige Beschreiben-Karte als Beschreibungs-Notiz (embed-frei, kein Diff-Gate —
+   *  Beschreibungen sind regenerierbarer Maschinen-Output, siehe Spec „außerhalb Scope"). */
+  async writeDescriptionOne(i: number): Promise<void> {
+    const path = this.deps.getActivePath();
+    const card = this.state.cards[i];
+    if (!path || !card || card.status !== "done" || card.mode !== "description") return;
+    const [res] = await this.deps.writeDescriptions(path, [{ item: card.item, category: card.category ?? null, tags: card.tags ?? [], prose: card.text, model: card.model }]);
+    if (res?.path) this.state.markWritten(i, res.path);
+    this.updateAllCards();
+    await this.rescan();
+  }
+
   async writeAll(): Promise<void> {
     const path = this.deps.getActivePath();
     if (!path) return;
+    // Beschreiben-Karten: eigener Pfad (writeDescriptions), getrennt von partitionDoneCards
+    // (die schließt mode==="description" bewusst aus — kein Transkript-Merge für Beschreibungen).
+    const descIdx = this.state.cards.map((c, k) => ({ c, k })).filter(x => x.c.status === "done" && x.c.mode === "description");
+    if (descIdx.length) {
+      const entries = descIdx.map(x => ({ item: x.c.item, category: x.c.category ?? null, tags: x.c.tags ?? [], prose: x.c.text, model: x.c.model }));
+      const results = await this.deps.writeDescriptions(path, entries);
+      descIdx.forEach((x, n) => { const r = results[n]; if (r?.path) this.state.markWritten(x.k, r.path); });
+    }
     const part = partitionDoneCards(this.state.cards);
     if (part.images.length) {
       const transcripts = part.images.map(x => x.card.text.trim());

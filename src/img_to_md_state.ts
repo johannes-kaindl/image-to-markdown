@@ -10,6 +10,7 @@ export interface ImgItem {
   pageCount?: number;
   range?: { from: number; to: number };
   existingTranscriptPath?: string;
+  existingDescriptionPath?: string;
   embed?: boolean;   // false = reiner Link (Quelltext bleibt); fehlt/true = Embed (heutiges Verhalten)
   selfSource?: boolean;   // true = die aktive Datei selbst ist die Quelle (embed dann immer false)
 }
@@ -134,7 +135,9 @@ export interface PdfGroup {
  *  done-Seiten; `failedPages`/`pending` erfassen fehlgeschlagene bzw. noch laufende Seiten, damit die
  *  zusammengeführte Notiz ehrlich bleibt (kein stiller Gap). `range` = min/max der Karten-Seiten,
  *  also der beim Lauf tatsächlich gewählte Bereich — bewusst NICHT `item.range`, das vom Range-Eingabe-
- *  feld jederzeit live mutiert wird (sonst Datenverlust bei Range-Edit nach dem Lauf). Behält Indizes. */
+ *  feld jederzeit live mutiert wird (sonst Datenverlust bei Range-Edit nach dem Lauf). Behält Indizes.
+ *  Beschreiben-Karten (`mode === "description"`) fließen NICHT ein — sie gehören zum separaten
+ *  writeDescriptions-Pfad (eigene Notiz-Form, kein Transkript-Merge). */
 export function partitionDoneCards(cards: ImgCard[]): {
   images: { card: ImgCard; cardIndex: number }[];
   pdfs: PdfGroup[];
@@ -152,11 +155,11 @@ export function partitionDoneCards(cards: ImgCard[]): {
       const pg = card.page ?? 1;
       if (pg < g.range.from) g.range.from = pg;
       if (pg > g.range.to) g.range.to = pg;
-      if (card.status === "done") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
+      if (card.status === "done" && card.mode !== "description") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
       else if (card.status === "error") g.failedPages.push(pg);
       else if (card.status === "streaming") g.pending = true;
       // "written": bereits geschrieben → neutral (kein Re-Add, kein Fehler).
-    } else if (card.status === "done") {
+    } else if (card.status === "done" && card.mode !== "description") {
       images.push({ card, cardIndex });
     }
   });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ImgToMdView, VIEW_TYPE_IMGMD } from "../src/img_to_md_view";
+import { ImgToMdView, VIEW_TYPE_IMGMD, ViewMode } from "../src/img_to_md_view";
 import { ImgItem } from "../src/img_to_md_state";
 import { CardCache } from "../src/card_cache";
 import { makeFakeApp } from "./__mocks__/obsidian";
@@ -19,12 +19,18 @@ const ITEMS: ImgItem[] = [
 
 function mkView(over: any = {}) {
   const calls: any = { written: [], copied: [], opened: [] };
+  let mode: ViewMode = over.initialMode ?? "transcribe";
   const deps = {
     getActivePath: over.getActivePath ?? (() => "q.md"),
     scan: over.scan ?? (async () => ITEMS),
     transcribeStream: over.transcribeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("Hal"); onContent("lo"); return { content: "Hallo", reasoning: "", model: "vm" }; }),
     writeTranscripts: over.writeTranscripts ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((e: any, i: number) => ({ path: `note-${i}.md`, body: e.content })); }),
     writePdf: over.writePdf ?? (async (_sp: string, _raw: string, _link: string, _pages: any[]) => { calls.written.push(_pages); return { path: "doc (PDF transcript).md", body: "body" }; }),
+    getMode: over.getMode ?? (() => mode),
+    setMode: over.setMode ?? ((m: ViewMode) => { mode = m; }),
+    describeStream: over.describeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("CATEGORY: Foto\nTAGS: a, b\n---\nEin Foto."); return { raw: "CATEGORY: Foto\nTAGS: a, b\n---\nEin Foto.", reasoning: "", model: "vm" }; }),
+    getTaxonomy: over.getTaxonomy ?? (() => ["Foto", "Diagramm"]),
+    writeDescriptions: over.writeDescriptions ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_e: any, i: number) => ({ path: `desc-${i}.md` })); }),
     connectionStatus: over.connectionStatus ?? (async () => ({ ok: true, endpoint: "http://localhost:1234" })),
     listModels: over.listModels ?? (async () => []),
     getModel: over.getModel ?? (() => "vm"),
@@ -732,5 +738,155 @@ describe("ImgToMdView — Pending-Ergebnis-Persistenz", () => {
     const cached = cache.load("q.md");
     expect(cached?.length).toBe(1);
     expect(cached?.[0].status).toBe("error");
+  });
+});
+
+describe("ImgToMdView — Modus-Umschalter", () => {
+  it("Transkribieren ist initial aktiv, Run-Label 'Transcribe'", async () => {
+    const { view } = mkView(); await view.onOpen();
+    const btns = all(view.contentEl, "img2md-mode-btn");
+    expect(btns.length).toBe(2);
+    expect(btns[0].className).toContain("is-active");
+    expect(btns[0].getAttribute("aria-pressed")).toBe("true");
+    expect(btns[1].getAttribute("aria-pressed")).toBe("false");
+    expect(all(view.contentEl, "img2md-run")[0].textContent).toBe("Transcribe");
+  });
+
+  it("Klick auf 'Describe' ruft setMode('describe')", async () => {
+    const setMode = vi.fn();
+    const { view } = mkView({ setMode });
+    await view.onOpen();
+    all(view.contentEl, "img2md-mode-btn")[1].click();
+    expect(setMode).toHaveBeenCalledWith("describe");
+  });
+
+  it("initialMode 'describe' rendert den Describe-Button aktiv + Run-Label 'Describe'", async () => {
+    const { view } = mkView({ initialMode: "describe" }); await view.onOpen();
+    const btns = all(view.contentEl, "img2md-mode-btn");
+    expect(btns[1].className).toContain("is-active");
+    expect(all(view.contentEl, "img2md-run")[0].textContent).toBe("Describe");
+  });
+
+  it("Moduswechsel während eines Laufs wird ignoriert", async () => {
+    let release: () => void = () => {};
+    const transcribeStream = vi.fn(() => new Promise<{ content: string; reasoning: string; model: string }>(r => { release = () => r({ content: "x", reasoning: "", model: "vm" }); }));
+    const { view } = mkView({ transcribeStream });
+    await view.onOpen();
+    const p = view.run();
+    all(view.contentEl, "img2md-mode-btn")[1].click();   // während des Laufs → no-op
+    expect(all(view.contentEl, "img2md-mode-btn")[0].className).toContain("is-active");
+    release(); await p;
+  });
+});
+
+const DESCRIBE_RAW = "CATEGORY: Foto\nTAGS: a, b\n---\nEin Foto.";
+
+describe("ImgToMdView — Beschreiben-Modus: Lauf + Karte", () => {
+  it("run() ruft im Beschreiben-Modus describeStream (nicht transcribeStream), Karte zeigt geparste Prosa", async () => {
+    const transcribeStream = vi.fn();
+    const describeStream = async (_sp: string, _it: ImgItem, onContent: any) => { onContent(DESCRIBE_RAW); return { raw: DESCRIBE_RAW, reasoning: "", model: "vm" }; };
+    const { view } = mkView({ initialMode: "describe", transcribeStream, describeStream });
+    await view.onOpen(); await view.run();
+    expect(transcribeStream).not.toHaveBeenCalled();
+    expect(all(view.contentEl, "img2md-text")[0].textContent).toBe("Ein Foto.");
+  });
+
+  it("fertige Beschreiben-Karte zeigt Kategorie-Select (Taxonomie) + Tags-Input, keine 'Create note'-Beschriftung", async () => {
+    const { view } = mkView({ initialMode: "describe" });
+    await view.onOpen(); await view.run();
+    const sel = all(view.contentEl, "img2md-category");
+    expect(sel.length).toBe(1);
+    const options = (sel[0] as any).children.map((o: any) => o.value);
+    expect(options).toEqual(["Foto", "Diagramm"]);
+    expect((sel[0] as any).value).toBe("Foto");
+    const tags = all(view.contentEl, "img2md-tags");
+    expect(tags.length).toBe(1);
+    expect((tags[0] as any).value).toBe("a, b");
+    const lbl = all(view.contentEl, "img2md-write-lbl");
+    expect(lbl[0].textContent).toBe("Save description");
+  });
+
+  it("unbekannte Kategorie landet als Extra-Option im Select (nichts geht verloren)", async () => {
+    const raw = "CATEGORY: Unbekannt\nTAGS: x\n---\nText.";
+    const describeStream = async (_sp: string, _it: ImgItem, onContent: any) => { onContent(raw); return { raw, reasoning: "", model: "vm" }; };
+    const { view } = mkView({ initialMode: "describe", describeStream });
+    await view.onOpen(); await view.run();
+    const sel = all(view.contentEl, "img2md-category")[0] as any;
+    // parseDescription: unbekannte Kategorie → category=null, landet in tags — Select bleibt auf "" (kein Treffer).
+    expect(sel.value).toBe("");
+    const tags = all(view.contentEl, "img2md-tags")[0] as any;
+    expect(tags.value).toContain("Unbekannt");
+  });
+
+  it("Kategorie-Select-Änderung schreibt in card.category, Tags-Input-Änderung in card.tags", async () => {
+    const { view } = mkView({ initialMode: "describe" });
+    await view.onOpen(); await view.run();
+    const sel = all(view.contentEl, "img2md-category")[0] as any;
+    sel.value = "Diagramm";
+    sel.dispatchEvent(new Event("change"));
+    const tags = all(view.contentEl, "img2md-tags")[0] as any;
+    tags.value = "x, y, z";
+    tags.dispatchEvent(new Event("change"));
+    expect((view as any).state.cards[0].category).toBe("Diagramm");
+    expect((view as any).state.cards[0].tags).toEqual(["x", "y", "z"]);
+  });
+
+  it("'Beschreibung speichern' ruft writeDescriptions mit editierter Kategorie/Tags, Karte → angelegt", async () => {
+    const { view, calls } = mkView({ initialMode: "describe" });
+    await view.onOpen(); await view.run();
+    const sel = all(view.contentEl, "img2md-category")[0] as any;
+    sel.value = "Diagramm"; sel.dispatchEvent(new Event("change"));
+    all(view.contentEl, "img2md-write")[0].click();
+    await Promise.resolve(); await Promise.resolve();
+    expect(calls.written.length).toBe(1);
+    expect(calls.written[0]).toEqual([{ item: ITEMS[0], category: "Diagramm", tags: ["a", "b"], prose: "Ein Foto.", model: "vm" }]);
+    expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("desc-0.md");
+  });
+
+  it("'Alle anlegen' schreibt Beschreiben-Karten via writeDescriptions, nicht writeTranscripts", async () => {
+    const twoItems: ImgItem[] = [
+      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
+      { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image" },
+    ];
+    const writeTranscripts = vi.fn();
+    const { view, calls } = mkView({ initialMode: "describe", scan: async () => twoItems, writeTranscripts });
+    await view.onOpen(); await view.run();
+    all(view.contentEl, "img2md-all")[0].click();
+    await Promise.resolve(); await Promise.resolve();
+    expect(writeTranscripts).not.toHaveBeenCalled();
+    expect(calls.written.length).toBe(1);
+    expect(calls.written[0].length).toBe(2);
+    expect(all(view.contentEl, "img2md-written").length).toBe(2);
+  });
+
+  it("leere Prosa → Fehler-Karte, kein 'Beschreibung speichern'", async () => {
+    const describeStream = async () => ({ raw: "CATEGORY: Foto\nTAGS: a\n---\n   ", reasoning: "", model: "vm" });
+    const { view } = mkView({ initialMode: "describe", describeStream });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-error")[0].textContent).toContain("Empty transcript");
+    expect(all(view.contentEl, "img2md-write").length).toBe(0);
+  });
+});
+
+const ITEMS_DESC_EXISTS: ImgItem[] = [
+  { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingDescriptionPath: "b (description).md" },
+];
+
+describe("ImgToMdView — Beschreiben-Modus: Idempotenz-Anzeige", () => {
+  it("zeigt 'description exists' + öffnen-Link, nicht die Transkript-Badge", async () => {
+    const { view, calls } = mkView({ initialMode: "describe", scan: async () => ITEMS_DESC_EXISTS });
+    await view.onOpen();
+    const badges = all(view.contentEl, "img2md-exists");
+    expect(badges.length).toBe(1);
+    expect(badges[0].textContent).toContain("description exists");
+    all(view.contentEl, "img2md-exists-open")[0].click();
+    expect(calls.opened).toEqual(["b (description).md"]);
+  });
+
+  it("im Transkribieren-Modus bleibt die Transkript-Badge maßgeblich (unabhängige Achsen)", async () => {
+    const both: ImgItem[] = [{ raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "b (transcript).md", existingDescriptionPath: "b (description).md" }];
+    const { view } = mkView({ scan: async () => both });
+    await view.onOpen();
+    expect(all(view.contentEl, "img2md-exists")[0].textContent).toContain("transcript exists");
   });
 });

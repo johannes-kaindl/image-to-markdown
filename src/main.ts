@@ -3,13 +3,14 @@ import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, mi
 import { mergeSettings } from "./vendor/kit/settings";
 import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint } from "./vision_client";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
-import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
-import { findExistingTranscript, BacklinkLookup } from "./backlinks";
+import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
+import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
 import { DEFAULT_FM_MAP } from "./frontmatter_map";
 import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, normalizePreset } from "./prompts";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
-import { setLang, pickLang, t } from "./i18n";
+import { buildDescribePrompt } from "./describe";
+import { setLang, pickLang, t, getLang } from "./i18n";
 import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
 import { DiffModal } from "./diff_modal";
@@ -121,11 +122,13 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const cls = classifySource(extOf(sourcePath));
         if (cls) {   // aktive Datei IST ein Bild/PDF → Selbst-Quelle
           const existingTranscriptPath = findExistingTranscript(lookup, sourcePath, DEFAULT_FM_MAP) ?? undefined;
+          const existingDescriptionPath = findExistingDescription(lookup, sourcePath, DEFAULT_FM_MAP) ?? undefined;
           let pageCount: number | undefined;
           if (cls === "pdf") {
             try { pageCount = await pdfPageCount(await this.app.vault.adapter.readBinary(sourcePath)); } catch { pageCount = 0; }
           }
           const item = buildSelfSourceItem(sourcePath, { pageCount, existingTranscriptPath, pdfMaxPages: this.settings.pdfMaxPages });
+          if (item) item.existingDescriptionPath = existingDescriptionPath;
           return item ? [item] : [];
         }
         let content: string;
@@ -136,6 +139,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
           if (seen.has(e.link)) continue; seen.add(e.link);
           const resolved = this.app.metadataCache.getFirstLinkpathDest(e.link, sourcePath);
           const existingTranscriptPath = resolved ? (findExistingTranscript(lookup, resolved.path, DEFAULT_FM_MAP) ?? undefined) : undefined;
+          const existingDescriptionPath = resolved ? (findExistingDescription(lookup, resolved.path, DEFAULT_FM_MAP) ?? undefined) : undefined;
           if (e.kind === "pdf") {
             let pageCount = 0;
             if (resolved) {
@@ -143,9 +147,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
             }
             const supported = pageCount > 0;
             const cappedTo = Math.min(pageCount, this.settings.pdfMaxPages);
-            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported, kind: "pdf", pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 }, existingTranscriptPath, embed: e.embed });
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported, kind: "pdf", pageCount, range: { from: 1, to: cappedTo > 0 ? cappedTo : 1 }, existingTranscriptPath, existingDescriptionPath, embed: e.embed });
           } else {
-            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image", existingTranscriptPath, embed: e.embed });
+            items.push({ raw: e.raw, link: e.link, ext: e.ext, supported: SUPPORTED_EXTS.includes(e.ext.toLowerCase()), kind: "image", existingTranscriptPath, existingDescriptionPath, embed: e.embed });
           }
         }
         return items;
@@ -206,6 +210,52 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const { path, body } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir, range, knownBody });
         return { path, body };
       },
+      describeStream: async (sourcePath, item, onContent, onReasoning, signal) => {
+        let filePath: string; let ext: string;
+        if (item.selfSource) { filePath = sourcePath; ext = item.ext; }
+        else {
+          const resolved = this.app.metadataCache.getFirstLinkpathDest(item.link, sourcePath);
+          if (!resolved) throw new Error(t("core.imageNotFound", item.link));
+          filePath = resolved.path; ext = resolved.extension;
+        }
+        let dataUrl: string;
+        if (item.kind === "pdf") {
+          // Beschreiben-Modus kennt (anders als transcribeStream) keine einzelne Karten-Seite in der
+          // Deps-Signatur — pragmatisch: erste Seite der gewählten Range (typischer Anwendungsfall
+          // von "beschreiben" sind Einzelbilder, nicht mehrseitige Dokumente).
+          const scale = Platform.isMobile ? Math.min(this.settings.pdfRenderScale, 1.5) : this.settings.pdfRenderScale;
+          const bytes = await this.app.vault.adapter.readBinary(filePath);
+          dataUrl = await renderPdfPage(bytes, item.range?.from ?? 1, scale);
+        } else {
+          dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
+        }
+        const prompt = buildDescribePrompt(this.settings.describeTaxonomy, getLang());
+        const opts = { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) };
+        try {
+          const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
+          return { raw: r.content, reasoning: r.reasoning, model: r.model };
+        } catch (err) {
+          await this.resolveAndReconnect();
+          if (this.activeEndpoint) {
+            const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
+            return { raw: r.content, reasoning: r.reasoning, model: r.model };
+          }
+          throw err;
+        }
+      },
+      getTaxonomy: () => this.settings.describeTaxonomy,
+      writeDescriptions: async (sourcePath, entries) => {
+        const self = classifySource(extOf(sourcePath)) !== null;
+        const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const { results } = await writeDescriptions(
+          this.makeImgIO(), sourcePath,
+          entries.map(e => ({ link: e.item.link, category: e.category, tags: e.tags, prose: e.prose, model: e.model })),
+          { selfSource: self, destDir },
+        );
+        return results;
+      },
+      getMode: () => this.settings.mode,
+      setMode: (m) => { this.settings.mode = m; void this.saveSettings(); },
       connectionStatus: async () => { await this.resolveAndReconnect(); return { ok: this.activeEndpoint !== null, endpoint: this.activeEndpoint }; },
       listModels: () => new VisionClient(this.activeEndpoint ?? this.settings.visionEndpoints[0] ?? "", "").listModels(),
       getModel: () => this.settings.visionModel,
