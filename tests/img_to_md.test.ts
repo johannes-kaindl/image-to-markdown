@@ -138,6 +138,13 @@ describe("buildDescriptionNote", () => {
     expect(note).toContain(`quelle_bild: "[[img.png]]"`);
     expect(note).toContain(`type: 📝 Beschreibung`);
   });
+  it("PDF-Quelle nutzt source_pdf statt source_image", () => {
+    // Der Beschreiben-Modus kann auch PDFs beschreiben (describeStream rendert die erste Seite) —
+    // dann ist source_pdf der konsistente Quell-Key (wie im Transkript-Pfad via buildPdfNote).
+    const note = buildDescriptionNote({ imageLink: "doc.pdf", date: "2026-07-12", model: "m", category: null, tags: [], prose: "x" }, DEFAULT_FM_MAP);
+    expect(note).toContain(`source_pdf: "[[doc.pdf]]"`);
+    expect(note).not.toContain("source_image");
+  });
 });
 
 describe("replaceEmbed", () => {
@@ -370,6 +377,15 @@ describe("writeDescriptions", () => {
     ]);
     expect(r.results).toEqual([{ path: null }]);
     expect(Object.keys(created)).toEqual([]);
+  });
+  it("PDF-Beschreibung nutzt source_pdf im Frontmatter", async () => {
+    const { io, created } = fakeIO({ notes: [["q.md", "![[doc.pdf]]"]] });
+    await writeDescriptions(io, "q.md", [
+      { link: "doc.pdf", category: null, tags: [], prose: "Inhalt", model: "vm" },
+    ]);
+    const note = created["doc (description).md"];
+    expect(note).toContain('source_pdf: "[[doc.pdf]]"');
+    expect(note).not.toContain("source_image");
   });
   it("selfSource: schreibt unter destDir, kein source_note, kein Quell-Read/-Write", async () => {
     const reads: string[] = [];

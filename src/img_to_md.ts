@@ -101,7 +101,10 @@ export function buildDescriptionNote(
   map: FrontmatterMap = DEFAULT_FM_MAP,
 ): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');   // YAML-Doppelquote-String — schützt vor Frontmatter-Bruch
-  const lines = ["---", `${map.sourceImage}: "[[${esc(o.imageLink)}]]"`];
+  // Quell-Key aus der Extension ableiten: der Beschreiben-Modus kann auch PDFs beschreiben →
+  // source_pdf statt source_image (konsistent mit dem Transkript-Pfad via buildPdfNote).
+  const sourceKey = classifySource(extOf(o.imageLink)) === "pdf" ? map.sourcePdf : map.sourceImage;
+  const lines = ["---", `${sourceKey}: "[[${esc(o.imageLink)}]]"`];
   if (o.sourceName !== undefined) lines.push(`${map.sourceNote}: "[[${esc(o.sourceName)}]]"`);
   lines.push(`${map.kindKey}: ${map.kindDescription}`);
   if (o.category !== null) lines.push(`${map.category}: ${o.category}`);
