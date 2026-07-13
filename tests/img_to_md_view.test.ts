@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ImgToMdView, VIEW_TYPE_IMGMD, ViewMode } from "../src/img_to_md_view";
+import { ImgToMdView, VIEW_TYPE_IMGMD, ViewMode, isDescribingCard } from "../src/img_to_md_view";
 import { ImgItem } from "../src/img_to_md_state";
 import { CardCache } from "../src/card_cache";
 import { makeFakeApp } from "./__mocks__/obsidian";
@@ -47,6 +47,17 @@ function mkView(over: any = {}) {
   const view = new ImgToMdView({ app: makeFakeApp() } as any, deps);
   return { view, calls, deps };
 }
+
+describe("isDescribingCard", () => {
+  it("bereits gelaufene Karte behält ihren Modus (Retry-Routing), ignoriert den Default", () => {
+    expect(isDescribingCard("description", false)).toBe(true);
+    expect(isDescribingCard("transcript", true)).toBe(false);
+  });
+  it("frische Karte (mode undefined) folgt dem globalen Default", () => {
+    expect(isDescribingCard(undefined, true)).toBe(true);
+    expect(isDescribingCard(undefined, false)).toBe(false);
+  });
+});
 
 describe("ImgToMdView — Gerüst + Liste", () => {
   it("getViewType ist VIEW_TYPE_IMGMD", () => {

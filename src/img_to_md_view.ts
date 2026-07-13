@@ -9,6 +9,16 @@ import { parseDescription } from "./describe";
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 export type ViewMode = "transcribe" | "describe";
 
+/** Ob eine Karte im Beschreiben-Modus läuft: eine bereits gelaufene Karte behält ihren Modus
+ *  (`card.mode` gesetzt — z. B. nach einem fehlgeschlagenen Beschreiben-Lauf, damit ein Retry
+ *  auch dann richtig routet, wenn der globale Umschalter zwischenzeitlich umgesprungen ist);
+ *  eine frische Karte (Modus noch unbekannt) folgt dem aktuellen globalen Modus. */
+export function isDescribingCard(cardMode: "transcript" | "description" | undefined, defaultDescribing: boolean): boolean {
+  if (cardMode === "description") return true;
+  if (cardMode === "transcript") return false;
+  return defaultDescribing;
+}
+
 interface CardRefs {
   cardEl: HTMLElement;
   headEl: HTMLElement;
@@ -525,11 +535,7 @@ export class ImgToMdView extends ItemView {
       if (signal.aborted) break;
       if (isRetry) { this.state.resetCard(i); this.resetCardDom(i); }
       const card = this.state.cards[i];
-      // Modus-Routing je Karte: eine bereits gelaufene Karte (card.mode gesetzt — z.B. nach einem
-      // fehlgeschlagenen Beschreiben-Lauf) behält ihren ursprünglichen Modus über einen Retry hinweg,
-      // auch wenn der globale Umschalter zwischenzeitlich umgesprungen ist. Frische Karten (mode noch
-      // unbekannt) folgen dem aktuellen globalen Modus.
-      const describing = card.mode === "description" ? true : card.mode === "transcript" ? false : defaultDescribing;
+      const describing = isDescribingCard(card.mode, defaultDescribing);
       try {
         if (describing) {
           card.mode = "description";   // vor dem Await setzen: auch der Fehlerpfad kennt so die Absicht (Retry-Routing)

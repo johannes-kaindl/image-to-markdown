@@ -81,4 +81,14 @@ describe("findExistingTranscript", () => {
     expect(findExistingTranscript(lk, "img.png", DEFAULT_FM_MAP)).toBe("T.md");
     expect(findExistingDescription(lk, "img.png", DEFAULT_FM_MAP)).toBeNull();
   });
+
+  it("nutzt den gemappten Quell-Key (custom sourceImage) statt des Defaults", () => {
+    // Notiz trägt den custom Frontmatter-Key "quelle_bild" statt "source_image".
+    const lk = makeLookup("T.md", "img.png", null, "quelle_bild");
+    const map = { ...DEFAULT_FM_MAP, sourceImage: "quelle_bild" };
+    expect(findExistingTranscript(lk, "img.png", map)).toBe("T.md");
+    // Mit DEFAULT_FM_MAP (sucht "source_image") wird der custom Key nicht erkannt → kein Treffer.
+    // Dieser Zweig scheiterte, ignorierte findByKind die Map und suchte fest "source_image".
+    expect(findExistingTranscript(lk, "img.png", DEFAULT_FM_MAP)).toBeNull();
+  });
 });

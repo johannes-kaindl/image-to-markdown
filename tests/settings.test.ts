@@ -84,8 +84,9 @@ describe("applyTaxonomyEdit", () => {
 describe("fmMapFromSettings", () => {
   it("füllt fehlende Keys aus DEFAULT_FM_MAP auf (Shallow-Merge-Vorwärtskompatibilität)", () => {
     const merged = fmMapFromSettings({ frontmatterMap: { sourceImage: "x" } } as any);
-    expect(merged.sourcePdf).toBe("source_pdf");
-    expect(merged.sourceImage).toBe("x");
+    // Vollständige Assertion: der Override greift genau für sourceImage, alle 11 übrigen Keys
+    // kommen unverändert aus DEFAULT_FM_MAP (fängt auch versehentlich fallengelassene Keys).
+    expect(merged).toEqual({ ...DEFAULT_FM_MAP, sourceImage: "x" });
   });
   it("ohne frontmatterMap → komplettes DEFAULT_FM_MAP", () => {
     expect(fmMapFromSettings({} as any)).toEqual(DEFAULT_FM_MAP);
