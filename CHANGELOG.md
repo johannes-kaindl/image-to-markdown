@@ -6,6 +6,12 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Beschreibung eines PDFs:** Die erzeugte Beschreibungs-Notiz trägt jetzt den Quell-Schlüssel
+  `source_pdf` (statt `source_image`) — konsistent mit den Transkript-Notizen. Die Wiedererkennung
+  bestehender Beschreibungen war nie betroffen.
+
 ## [0.13.0] — 2026-07-12
 
 ### Hinzugefügt
