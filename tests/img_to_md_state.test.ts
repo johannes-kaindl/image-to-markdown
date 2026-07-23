@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ImgToMdState, ImgItem, ImgCard, partitionDoneCards, actualModel } from "../src/img_to_md_state";
+import { ImgToMdState, ImgItem, ImgCard, partitionDoneCards, actualModel, canRefine, canUndo } from "../src/img_to_md_state";
 
 const items: ImgItem[] = [
   { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
@@ -210,5 +210,77 @@ describe("actualModel", () => {
   });
   it("liefert \"\" für leere Kartenliste", () => {
     expect(actualModel([])).toBe("");
+  });
+});
+
+describe("ImgToMdState — Refine (#7)", () => {
+  function doneCard(): ImgToMdState {
+    const s = new ImgToMdState();
+    s.setItems([{ raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" }]);
+    s.startCards();
+    s.appendContent(0, "v0");
+    s.setDone(0);   // status "done", text "v0", mode undefined (Transkript)
+    return s;
+  }
+
+  it("commitRefine erste Runde: base=vorige Version, ein Step, text=neu, Status done", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    expect(s.cards[0].refine).toEqual({ base: "v0", steps: [{ feedback: "f1", text: "v1" }] });
+    expect(s.cards[0].text).toBe("v1");
+    expect(s.cards[0].status).toBe("done");
+  });
+
+  it("commitRefine zweite Runde: base bleibt Original, Steps akkumulieren", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.commitRefine(0, "f2", "v2");
+    expect(s.cards[0].refine!.base).toBe("v0");
+    expect(s.cards[0].refine!.steps).toEqual([{ feedback: "f1", text: "v1" }, { feedback: "f2", text: "v2" }]);
+    expect(s.cards[0].text).toBe("v2");
+  });
+
+  it("undoRefine: ein Schritt zurück auf vorige Version", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.commitRefine(0, "f2", "v2");
+    s.undoRefine(0);
+    expect(s.cards[0].text).toBe("v1");
+    expect(s.cards[0].refine!.steps).toEqual([{ feedback: "f1", text: "v1" }]);
+  });
+
+  it("undoRefine bis zum Original: Text=base, refine entfernt", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.undoRefine(0);
+    expect(s.cards[0].text).toBe("v0");
+    expect(s.cards[0].refine).toBeUndefined();
+  });
+
+  it("commitRefine auf written-Karte setzt Status zurück auf done (erneut schreibbar)", () => {
+    const s = doneCard();
+    s.markWritten(0, "note.md");
+    expect(s.cards[0].status).toBe("written");
+    s.commitRefine(0, "f1", "v1");
+    expect(s.cards[0].status).toBe("done");
+    expect(s.cards[0].writtenPath).toBe("note.md");   // Pfad bleibt für idempotentes Re-Write
+  });
+
+  it("canRefine: done/written-Transkript ja, Beschreiben-Karte nein, streaming nein", () => {
+    const s = doneCard();
+    expect(canRefine(s.cards[0])).toBe(true);
+    s.markWritten(0, "n.md");
+    expect(canRefine(s.cards[0])).toBe(true);
+    const desc: ImgCard = { ...s.cards[0], status: "done", mode: "description" };
+    expect(canRefine(desc)).toBe(false);
+    const streaming: ImgCard = { ...s.cards[0], status: "streaming" };
+    expect(canRefine(streaming)).toBe(false);
+  });
+
+  it("canUndo: nur mit mindestens einem Step", () => {
+    const s = doneCard();
+    expect(canUndo(s.cards[0])).toBe(false);
+    s.commitRefine(0, "f1", "v1");
+    expect(canUndo(s.cards[0])).toBe(true);
   });
 });
