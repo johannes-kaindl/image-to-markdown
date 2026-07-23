@@ -88,3 +88,16 @@ describe("i18n", () => {
     expect(t("diff.hunk.aria", "1")).toBe("Änderung 1 übernehmen");
   });
 });
+
+describe("Refine-Keys (#7) EN/DE", () => {
+  it("Modell-Prompt + UI-Strings sind in beiden Sprachen nicht leer", () => {
+    for (const lang of ["en", "de"] as const) {
+      setLang(lang);
+      for (const k of ["refine.systemPrompt", "view.refine", "view.refinePlaceholder", "view.refineUndo", "view.refineEmpty"]) {
+        expect(t(k).length, `${lang}:${k}`).toBeGreaterThan(0);
+        expect(t(k), `${lang}:${k}`).not.toBe(k);   // kein roher Key-Fallback
+      }
+    }
+    setLang("en");
+  });
+});
