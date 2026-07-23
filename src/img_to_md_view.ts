@@ -279,6 +279,8 @@ export class ImgToMdView extends ItemView {
     this.persistCards();
     this.state.clearCards();
     this.resetCards();
+    this.refineErrors.clear();
+    this.refineDrafts.clear();
     await this.rescan();
     this.restoreCardsFor(this.deps.getActivePath());
   }
@@ -702,7 +704,11 @@ export class ImgToMdView extends ItemView {
       const knownBody = op ? this.sessionOwned.get(op) : undefined;
       const transcript = card.text.trim();
       const [res] = await this.deps.writeTranscripts(path, [{ item: card.item, content: transcript, model: card.model, knownBody }]);
-      if (res?.path) { this.sessionOwned.set(res.path, res.body ?? transcript); this.state.markWritten(i, res.path); }
+      if (res?.path) {
+        this.sessionOwned.set(res.path, res.body ?? transcript);
+        if (!card.item.existingTranscriptPath) card.item.existingTranscriptPath = res.path;
+        this.state.markWritten(i, res.path);
+      }
     }
     this.updateAllCards();
     await this.rescan();

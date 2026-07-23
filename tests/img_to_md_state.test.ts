@@ -198,6 +198,40 @@ describe("ImgToMdState — PDF-Karten im Beschreiben-Modus", () => {
   });
 });
 
+describe("ImgToMdState — partitionDoneCards Refine-Seam (#7, Critical 1)", () => {
+  const raw = "![[doc.pdf]]";
+  const pdfItem: ImgItem = { raw, link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 3, range: { from: 1, to: 3 } };
+  function pageCard(page: number, status: ImgCard["status"], text: string): ImgCard {
+    return { item: pdfItem, index: page, total: 3, page, text, reasoning: "", model: "m", status };
+  }
+
+  it("written Schwesterseiten fließen bei >=1 done-Seite komplett in g.pages ein (kein Datenverlust bei Refine-Re-Write)", () => {
+    const cards: ImgCard[] = [
+      pageCard(1, "written", "Seite1"),
+      pageCard(2, "done", "Seite2-verbessert"),
+      pageCard(3, "written", "Seite3"),
+    ];
+    const part = partitionDoneCards(cards);
+    expect(part.pdfs.length).toBe(1);
+    const pages = part.pdfs[0].pages;
+    expect(pages.map(p => p.page).sort()).toEqual([1, 2, 3]);
+    expect(pages.find(p => p.page === 1)?.content).toBe("Seite1");
+    expect(pages.find(p => p.page === 2)?.content).toBe("Seite2-verbessert");
+    expect(pages.find(p => p.page === 3)?.content).toBe("Seite3");
+  });
+
+  it("reine written-Gruppe (keine done-Seite) bleibt neutral: pages leer (kein spuriöser Re-Write)", () => {
+    const cards: ImgCard[] = [
+      pageCard(1, "written", "Seite1"),
+      pageCard(2, "written", "Seite2"),
+      pageCard(3, "written", "Seite3"),
+    ];
+    const part = partitionDoneCards(cards);
+    expect(part.pdfs.length).toBe(1);
+    expect(part.pdfs[0].pages.length).toBe(0);
+  });
+});
+
 function mkCard(model: string): ImgCard {
   return { item: items[0], index: 1, total: 1, text: "x", reasoning: "", model, status: "done" };
 }
@@ -282,5 +316,31 @@ describe("ImgToMdState — Refine (#7)", () => {
     expect(canUndo(s.cards[0])).toBe(false);
     s.commitRefine(0, "f1", "v1");
     expect(canUndo(s.cards[0])).toBe(true);
+  });
+
+  it("undoRefine No-op: Karte ohne refine bleibt unverändert, Out-of-range wirft nicht", () => {
+    const s = doneCard();
+    s.undoRefine(0);   // kein refine vorhanden → No-op
+    expect(s.cards[0].text).toBe("v0");
+    expect(s.cards[0].refine).toBeUndefined();
+    expect(() => s.undoRefine(99)).not.toThrow();
+  });
+
+  it("commitRefine No-op bei Out-of-range-Index", () => {
+    const s = doneCard();
+    expect(() => s.commitRefine(99, "f", "x")).not.toThrow();
+    expect(s.cards.length).toBe(1);
+    expect(s.cards[0].text).toBe("v0");
+  });
+
+  it("Zyklus commit→undo bis base→erneut commit: base wird nach dem refine-Clear neu aus card.text bestimmt", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.undoRefine(0);   // zurück zu base (v0), refine wird entfernt
+    expect(s.cards[0].refine).toBeUndefined();
+    expect(s.cards[0].text).toBe("v0");
+    s.commitRefine(0, "f2", "v2");   // zweiter Commit: base muss wieder v0 sein (Version vor diesem Commit)
+    expect(s.cards[0].refine).toEqual({ base: "v0", steps: [{ feedback: "f2", text: "v2" }] });
+    expect(s.cards[0].text).toBe("v2");
   });
 });

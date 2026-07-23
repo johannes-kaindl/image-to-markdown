@@ -186,6 +186,9 @@ export function partitionDoneCards(cards: ImgCard[]): {
     if (!g) { const pg = card.page ?? 1; g = { raw: card.item.raw, link: card.item.link, item: card.item, cardIndices: [], pages: [], failedPages: [], pending: false, range: { from: pg, to: pg } }; pdfMap.set(card.item.raw, g); }
     return g;
   };
+  // Refine-Seam (#7): written Schwesterseiten einer Gruppe separat sammeln (lokales Side-Map, NICHT
+  // Teil von PdfGroup) — erst nach der Schleife und nur bei mind. einer done-Seite in g.pages einspielen.
+  const writtenByRaw = new Map<string, { cardIndex: number; page: number; content: string; model: string }[]>();
   cards.forEach((card, cardIndex) => {
     // Beschreiben-Karten (Bild ODER PDF-Seite) fließen gar nicht erst in pdfMap/images ein — sonst
     // entstünde für eine done-PDF-Seite im Beschreiben-Modus eine leere PdfGroup (ensurePdf legt sie
@@ -199,10 +202,24 @@ export function partitionDoneCards(cards: ImgCard[]): {
       if (card.status === "done") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
       else if (card.status === "error") g.failedPages.push(pg);
       else if (card.status === "streaming") g.pending = true;
-      // "written": bereits geschrieben → neutral (kein Re-Add, kein Fehler).
+      else if (card.status === "written") {
+        const arr = writtenByRaw.get(card.item.raw) ?? [];
+        arr.push({ cardIndex, page: pg, content: card.text, model: card.model });
+        writtenByRaw.set(card.item.raw, arr);
+      }
     } else if (card.status === "done") {
       images.push({ card, cardIndex });
     }
   });
+  // Refine-Seam (#7): eine PDF-Gruppe mit >=1 nachgebesserten (done) Seite + bereits geschriebenen
+  // Schwesterseiten muss beim Re-Write vollständig bleiben — sonst füllt buildPdfBody die fehlenden
+  // (written) Seiten mit "Seite fehlgeschlagen"-Platzhaltern (Datenverlust). Rein written Gruppen
+  // (keine done-Seite) bleiben neutral (kein spuriöser Re-Write via "Alle anlegen").
+  for (const [raw, written] of writtenByRaw) {
+    const g = pdfMap.get(raw);
+    if (g && g.pages.length) {
+      for (const w of written) { g.cardIndices.push(w.cardIndex); g.pages.push({ page: w.page, content: w.content, model: w.model }); }
+    }
+  }
   return { images, pdfs: [...pdfMap.values()] };
 }
