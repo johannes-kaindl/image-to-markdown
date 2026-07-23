@@ -139,10 +139,11 @@ export class VisionClient {
     return { content: r.content, reasoning: r.reasoning, model: r.model || this.model };
   }
 
-  /** Wie transcribeStream, aber sendet reinen TEXT (kein Bild) — für born-digital PDF-Seiten, deren
-   *  exakter Text-Layer extrahiert und vom Modell nur nach Markdown formatiert wird. */
-  async transcribeTextStream(
-    text: string, prompt: string,
+  /** Gemeinsamer Streaming-Kern für die text-basierten Calls (transcribeTextStream + refineStream):
+   *  serialisiert ein beliebiges Messages-Array, streamt via SSE, hebt einen 200-Error-Body als echte
+   *  Servermeldung. Der multimodale transcribeStream bleibt eigenständig (image_url-Content). */
+  private async streamChat(
+    messages: unknown[],
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
   ): Promise<{ content: string; reasoning: string; model: string }> {
@@ -150,7 +151,7 @@ export class VisionClient {
     const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: this.model, messages: [{ role: "user", content: `${prompt}\n\n${text}` }], stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
+      body: JSON.stringify({ model: this.model, messages, stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
       signal,
     });
     if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
@@ -160,5 +161,25 @@ export class VisionClient {
       if (envelope) throw new Error(envelope);
     }
     return { content: r.content, reasoning: r.reasoning, model: r.model || this.model };
+  }
+
+  /** Wie transcribeStream, aber sendet reinen TEXT (kein Bild) — für born-digital PDF-Seiten, deren
+   *  exakter Text-Layer extrahiert und vom Modell nur nach Markdown formatiert wird. */
+  async transcribeTextStream(
+    text: string, prompt: string,
+    onContent: (t: string) => void, onReasoning: (t: string) => void,
+    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
+  ): Promise<{ content: string; reasoning: string; model: string }> {
+    return this.streamChat([{ role: "user", content: `${prompt}\n\n${text}` }], onContent, onReasoning, signal, opts);
+  }
+
+  /** Iterative Nachbesserung (#7): streamt ein fertig gebautes Multi-Turn-Messages-Array (System +
+   *  Original/Feedback-Verlauf), text-only. Das Array baut der reine refine.ts::buildRefineMessages. */
+  async refineStream(
+    messages: unknown[],
+    onContent: (t: string) => void, onReasoning: (t: string) => void,
+    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
+  ): Promise<{ content: string; reasoning: string; model: string }> {
+    return this.streamChat(messages, onContent, onReasoning, signal, opts);
   }
 }
