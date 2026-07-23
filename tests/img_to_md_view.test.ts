@@ -938,3 +938,69 @@ describe("ImgToMdView — Beschreiben-Modus: Idempotenz-Anzeige", () => {
     expect(all(view.contentEl, "img2md-exists")[0].textContent).toContain("transcript exists");
   });
 });
+
+describe("Refine-Zeile (#7)", () => {
+  async function runToDone(over: any = {}) {
+    const { view, deps, calls } = mkView(over);
+    await view.onOpen();
+    (view as any).state.toggleAll();          // nur a.png bleibt wählbar (b.heic unsupported)
+    (view as any).state.toggle("a.png");      // a.png sicher an
+    await (view as any).run();                // transcribeStream-Default → "Hallo", done
+    return { view, deps, calls };
+  }
+
+  it("done-Transkript-Karte zeigt Feedback-Eingabe + Nachbessern-Button", async () => {
+    const { view } = await runToDone();
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-refine-input").length).toBe(1);
+    expect(all(root, "img2md-refine-submit").length).toBe(1);
+  });
+
+  it("Beschreiben-Karte zeigt KEINE Refine-Zeile", async () => {
+    const { view } = await runToDone({ initialMode: "describe" });
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-refine-input").length).toBe(0);
+  });
+
+  it("refineCard committet die neue Version in card.text (Draft → Commit)", async () => {
+    const { view } = await runToDone();
+    await (view as any).refineCard(0, "Tabellen als GFM");
+    expect((view as any).state.cards[0].text).toBe("VERBESSERT");
+    expect((view as any).state.cards[0].refine.steps).toEqual([{ feedback: "Tabellen als GFM", text: "VERBESSERT" }]);
+  });
+
+  it("leeres Feedback → kein Refine-Aufruf, Karte unverändert", async () => {
+    const refine = vi.fn();
+    const { view } = await runToDone({ refine });
+    await (view as any).refineCard(0, "   ");
+    expect(refine).not.toHaveBeenCalled();
+    expect((view as any).state.cards[0].text).toBe("Hallo");
+  });
+
+  it("Fehler beim Refine lässt die aktuelle Version intakt", async () => {
+    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
+    await (view as any).refineCard(0, "mach was");
+    expect((view as any).state.cards[0].text).toBe("Hallo");   // unverändert
+    expect((view as any).state.cards[0].refine).toBeUndefined();
+  });
+
+  it("Undo-Button erscheint nach einem Refine und stellt die vorige Version her", async () => {
+    const { view } = await runToDone();
+    await (view as any).refineCard(0, "f1");
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-refine-undo").length).toBe(1);
+    (view as any).undoRefine(0);
+    expect((view as any).state.cards[0].text).toBe("Hallo");
+  });
+
+  it("Refine einer geschriebenen Karte: Status zurück auf done (writeBtn wieder da), written-Zeile weg", async () => {
+    const { view } = await runToDone();
+    await (view as any).writeOne(0);
+    expect((view as any).state.cards[0].status).toBe("written");
+    await (view as any).refineCard(0, "f1");
+    expect((view as any).state.cards[0].status).toBe("done");
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-written").length).toBe(0);       // stale „✓ created" entfernt
+    expect(all(root, "img2md-write").length).toBe(1);         // erneut schreibbar
+  });
+});

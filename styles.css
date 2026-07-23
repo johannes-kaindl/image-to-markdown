@@ -45,6 +45,12 @@
 .img2md-write { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 .img2md-write-icon { display: inline-flex; align-items: center; }
 .img2md-write-icon svg { width: 14px; height: 14px; }
+.img2md-refine-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.img2md-refine-input { flex: 1 1 120px; min-width: 0; font-size: 12px; }
+.img2md-refine-submit { font-size: 12px; }
+.img2md-refine-undo.is-hidden { display: none; }
+.img2md-refine-undo.is-disabled { opacity: 0.5; pointer-events: none; }
+.img2md-refine-error { flex-basis: 100%; font-size: 12px; color: var(--text-error); }
 /* Kategorie/Tags-Zeile (Beschreiben-Karte, editierbar vor dem Speichern). Kategorie ist ein
    Text-Input mit Taxonomie-Datalist (Vorschlag, keine Beschränkung) — Spec §2 "Dropdown der
    Taxonomie + freie Eingabe". */

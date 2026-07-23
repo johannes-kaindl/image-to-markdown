@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel } from "./img_to_md_state";
+import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, canUndo } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 import { thinkToggleView } from "./reasoning_toggle";
@@ -33,6 +33,11 @@ interface CardRefs {
   catRow?: HTMLElement;
   categoryInput?: HTMLInputElement;
   tagsInput?: HTMLInputElement;
+  refineRow?: HTMLElement;
+  refineInput?: HTMLInputElement;
+  refineSubmit?: HTMLButtonElement;
+  refineUndo?: HTMLButtonElement;
+  refineErrEl?: HTMLElement;
   liveWas: boolean;
   autoCollapsed: boolean;
 }
@@ -85,6 +90,11 @@ export class ImgToMdView extends ItemView {
   private listEl: HTMLElement | null = null;
   private cardsEl: HTMLElement | null = null;
   private cardEls: CardRefs[] = [];
+  /** Transiente, nicht-committete Refine-Streams je Karten-Index (Live-Anzeige; card.text bleibt
+   *  bis zum Commit die alte Version). */
+  private refineDrafts = new Map<number, string>();
+  /** Transiente Refine-Fehlermeldung je Karten-Index (bis zum nächsten Versuch/Erfolg). */
+  private refineErrors = new Map<number, string>();
   private toggleBtn: HTMLElement | null = null;
   private modeTranscribeBtn: HTMLElement | null = null;
   private modeDescribeBtn: HTMLElement | null = null;
@@ -393,10 +403,12 @@ export class ImgToMdView extends ItemView {
       }
       refs.liveWas = live;
     }
-    // Transkript-Text (lazy, inkrementell).
-    if (card.text) {
+    // Transkript-Text (lazy, inkrementell) — während einer Nachbesserung der Draft (card.text bleibt
+    // bis zum Commit die alte Version).
+    const shownText = this.refineDrafts.has(i) ? this.refineDrafts.get(i)! : card.text;
+    if (shownText) {
       if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
-      refs.textEl.setText(card.text);
+      refs.textEl.setText(shownText);
     }
     // Fehlerzeile (lazy, bei error) — Meldung + Retry-Button (re-läuft genau diese Seite/Karte).
     if (card.status === "error" && !refs.errorEl) {
@@ -407,6 +419,8 @@ export class ImgToMdView extends ItemView {
       retry.addEventListener("click", () => void this.retryOne(i));
       refs.errorEl = errLine;
     }
+    // Nach einem Refine einer geschriebenen Karte (written → done) ist die „✓ created"-Zeile stale.
+    if (card.status !== "written" && refs.writtenEl) { cardEl.removeChild(refs.writtenEl); refs.writtenEl = undefined; }
     // „angelegt"-Zeile (lazy, bei written).
     if (card.status === "written" && !refs.writtenEl) {
       const w = cardEl.createDiv({ cls: "img2md-written", text: t("view.created", card.writtenPath ?? "") });
@@ -438,6 +452,33 @@ export class ImgToMdView extends ItemView {
       }
       refs.categoryInput!.value = card.category ?? "";
       refs.tagsInput!.value = (card.tags ?? []).join(", ");
+    }
+    // Refine-Zeile (#7): nur Transkript-Karten (done/written). Feedback-Eingabe + Nachbessern + Undo.
+    if (canRefine(card)) {
+      if (!refs.refineRow) {
+        const row = cardEl.createDiv({ cls: "img2md-refine-row" });
+        const input = row.createEl("input", { cls: "img2md-refine-input", attr: { placeholder: t("view.refinePlaceholder"), "aria-label": t("view.refine") } });
+        input.type = "text";
+        const submit = row.createEl("button", { cls: "img2md-refine-submit", text: t("view.refine") });
+        submit.addEventListener("click", () => { const v = input.value; input.value = ""; void this.refineCard(i, v); });
+        input.addEventListener("keydown", (e) => { if (e.key === "Enter") { const v = input.value; input.value = ""; void this.refineCard(i, v); } });
+        const undo = row.createEl("button", { cls: "img2md-refine-undo clickable-icon", attr: { "aria-label": t("view.refineUndo"), title: t("view.refineUndo") } });
+        setIcon(undo, "undo-2");
+        undo.addEventListener("click", () => this.undoRefine(i));
+        refs.refineRow = row; refs.refineInput = input; refs.refineSubmit = submit; refs.refineUndo = undo;
+      }
+      // Undo nur mit Verlauf; Eingabe/Buttons während irgendeines Laufs sperren.
+      refs.refineUndo!.toggleClass("is-hidden", !canUndo(card));
+      const locked = this.running;
+      refs.refineInput!.disabled = locked;
+      refs.refineSubmit!.disabled = locked;
+      refs.refineUndo!.toggleClass("is-disabled", locked);
+      // Transiente Fehlermeldung (lazy an/aus).
+      const err = this.refineErrors.get(i);
+      if (err) {
+        if (!refs.refineErrEl) refs.refineErrEl = refs.refineRow.createDiv({ cls: "img2md-refine-error" });
+        refs.refineErrEl.setText(err);
+      } else if (refs.refineErrEl) { refs.refineRow.removeChild(refs.refineErrEl); refs.refineErrEl = undefined; }
     }
     // Aktionen (lazy, sobald Text da): Kopieren immer; „Notiz anlegen"/„Beschreibung speichern" nur bei done.
     if (card.text) {
@@ -524,6 +565,52 @@ export class ImgToMdView extends ItemView {
     const idx = this.state.failedCardIndices();
     if (!idx.length) return;
     await this.runIndices(path, idx, true);
+  }
+
+  /** Nachbessern einer Transkript-Karte (#7): streamt die neue Version in einen Draft (card.text
+   *  bleibt bis zum Commit die alte Version), committet nur bei nicht-leerem Erfolg. Bei Fehler
+   *  bleibt die aktuelle Version intakt; die Meldung erscheint transient an der Karte. */
+  async refineCard(i: number, feedback: string): Promise<void> {
+    if (this.running) return;
+    const card = this.state.cards[i];
+    if (!card || !canRefine(card)) return;
+    const fb = feedback.trim();
+    if (!fb) return;
+    this.refineErrors.delete(i);
+    this.running = true; this.runBtn?.setText("Stop");
+    this.controller = new AbortController();
+    const signal = this.controller.signal;
+    const base = card.refine?.base ?? card.text;
+    const steps = (card.refine?.steps ?? []).map(s => ({ feedback: s.feedback, text: s.text }));
+    this.refineDrafts.set(i, "");
+    this.updateAllCards();   // Eingabe sperren, writeBtn (this.running) entfernen
+    try {
+      const r = await this.deps.refine(
+        base, steps, fb,
+        (t) => { this.refineDrafts.set(i, (this.refineDrafts.get(i) ?? "") + t); this.updateCard(i); },
+        () => {},   // Reasoning während Refine bewusst nicht angezeigt (v1)
+        signal,
+      );
+      if (!signal.aborted) {
+        if (r.content.trim()) { card.model = r.model; this.state.commitRefine(i, fb, r.content); }
+        else this.refineErrors.set(i, t("view.refineEmpty"));
+      }
+    } catch (e) {
+      if (!signal.aborted) this.refineErrors.set(i, e instanceof Error ? e.message : String(e));
+    } finally {
+      this.refineDrafts.delete(i);
+      this.running = false; this.runBtn?.setText(this.runLabel());
+      this.controller = null;
+      this.updateAllCards();
+    }
+  }
+
+  /** Ein Schritt zurück (#7): stellt die vorige Version her (reiner State), rendert neu. */
+  undoRefine(i: number): void {
+    if (this.running) return;
+    this.state.undoRefine(i);
+    this.refineErrors.delete(i);
+    this.updateAllCards();
   }
 
   /** Gemeinsamer Lauf-Loop für run() und Retry — verzweigt je aktuellem Modus zwischen Transkribieren
