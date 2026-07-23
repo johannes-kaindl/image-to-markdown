@@ -1023,11 +1023,23 @@ describe("Refine-Zeile (#7)", () => {
     expect(calls.written[1][0].item.existingTranscriptPath).toBe("note-0.md");
   });
 
+  it("Critical 2 (writeAll): zweiter 'Alle anlegen'-Write nach Refine überschreibt dieselbe Notiz statt eine Dublette anzulegen", async () => {
+    const { view, calls } = await runToDone();
+    await (view as any).writeAll();   // erster Write über den „Alle anlegen"-Button-Pfad → legt "note-0.md" an
+    expect((view as any).state.cards[0].item.existingTranscriptPath).toBe("note-0.md");
+    await (view as any).refineCard(0, "f1");   // Refine → written zurück auf done
+    expect((view as any).state.cards[0].status).toBe("done");
+    await (view as any).writeAll();   // zweiter Write → muss den Override-Pfad nehmen, keine Dublette
+    expect(calls.written.length).toBe(2);
+    expect(calls.written[1][0].item.existingTranscriptPath).toBe("note-0.md");
+  });
+
   it("Minor 3: refresh() leert refineErrors (kein Bluten über Notizwechsel)", async () => {
     const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
     await (view as any).refineCard(0, "mach was");
     expect((view as any).refineErrors.get(0)).toBe("boom");
     await view.refresh();
     expect((view as any).refineErrors.size).toBe(0);
+    expect((view as any).refineDrafts.size).toBe(0);
   });
 });

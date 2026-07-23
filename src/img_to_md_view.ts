@@ -745,7 +745,14 @@ export class ImgToMdView extends ItemView {
         return { item: x.card.item, content: transcripts[k], model: x.card.model, knownBody: op ? this.sessionOwned.get(op) : undefined };
       });
       const results = await this.deps.writeTranscripts(path, entries);
-      part.images.forEach((x, k) => { const r = results[k]; if (r?.path) { this.sessionOwned.set(r.path, r.body ?? transcripts[k]); this.state.markWritten(x.cardIndex, r.path); } });
+      part.images.forEach((x, k) => {
+        const r = results[k];
+        if (r?.path) {
+          this.sessionOwned.set(r.path, r.body ?? transcripts[k]);
+          if (!x.card.item.existingTranscriptPath) x.card.item.existingTranscriptPath = r.path;
+          this.state.markWritten(x.cardIndex, r.path);
+        }
+      });
     }
     for (const g of part.pdfs) await this.writePdfGroup(path, g);
     this.updateAllCards();
