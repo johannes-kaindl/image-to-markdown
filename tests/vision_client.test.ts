@@ -163,6 +163,43 @@ describe("VisionClient.transcribeTextStream (text-only)", () => {
   });
 });
 
+describe("VisionClient.refineStream (text-only Multi-Turn)", () => {
+  it("schickt das übergebene Messages-Array unverändert, stream:true, kein image_url", async () => {
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: {"model":"m","choices":[{"delta":{"content":"# A"}}]}\n\ndata: [DONE]\n\n'])); });
+    const msgs = [
+      { role: "system", content: "SYS" },
+      { role: "user", content: "f1\n\n---\n\nBASIS" },
+    ];
+    const got: string[] = [];
+    const r = await new VisionClient("http://x", "vm").refineStream(msgs, t => got.push(t), () => {});
+    expect(got).toEqual(["# A"]);
+    expect(r).toEqual({ content: "# A", reasoning: "", model: "m" });
+    const body = JSON.parse(calls[0].body!) as { messages: unknown; stream: boolean };
+    expect(body.stream).toBe(true);
+    expect(body.messages).toEqual(msgs);
+  });
+  it("wirft Servermeldung bei 200-Error-Body", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes(['{"error":{"message":"boom"}}'])));
+    await expect(new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {})).rejects.toThrow("boom");
+  });
+  it("wirft bei HTTP-Fehler", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
+    await expect(new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {})).rejects.toThrow("500");
+  });
+  it("Fallback auf Konstruktor-Modell ohne model im Stream", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes(['data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n'])));
+    const r = await new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {});
+    expect(r.model).toBe("vm");
+  });
+  it("suppressThinking=true → Suppress-Params im Body", async () => {
+    const calls: { body?: string }[] = [];
+    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    await new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {}, undefined, { suppressThinking: true });
+    expect(JSON.parse(calls[0].body!)).toMatchObject({ reasoning_effort: "none", chat_template_kwargs: { enable_thinking: false }, reasoning_budget: 0 });
+  });
+});
+
 describe("VisionClient.visionConfidence", () => {
   it("liefert 'confirmed' aus Ollama-Metadaten", async () => {
     mockHttp(() => ok({ capabilities: ["vision"] }));

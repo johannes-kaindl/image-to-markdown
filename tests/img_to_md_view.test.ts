@@ -22,13 +22,18 @@ function mkView(over: any = {}) {
   let mode: ViewMode = over.initialMode ?? "transcribe";
   const deps = {
     getActivePath: over.getActivePath ?? (() => "q.md"),
-    scan: over.scan ?? (async () => ITEMS),
+    // Fresh Kopien statt der geteilten ITEMS-Referenz: Critical 2 mutiert card.item.existingTranscriptPath
+    // nach einem erfolgreichen Bild-Write (spiegelt den PDF-Pfad) — ohne Kopie würde das die modul-weit
+    // geteilte ITEMS-Fixture dauerhaft verändern und alle NACHFOLGENDEN Tests im File verseuchen
+    // (setItems wählt Items mit existingTranscriptPath default ab → leere Kartenliste in fremden Tests).
+    scan: over.scan ?? (async () => ITEMS.map(i => ({ ...i }))),
     transcribeStream: over.transcribeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("Hal"); onContent("lo"); return { content: "Hallo", reasoning: "", model: "vm" }; }),
     writeTranscripts: over.writeTranscripts ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((e: any, i: number) => ({ path: `note-${i}.md`, body: e.content })); }),
     writePdf: over.writePdf ?? (async (_sp: string, _raw: string, _link: string, _pages: any[]) => { calls.written.push(_pages); return { path: "doc (PDF transcript).md", body: "body" }; }),
     getMode: over.getMode ?? (() => mode),
     setMode: over.setMode ?? ((m: ViewMode) => { mode = m; }),
     describeStream: over.describeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("CATEGORY: Foto\nTAGS: a, b\n---\nEin Foto."); return { raw: "CATEGORY: Foto\nTAGS: a, b\n---\nEin Foto.", reasoning: "", model: "vm" }; }),
+    refine: over.refine ?? (async (_base: string, _steps: any[], _fb: string, onContent: any) => { onContent("VERBESSERT"); return { content: "VERBESSERT", reasoning: "", model: "vm" }; }),
     getTaxonomy: over.getTaxonomy ?? (() => ["Foto", "Diagramm"]),
     writeDescriptions: over.writeDescriptions ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_e: any, i: number) => ({ path: `desc-${i}.md` })); }),
     connectionStatus: over.connectionStatus ?? (async () => ({ ok: true, endpoint: "http://localhost:1234" })),
@@ -361,7 +366,9 @@ describe("ImgToMdView — Notiz anlegen", () => {
     all(view.contentEl, "img2md-write")[0].click();
     await Promise.resolve(); await Promise.resolve();
     expect(calls.written.length).toBe(1);
-    expect(calls.written[0]).toEqual([{ item: ITEMS[0], content: "Hallo", model: "vm", knownBody: undefined }]);
+    // Nach dem Write trägt card.item (Kopie der Fixture, siehe mkView) existingTranscriptPath — Critical-2-Fix
+    // (spiegelt den PDF-Pfad), damit ein zweiter Write dieselbe Notiz überschreibt statt zu duplizieren.
+    expect(calls.written[0]).toEqual([{ item: { ...ITEMS[0], existingTranscriptPath: "foto.md" }, content: "Hallo", model: "vm", knownBody: undefined }]);
     expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("foto.md");
   });
   it("'angelegt'-Zeile öffnet die Notiz per Klick", async () => {
@@ -385,7 +392,9 @@ describe("ImgToMdView — Notiz anlegen", () => {
     expect(all(view.contentEl, "img2md-written").length).toBe(2);
   });
   it("nach Schreiben wird neu gescannt (scan erneut aufgerufen)", async () => {
-    const scan = vi.fn(async () => ITEMS);
+    // Frische Kopie statt der geteilten ITEMS-Referenz (Critical 2 mutiert existingTranscriptPath nach
+    // erfolgreichem Write, siehe mkView-Default) — sonst verseucht dieser Write nachfolgende Tests im File.
+    const scan = vi.fn(async () => ITEMS.map(i => ({ ...i })));
     const { view } = mkView({ scan, writeTranscripts: async () => [{ path: "foto.md", body: null }] });
     await view.onOpen();          // scan #1
     await view.run();
@@ -935,5 +944,102 @@ describe("ImgToMdView — Beschreiben-Modus: Idempotenz-Anzeige", () => {
     const { view } = mkView({ scan: async () => both });
     await view.onOpen();
     expect(all(view.contentEl, "img2md-exists")[0].textContent).toContain("transcript exists");
+  });
+});
+
+describe("Refine-Zeile (#7)", () => {
+  async function runToDone(over: any = {}) {
+    const { view, deps, calls } = mkView(over);
+    await view.onOpen();
+    (view as any).state.toggleAll();          // nur a.png bleibt wählbar (b.heic unsupported)
+    (view as any).state.toggle("a.png");      // a.png sicher an
+    await (view as any).run();                // transcribeStream-Default → "Hallo", done
+    return { view, deps, calls };
+  }
+
+  it("done-Transkript-Karte zeigt Feedback-Eingabe + Nachbessern-Button", async () => {
+    const { view } = await runToDone();
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-refine-input").length).toBe(1);
+    expect(all(root, "img2md-refine-submit").length).toBe(1);
+  });
+
+  it("Beschreiben-Karte zeigt KEINE Refine-Zeile", async () => {
+    const { view } = await runToDone({ initialMode: "describe" });
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-refine-input").length).toBe(0);
+  });
+
+  it("refineCard committet die neue Version in card.text (Draft → Commit)", async () => {
+    const { view } = await runToDone();
+    await (view as any).refineCard(0, "Tabellen als GFM");
+    expect((view as any).state.cards[0].text).toBe("VERBESSERT");
+    expect((view as any).state.cards[0].refine.steps).toEqual([{ feedback: "Tabellen als GFM", text: "VERBESSERT" }]);
+  });
+
+  it("leeres Feedback → kein Refine-Aufruf, Karte unverändert", async () => {
+    const refine = vi.fn();
+    const { view } = await runToDone({ refine });
+    await (view as any).refineCard(0, "   ");
+    expect(refine).not.toHaveBeenCalled();
+    expect((view as any).state.cards[0].text).toBe("Hallo");
+  });
+
+  it("Fehler beim Refine lässt die aktuelle Version intakt", async () => {
+    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
+    await (view as any).refineCard(0, "mach was");
+    expect((view as any).state.cards[0].text).toBe("Hallo");   // unverändert
+    expect((view as any).state.cards[0].refine).toBeUndefined();
+  });
+
+  it("Undo-Button erscheint nach einem Refine und stellt die vorige Version her", async () => {
+    const { view } = await runToDone();
+    await (view as any).refineCard(0, "f1");
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-refine-undo").length).toBe(1);
+    (view as any).undoRefine(0);
+    expect((view as any).state.cards[0].text).toBe("Hallo");
+  });
+
+  it("Refine einer geschriebenen Karte: Status zurück auf done (writeBtn wieder da), written-Zeile weg", async () => {
+    const { view } = await runToDone();
+    await (view as any).writeOne(0);
+    expect((view as any).state.cards[0].status).toBe("written");
+    await (view as any).refineCard(0, "f1");
+    expect((view as any).state.cards[0].status).toBe("done");
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-written").length).toBe(0);       // stale „✓ created" entfernt
+    expect(all(root, "img2md-write").length).toBe(1);         // erneut schreibbar
+  });
+
+  it("Critical 2: zweiter Write nach Refine überschreibt dieselbe Notiz statt eine Dublette anzulegen", async () => {
+    const { view, calls } = await runToDone();
+    await (view as any).writeOne(0);   // erster Write → legt "note-0.md" an
+    expect((view as any).state.cards[0].item.existingTranscriptPath).toBe("note-0.md");
+    await (view as any).refineCard(0, "f1");   // Refine → written zurück auf done
+    expect((view as any).state.cards[0].status).toBe("done");
+    await (view as any).writeOne(0);   // zweiter Write → muss den Override-Pfad nehmen, keine Dublette
+    expect(calls.written.length).toBe(2);
+    expect(calls.written[1][0].item.existingTranscriptPath).toBe("note-0.md");
+  });
+
+  it("Critical 2 (writeAll): zweiter 'Alle anlegen'-Write nach Refine überschreibt dieselbe Notiz statt eine Dublette anzulegen", async () => {
+    const { view, calls } = await runToDone();
+    await (view as any).writeAll();   // erster Write über den „Alle anlegen"-Button-Pfad → legt "note-0.md" an
+    expect((view as any).state.cards[0].item.existingTranscriptPath).toBe("note-0.md");
+    await (view as any).refineCard(0, "f1");   // Refine → written zurück auf done
+    expect((view as any).state.cards[0].status).toBe("done");
+    await (view as any).writeAll();   // zweiter Write → muss den Override-Pfad nehmen, keine Dublette
+    expect(calls.written.length).toBe(2);
+    expect(calls.written[1][0].item.existingTranscriptPath).toBe("note-0.md");
+  });
+
+  it("Minor 3: refresh() leert refineErrors (kein Bluten über Notizwechsel)", async () => {
+    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
+    await (view as any).refineCard(0, "mach was");
+    expect((view as any).refineErrors.get(0)).toBe("boom");
+    await view.refresh();
+    expect((view as any).refineErrors.size).toBe(0);
+    expect((view as any).refineDrafts.size).toBe(0);
   });
 });

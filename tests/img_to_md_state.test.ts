@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ImgToMdState, ImgItem, ImgCard, partitionDoneCards, actualModel } from "../src/img_to_md_state";
+import { ImgToMdState, ImgItem, ImgCard, partitionDoneCards, actualModel, canRefine, canUndo } from "../src/img_to_md_state";
 
 const items: ImgItem[] = [
   { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
@@ -198,6 +198,40 @@ describe("ImgToMdState — PDF-Karten im Beschreiben-Modus", () => {
   });
 });
 
+describe("ImgToMdState — partitionDoneCards Refine-Seam (#7, Critical 1)", () => {
+  const raw = "![[doc.pdf]]";
+  const pdfItem: ImgItem = { raw, link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 3, range: { from: 1, to: 3 } };
+  function pageCard(page: number, status: ImgCard["status"], text: string): ImgCard {
+    return { item: pdfItem, index: page, total: 3, page, text, reasoning: "", model: "m", status };
+  }
+
+  it("written Schwesterseiten fließen bei >=1 done-Seite komplett in g.pages ein (kein Datenverlust bei Refine-Re-Write)", () => {
+    const cards: ImgCard[] = [
+      pageCard(1, "written", "Seite1"),
+      pageCard(2, "done", "Seite2-verbessert"),
+      pageCard(3, "written", "Seite3"),
+    ];
+    const part = partitionDoneCards(cards);
+    expect(part.pdfs.length).toBe(1);
+    const pages = part.pdfs[0].pages;
+    expect(pages.map(p => p.page).sort()).toEqual([1, 2, 3]);
+    expect(pages.find(p => p.page === 1)?.content).toBe("Seite1");
+    expect(pages.find(p => p.page === 2)?.content).toBe("Seite2-verbessert");
+    expect(pages.find(p => p.page === 3)?.content).toBe("Seite3");
+  });
+
+  it("reine written-Gruppe (keine done-Seite) bleibt neutral: pages leer (kein spuriöser Re-Write)", () => {
+    const cards: ImgCard[] = [
+      pageCard(1, "written", "Seite1"),
+      pageCard(2, "written", "Seite2"),
+      pageCard(3, "written", "Seite3"),
+    ];
+    const part = partitionDoneCards(cards);
+    expect(part.pdfs.length).toBe(1);
+    expect(part.pdfs[0].pages.length).toBe(0);
+  });
+});
+
 function mkCard(model: string): ImgCard {
   return { item: items[0], index: 1, total: 1, text: "x", reasoning: "", model, status: "done" };
 }
@@ -210,5 +244,103 @@ describe("actualModel", () => {
   });
   it("liefert \"\" für leere Kartenliste", () => {
     expect(actualModel([])).toBe("");
+  });
+});
+
+describe("ImgToMdState — Refine (#7)", () => {
+  function doneCard(): ImgToMdState {
+    const s = new ImgToMdState();
+    s.setItems([{ raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" }]);
+    s.startCards();
+    s.appendContent(0, "v0");
+    s.setDone(0);   // status "done", text "v0", mode undefined (Transkript)
+    return s;
+  }
+
+  it("commitRefine erste Runde: base=vorige Version, ein Step, text=neu, Status done", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    expect(s.cards[0].refine).toEqual({ base: "v0", steps: [{ feedback: "f1", text: "v1" }] });
+    expect(s.cards[0].text).toBe("v1");
+    expect(s.cards[0].status).toBe("done");
+  });
+
+  it("commitRefine zweite Runde: base bleibt Original, Steps akkumulieren", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.commitRefine(0, "f2", "v2");
+    expect(s.cards[0].refine!.base).toBe("v0");
+    expect(s.cards[0].refine!.steps).toEqual([{ feedback: "f1", text: "v1" }, { feedback: "f2", text: "v2" }]);
+    expect(s.cards[0].text).toBe("v2");
+  });
+
+  it("undoRefine: ein Schritt zurück auf vorige Version", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.commitRefine(0, "f2", "v2");
+    s.undoRefine(0);
+    expect(s.cards[0].text).toBe("v1");
+    expect(s.cards[0].refine!.steps).toEqual([{ feedback: "f1", text: "v1" }]);
+  });
+
+  it("undoRefine bis zum Original: Text=base, refine entfernt", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.undoRefine(0);
+    expect(s.cards[0].text).toBe("v0");
+    expect(s.cards[0].refine).toBeUndefined();
+  });
+
+  it("commitRefine auf written-Karte setzt Status zurück auf done (erneut schreibbar)", () => {
+    const s = doneCard();
+    s.markWritten(0, "note.md");
+    expect(s.cards[0].status).toBe("written");
+    s.commitRefine(0, "f1", "v1");
+    expect(s.cards[0].status).toBe("done");
+    expect(s.cards[0].writtenPath).toBe("note.md");   // Pfad bleibt für idempotentes Re-Write
+  });
+
+  it("canRefine: done/written-Transkript ja, Beschreiben-Karte nein, streaming nein", () => {
+    const s = doneCard();
+    expect(canRefine(s.cards[0])).toBe(true);
+    s.markWritten(0, "n.md");
+    expect(canRefine(s.cards[0])).toBe(true);
+    const desc: ImgCard = { ...s.cards[0], status: "done", mode: "description" };
+    expect(canRefine(desc)).toBe(false);
+    const streaming: ImgCard = { ...s.cards[0], status: "streaming" };
+    expect(canRefine(streaming)).toBe(false);
+  });
+
+  it("canUndo: nur mit mindestens einem Step", () => {
+    const s = doneCard();
+    expect(canUndo(s.cards[0])).toBe(false);
+    s.commitRefine(0, "f1", "v1");
+    expect(canUndo(s.cards[0])).toBe(true);
+  });
+
+  it("undoRefine No-op: Karte ohne refine bleibt unverändert, Out-of-range wirft nicht", () => {
+    const s = doneCard();
+    s.undoRefine(0);   // kein refine vorhanden → No-op
+    expect(s.cards[0].text).toBe("v0");
+    expect(s.cards[0].refine).toBeUndefined();
+    expect(() => s.undoRefine(99)).not.toThrow();
+  });
+
+  it("commitRefine No-op bei Out-of-range-Index", () => {
+    const s = doneCard();
+    expect(() => s.commitRefine(99, "f", "x")).not.toThrow();
+    expect(s.cards.length).toBe(1);
+    expect(s.cards[0].text).toBe("v0");
+  });
+
+  it("Zyklus commit→undo bis base→erneut commit: base wird nach dem refine-Clear neu aus card.text bestimmt", () => {
+    const s = doneCard();
+    s.commitRefine(0, "f1", "v1");
+    s.undoRefine(0);   // zurück zu base (v0), refine wird entfernt
+    expect(s.cards[0].refine).toBeUndefined();
+    expect(s.cards[0].text).toBe("v0");
+    s.commitRefine(0, "f2", "v2");   // zweiter Commit: base muss wieder v0 sein (Version vor diesem Commit)
+    expect(s.cards[0].refine).toEqual({ base: "v0", steps: [{ feedback: "f2", text: "v2" }] });
+    expect(s.cards[0].text).toBe("v2");
   });
 });

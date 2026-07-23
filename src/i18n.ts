@@ -143,6 +143,10 @@ const EN: Dict = {
   "view.modelsLoaded": "{0} models loaded",
   "view.linked": "linked",
   "view.thisFile": "this file",
+  "view.refine": "Refine",
+  "view.refinePlaceholder": "Feedback, e.g. tables as GFM",
+  "view.refineUndo": "Undo last refinement",
+  "view.refineEmpty": "No revision returned",
   "core.noMatchingImages": "No (matching) images in this note.",
   "core.imageNotFound": "Image not found: {0}",
   "core.pdfTooManyPages": "PDF has {0} pages (limit {1}) — narrow the page range.",
@@ -167,6 +171,7 @@ const EN: Dict = {
     "Format the following text, extracted from a PDF page, into clean Markdown. Preserve the exact " +
     "wording — do not rephrase, add or omit content; only add structure (headings, lists, tables, " +
     "emphasis). Output only the Markdown, no comments.",
+  "refine.systemPrompt": "You revise a Markdown document according to the user's instruction. Always output the complete revised document, only the document — no preamble, no commentary.",
   "notice.overwriteSkipped": "Skipped — existing note kept",
   "diff.modal.title": "Overwrite {0}?",
   "diff.overwrite": "Apply",
@@ -300,6 +305,10 @@ const DE: Dict = {
   "view.modelsLoaded": "{0} Modelle geladen",
   "view.linked": "verlinkt",
   "view.thisFile": "diese Datei",
+  "view.refine": "Nachbessern",
+  "view.refinePlaceholder": "Feedback, z. B. Tabellen als GFM",
+  "view.refineUndo": "Letzte Nachbesserung rückgängig",
+  "view.refineEmpty": "Keine Überarbeitung erhalten",
   "core.noMatchingImages": "Keine (passenden) Bilder in dieser Notiz.",
   "core.imageNotFound": "Bild nicht gefunden: {0}",
   "core.pdfTooManyPages": "PDF hat {0} Seiten (Limit {1}) — Seitenbereich einschränken.",
@@ -324,6 +333,7 @@ const DE: Dict = {
     "Formatiere den folgenden, aus einer PDF-Seite extrahierten Text zu sauberem Markdown. Erhalte den " +
     "Wortlaut exakt — formuliere nichts um, füge nichts hinzu, lass nichts weg; ergänze nur Struktur " +
     "(Überschriften, Listen, Tabellen, Hervorhebungen). Gib nur das Markdown aus, keine Kommentare.",
+  "refine.systemPrompt": "Du überarbeitest ein Markdown-Dokument gemäß der Anweisung des Nutzers. Gib immer die vollständige überarbeitete Fassung aus, nur das Dokument — keine Vorrede, kein Kommentar.",
   "notice.overwriteSkipped": "Übersprungen — bestehende Notiz behalten",
   "diff.modal.title": "{0} überschreiben?",
   "diff.overwrite": "Übernehmen",

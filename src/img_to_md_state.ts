@@ -1,5 +1,6 @@
 import { t } from "./i18n";
 import type { ParsedDescription } from "./describe";
+import type { RefineStep } from "./refine";
 
 export interface ImgItem {
   raw: string;
@@ -31,6 +32,9 @@ export interface ImgCard {
   mode?: "transcript" | "description";
   category?: string | null;
   tags?: string[];
+  /** In-Session-Nachbesserungs-Verlauf (#7). base = Original-Version, steps = je Runde
+   *  Feedback + Ergebnis. Aktuelle Version = card.text (Spiegel). Reitet auf dem CardCache. */
+  refine?: { base: string; steps: RefineStep[] };
 }
 
 /** Reine View-Buchhaltung für die IMG→MD-Sidebar: Bild-Auswahl + Ergebnis-Karten.
@@ -111,6 +115,28 @@ export class ImgToMdState {
     const c = this.cards[i]; if (!c) return;
     c.text = ""; c.reasoning = ""; c.model = ""; c.status = "streaming"; c.error = undefined; c.writtenPath = undefined;
   }
+  /** Committet eine erfolgreiche Nachbesserung: setzt beim ersten Mal die Basis (die vorige
+   *  Version — card.text wurde während des Streamens NICHT mutiert, siehe View-Draft), hängt
+   *  {feedback, text} an und macht die neue Version zur aktuellen. Status → done, damit eine
+   *  zuvor geschriebene Karte erneut geschrieben werden kann (writtenPath bleibt für Idempotenz). */
+  commitRefine(i: number, feedback: string, text: string): void {
+    const c = this.cards[i]; if (!c) return;
+    if (!c.refine) c.refine = { base: c.text, steps: [] };
+    c.refine.steps.push({ feedback, text });
+    c.text = text;
+    c.status = "done";
+  }
+
+  /** Ein Schritt zurück: entfernt die letzte Runde, stellt die vorige Version her. Ohne Steps
+   *  wird refine ganz entfernt (Text = Basis). Status bleibt done (erneut schreibbar). */
+  undoRefine(i: number): void {
+    const c = this.cards[i]; const r = c?.refine; if (!c || !r || !r.steps.length) return;
+    r.steps.pop();
+    c.text = r.steps.length ? r.steps[r.steps.length - 1].text : r.base;
+    c.status = "done";
+    if (!r.steps.length) c.refine = undefined;
+  }
+
   /** Karten-Indizes mit Fehlerstatus (für „Fehlgeschlagene erneut"). */
   failedCardIndices(): number[] { return this.cards.map((c, i) => ({ c, i })).filter(x => x.c.status === "error").map(x => x.i); }
   doneCardIndices(): number[] { return this.cards.map((c, i) => ({ c, i })).filter(x => x.c.status === "done").map(x => x.i); }
@@ -121,6 +147,17 @@ export class ImgToMdState {
  *  "" wenn keine Karte ein Modell meldet. Alle Karten eines Laufs stammen vom selben Backend. */
 export function actualModel(cards: ImgCard[]): string {
   return cards.find(c => c.model)?.model ?? "";
+}
+
+/** Ob eine Karte nachbesserbar ist (#7): Transkript-Karte (nicht Beschreiben) mit fertigem
+ *  bzw. geschriebenem Ergebnis. Streaming/Fehler-Karten sind es nicht. */
+export function canRefine(card: ImgCard): boolean {
+  return card.mode !== "description" && (card.status === "done" || card.status === "written");
+}
+
+/** Ob ein Zurück-Schritt möglich ist: mindestens eine committete Nachbesserung. */
+export function canUndo(card: ImgCard): boolean {
+  return !!card.refine && card.refine.steps.length >= 1;
 }
 
 export interface PdfGroup {
@@ -149,6 +186,9 @@ export function partitionDoneCards(cards: ImgCard[]): {
     if (!g) { const pg = card.page ?? 1; g = { raw: card.item.raw, link: card.item.link, item: card.item, cardIndices: [], pages: [], failedPages: [], pending: false, range: { from: pg, to: pg } }; pdfMap.set(card.item.raw, g); }
     return g;
   };
+  // Refine-Seam (#7): written Schwesterseiten einer Gruppe separat sammeln (lokales Side-Map, NICHT
+  // Teil von PdfGroup) — erst nach der Schleife und nur bei mind. einer done-Seite in g.pages einspielen.
+  const writtenByRaw = new Map<string, { cardIndex: number; page: number; content: string; model: string }[]>();
   cards.forEach((card, cardIndex) => {
     // Beschreiben-Karten (Bild ODER PDF-Seite) fließen gar nicht erst in pdfMap/images ein — sonst
     // entstünde für eine done-PDF-Seite im Beschreiben-Modus eine leere PdfGroup (ensurePdf legt sie
@@ -162,10 +202,24 @@ export function partitionDoneCards(cards: ImgCard[]): {
       if (card.status === "done") { g.cardIndices.push(cardIndex); g.pages.push({ page: pg, content: card.text, model: card.model }); }
       else if (card.status === "error") g.failedPages.push(pg);
       else if (card.status === "streaming") g.pending = true;
-      // "written": bereits geschrieben → neutral (kein Re-Add, kein Fehler).
+      else if (card.status === "written") {
+        const arr = writtenByRaw.get(card.item.raw) ?? [];
+        arr.push({ cardIndex, page: pg, content: card.text, model: card.model });
+        writtenByRaw.set(card.item.raw, arr);
+      }
     } else if (card.status === "done") {
       images.push({ card, cardIndex });
     }
   });
+  // Refine-Seam (#7): eine PDF-Gruppe mit >=1 nachgebesserten (done) Seite + bereits geschriebenen
+  // Schwesterseiten muss beim Re-Write vollständig bleiben — sonst füllt buildPdfBody die fehlenden
+  // (written) Seiten mit "Seite fehlgeschlagen"-Platzhaltern (Datenverlust). Rein written Gruppen
+  // (keine done-Seite) bleiben neutral (kein spuriöser Re-Write via "Alle anlegen").
+  for (const [raw, written] of writtenByRaw) {
+    const g = pdfMap.get(raw);
+    if (g && g.pages.length) {
+      for (const w of written) { g.cardIndices.push(w.cardIndex); g.pages.push({ page: w.page, content: w.content, model: w.model }); }
+    }
+  }
   return { images, pdfs: [...pdfMap.values()] };
 }

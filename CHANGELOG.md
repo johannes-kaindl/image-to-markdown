@@ -6,6 +6,10 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added
+
+- **LLM-Feedback-Refinement (#7):** Transkript-Karten in der Sidebar per Prosa-Feedback iterativ nachbessern („Tabellen als GFM", „Überschriften-Ebene falsch"). Konversationeller Verlauf pro Karte (das Modell sieht Original + bisherige Runden), ein Schritt zurücknehmbar; text-only, funktioniert auch nach dem Schreiben (erneutes Schreiben via bestehendem Diff-Gate).
+
 ### Behoben
 
 - **Beschreibung eines PDFs:** Die erzeugte Beschreibungs-Notiz trägt jetzt den Quell-Schlüssel
