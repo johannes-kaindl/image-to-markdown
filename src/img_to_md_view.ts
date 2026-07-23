@@ -52,6 +52,10 @@ export interface ImgToMdViewDeps {
    *  Parsen (CATEGORY:/TAGS:/Prosa) übernimmt die View via parseDescription. Kein page-Parameter
    *  (Beschreiben zielt auf Einzelbilder, nicht auf mehrseitige PDF-Läufe). */
   describeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ raw: string; reasoning: string; model: string }>;
+  /** Iterative Nachbesserung einer Transkript-Karte (#7): baut (in main.ts) aus base + steps +
+   *  feedback das Multi-Turn-Messages-Array und streamt es text-only. Modell/Endpoint/Suppress
+   *  kommen aus den Settings — die View gibt nur Verlauf + neues Feedback + Stream-Callbacks. */
+  refine: (base: string, steps: { feedback: string; text: string }[], feedback: string, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ content: string; reasoning: string; model: string }>;
   getTaxonomy: () => string[];
   writeDescriptions: (sourcePath: string, entries: { item: ImgItem; category: string | null; tags: string[]; prose: string; model: string }[]) => Promise<{ path: string | null }[]>;
   connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;

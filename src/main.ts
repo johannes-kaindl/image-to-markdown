@@ -9,6 +9,7 @@ import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, n
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
 import { ImgItem } from "./img_to_md_state";
 import { buildDescribePrompt } from "./describe";
+import { buildRefineMessages } from "./refine";
 import { setLang, pickLang, t, getLang } from "./i18n";
 import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
@@ -242,6 +243,17 @@ export default class ImageToMarkdownPlugin extends Plugin {
             const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
             return { raw: r.content, reasoning: r.reasoning, model: r.model };
           }
+          throw err;
+        }
+      },
+      refine: async (base, steps, feedback, onContent, onReasoning, signal) => {
+        const messages = buildRefineMessages(base, steps, feedback, t("refine.systemPrompt"));
+        const opts = { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) };
+        try {
+          return await this.visionClient.refineStream(messages, onContent, onReasoning, signal, opts);
+        } catch (err) {
+          await this.resolveAndReconnect();
+          if (this.activeEndpoint) return this.visionClient.refineStream(messages, onContent, onReasoning, signal, opts);
           throw err;
         }
       },

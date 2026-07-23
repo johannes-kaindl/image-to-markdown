@@ -29,6 +29,7 @@ function mkView(over: any = {}) {
     getMode: over.getMode ?? (() => mode),
     setMode: over.setMode ?? ((m: ViewMode) => { mode = m; }),
     describeStream: over.describeStream ?? (async (_sp: string, _it: ImgItem, onContent: any) => { onContent("CATEGORY: Foto\nTAGS: a, b\n---\nEin Foto."); return { raw: "CATEGORY: Foto\nTAGS: a, b\n---\nEin Foto.", reasoning: "", model: "vm" }; }),
+    refine: over.refine ?? (async (_base: string, _steps: any[], _fb: string, onContent: any) => { onContent("VERBESSERT"); return { content: "VERBESSERT", reasoning: "", model: "vm" }; }),
     getTaxonomy: over.getTaxonomy ?? (() => ["Foto", "Diagramm"]),
     writeDescriptions: over.writeDescriptions ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_e: any, i: number) => ({ path: `desc-${i}.md` })); }),
     connectionStatus: over.connectionStatus ?? (async () => ({ ok: true, endpoint: "http://localhost:1234" })),
