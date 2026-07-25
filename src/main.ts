@@ -278,6 +278,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       getPreset: () => this.settings.promptPreset,
       setPreset: (id: string) => { this.settings.promptPreset = isPromptPreset(id) ? id : "default"; void this.saveSettings(); },
       getSuppress: () => this.settings.suppressThinking,
+      getReasoningExpanded: () => this.settings.reasoningExpanded,
       setSuppress: (v: boolean) => { this.settings.suppressThinking = v; void this.saveSettings(); },
       openPath: this.openPath,
       copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },

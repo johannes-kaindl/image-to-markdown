@@ -38,11 +38,12 @@ interface CardRefs {
   refineSubmit?: HTMLButtonElement;
   refineErrEl?: HTMLElement;
   refineLog?: HTMLElement;                    // scrollbarer Verlauf-Container
-  refineEntryEls?: { textEl: HTMLElement; reasoningBody?: HTMLElement; useBtn: HTMLElement }[];  // je committete Runde
+  refineEntryEls?: { entryEl: HTMLElement; useBtn: HTMLElement }[];  // je committete Runde (Karte + Auswahl-Button)
   refineLiveEl?: HTMLElement;                 // transienter Live-Eintrag während des Streamens
-  refineLiveReasoning?: HTMLElement;          // Reasoning-Body des Live-Eintrags
+  refineLiveReasoning?: HTMLElement;          // Reasoning-Body des Live-Eintrags (im <details>)
   refineLiveVersion?: HTMLElement;            // Versionstext des Live-Eintrags
-  refineOrigUse?: HTMLElement;                // „diese verwenden" am Original-Eintrag
+  refineOrigRow?: HTMLElement;                // Auswahl-Zeile des Originals (für is-selected)
+  refineOrigUse?: HTMLElement;                // „diese verwenden" am Original
   liveWas: boolean;
   autoCollapsed: boolean;
 }
@@ -76,6 +77,8 @@ export interface ImgToMdViewDeps {
   getPreset: () => string;
   setPreset: (id: string) => void;
   getSuppress: () => boolean;
+  /** Ob Denkprozess-Blöcke im Nachbesserungs-Verlauf standardmäßig aufgeklappt starten. */
+  getReasoningExpanded: () => boolean;
   setSuppress: (v: boolean) => void;
   openPath: (p: string) => void;
   copyText: (t: string) => void;
@@ -283,6 +286,12 @@ export class ImgToMdView extends ItemView {
    *  Karten der neuen Quelle (falls vorhanden) wiederherstellen. */
   async refresh(): Promise<void> {
     if (this.running) return;
+    const path = this.deps.getActivePath();
+    // active-leaf-change feuert auch bei Klicks IN der Sidebar (Leaf-Fokus) — dann ist der aktive
+    // Pfad null oder unverändert. Nur bei einem ECHTEN Notizwechsel neu scannen/tauschen; sonst die
+    // Karten NICHT anfassen (sonst „resettet" die Ansicht bei jedem Sidebar-Klick, weil der Cache
+    // unter dem neuen Pfad — z.B. null — keinen Treffer hat und die Karten verworfen bleiben).
+    if (path === null || path === this.cardsSourcePath) return;
     this.persistCards();
     this.state.clearCards();
     this.resetCards();
@@ -525,14 +534,14 @@ export class ImgToMdView extends ItemView {
     const card = this.state.cards[i];
     const draft = this.refineDrafts.get(i);
     const rounds = card.refine?.rounds ?? [];
-    // Log nur bei Transkript-Karten mit ≥1 Runde ODER laufender Nachbesserung.
+    // Verlauf nur bei Transkript-Karten mit ≥1 Runde ODER laufender Nachbesserung.
     if (card.mode === "description" || (!card.refine && !draft)) {
-      // Kein Verlauf (mehr) zu zeigen — einen zuvor angelegten Log-Container vollständig abräumen,
-      // sonst bleibt nach einem fehlgeschlagenen/abgebrochenen ERSTEN Refine ein Geister-Live-Eintrag
-      // + leerer Log im DOM hängen (refine wurde nie committet, draft ist weg).
+      // Kein Verlauf (mehr) — einen zuvor angelegten Container vollständig abräumen, sonst bleibt nach
+      // einem fehlgeschlagenen/abgebrochenen ERSTEN Refine ein Geister-Live-Eintrag im DOM hängen.
       if (refs.refineLog) {
         cardEl.removeChild(refs.refineLog);
-        refs.refineLog = undefined; refs.refineEntryEls = undefined; refs.refineOrigUse = undefined;
+        refs.refineLog = undefined; refs.refineEntryEls = undefined;
+        refs.refineOrigRow = undefined; refs.refineOrigUse = undefined;
         refs.refineLiveEl = undefined; refs.refineLiveReasoning = undefined; refs.refineLiveVersion = undefined;
       }
       return;
@@ -540,53 +549,61 @@ export class ImgToMdView extends ItemView {
 
     if (!refs.refineLog) {
       const log = cardEl.createDiv({ cls: "img2md-refine-log" });
-      // Original-Auswahl (Version 0) — kompakte Zeile über den Runden.
-      const origRow = log.createDiv({ cls: "img2md-refine-entry img2md-refine-orig" });
-      origRow.createSpan({ cls: "img2md-refine-head", text: t("view.refineOriginal") });
-      const origUse = origRow.createEl("button", { cls: "img2md-refine-use", text: t("view.refineUse") });
+      log.createDiv({ cls: "img2md-refine-section", text: t("view.refineSection") });
+      // Original als eigene Auswahl-Zeile (der Original-Text steht oben in der Karte, nicht doppelt hier).
+      const origRow = log.createDiv({ cls: "img2md-refine-select-row img2md-refine-orig" });
+      origRow.createSpan({ cls: "img2md-refine-select-lbl", text: t("view.refineOriginal") });
+      const origUse = origRow.createEl("button", { cls: "img2md-refine-use" });
       origUse.addEventListener("click", () => { this.state.selectRefineVersion(i, 0); this.updateCard(i); });
-      refs.refineLog = log; refs.refineOrigUse = origUse; refs.refineEntryEls = [];
+      refs.refineLog = log; refs.refineOrigRow = origRow; refs.refineOrigUse = origUse; refs.refineEntryEls = [];
     }
     const log = refs.refineLog;
     const entries = refs.refineEntryEls!;
 
-    // Neue committete Runden inkrementell anhängen.
+    // Committete Runden inkrementell als abgegrenzte Karten anhängen.
     for (let k = entries.length; k < rounds.length; k++) {
       const r = rounds[k];
-      const entry = log.createDiv({ cls: "img2md-refine-entry" });
-      entry.createDiv({ cls: "img2md-refine-head", text: t("view.refineYou", r.feedback) });
-      let reasoningBody: HTMLElement | undefined;
+      const round = log.createDiv({ cls: "img2md-refine-round" });
+      round.createDiv({ cls: "img2md-refine-round-head", text: t("view.refineYou", r.feedback) });
       if (r.reasoning.trim()) {
-        const det = entry.createEl("details", { cls: "img2md-reasoning" });
+        const det = round.createEl("details", { cls: "img2md-reasoning" });
+        det.open = this.deps.getReasoningExpanded();
         const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
         setIcon(sum.createSpan({ cls: "img2md-reasoning-icon" }), "brain");
         sum.createSpan({ cls: "img2md-reasoning-lbl", text: t("view.thoughts") });
-        reasoningBody = det.createDiv({ cls: "img2md-reasoning-body" });
-        reasoningBody.setText(r.reasoning);
+        det.createDiv({ cls: "img2md-reasoning-body" }).setText(r.reasoning);
       }
-      const textEl = entry.createDiv({ cls: "img2md-refine-version", text: r.text });
-      const useBtn = entry.createEl("button", { cls: "img2md-refine-use", text: t("view.refineUse") });
+      round.createDiv({ cls: "img2md-refine-version", text: r.text });
+      const selRow = round.createDiv({ cls: "img2md-refine-select-row" });
+      const useBtn = selRow.createEl("button", { cls: "img2md-refine-use" });
       const idx = k + 1;   // rounds[k] hat Auswahl-Index k+1
       useBtn.addEventListener("click", () => { this.state.selectRefineVersion(i, idx); this.updateCard(i); });
-      entries.push({ textEl, reasoningBody, useBtn });
+      entries.push({ entryEl: round, useBtn });
     }
 
-    // Auswahl-Markierung (Original + je Runde).
+    // Auswahl-Markierung (Original-Zeile + je Runden-Karte: Rahmen/Badge, nicht nur Farbe).
     const selected = card.refine?.selected ?? 0;
-    const mark = (btn: HTMLElement, on: boolean) => {
+    const mark = (container: HTMLElement | undefined, btn: HTMLElement | undefined, on: boolean) => {
+      container?.toggleClass("is-selected", on);
+      if (!btn) return;
       btn.toggleClass("is-selected", on);
       btn.setText(on ? t("view.refineSelected") : t("view.refineUse"));
       btn.setAttribute("aria-pressed", String(on));
     };
-    if (refs.refineOrigUse) mark(refs.refineOrigUse, selected === 0);
-    entries.forEach((e, k) => mark(e.useBtn, selected === k + 1));
+    mark(refs.refineOrigRow, refs.refineOrigUse, selected === 0);
+    entries.forEach((e, k) => mark(e.entryEl, e.useBtn, selected === k + 1));
 
-    // Live-Eintrag (transient) während des Streamens.
+    // Live-Eintrag (transient) während des Streamens — Denkprozess als aufklappbarer Block, beim Denken offen.
     if (draft) {
       if (!refs.refineLiveEl) {
-        const live = log.createDiv({ cls: "img2md-refine-entry img2md-refine-live" });
-        live.createDiv({ cls: "img2md-refine-head", text: t("view.refineYou", draft.feedback) });
-        refs.refineLiveReasoning = live.createDiv({ cls: "img2md-reasoning-body img2md-refine-live-reasoning" });
+        const live = log.createDiv({ cls: "img2md-refine-round img2md-refine-live" });
+        live.createDiv({ cls: "img2md-refine-round-head", text: t("view.refineYou", draft.feedback) });
+        const det = live.createEl("details", { cls: "img2md-reasoning" });
+        det.open = true;
+        const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
+        setIcon(sum.createSpan({ cls: "img2md-reasoning-icon" }), "brain");
+        sum.createSpan({ cls: "img2md-reasoning-lbl", text: t("view.thinking") });
+        refs.refineLiveReasoning = det.createDiv({ cls: "img2md-reasoning-body" });
         refs.refineLiveVersion = live.createDiv({ cls: "img2md-refine-version" });
         refs.refineLiveEl = live;
       }

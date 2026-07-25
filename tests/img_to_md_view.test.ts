@@ -44,6 +44,7 @@ function mkView(over: any = {}) {
     getPreset: over.getPreset ?? (() => "default"),
     setPreset: over.setPreset ?? vi.fn(),
     getSuppress: over.getSuppress ?? (() => false),
+    getReasoningExpanded: over.getReasoningExpanded ?? (() => false),
     setSuppress: over.setSuppress ?? vi.fn(),
     openPath: (p: string) => calls.opened.push(p),
     copyText: over.copyText ?? ((t: string) => calls.copied.push(t)),
@@ -1004,7 +1005,7 @@ describe("Refine-Zeile (#7)", () => {
     await (view as any).refineCard(0, "f1");
     const root = (view as any).contentEl;
     expect(all(root, "img2md-refine-log").length).toBe(0);
-    expect(all(root, "img2md-refine-entry").length).toBe(0);
+    expect(all(root, "img2md-refine-round").length).toBe(0);
     expect((view as any).state.cards[0].refine).toBeUndefined();
   });
 
@@ -1041,10 +1042,12 @@ describe("Refine-Zeile (#7)", () => {
     expect(calls.written[1][0].item.existingTranscriptPath).toBe("note-0.md");
   });
 
-  it("Minor 3: refresh() leert refineErrors (kein Bluten über Notizwechsel)", async () => {
-    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
+  it("Minor 3: refresh() leert refineErrors bei echtem Notizwechsel (kein Bluten)", async () => {
+    let active = "q.md";
+    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); }, getActivePath: () => active });
     await (view as any).refineCard(0, "mach was");
     expect((view as any).refineErrors.get(0)).toBe("boom");
+    active = "other.md";              // echter Notizwechsel → Clear greift (bei gleichem Pfad wäre refresh No-op)
     await view.refresh();
     expect((view as any).refineErrors.size).toBe(0);
     expect((view as any).refineDrafts.size).toBe(0);
@@ -1061,9 +1064,10 @@ describe("Refine-Zeile (#7)", () => {
       const view = await withOneRound();
       const root = (view as any).contentEl;
       expect(all(root, "img2md-refine-log").length).toBe(1);
-      // Original-Eintrag + 1 Runden-Eintrag:
-      expect(all(root, "img2md-refine-entry").length).toBe(2);
-      // je Eintrag ein „diese verwenden"-Button:
+      // Original-Auswahlzeile + 1 Runden-Karte:
+      expect(all(root, "img2md-refine-orig").length).toBe(1);
+      expect(all(root, "img2md-refine-round").length).toBe(1);
+      // je Version ein „diese verwenden"-Button (Original + Runde):
       expect(all(root, "img2md-refine-use").length).toBe(2);
     });
 
@@ -1080,6 +1084,23 @@ describe("Refine-Zeile (#7)", () => {
     it("Beschreiben-Karte zeigt keinen Verlauf", async () => {
       const { view } = await runToDone({ initialMode: "describe" });
       expect(all((view as any).contentEl, "img2md-refine-log").length).toBe(0);
+    });
+
+    it("Runden-Denkprozess ist ein <details>, dessen Default-Offen dem Setting folgt", async () => {
+      const withReasoning = (open: boolean) => ({
+        getReasoningExpanded: () => open,
+        refine: async (_b: string, _r: any[], _fb: string, onContent: any, onReasoning: any) => {
+          onReasoning("denke"); onContent("V"); return { content: "V", reasoning: "denke", model: "vm" };
+        },
+      });
+      const vOpen = await withOneRound(withReasoning(true));
+      const detsOpen = all((vOpen as any).contentEl, "img2md-reasoning");
+      expect(detsOpen.length).toBe(1);
+      expect(detsOpen[0].open).toBe(true);
+
+      const vClosed = await withOneRound(withReasoning(false));
+      const detsClosed = all((vClosed as any).contentEl, "img2md-reasoning");
+      expect(detsClosed[0].open).toBe(false);
     });
   });
 });
@@ -1125,5 +1146,29 @@ describe("Write-Button-Klarheit (A, #0.14.1)", () => {
     await (view as any).run();
     const lbl = all((view as any).contentEl, "img2md-write-lbl")[0];
     expect(lbl.textContent).toBe(t("view.updateNote"));
+  });
+});
+
+describe("refresh — kein Reset bei Sidebar-Fokus (0.15.1)", () => {
+  it("aktiver Pfad null (Sidebar hat Fokus) verwirft die Karten NICHT", async () => {
+    let active: string | null = "q.md";
+    const { view } = mkView({ getActivePath: () => active });
+    await view.onOpen();
+    await (view as any).run();
+    expect((view as any).state.cards.length).toBe(1);
+    active = null;                     // active-leaf-change durch Sidebar-Klick → getActiveFile() null
+    await view.refresh();
+    expect((view as any).state.cards.length).toBe(1);   // Karten bleiben — kein „resettet"
+    expect(all((view as any).contentEl, "img2md-card").length).toBe(1);
+  });
+
+  it("gleicher Pfad (kein Notizwechsel) lässt die Karten unangetastet", async () => {
+    const { view } = mkView();          // getActivePath → "q.md"
+    await view.onOpen();
+    await (view as any).run();
+    const before = (view as any).state.cards;
+    await view.refresh();
+    expect((view as any).state.cards).toBe(before);     // Array nicht getauscht
+    expect((view as any).state.cards.length).toBe(1);
   });
 });

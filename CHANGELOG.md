@@ -6,6 +6,20 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Nachbesserungs-Verlauf aufgeräumt:** Jede Nachbesserung ist jetzt eine klar abgegrenzte Karte
+  mit Titel, aufklappbarem Denkprozess und einheitlicher Schriftgröße; das Original und die Auswahl
+  „Diese Version verwenden" sind sauber getrennt statt gequetscht. Der Denkprozess ist auch **während**
+  des Denkens aufklappbar; per Einstellung lässt sich festlegen, ob er standardmäßig auf- oder
+  zugeklappt startet.
+
+### Behoben
+
+- **Ansicht „resettete" bei Klicks in der Seitenleiste:** Ein Klick in der Seitenleiste (z. B. auf den
+  Denkprozess) konnte die Ergebnis-Karten verschwinden lassen. Behoben — die Ansicht wird nur noch bei
+  einem **echten Notizwechsel** neu aufgebaut, nicht bei jedem Fokuswechsel.
+
 ## [0.15.0] — 2026-07-25
 
 ### Geändert
