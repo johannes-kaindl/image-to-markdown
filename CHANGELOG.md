@@ -6,6 +6,13 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Nachbessern als Chat-Verlauf:** Jede Nachbesserung wird jetzt als eigener Eintrag unten
+  angehängt (statt den Text in-place zu ersetzen) — mit sichtbarem Denk-Prozess (Thinking) und
+  scrollbarem Verlauf. Du kannst die Versionen vergleichen und **jede** frei als die zu
+  schreibende Version wählen (ersetzt das bisherige „Zurück").
+
 ## [0.14.1] — 2026-07-25
 
 ### Geändert
