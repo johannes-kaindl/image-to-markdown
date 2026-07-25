@@ -283,6 +283,12 @@ export class ImgToMdView extends ItemView {
    *  Karten der neuen Quelle (falls vorhanden) wiederherstellen. */
   async refresh(): Promise<void> {
     if (this.running) return;
+    const path = this.deps.getActivePath();
+    // active-leaf-change feuert auch bei Klicks IN der Sidebar (Leaf-Fokus) — dann ist der aktive
+    // Pfad null oder unverändert. Nur bei einem ECHTEN Notizwechsel neu scannen/tauschen; sonst die
+    // Karten NICHT anfassen (sonst „resettet" die Ansicht bei jedem Sidebar-Klick, weil der Cache
+    // unter dem neuen Pfad — z.B. null — keinen Treffer hat und die Karten verworfen bleiben).
+    if (path === null || path === this.cardsSourcePath) return;
     this.persistCards();
     this.state.clearCards();
     this.resetCards();

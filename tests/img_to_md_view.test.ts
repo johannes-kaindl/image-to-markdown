@@ -1041,10 +1041,12 @@ describe("Refine-Zeile (#7)", () => {
     expect(calls.written[1][0].item.existingTranscriptPath).toBe("note-0.md");
   });
 
-  it("Minor 3: refresh() leert refineErrors (kein Bluten über Notizwechsel)", async () => {
-    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
+  it("Minor 3: refresh() leert refineErrors bei echtem Notizwechsel (kein Bluten)", async () => {
+    let active = "q.md";
+    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); }, getActivePath: () => active });
     await (view as any).refineCard(0, "mach was");
     expect((view as any).refineErrors.get(0)).toBe("boom");
+    active = "other.md";              // echter Notizwechsel → Clear greift (bei gleichem Pfad wäre refresh No-op)
     await view.refresh();
     expect((view as any).refineErrors.size).toBe(0);
     expect((view as any).refineDrafts.size).toBe(0);
@@ -1125,5 +1127,29 @@ describe("Write-Button-Klarheit (A, #0.14.1)", () => {
     await (view as any).run();
     const lbl = all((view as any).contentEl, "img2md-write-lbl")[0];
     expect(lbl.textContent).toBe(t("view.updateNote"));
+  });
+});
+
+describe("refresh — kein Reset bei Sidebar-Fokus (0.15.1)", () => {
+  it("aktiver Pfad null (Sidebar hat Fokus) verwirft die Karten NICHT", async () => {
+    let active: string | null = "q.md";
+    const { view } = mkView({ getActivePath: () => active });
+    await view.onOpen();
+    await (view as any).run();
+    expect((view as any).state.cards.length).toBe(1);
+    active = null;                     // active-leaf-change durch Sidebar-Klick → getActiveFile() null
+    await view.refresh();
+    expect((view as any).state.cards.length).toBe(1);   // Karten bleiben — kein „resettet"
+    expect(all((view as any).contentEl, "img2md-card").length).toBe(1);
+  });
+
+  it("gleicher Pfad (kein Notizwechsel) lässt die Karten unangetastet", async () => {
+    const { view } = mkView();          // getActivePath → "q.md"
+    await view.onOpen();
+    await (view as any).run();
+    const before = (view as any).state.cards;
+    await view.refresh();
+    expect((view as any).state.cards).toBe(before);     // Array nicht getauscht
+    expect((view as any).state.cards.length).toBe(1);
   });
 });
