@@ -99,6 +99,7 @@ export class ImgToMdView extends ItemView {
   private modeTranscribeBtn: HTMLElement | null = null;
   private modeDescribeBtn: HTMLElement | null = null;
   private runBtn: HTMLElement | null = null;
+  private allBtn: HTMLElement | null = null;
   private retryAllBtn: HTMLElement | null = null;
   private clearBtn: HTMLElement | null = null;
   private controller: AbortController | null = null;
@@ -157,7 +158,8 @@ export class ImgToMdView extends ItemView {
     this.listEl = c.createDiv({ cls: "img2md-list" });
     this.cardsEl = c.createDiv({ cls: "img2md-cards" });
     const foot = c.createDiv({ cls: "img2md-foot" });
-    foot.createEl("button", { cls: "img2md-all", text: t("view.createAll") }).addEventListener("click", () => void this.writeAll());
+    this.allBtn = foot.createEl("button", { cls: "img2md-all is-hidden", text: t("view.createAll") });
+    this.allBtn.addEventListener("click", () => void this.writeAll());
     this.retryAllBtn = foot.createEl("button", { cls: "img2md-retry-all is-hidden", text: t("view.retryAllFailed") });
     this.retryAllBtn.addEventListener("click", () => void this.retryAll());
     this.clearBtn = foot.createEl("button", { cls: "img2md-clear is-hidden", text: t("view.clearResults") });
@@ -498,7 +500,13 @@ export class ImgToMdView extends ItemView {
         const wb = refs.actionsEl.createEl("button", { cls: "img2md-write" });
         const wbIcon = wb.createSpan({ cls: "img2md-write-icon" });
         setIcon(wbIcon, "file-plus");
-        wb.createSpan({ cls: "img2md-write-lbl", text: t(isDescription ? "view.saveDescription" : "view.createNote") });
+        // Verb create vs. update: trifft die Karte eine bestehende Notiz (Idempotenz-Treffer oder nach
+        // einem eigenen Write), heißt der Button „aktualisieren" statt „anlegen". Beschreibungen kennen
+        // (noch) keine Update-Semantik → bleiben bei „speichern".
+        const writeLblKey = isDescription
+          ? "view.saveDescription"
+          : (card.item.existingTranscriptPath ? "view.updateNote" : "view.createNote");
+        wb.createSpan({ cls: "img2md-write-lbl", text: t(writeLblKey) });
         wb.addEventListener("click", () => void (isDescription ? this.writeDescriptionOne(i) : this.writeOne(i)));
         refs.writeBtn = wb;
       } else if ((card.status !== "done" || this.running) && refs.writeBtn) {
@@ -511,6 +519,11 @@ export class ImgToMdView extends ItemView {
 
   /** Footer-Button „Fehlgeschlagene erneut" nur einblenden, wenn es Fehler-Karten gibt. */
   private updateRetryAll(): void {
+    // „Alle anlegen" nur zeigen, wenn es einen Grund gibt — mind. zwei fertige Karten (mehrere Bilder
+    // oder mehrere PDF-Seiten). Bei einem einzigen Ergebnis genügt der Pro-Karte-Button (keine
+    // verwirrende Doppelung „anlegen"/„Alle anlegen").
+    const doneCount = this.state.cards.filter(c => c.status === "done").length;
+    this.allBtn?.toggleClass("is-hidden", doneCount < 2);
     const btn = this.retryAllBtn; if (!btn) return;
     if (this.state.cards.some(c => c.status === "error")) btn.removeClass("is-hidden");
     else btn.addClass("is-hidden");
