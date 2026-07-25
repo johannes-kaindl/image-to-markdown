@@ -44,6 +44,7 @@ function mkView(over: any = {}) {
     getPreset: over.getPreset ?? (() => "default"),
     setPreset: over.setPreset ?? vi.fn(),
     getSuppress: over.getSuppress ?? (() => false),
+    getReasoningExpanded: over.getReasoningExpanded ?? (() => false),
     setSuppress: over.setSuppress ?? vi.fn(),
     openPath: (p: string) => calls.opened.push(p),
     copyText: over.copyText ?? ((t: string) => calls.copied.push(t)),
@@ -1004,7 +1005,7 @@ describe("Refine-Zeile (#7)", () => {
     await (view as any).refineCard(0, "f1");
     const root = (view as any).contentEl;
     expect(all(root, "img2md-refine-log").length).toBe(0);
-    expect(all(root, "img2md-refine-entry").length).toBe(0);
+    expect(all(root, "img2md-refine-round").length).toBe(0);
     expect((view as any).state.cards[0].refine).toBeUndefined();
   });
 
@@ -1063,9 +1064,10 @@ describe("Refine-Zeile (#7)", () => {
       const view = await withOneRound();
       const root = (view as any).contentEl;
       expect(all(root, "img2md-refine-log").length).toBe(1);
-      // Original-Eintrag + 1 Runden-Eintrag:
-      expect(all(root, "img2md-refine-entry").length).toBe(2);
-      // je Eintrag ein „diese verwenden"-Button:
+      // Original-Auswahlzeile + 1 Runden-Karte:
+      expect(all(root, "img2md-refine-orig").length).toBe(1);
+      expect(all(root, "img2md-refine-round").length).toBe(1);
+      // je Version ein „diese verwenden"-Button (Original + Runde):
       expect(all(root, "img2md-refine-use").length).toBe(2);
     });
 
@@ -1082,6 +1084,23 @@ describe("Refine-Zeile (#7)", () => {
     it("Beschreiben-Karte zeigt keinen Verlauf", async () => {
       const { view } = await runToDone({ initialMode: "describe" });
       expect(all((view as any).contentEl, "img2md-refine-log").length).toBe(0);
+    });
+
+    it("Runden-Denkprozess ist ein <details>, dessen Default-Offen dem Setting folgt", async () => {
+      const withReasoning = (open: boolean) => ({
+        getReasoningExpanded: () => open,
+        refine: async (_b: string, _r: any[], _fb: string, onContent: any, onReasoning: any) => {
+          onReasoning("denke"); onContent("V"); return { content: "V", reasoning: "denke", model: "vm" };
+        },
+      });
+      const vOpen = await withOneRound(withReasoning(true));
+      const detsOpen = all((vOpen as any).contentEl, "img2md-reasoning");
+      expect(detsOpen.length).toBe(1);
+      expect(detsOpen[0].open).toBe(true);
+
+      const vClosed = await withOneRound(withReasoning(false));
+      const detsClosed = all((vClosed as any).contentEl, "img2md-reasoning");
+      expect(detsClosed[0].open).toBe(false);
     });
   });
 });

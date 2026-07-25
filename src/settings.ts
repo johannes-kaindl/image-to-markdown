@@ -41,6 +41,7 @@ export interface ImageToMarkdownSettings {
   pdfPageSeparator: PdfPageSeparator;
   pdfUseTextLayer: boolean;
   suppressThinking: boolean;
+  reasoningExpanded: boolean;
   describeTaxonomy: string[];
   frontmatterMap: FrontmatterMap;
   describeDestDir?: string;
@@ -59,6 +60,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     pdfPageSeparator: "comment",
     pdfUseTextLayer: true,
     suppressThinking: false,
+    reasoningExpanded: false,
     describeTaxonomy: ["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"],
     frontmatterMap: { ...DEFAULT_FM_MAP },
     mode: "transcribe",
@@ -267,6 +269,12 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       .setName(t("settings.pdfUseTextLayer.name")).setDesc(t("settings.pdfUseTextLayer.desc"))
       .addToggle(tg => tg.setValue(this.plugin.settings.pdfUseTextLayer)
         .onChange(async (v: boolean) => { this.plugin.settings.pdfUseTextLayer = v; await this.plugin.saveSettings(); }));
+
+    // ── Denkprozess-Blöcke standardmäßig auf/zu (Nachbesserungs-Verlauf) ──
+    new Setting(containerEl)
+      .setName(t("settings.reasoningExpanded.name")).setDesc(t("settings.reasoningExpanded.desc"))
+      .addToggle(tg => tg.setValue(this.plugin.settings.reasoningExpanded)
+        .onChange(async (v: boolean) => { this.plugin.settings.reasoningExpanded = v; await this.plugin.saveSettings(); }));
 
     // ── Beschreibungs-Taxonomie (geordnete Kategorie-Liste, gleiches blur-Muster wie Endpunkte) ──
     new Setting(containerEl).setName(t("settings.taxonomy.heading")).setHeading();
