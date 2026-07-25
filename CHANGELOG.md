@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-07-25
+
 ### Geändert
 
 - **Nachbessern als Chat-Verlauf:** Jede Nachbesserung wird jetzt als eigener Eintrag unten
