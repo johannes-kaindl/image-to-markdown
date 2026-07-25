@@ -305,6 +305,17 @@ describe("ImgToMdState — Refine v2 (Chat-Verlauf)", () => {
     expect(s.cards[0].writtenPath).toBe("note.md");
   });
 
+  it("selectRefineVersion auf die bereits gewählte Version belässt written unverändert, ein Wechsel setzt done", () => {
+    const s = doneCard();
+    s.commitRefineRound(0, "f1", "v1", "");
+    s.markWritten(0, "note.md");
+    expect(s.cards[0].status).toBe("written");
+    s.selectRefineVersion(0, 1);   // bereits gewählte Version erneut wählen
+    expect(s.cards[0].status).toBe("written");
+    s.selectRefineVersion(0, 0);   // andere Version wählen
+    expect(s.cards[0].status).toBe("done");
+  });
+
   it("canRefine: done/written-Transkript ja, Beschreiben nein, streaming nein", () => {
     const s = doneCard();
     expect(canRefine(s.cards[0])).toBe(true);

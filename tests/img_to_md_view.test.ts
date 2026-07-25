@@ -999,6 +999,15 @@ describe("Refine-Zeile (#7)", () => {
     expect((view as any).state.cards[0].refine).toBeUndefined();
   });
 
+  it("fehlgeschlagener erster Refine hinterlässt keinen Geister-Log", async () => {
+    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
+    await (view as any).refineCard(0, "f1");
+    const root = (view as any).contentEl;
+    expect(all(root, "img2md-refine-log").length).toBe(0);
+    expect(all(root, "img2md-refine-entry").length).toBe(0);
+    expect((view as any).state.cards[0].refine).toBeUndefined();
+  });
+
   it("Refine einer geschriebenen Karte: Status zurück auf done (writeBtn wieder da), written-Zeile weg", async () => {
     const { view } = await runToDone();
     await (view as any).writeOne(0);

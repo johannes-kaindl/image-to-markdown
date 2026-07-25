@@ -526,7 +526,17 @@ export class ImgToMdView extends ItemView {
     const draft = this.refineDrafts.get(i);
     const rounds = card.refine?.rounds ?? [];
     // Log nur bei Transkript-Karten mit ≥1 Runde ODER laufender Nachbesserung.
-    if (card.mode === "description" || (!card.refine && !draft)) return;
+    if (card.mode === "description" || (!card.refine && !draft)) {
+      // Kein Verlauf (mehr) zu zeigen — einen zuvor angelegten Log-Container vollständig abräumen,
+      // sonst bleibt nach einem fehlgeschlagenen/abgebrochenen ERSTEN Refine ein Geister-Live-Eintrag
+      // + leerer Log im DOM hängen (refine wurde nie committet, draft ist weg).
+      if (refs.refineLog) {
+        cardEl.removeChild(refs.refineLog);
+        refs.refineLog = undefined; refs.refineEntryEls = undefined; refs.refineOrigUse = undefined;
+        refs.refineLiveEl = undefined; refs.refineLiveReasoning = undefined; refs.refineLiveVersion = undefined;
+      }
+      return;
+    }
 
     if (!refs.refineLog) {
       const log = cardEl.createDiv({ cls: "img2md-refine-log" });

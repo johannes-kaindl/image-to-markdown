@@ -135,6 +135,7 @@ export class ImgToMdState {
   selectRefineVersion(i: number, index: number): void {
     const c = this.cards[i]; const r = c?.refine; if (!c || !r) return;
     const sel = Math.max(0, Math.min(index, r.rounds.length));
+    if (sel === r.selected) return;   // gleiche Version erneut gewählt → kein Status-/Text-Flip
     r.selected = sel;
     c.text = sel === 0 ? r.base : r.rounds[sel - 1].text;
     c.status = "done";
