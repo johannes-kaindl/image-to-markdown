@@ -1040,6 +1040,39 @@ describe("Refine-Zeile (#7)", () => {
     expect((view as any).refineErrors.size).toBe(0);
     expect((view as any).refineDrafts.size).toBe(0);
   });
+
+  describe("Refine-Chat-Verlauf (v2)", () => {
+    async function withOneRound(over: any = {}) {
+      const { view } = await runToDone(over);
+      await (view as any).refineCard(0, "Tabellen als GFM");   // Default-refine → "VERBESSERT"
+      return view;
+    }
+
+    it("nach einer Runde rendert der Verlauf Original + Runde + Auswahl-Buttons", async () => {
+      const view = await withOneRound();
+      const root = (view as any).contentEl;
+      expect(all(root, "img2md-refine-log").length).toBe(1);
+      // Original-Eintrag + 1 Runden-Eintrag:
+      expect(all(root, "img2md-refine-entry").length).toBe(2);
+      // je Eintrag ein „diese verwenden"-Button:
+      expect(all(root, "img2md-refine-use").length).toBe(2);
+    });
+
+    it("Klick auf 'diese verwenden' am Original wählt Version 0 und spiegelt card.text", async () => {
+      const view = await withOneRound();
+      const root = (view as any).contentEl;
+      const useBtns = all(root, "img2md-refine-use");
+      // Reihenfolge: [0]=Original, [1]=Runde 1
+      useBtns[0].click();
+      expect((view as any).state.cards[0].refine.selected).toBe(0);
+      expect((view as any).state.cards[0].text).toBe("Hallo");   // Original (Default-Transkript)
+    });
+
+    it("Beschreiben-Karte zeigt keinen Verlauf", async () => {
+      const { view } = await runToDone({ initialMode: "describe" });
+      expect(all((view as any).contentEl, "img2md-refine-log").length).toBe(0);
+    });
+  });
 });
 
 describe("Write-Button-Klarheit (A, #0.14.1)", () => {

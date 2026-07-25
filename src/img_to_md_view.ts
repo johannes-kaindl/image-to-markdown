@@ -37,6 +37,12 @@ interface CardRefs {
   refineInput?: HTMLInputElement;
   refineSubmit?: HTMLButtonElement;
   refineErrEl?: HTMLElement;
+  refineLog?: HTMLElement;                    // scrollbarer Verlauf-Container
+  refineEntryEls?: { textEl: HTMLElement; reasoningBody?: HTMLElement; useBtn: HTMLElement }[];  // je committete Runde
+  refineLiveEl?: HTMLElement;                 // transienter Live-Eintrag während des Streamens
+  refineLiveReasoning?: HTMLElement;          // Reasoning-Body des Live-Eintrags
+  refineLiveVersion?: HTMLElement;            // Versionstext des Live-Eintrags
+  refineOrigUse?: HTMLElement;                // „diese verwenden" am Original-Eintrag
   liveWas: boolean;
   autoCollapsed: boolean;
 }
@@ -406,10 +412,11 @@ export class ImgToMdView extends ItemView {
       }
       refs.liveWas = live;
     }
-    // Transkript-Text (lazy, inkrementell) — während einer Nachbesserung der Draft (card.text bleibt
-    // bis zum Commit die alte Version).
+    // Transkript-Text (lazy, inkrementell). Sobald ein Refine existiert oder läuft, bleibt der obere
+    // Text auf der Original-Version fixiert (card.refine.base) — die gewählte Version erscheint im
+    // Verlauf (syncRefineLog), nicht hier, damit ein Versionswechsel den oberen Text nicht ersetzt.
     const draft = this.refineDrafts.get(i);
-    const shownText = draft ? draft.text : card.text;
+    const shownText = (card.refine || draft) ? (card.refine?.base ?? card.text) : card.text;
     if (shownText) {
       if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
       refs.textEl.setText(shownText);
@@ -457,6 +464,7 @@ export class ImgToMdView extends ItemView {
       refs.categoryInput!.value = card.category ?? "";
       refs.tagsInput!.value = (card.tags ?? []).join(", ");
     }
+    this.syncRefineLog(i, refs, cardEl);
     if (canRefine(card)) {
       if (!refs.refineRow) {
         const row = cardEl.createDiv({ cls: "img2md-refine-row" });
@@ -507,6 +515,81 @@ export class ImgToMdView extends ItemView {
       }
     }
     this.updateRetryAll();
+  }
+
+  /** Rendert/aktualisiert den Nachbesserungs-Verlauf einer Karte inkrementell: Original-Auswahl +
+   *  je committete Runde ein Eintrag (Feedback-Kopf, Thinking-<details>, Versionstext, „diese
+   *  verwenden"), plus einen transienten Live-Eintrag während des Streamens. Auto-Scroll (stick-to-
+   *  bottom), solange der Nutzer nicht selbst hochgescrollt hat. */
+  private syncRefineLog(i: number, refs: CardRefs, cardEl: HTMLElement): void {
+    const card = this.state.cards[i];
+    const draft = this.refineDrafts.get(i);
+    const rounds = card.refine?.rounds ?? [];
+    // Log nur bei Transkript-Karten mit ≥1 Runde ODER laufender Nachbesserung.
+    if (card.mode === "description" || (!card.refine && !draft)) return;
+
+    if (!refs.refineLog) {
+      const log = cardEl.createDiv({ cls: "img2md-refine-log" });
+      // Original-Auswahl (Version 0) — kompakte Zeile über den Runden.
+      const origRow = log.createDiv({ cls: "img2md-refine-entry img2md-refine-orig" });
+      origRow.createSpan({ cls: "img2md-refine-head", text: t("view.refineOriginal") });
+      const origUse = origRow.createEl("button", { cls: "img2md-refine-use", text: t("view.refineUse") });
+      origUse.addEventListener("click", () => { this.state.selectRefineVersion(i, 0); this.updateCard(i); });
+      refs.refineLog = log; refs.refineOrigUse = origUse; refs.refineEntryEls = [];
+    }
+    const log = refs.refineLog;
+    const entries = refs.refineEntryEls!;
+
+    // Neue committete Runden inkrementell anhängen.
+    for (let k = entries.length; k < rounds.length; k++) {
+      const r = rounds[k];
+      const entry = log.createDiv({ cls: "img2md-refine-entry" });
+      entry.createDiv({ cls: "img2md-refine-head", text: t("view.refineYou", r.feedback) });
+      let reasoningBody: HTMLElement | undefined;
+      if (r.reasoning.trim()) {
+        const det = entry.createEl("details", { cls: "img2md-reasoning" });
+        const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
+        setIcon(sum.createSpan({ cls: "img2md-reasoning-icon" }), "brain");
+        sum.createSpan({ cls: "img2md-reasoning-lbl", text: t("view.thoughts") });
+        reasoningBody = det.createDiv({ cls: "img2md-reasoning-body" });
+        reasoningBody.setText(r.reasoning);
+      }
+      const textEl = entry.createDiv({ cls: "img2md-refine-version", text: r.text });
+      const useBtn = entry.createEl("button", { cls: "img2md-refine-use", text: t("view.refineUse") });
+      const idx = k + 1;   // rounds[k] hat Auswahl-Index k+1
+      useBtn.addEventListener("click", () => { this.state.selectRefineVersion(i, idx); this.updateCard(i); });
+      entries.push({ textEl, reasoningBody, useBtn });
+    }
+
+    // Auswahl-Markierung (Original + je Runde).
+    const selected = card.refine?.selected ?? 0;
+    const mark = (btn: HTMLElement, on: boolean) => {
+      btn.toggleClass("is-selected", on);
+      btn.setText(on ? t("view.refineSelected") : t("view.refineUse"));
+      btn.setAttribute("aria-pressed", String(on));
+    };
+    if (refs.refineOrigUse) mark(refs.refineOrigUse, selected === 0);
+    entries.forEach((e, k) => mark(e.useBtn, selected === k + 1));
+
+    // Live-Eintrag (transient) während des Streamens.
+    if (draft) {
+      if (!refs.refineLiveEl) {
+        const live = log.createDiv({ cls: "img2md-refine-entry img2md-refine-live" });
+        live.createDiv({ cls: "img2md-refine-head", text: t("view.refineYou", draft.feedback) });
+        refs.refineLiveReasoning = live.createDiv({ cls: "img2md-reasoning-body img2md-refine-live-reasoning" });
+        refs.refineLiveVersion = live.createDiv({ cls: "img2md-refine-version" });
+        refs.refineLiveEl = live;
+      }
+      refs.refineLiveReasoning?.setText(draft.reasoning);
+      refs.refineLiveVersion?.setText(draft.text);
+    } else if (refs.refineLiveEl) {
+      log.removeChild(refs.refineLiveEl);
+      refs.refineLiveEl = undefined; refs.refineLiveReasoning = undefined; refs.refineLiveVersion = undefined;
+    }
+
+    // Stick-to-bottom: nur nachziehen, wenn der Nutzer ohnehin (fast) unten steht.
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+    if (draft && nearBottom) log.scrollTop = log.scrollHeight;
   }
 
   /** Footer-Button „Fehlgeschlagene erneut" nur einblenden, wenn es Fehler-Karten gibt. */
