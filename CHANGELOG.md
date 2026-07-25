@@ -6,6 +6,13 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Klarere Schreib-Buttons:** Der Karten-Button heißt „Notiz aktualisieren" statt „Notiz anlegen",
+  wenn er eine bestehende Notiz überschreibt (z. B. nach einer Nachbesserung). Der Sammel-Button
+  „Alle anlegen" erscheint nur noch, wenn wirklich mehrere Notizen anzulegen sind — bei einem einzigen
+  Ergebnis genügt der eine Karten-Button (keine verwirrende Doppelung).
+
 ## [0.14.0] — 2026-07-23
 
 ### Added

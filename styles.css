@@ -74,6 +74,7 @@
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }
+.img2md-all.is-hidden { display: none; }
 .img2md-retry-all.is-hidden { display: none; }
 .img2md-clear { margin-left: auto; }
 .img2md-clear.is-hidden { display: none; }

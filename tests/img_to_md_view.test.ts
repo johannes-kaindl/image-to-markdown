@@ -3,7 +3,7 @@ import { ImgToMdView, VIEW_TYPE_IMGMD, ViewMode, isDescribingCard } from "../src
 import { ImgItem } from "../src/img_to_md_state";
 import { CardCache } from "../src/card_cache";
 import { makeFakeApp } from "./__mocks__/obsidian";
-import { setLang } from "../src/i18n";
+import { setLang, t } from "../src/i18n";
 
 function all(el: any, cls: string): any[] {
   const out: any[] = [];
@@ -1041,5 +1041,49 @@ describe("Refine-Zeile (#7)", () => {
     await view.refresh();
     expect((view as any).refineErrors.size).toBe(0);
     expect((view as any).refineDrafts.size).toBe(0);
+  });
+});
+
+describe("Write-Button-Klarheit (A, #0.14.1)", () => {
+  it("Footer 'Alle anlegen' ist versteckt bei genau einer fertigen Karte", async () => {
+    const { view } = mkView();
+    await view.onOpen();
+    await (view as any).run();   // Default-ITEMS: nur a.png → 1 done-Karte
+    const allBtn = all((view as any).contentEl, "img2md-all")[0];
+    expect((view as any).state.cards.filter((c: any) => c.status === "done").length).toBe(1);
+    expect(String(allBtn.className)).toContain("is-hidden");
+  });
+
+  it("Footer 'Alle anlegen' ist sichtbar bei zwei fertigen Karten", async () => {
+    const two: ImgItem[] = [
+      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
+      { raw: "![[c.png]]", link: "c.png", ext: "png", supported: true, kind: "image" },
+    ];
+    const { view } = mkView({ scan: async () => two.map(i => ({ ...i })) });
+    await view.onOpen();
+    await (view as any).run();   // 2 done-Karten
+    const allBtn = all((view as any).contentEl, "img2md-all")[0];
+    expect((view as any).state.cards.filter((c: any) => c.status === "done").length).toBe(2);
+    expect(String(allBtn.className)).not.toContain("is-hidden");
+  });
+
+  it("Pro-Karte-Button sagt 'anlegen' für ein neues Bild", async () => {
+    const { view } = mkView();
+    await view.onOpen();
+    await (view as any).run();
+    const lbl = all((view as any).contentEl, "img2md-write-lbl")[0];
+    expect(lbl.textContent).toBe(t("view.createNote"));
+  });
+
+  it("Pro-Karte-Button sagt 'aktualisieren', wenn die Karte eine bestehende Notiz trifft", async () => {
+    const existing: ImgItem[] = [
+      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image", existingTranscriptPath: "a (transcript).md" },
+    ];
+    const { view } = mkView({ scan: async () => existing.map(i => ({ ...i })) });
+    await view.onOpen();
+    (view as any).state.toggle("a.png");   // bestehende Karten sind nicht vorausgewählt
+    await (view as any).run();
+    const lbl = all((view as any).contentEl, "img2md-write-lbl")[0];
+    expect(lbl.textContent).toBe(t("view.updateNote"));
   });
 });
