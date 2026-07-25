@@ -48,9 +48,14 @@
 .img2md-refine-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
 .img2md-refine-input { flex: 1 1 120px; min-width: 0; font-size: 12px; }
 .img2md-refine-submit { font-size: 12px; }
-.img2md-refine-undo.is-hidden { display: none; }
-.img2md-refine-undo.is-disabled { opacity: 0.5; pointer-events: none; }
 .img2md-refine-error { flex-basis: 100%; font-size: 12px; color: var(--text-error); }
+.img2md-refine-log { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.img2md-refine-entry { border-left: 2px solid var(--background-modifier-border); padding-left: 8px; }
+.img2md-refine-entry.is-selected, .img2md-refine-entry:has(.img2md-refine-use.is-selected) { border-left-color: var(--interactive-accent); }
+.img2md-refine-head { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+.img2md-refine-version { white-space: pre-wrap; font-size: 13px; }
+.img2md-refine-use { font-size: 12px; margin-top: 4px; }
+.img2md-refine-use.is-selected { color: var(--text-on-accent); background: var(--interactive-accent); }
 /* Kategorie/Tags-Zeile (Beschreiben-Karte, editierbar vor dem Speichern). Kategorie ist ein
    Text-Input mit Taxonomie-Datalist (Vorschlag, keine Beschränkung) — Spec §2 "Dropdown der
    Taxonomie + freie Eingabe". */

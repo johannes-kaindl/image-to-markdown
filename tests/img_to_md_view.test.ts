@@ -970,11 +970,18 @@ describe("Refine-Zeile (#7)", () => {
     expect(all(root, "img2md-refine-input").length).toBe(0);
   });
 
-  it("refineCard committet die neue Version in card.text (Draft → Commit)", async () => {
-    const { view } = await runToDone();
+  it("refineCard committet eine Runde in card.refine.rounds (mit Reasoning)", async () => {
+    const { view } = await runToDone({
+      refine: async (_b: string, _r: any[], _fb: string, onContent: any, onReasoning: any) => {
+        onReasoning("den"); onReasoning("ke"); onContent("VERBESSERT");
+        return { content: "VERBESSERT", reasoning: "denke", model: "vm" };
+      },
+    });
     await (view as any).refineCard(0, "Tabellen als GFM");
+    const rf = (view as any).state.cards[0].refine;
+    expect(rf.rounds).toEqual([{ feedback: "Tabellen als GFM", text: "VERBESSERT", reasoning: "denke" }]);
+    expect(rf.selected).toBe(1);
     expect((view as any).state.cards[0].text).toBe("VERBESSERT");
-    expect((view as any).state.cards[0].refine.steps).toEqual([{ feedback: "Tabellen als GFM", text: "VERBESSERT" }]);
   });
 
   it("leeres Feedback → kein Refine-Aufruf, Karte unverändert", async () => {
@@ -992,13 +999,13 @@ describe("Refine-Zeile (#7)", () => {
     expect((view as any).state.cards[0].refine).toBeUndefined();
   });
 
-  it("Undo-Button erscheint nach einem Refine und stellt die vorige Version her", async () => {
-    const { view } = await runToDone();
+  it("fehlgeschlagener erster Refine hinterlässt keinen Geister-Log", async () => {
+    const { view } = await runToDone({ refine: async () => { throw new Error("boom"); } });
     await (view as any).refineCard(0, "f1");
     const root = (view as any).contentEl;
-    expect(all(root, "img2md-refine-undo").length).toBe(1);
-    (view as any).undoRefine(0);
-    expect((view as any).state.cards[0].text).toBe("Hallo");
+    expect(all(root, "img2md-refine-log").length).toBe(0);
+    expect(all(root, "img2md-refine-entry").length).toBe(0);
+    expect((view as any).state.cards[0].refine).toBeUndefined();
   });
 
   it("Refine einer geschriebenen Karte: Status zurück auf done (writeBtn wieder da), written-Zeile weg", async () => {
@@ -1041,6 +1048,39 @@ describe("Refine-Zeile (#7)", () => {
     await view.refresh();
     expect((view as any).refineErrors.size).toBe(0);
     expect((view as any).refineDrafts.size).toBe(0);
+  });
+
+  describe("Refine-Chat-Verlauf (v2)", () => {
+    async function withOneRound(over: any = {}) {
+      const { view } = await runToDone(over);
+      await (view as any).refineCard(0, "Tabellen als GFM");   // Default-refine → "VERBESSERT"
+      return view;
+    }
+
+    it("nach einer Runde rendert der Verlauf Original + Runde + Auswahl-Buttons", async () => {
+      const view = await withOneRound();
+      const root = (view as any).contentEl;
+      expect(all(root, "img2md-refine-log").length).toBe(1);
+      // Original-Eintrag + 1 Runden-Eintrag:
+      expect(all(root, "img2md-refine-entry").length).toBe(2);
+      // je Eintrag ein „diese verwenden"-Button:
+      expect(all(root, "img2md-refine-use").length).toBe(2);
+    });
+
+    it("Klick auf 'diese verwenden' am Original wählt Version 0 und spiegelt card.text", async () => {
+      const view = await withOneRound();
+      const root = (view as any).contentEl;
+      const useBtns = all(root, "img2md-refine-use");
+      // Reihenfolge: [0]=Original, [1]=Runde 1
+      useBtns[0].click();
+      expect((view as any).state.cards[0].refine.selected).toBe(0);
+      expect((view as any).state.cards[0].text).toBe("Hallo");   // Original (Default-Transkript)
+    });
+
+    it("Beschreiben-Karte zeigt keinen Verlauf", async () => {
+      const { view } = await runToDone({ initialMode: "describe" });
+      expect(all((view as any).contentEl, "img2md-refine-log").length).toBe(0);
+    });
   });
 });
 

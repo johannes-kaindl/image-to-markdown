@@ -1,6 +1,5 @@
 import { t } from "./i18n";
 import type { ParsedDescription } from "./describe";
-import type { RefineStep } from "./refine";
 
 export interface ImgItem {
   raw: string;
@@ -15,6 +14,8 @@ export interface ImgItem {
   embed?: boolean;   // false = reiner Link (Quelltext bleibt); fehlt/true = Embed (heutiges Verhalten)
   selfSource?: boolean;   // true = die aktive Datei selbst ist die Quelle (embed dann immer false)
 }
+
+export interface RefineRound { feedback: string; text: string; reasoning: string; }
 
 export type CardStatus = "streaming" | "done" | "error" | "written";
 
@@ -32,9 +33,10 @@ export interface ImgCard {
   mode?: "transcript" | "description";
   category?: string | null;
   tags?: string[];
-  /** In-Session-Nachbesserungs-Verlauf (#7). base = Original-Version, steps = je Runde
-   *  Feedback + Ergebnis. Aktuelle Version = card.text (Spiegel). Reitet auf dem CardCache. */
-  refine?: { base: string; steps: RefineStep[] };
+  /** In-Session-Nachbesserungs-Chat (#7 v2). base = Original-Transkription, rounds = je Runde
+   *  Feedback + Ergebnis + Reasoning; selected = kanonische Version (0 = base, k = rounds[k-1]),
+   *  gespiegelt in card.text. Reitet auf dem CardCache. */
+  refine?: { base: string; rounds: RefineRound[]; selected: number };
 }
 
 /** Reine View-Buchhaltung für die IMG→MD-Sidebar: Bild-Auswahl + Ergebnis-Karten.
@@ -115,26 +117,28 @@ export class ImgToMdState {
     const c = this.cards[i]; if (!c) return;
     c.text = ""; c.reasoning = ""; c.model = ""; c.status = "streaming"; c.error = undefined; c.writtenPath = undefined;
   }
-  /** Committet eine erfolgreiche Nachbesserung: setzt beim ersten Mal die Basis (die vorige
-   *  Version — card.text wurde während des Streamens NICHT mutiert, siehe View-Draft), hängt
-   *  {feedback, text} an und macht die neue Version zur aktuellen. Status → done, damit eine
-   *  zuvor geschriebene Karte erneut geschrieben werden kann (writtenPath bleibt für Idempotenz). */
-  commitRefine(i: number, feedback: string, text: string): void {
+  /** Committet eine erfolgreiche Nachbesserung als neue Runde: setzt beim ersten Mal die Basis
+   *  (die vorige card.text — während des Streamens nicht mutiert), hängt {feedback,text,reasoning}
+   *  an, wählt die neue Runde und macht sie zur aktuellen. Status → done (written-Karte re-schreibbar,
+   *  writtenPath bleibt). */
+  commitRefineRound(i: number, feedback: string, text: string, reasoning: string): void {
     const c = this.cards[i]; if (!c) return;
-    if (!c.refine) c.refine = { base: c.text, steps: [] };
-    c.refine.steps.push({ feedback, text });
+    if (!c.refine) c.refine = { base: c.text, rounds: [], selected: 0 };
+    c.refine.rounds.push({ feedback, text, reasoning });
+    c.refine.selected = c.refine.rounds.length;
     c.text = text;
     c.status = "done";
   }
 
-  /** Ein Schritt zurück: entfernt die letzte Runde, stellt die vorige Version her. Ohne Steps
-   *  wird refine ganz entfernt (Text = Basis). Status bleibt done (erneut schreibbar). */
-  undoRefine(i: number): void {
-    const c = this.cards[i]; const r = c?.refine; if (!c || !r || !r.steps.length) return;
-    r.steps.pop();
-    c.text = r.steps.length ? r.steps[r.steps.length - 1].text : r.base;
+  /** Wählt die kanonische Version (0 = Original/base, k = rounds[k-1]); klemmt den Index und
+   *  spiegelt card.text. Status bleibt done. Ersetzt das v1-Ein-Schritt-Undo. */
+  selectRefineVersion(i: number, index: number): void {
+    const c = this.cards[i]; const r = c?.refine; if (!c || !r) return;
+    const sel = Math.max(0, Math.min(index, r.rounds.length));
+    if (sel === r.selected) return;   // gleiche Version erneut gewählt → kein Status-/Text-Flip
+    r.selected = sel;
+    c.text = sel === 0 ? r.base : r.rounds[sel - 1].text;
     c.status = "done";
-    if (!r.steps.length) c.refine = undefined;
   }
 
   /** Karten-Indizes mit Fehlerstatus (für „Fehlgeschlagene erneut"). */
@@ -153,11 +157,6 @@ export function actualModel(cards: ImgCard[]): string {
  *  bzw. geschriebenem Ergebnis. Streaming/Fehler-Karten sind es nicht. */
 export function canRefine(card: ImgCard): boolean {
   return card.mode !== "description" && (card.status === "done" || card.status === "written");
-}
-
-/** Ob ein Zurück-Schritt möglich ist: mindestens eine committete Nachbesserung. */
-export function canUndo(card: ImgCard): boolean {
-  return !!card.refine && card.refine.steps.length >= 1;
 }
 
 export interface PdfGroup {

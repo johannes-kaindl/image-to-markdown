@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, canUndo } from "./img_to_md_state";
+import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 import { thinkToggleView } from "./reasoning_toggle";
@@ -36,8 +36,13 @@ interface CardRefs {
   refineRow?: HTMLElement;
   refineInput?: HTMLInputElement;
   refineSubmit?: HTMLButtonElement;
-  refineUndo?: HTMLButtonElement;
   refineErrEl?: HTMLElement;
+  refineLog?: HTMLElement;                    // scrollbarer Verlauf-Container
+  refineEntryEls?: { textEl: HTMLElement; reasoningBody?: HTMLElement; useBtn: HTMLElement }[];  // je committete Runde
+  refineLiveEl?: HTMLElement;                 // transienter Live-Eintrag während des Streamens
+  refineLiveReasoning?: HTMLElement;          // Reasoning-Body des Live-Eintrags
+  refineLiveVersion?: HTMLElement;            // Versionstext des Live-Eintrags
+  refineOrigUse?: HTMLElement;                // „diese verwenden" am Original-Eintrag
   liveWas: boolean;
   autoCollapsed: boolean;
 }
@@ -90,9 +95,9 @@ export class ImgToMdView extends ItemView {
   private listEl: HTMLElement | null = null;
   private cardsEl: HTMLElement | null = null;
   private cardEls: CardRefs[] = [];
-  /** Transiente, nicht-committete Refine-Streams je Karten-Index (Live-Anzeige; card.text bleibt
-   *  bis zum Commit die alte Version). */
-  private refineDrafts = new Map<number, string>();
+  /** Transiente, nicht-committete Refine-Streams je Karten-Index (Live-Anzeige; card.text/refine
+   *  bleiben bis zum Commit unangetastet). Trägt Feedback + Text + Reasoning der laufenden Runde. */
+  private refineDrafts = new Map<number, { feedback: string; text: string; reasoning: string }>();
   /** Transiente Refine-Fehlermeldung je Karten-Index (bis zum nächsten Versuch/Erfolg). */
   private refineErrors = new Map<number, string>();
   private toggleBtn: HTMLElement | null = null;
@@ -407,9 +412,11 @@ export class ImgToMdView extends ItemView {
       }
       refs.liveWas = live;
     }
-    // Transkript-Text (lazy, inkrementell) — während einer Nachbesserung der Draft (card.text bleibt
-    // bis zum Commit die alte Version).
-    const shownText = this.refineDrafts.has(i) ? this.refineDrafts.get(i)! : card.text;
+    // Transkript-Text (lazy, inkrementell). Sobald ein Refine existiert oder läuft, bleibt der obere
+    // Text auf der Original-Version fixiert (card.refine.base) — die gewählte Version erscheint im
+    // Verlauf (syncRefineLog), nicht hier, damit ein Versionswechsel den oberen Text nicht ersetzt.
+    const draft = this.refineDrafts.get(i);
+    const shownText = (card.refine || draft) ? (card.refine?.base ?? card.text) : card.text;
     if (shownText) {
       if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
       refs.textEl.setText(shownText);
@@ -457,7 +464,7 @@ export class ImgToMdView extends ItemView {
       refs.categoryInput!.value = card.category ?? "";
       refs.tagsInput!.value = (card.tags ?? []).join(", ");
     }
-    // Refine-Zeile (#7): nur Transkript-Karten (done/written). Feedback-Eingabe + Nachbessern + Undo.
+    this.syncRefineLog(i, refs, cardEl);
     if (canRefine(card)) {
       if (!refs.refineRow) {
         const row = cardEl.createDiv({ cls: "img2md-refine-row" });
@@ -466,18 +473,11 @@ export class ImgToMdView extends ItemView {
         const submit = row.createEl("button", { cls: "img2md-refine-submit", text: t("view.refine") });
         submit.addEventListener("click", () => { const v = input.value; input.value = ""; void this.refineCard(i, v); });
         input.addEventListener("keydown", (e) => { if (e.key === "Enter") { const v = input.value; input.value = ""; void this.refineCard(i, v); } });
-        const undo = row.createEl("button", { cls: "img2md-refine-undo clickable-icon", attr: { "aria-label": t("view.refineUndo"), title: t("view.refineUndo") } });
-        setIcon(undo, "undo-2");
-        undo.addEventListener("click", () => this.undoRefine(i));
-        refs.refineRow = row; refs.refineInput = input; refs.refineSubmit = submit; refs.refineUndo = undo;
+        refs.refineRow = row; refs.refineInput = input; refs.refineSubmit = submit;
       }
-      // Undo nur mit Verlauf; Eingabe/Buttons während irgendeines Laufs sperren.
-      refs.refineUndo!.toggleClass("is-hidden", !canUndo(card));
       const locked = this.running;
       refs.refineInput!.disabled = locked;
       refs.refineSubmit!.disabled = locked;
-      refs.refineUndo!.toggleClass("is-disabled", locked);
-      // Transiente Fehlermeldung (lazy an/aus).
       const err = this.refineErrors.get(i);
       if (err) {
         if (!refs.refineErrEl) refs.refineErrEl = refs.refineRow.createDiv({ cls: "img2md-refine-error" });
@@ -515,6 +515,91 @@ export class ImgToMdView extends ItemView {
       }
     }
     this.updateRetryAll();
+  }
+
+  /** Rendert/aktualisiert den Nachbesserungs-Verlauf einer Karte inkrementell: Original-Auswahl +
+   *  je committete Runde ein Eintrag (Feedback-Kopf, Thinking-<details>, Versionstext, „diese
+   *  verwenden"), plus einen transienten Live-Eintrag während des Streamens. Auto-Scroll (stick-to-
+   *  bottom), solange der Nutzer nicht selbst hochgescrollt hat. */
+  private syncRefineLog(i: number, refs: CardRefs, cardEl: HTMLElement): void {
+    const card = this.state.cards[i];
+    const draft = this.refineDrafts.get(i);
+    const rounds = card.refine?.rounds ?? [];
+    // Log nur bei Transkript-Karten mit ≥1 Runde ODER laufender Nachbesserung.
+    if (card.mode === "description" || (!card.refine && !draft)) {
+      // Kein Verlauf (mehr) zu zeigen — einen zuvor angelegten Log-Container vollständig abräumen,
+      // sonst bleibt nach einem fehlgeschlagenen/abgebrochenen ERSTEN Refine ein Geister-Live-Eintrag
+      // + leerer Log im DOM hängen (refine wurde nie committet, draft ist weg).
+      if (refs.refineLog) {
+        cardEl.removeChild(refs.refineLog);
+        refs.refineLog = undefined; refs.refineEntryEls = undefined; refs.refineOrigUse = undefined;
+        refs.refineLiveEl = undefined; refs.refineLiveReasoning = undefined; refs.refineLiveVersion = undefined;
+      }
+      return;
+    }
+
+    if (!refs.refineLog) {
+      const log = cardEl.createDiv({ cls: "img2md-refine-log" });
+      // Original-Auswahl (Version 0) — kompakte Zeile über den Runden.
+      const origRow = log.createDiv({ cls: "img2md-refine-entry img2md-refine-orig" });
+      origRow.createSpan({ cls: "img2md-refine-head", text: t("view.refineOriginal") });
+      const origUse = origRow.createEl("button", { cls: "img2md-refine-use", text: t("view.refineUse") });
+      origUse.addEventListener("click", () => { this.state.selectRefineVersion(i, 0); this.updateCard(i); });
+      refs.refineLog = log; refs.refineOrigUse = origUse; refs.refineEntryEls = [];
+    }
+    const log = refs.refineLog;
+    const entries = refs.refineEntryEls!;
+
+    // Neue committete Runden inkrementell anhängen.
+    for (let k = entries.length; k < rounds.length; k++) {
+      const r = rounds[k];
+      const entry = log.createDiv({ cls: "img2md-refine-entry" });
+      entry.createDiv({ cls: "img2md-refine-head", text: t("view.refineYou", r.feedback) });
+      let reasoningBody: HTMLElement | undefined;
+      if (r.reasoning.trim()) {
+        const det = entry.createEl("details", { cls: "img2md-reasoning" });
+        const sum = det.createEl("summary", { cls: "img2md-reasoning-sum" });
+        setIcon(sum.createSpan({ cls: "img2md-reasoning-icon" }), "brain");
+        sum.createSpan({ cls: "img2md-reasoning-lbl", text: t("view.thoughts") });
+        reasoningBody = det.createDiv({ cls: "img2md-reasoning-body" });
+        reasoningBody.setText(r.reasoning);
+      }
+      const textEl = entry.createDiv({ cls: "img2md-refine-version", text: r.text });
+      const useBtn = entry.createEl("button", { cls: "img2md-refine-use", text: t("view.refineUse") });
+      const idx = k + 1;   // rounds[k] hat Auswahl-Index k+1
+      useBtn.addEventListener("click", () => { this.state.selectRefineVersion(i, idx); this.updateCard(i); });
+      entries.push({ textEl, reasoningBody, useBtn });
+    }
+
+    // Auswahl-Markierung (Original + je Runde).
+    const selected = card.refine?.selected ?? 0;
+    const mark = (btn: HTMLElement, on: boolean) => {
+      btn.toggleClass("is-selected", on);
+      btn.setText(on ? t("view.refineSelected") : t("view.refineUse"));
+      btn.setAttribute("aria-pressed", String(on));
+    };
+    if (refs.refineOrigUse) mark(refs.refineOrigUse, selected === 0);
+    entries.forEach((e, k) => mark(e.useBtn, selected === k + 1));
+
+    // Live-Eintrag (transient) während des Streamens.
+    if (draft) {
+      if (!refs.refineLiveEl) {
+        const live = log.createDiv({ cls: "img2md-refine-entry img2md-refine-live" });
+        live.createDiv({ cls: "img2md-refine-head", text: t("view.refineYou", draft.feedback) });
+        refs.refineLiveReasoning = live.createDiv({ cls: "img2md-reasoning-body img2md-refine-live-reasoning" });
+        refs.refineLiveVersion = live.createDiv({ cls: "img2md-refine-version" });
+        refs.refineLiveEl = live;
+      }
+      refs.refineLiveReasoning?.setText(draft.reasoning);
+      refs.refineLiveVersion?.setText(draft.text);
+    } else if (refs.refineLiveEl) {
+      log.removeChild(refs.refineLiveEl);
+      refs.refineLiveEl = undefined; refs.refineLiveReasoning = undefined; refs.refineLiveVersion = undefined;
+    }
+
+    // Stick-to-bottom: nur nachziehen, wenn der Nutzer ohnehin (fast) unten steht.
+    const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+    if (draft && nearBottom) log.scrollTop = log.scrollHeight;
   }
 
   /** Footer-Button „Fehlgeschlagene erneut" nur einblenden, wenn es Fehler-Karten gibt. */
@@ -596,18 +681,18 @@ export class ImgToMdView extends ItemView {
     this.controller = new AbortController();
     const signal = this.controller.signal;
     const base = card.refine?.base ?? card.text;
-    const steps = (card.refine?.steps ?? []).map(s => ({ feedback: s.feedback, text: s.text }));
-    this.refineDrafts.set(i, "");
-    this.updateAllCards();   // Eingabe sperren, writeBtn (this.running) entfernen
+    const rounds = (card.refine?.rounds ?? []).map(r => ({ feedback: r.feedback, text: r.text }));
+    this.refineDrafts.set(i, { feedback: fb, text: "", reasoning: "" });
+    this.updateAllCards();
     try {
       const r = await this.deps.refine(
-        base, steps, fb,
-        (t) => { this.refineDrafts.set(i, (this.refineDrafts.get(i) ?? "") + t); this.updateCard(i); },
-        () => {},   // Reasoning während Refine bewusst nicht angezeigt (v1)
+        base, rounds, fb,
+        (t) => { const d = this.refineDrafts.get(i); if (d) { d.text += t; this.updateCard(i); } },
+        (t) => { const d = this.refineDrafts.get(i); if (d) { d.reasoning += t; this.updateCard(i); } },
         signal,
       );
       if (!signal.aborted) {
-        if (r.content.trim()) { card.model = r.model; this.state.commitRefine(i, fb, r.content); }
+        if (r.content.trim()) { card.model = r.model; this.state.commitRefineRound(i, fb, r.content, r.reasoning); }
         else this.refineErrors.set(i, t("view.refineEmpty"));
       }
     } catch (e) {
@@ -618,14 +703,6 @@ export class ImgToMdView extends ItemView {
       this.controller = null;
       this.updateAllCards();
     }
-  }
-
-  /** Ein Schritt zurück (#7): stellt die vorige Version her (reiner State), rendert neu. */
-  undoRefine(i: number): void {
-    if (this.running) return;
-    this.state.undoRefine(i);
-    this.refineErrors.delete(i);
-    this.updateAllCards();
   }
 
   /** Gemeinsamer Lauf-Loop für run() und Retry — verzweigt je aktuellem Modus zwischen Transkribieren
