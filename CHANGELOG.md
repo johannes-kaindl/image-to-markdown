@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.15.1] — 2026-07-25
+
 ### Geändert
 
 - **Nachbesserungs-Verlauf aufgeräumt:** Jede Nachbesserung ist jetzt eine klar abgegrenzte Karte
