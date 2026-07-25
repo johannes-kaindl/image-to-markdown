@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.14.1] — 2026-07-25
+
 ### Geändert
 
 - **Klarere Schreib-Buttons:** Der Karten-Button heißt „Notiz aktualisieren" statt „Notiz anlegen",
