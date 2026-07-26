@@ -11,8 +11,8 @@ export function diffMappings(oldMap: FrontmatterMap, newMap: FrontmatterMap): Ma
 }
 
 function fmBlock(content: string): string | null {
-  const m = /^---\r?\n([\s\S]*?)\r?\n?---/.exec(content);
-  return m ? m[1] : null;
+  const m = /^---\r?\n(?:([\s\S]*?)\r?\n)?---/.exec(content);
+  return m ? (m[1] ?? "") : null;
 }
 
 function kEsc(key: string): string {
