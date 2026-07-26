@@ -78,14 +78,34 @@ describe("migrateNoteFrontmatter", () => {
     expect(r.next).toContain(`erstellt: 2026-01-01\r\n`);
     expect(r.next).not.toContain(`\ncreated:`);
   });
-  it("verkettete Umbenennung a→b, b→c ohne Doppelanwendung", () => {
+  it("Kette (category→tags, tags→foo) wird verweigert → conflict, unverändert", () => {
     const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncategory: X\ntags: Y\n---\nB\n`;
-    // category→tags, tags→foo  (Kette)
     const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "tags", tags: "foo" });
-    expect(r.next).toContain(`tags: X`);   // altes category
-    expect(r.next).toContain(`foo: Y`);    // altes tags
+    expect(r.conflict).toBe(true);
+    expect(r.changed).toBe(false);
+    expect(r.next).toBe(note);
   });
-  it("Idempotenz — zweimal anwenden = No-op beim 2. Mal", () => {
+  it("Swap (category↔tags) wird verweigert → conflict", () => {
+    const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncategory: X\ntags: Y\n---\nB\n`;
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "tags", tags: "category" });
+    expect(r.conflict).toBe(true);
+    expect(r.changed).toBe(false);
+  });
+  it("nicht-überlappende Simultan-Umbenennung ist erlaubt (created→erstellt, transcribed_by→by)", () => {
+    const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncreated: 2026-01-01\ntranscribed_by: "m"\n---\nB\n`;
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, created: "erstellt", authorTranscribed: "by" });
+    expect(r.conflict).toBe(false);
+    expect(r.next).toContain(`erstellt: 2026-01-01`);
+    expect(r.next).toContain(`by: "m"`);
+  });
+  it("Idempotenz — Nicht-Quell-Key-Umbenennung zweimal (re-gescannter Note) = No-op", () => {
+    const newMap = { ...DEFAULT_FM_MAP, created: "erstellt" };
+    const once = migrateNoteFrontmatter(base, DEFAULT_FM_MAP, newMap).next;
+    const twice = migrateNoteFrontmatter(once, DEFAULT_FM_MAP, newMap);
+    expect(twice.changed).toBe(false);
+    expect(twice.next).toBe(once);
+  });
+  it("Idempotenz — kindKey-Umbenennung zweimal = No-op beim 2. Mal", () => {
     const newMap = { ...DEFAULT_FM_MAP, kindKey: "type" };
     const once = migrateNoteFrontmatter(base, DEFAULT_FM_MAP, newMap).next;
     const twice = migrateNoteFrontmatter(once, DEFAULT_FM_MAP, newMap);

@@ -57,6 +57,19 @@ export function migrateNoteFrontmatter(content: string, oldMap: FrontmatterMap, 
     return mm ? mm[1] : null;
   };
 
+  // Ketten/Swap-Verweigerung (Idempotenz-Sicherung): benennt eine Zeile ihren Key in einen Key
+  // um, der selbst Umbenennungs-Quelle ist (Ziel ∈ Domain), ist die Umschrift nicht idempotent
+  // (Kette → Duplikat-Key beim Re-Run = Datenverlust; Swap → Rückkippen) → Notiz als conflict
+  // überspringen. Präzise per Notiz: nur Notizen, deren Key tatsächlich in die Domain wandert.
+  const domain = new Set(rename.keys());
+  for (const line of block.split("\n")) {
+    const k = keyOf(line.endsWith("\r") ? line.slice(0, -1) : line);
+    if (k !== null && rename.has(k)) {
+      const to = rename.get(k)!;
+      if (to !== k && domain.has(to)) return { changed: false, next: content, conflict: true };
+    }
+  }
+
   const outLines = block.split("\n").map((line) => {
     const cr = line.endsWith("\r") ? "\r" : "";
     const bare = cr ? line.slice(0, -1) : line;
