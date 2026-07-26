@@ -102,6 +102,15 @@ entfällt für diese Felder.
   hat `newKey` aber **bereits** als (fremden oder anderen) Key → `conflict: true`, die Notiz
   wird **nicht** verändert (kein doppelter Key = keine Datenkorruption) und im Bericht als
   „übersprungen (Konflikt)" geführt.
+- **Ketten/Swap-Verweigerung (Idempotenz-Sicherung):** hat die Umbenennungs-Menge eine
+  **Domain/Range-Überlappung** — ein Ziel-Key ist zugleich Quell-Key eines anderen Feldes, also
+  eine **Kette** (`category→tags, tags→foo`) oder ein **Swap** (`category↔tags`) — dann ist die
+  Umschrift **nicht idempotent** (ein Wiederholungslauf würde bei der Kette einen doppelten Key
+  erzeugen = stiller Datenverlust; ein Swap würde zurückkippen). Solche Notizen werden mit
+  `conflict: true` **übersprungen und gemeldet**, statt korrumpiert. Ohne Überlappung ist die
+  Umschrift ein reines alt→neu-Remap: der Wiederholungslauf findet nur noch neue Keys (∉ Domain)
+  → No-op → **Idempotenz gilt für alle nicht-pathologischen Mappings**. (Simultane Key-Swaps sind
+  ohnehin pathologisch — wer benennt zwei Felder gegeneinander um?)
 
 ## UX-Fluss
 
@@ -126,9 +135,13 @@ entfällt für diese Felder.
 - **Best-effort:** jeder `vault.modify` in try/catch; ein Fehler stoppt den Sweep nicht.
 - **Abschlussbericht** (Notice + `console` für Details): „N migriert · M fehlgeschlagen ·
   K Konflikte übersprungen" mit Dateiliste je Kategorie.
-- **Idempotent:** ein erneuter Lauf scannt frisch — bereits migrierte Notizen matchen den
-  **alten** Fingerabdruck nicht mehr → fallen aus der Menge → nur Fehlgeschlagene/neu
-  Betroffene bleiben. Zweimaliges Anwenden derselben Migration = No-op.
+- **Idempotent:** zweimaliges Anwenden derselben Migration = No-op. Zwei Gründe greifen
+  ineinander: (a) ändert die Migration einen Quell-Key, matcht die migrierte Notiz den **alten**
+  Fingerabdruck nicht mehr → fällt aus dem Scan; (b) ändert sie **keinen** Quell-Key, wird die
+  Notiz zwar re-gescannt, aber die Umschrift ist ein reines alt→neu-Remap **ohne
+  Domain/Range-Überlappung** (Ketten/Swaps sind ja verweigert) → die migrierten Keys sind alle
+  neue Keys ∉ Domain → `migrateNoteFrontmatter` liefert `changed: false`. So bleibt der
+  Wiederholungslauf (Partial-Failure-Recovery) sicher.
 - **Nicht-destruktiv bei Unerwartetem:** Notizen ohne Frontmatter, ohne alten Fingerabdruck
   oder mit Kollision werden **nie** angefasst.
 

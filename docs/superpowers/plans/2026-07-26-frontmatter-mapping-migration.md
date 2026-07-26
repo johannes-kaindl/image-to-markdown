@@ -238,15 +238,38 @@ describe("migrateNoteFrontmatter", () => {
     expect(r.next).toContain(`erstellt: 2026-01-01\r\n`);
     expect(r.next).not.toContain(`\ncreated:`);
   });
-  it("verkettete Umbenennung a→b, b→c ohne Doppelanwendung", () => {
+  it("Kette (category→tags, tags→foo) wird verweigert → conflict, unverändert", () => {
     const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncategory: X\ntags: Y\n---\nB\n`;
-    // category→tags, tags→foo  (Kette)
+    // Domain/Range-Überlappung (tags ist Ziel UND Quelle) → nicht idempotent → conflict
     const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "tags", tags: "foo" });
-    expect(r.next).toContain(`tags: X`);   // altes category
-    expect(r.next).toContain(`foo: Y`);    // altes tags
+    expect(r.conflict).toBe(true);
+    expect(r.changed).toBe(false);
+    expect(r.next).toBe(note);
   });
-  it("Idempotenz — zweimal anwenden = No-op beim 2. Mal", () => {
+  it("Swap (category↔tags) wird verweigert → conflict", () => {
+    const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncategory: X\ntags: Y\n---\nB\n`;
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "tags", tags: "category" });
+    expect(r.conflict).toBe(true);
+    expect(r.changed).toBe(false);
+  });
+  it("nicht-überlappende Simultan-Umbenennung ist erlaubt (created→erstellt, transcribed_by→by)", () => {
+    const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncreated: 2026-01-01\ntranscribed_by: "m"\n---\nB\n`;
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, created: "erstellt", authorTranscribed: "by" });
+    expect(r.conflict).toBe(false);
+    expect(r.next).toContain(`erstellt: 2026-01-01`);
+    expect(r.next).toContain(`by: "m"`);
+  });
+  it("Idempotenz — einfache Umbenennung zweimal anwenden = No-op beim 2. Mal", () => {
     const newMap = { ...DEFAULT_FM_MAP, kindKey: "type" };
+    const once = migrateNoteFrontmatter(base, DEFAULT_FM_MAP, newMap).next;
+    const twice = migrateNoteFrontmatter(once, DEFAULT_FM_MAP, newMap);
+    expect(twice.changed).toBe(false);
+    expect(twice.next).toBe(once);
+  });
+  it("Idempotenz — Nicht-Quell-Key-Umbenennung zweimal auf re-gescanntem Note = No-op", () => {
+    // created→erstellt ändert KEINEN Quell-Key → migrierte Notiz matcht Fingerabdruck weiter,
+    // wird re-gescannt; 2. Lauf muss No-op sein (erstellt ∉ Domain).
+    const newMap = { ...DEFAULT_FM_MAP, created: "erstellt" };
     const once = migrateNoteFrontmatter(base, DEFAULT_FM_MAP, newMap).next;
     const twice = migrateNoteFrontmatter(once, DEFAULT_FM_MAP, newMap);
     expect(twice.changed).toBe(false);
@@ -286,6 +309,19 @@ export function migrateNoteFrontmatter(content: string, oldMap: FrontmatterMap, 
     const mm = /^([^\r\n:]+):/.exec(bare);
     return mm ? mm[1] : null;
   };
+
+  // Ketten/Swap-Verweigerung (Idempotenz-Sicherung): benennt eine Zeile ihren Key in einen Key
+  // um, der selbst Umbenennungs-Quelle ist (Ziel ∈ Domain), ist die Umschrift nicht idempotent
+  // (Kette → Duplikat-Key beim Re-Run = Datenverlust; Swap → Rückkippen) → Notiz als conflict
+  // überspringen. Präzise per Notiz: nur Notizen, deren Key tatsächlich in die Domain wandert.
+  const domain = new Set(rename.keys());
+  for (const line of block.split("\n")) {
+    const k = keyOf(line.endsWith("\r") ? line.slice(0, -1) : line);
+    if (k !== null && rename.has(k)) {
+      const to = rename.get(k)!;
+      if (to !== k && domain.has(to)) return { changed: false, next: content, conflict: true };
+    }
+  }
 
   const outLines = block.split("\n").map((line) => {
     const cr = line.endsWith("\r") ? "\r" : "";
@@ -336,7 +372,8 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Test: `tests/fm_migration.test.ts`
 
 **Interfaces:**
-- Ändert das Verhalten von `migrateNoteFrontmatter`: würde eine Umbenennung `oldKey→newKey` auf einen bereits vorhandenen (nicht selbst weg-umbenannten) Key treffen, oder zwei Quellen auf denselben Ziel-Key → `{ changed: false, next: content, conflict: true }`.
+- Ändert das Verhalten von `migrateNoteFrontmatter`: eine zweite Konflikt-Quelle **zusätzlich** zur bereits in Task 3 ergänzten Ketten/Swap-Verweigerung. Würde eine Umbenennung `oldKey→newKey` auf einen bereits vorhandenen (nicht selbst weg-umbenannten) fremden Key treffen, **oder** zwei Quellen auf denselben Ziel-Key → `{ changed: false, next: content, conflict: true }`.
+- **Hinweis:** Ketten/Swaps (Domain/Range-Überlappung) fängt bereits die Task-3-Überlappungsprüfung ab (sie läuft zuerst). Die `!rename.has(to)`-Klausel unten bleibt trotzdem nötig für den Fall „Notiz enthält nur den Mittel-Key einer Kette" (der von der Task-3-Prüfung nicht erfasst wird, weil sein Ziel ∉ Domain liegt).
 
 - [ ] **Step 1: Failing tests schreiben**
 
@@ -349,11 +386,12 @@ describe("migrateNoteFrontmatter — Kollision", () => {
     expect(r.changed).toBe(false);
     expect(r.next).toBe(note);
   });
-  it("Kette a→b, b→c ist KEINE Kollision (b wird weg-umbenannt)", () => {
+  it("zwei Quellen auf denselben Ziel-Key → conflict", () => {
     const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncategory: X\ntags: Y\n---\nB\n`;
-    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "tags", tags: "foo" });
-    expect(r.conflict).toBe(false);
-    expect(r.changed).toBe(true);
+    // category→z UND tags→z (kein Domain/Range-Overlap, aber Ziel-Kollision)
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "z", tags: "z" });
+    expect(r.conflict).toBe(true);
+    expect(r.changed).toBe(false);
   });
 });
 ```
@@ -361,7 +399,7 @@ describe("migrateNoteFrontmatter — Kollision", () => {
 - [ ] **Step 2: Test läuft rot**
 
 Run: `npx vitest run tests/fm_migration.test.ts -t Kollision`
-Expected: FAIL (erster Test: `conflict` ist noch `false`).
+Expected: FAIL (`conflict` ist noch `false` für beide Fälle).
 
 - [ ] **Step 3: Kollisions-Check ergänzen** (in `migrateNoteFrontmatter`, direkt nach dem Aufbau von `rename`, vor dem `outLines`-Mapping)
 
