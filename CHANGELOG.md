@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.15.3] — 2026-07-26
+
 ### Geändert
 
 - **Ursprungstranskription scrollt gleichwertig mit:** Sie ist jetzt der erste Block im scrollbaren
