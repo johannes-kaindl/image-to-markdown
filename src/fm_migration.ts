@@ -79,7 +79,7 @@ export function migrateNoteFrontmatter(content: string, oldMap: FrontmatterMap, 
   }
   const targets = new Set<string>();
   for (const [from, to] of rename) {
-    if (to === from) continue;
+    if (!existingKeys.has(from)) continue;   // Notiz hat diesen Key nicht → nichts umzubenennen, keine Kollision (load-bearing für idempotenten Re-Scan)
     if (existingKeys.has(to) && !rename.has(to)) return { changed: false, next: content, conflict: true };
     if (targets.has(to)) return { changed: false, next: content, conflict: true };
     targets.add(to);

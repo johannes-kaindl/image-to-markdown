@@ -133,4 +133,11 @@ describe("migrateNoteFrontmatter — Kollision", () => {
     expect(r.conflict).toBe(true);
     expect(r.changed).toBe(false);
   });
+  it("idempotenter Re-Scan meldet KEINEN Kollisions-conflict (bereits migrierter Key)", () => {
+    const newMap = { ...DEFAULT_FM_MAP, kindKey: "type" };
+    const migrated = migrateNoteFrontmatter(`---\nsource_image: "[[a.png]]"\nkind: transcript\n---\nB\n`, DEFAULT_FM_MAP, newMap).next;
+    const again = migrateNoteFrontmatter(migrated, DEFAULT_FM_MAP, newMap);
+    expect(again.conflict).toBe(false);
+    expect(again.changed).toBe(false);
+  });
 });
