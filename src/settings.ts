@@ -330,17 +330,19 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     for (const [field, labelKey] of fmFields) {
       new Setting(containerEl)
         .setName(t(labelKey))
-        .addText(tx => tx
-          .setPlaceholder(DEFAULT_FM_MAP[field])
-          .setValue(currentFmMap[field])
-          .onChange(async (v: string) => {
-            const trimmed = v.trim();
-            this.plugin.settings.frontmatterMap = {
-              ...fmMapFromSettings(this.plugin.settings),
-              [field]: trimmed || DEFAULT_FM_MAP[field],
-            };
-            await this.plugin.saveSettings();
-          }));
+        .addText(tx => {
+          tx.setPlaceholder(DEFAULT_FM_MAP[field]).setValue(currentFmMap[field]);
+          // Mutation NUR bei blur, NICHT in onChange: ein geänderter Key kann Vault-weit migriert
+          // werden müssen (offerFmMigration fragt vorher per Modal nach) — pro Tastendruck wäre
+          // das weder sinnvoll noch performant. Bei "cancel" speichert offerFmMigration nichts;
+          // render() zeichnet das Feld dann unverändert aus den gespeicherten settings neu.
+          tx.inputEl.addEventListener("blur", () => {
+            const oldMap = fmMapFromSettings(this.plugin.settings);
+            const candidate: FrontmatterMap = { ...oldMap, [field]: tx.getValue().trim() || DEFAULT_FM_MAP[field] };
+            if (candidate[field] === oldMap[field]) return;   // unverändert → kein Diff, kein Re-Render
+            void this.plugin.offerFmMigration(oldMap, candidate).then(() => this.render());
+          });
+        });
     }
   }
 }
