@@ -38,12 +38,10 @@ interface CardRefs {
   refineSubmit?: HTMLButtonElement;
   refineErrEl?: HTMLElement;
   refineLog?: HTMLElement;                    // scrollbarer Verlauf-Container
-  refineEntryEls?: { entryEl: HTMLElement; useBtn: HTMLElement }[];  // je committete Runde (Karte + Auswahl-Button)
+  refineEntryEls?: { entryEl: HTMLElement; writeBtn: HTMLElement; writeLbl: HTMLElement }[];  // je Runde (Karte + „Notiz anlegen")
   refineLiveEl?: HTMLElement;                 // transienter Live-Eintrag während des Streamens
   refineLiveReasoning?: HTMLElement;          // Reasoning-Body des Live-Eintrags (im <details>)
   refineLiveVersion?: HTMLElement;            // Versionstext des Live-Eintrags
-  refineOrigRow?: HTMLElement;                // Auswahl-Zeile des Originals (für is-selected)
-  refineOrigUse?: HTMLElement;                // „diese verwenden" am Original
   liveWas: boolean;
   autoCollapsed: boolean;
 }
@@ -499,7 +497,9 @@ export class ImgToMdView extends ItemView {
         const actions = cardEl.createDiv({ cls: "img2md-card-actions" });
         const copyBtn = actions.createEl("button", { cls: "img2md-copy clickable-icon", attr: { "aria-label": t("view.copyTranscript") } });
         setIcon(copyBtn, "copy");
-        copyBtn.addEventListener("click", () => this.deps.copyText(this.state.cards[i].text));
+        // Der obere Block IST das Original — bei vorhandenem Verlauf kopiert/schreibt er die Basis-Version
+        // (nicht card.text, das der zuletzt geschriebenen Runde folgt).
+        copyBtn.addEventListener("click", () => this.deps.copyText(this.state.cards[i].refine?.base ?? this.state.cards[i].text));
         refs.actionsEl = actions;
       }
       // Schreiben nur bei done UND wenn kein Lauf aktiv ist — sonst no-op'te ein Klick still,
@@ -516,7 +516,11 @@ export class ImgToMdView extends ItemView {
           ? "view.saveDescription"
           : (card.item.existingTranscriptPath ? "view.updateNote" : "view.createNote");
         wb.createSpan({ cls: "img2md-write-lbl", text: t(writeLblKey) });
-        wb.addEventListener("click", () => void (isDescription ? this.writeDescriptionOne(i) : this.writeOne(i)));
+        wb.addEventListener("click", () => {
+          const c = this.state.cards[i];
+          if (!isDescription && c.refine) this.state.selectRefineVersion(i, 0);   // Original schreiben (Basis)
+          void (isDescription ? this.writeDescriptionOne(i) : this.writeOne(i));
+        });
         refs.writeBtn = wb;
       } else if ((card.status !== "done" || this.running) && refs.writeBtn) {
         refs.actionsEl.removeChild(refs.writeBtn);
@@ -526,10 +530,32 @@ export class ImgToMdView extends ItemView {
     this.updateRetryAll();
   }
 
-  /** Rendert/aktualisiert den Nachbesserungs-Verlauf einer Karte inkrementell: Original-Auswahl +
-   *  je committete Runde ein Eintrag (Feedback-Kopf, Thinking-<details>, Versionstext, „diese
-   *  verwenden"), plus einen transienten Live-Eintrag während des Streamens. Auto-Scroll (stick-to-
-   *  bottom), solange der Nutzer nicht selbst hochgescrollt hat. */
+  /** Text einer Version: 0 = Original (base), k = rounds[k-1]. */
+  private versionText(i: number, versionIdx: number): string {
+    const c = this.state.cards[i]; const r = c?.refine;
+    if (!r) return c?.text ?? "";
+    return versionIdx === 0 ? r.base : (r.rounds[versionIdx - 1]?.text ?? "");
+  }
+
+  /** Baut eine [Kopieren][Notiz anlegen]-Aktionszeile für eine Version (0 = Original, k = Runde k) —
+   *  identisch zur Ursprungstranskription. „Notiz anlegen" wählt die Version (spiegelt card.text) und
+   *  schreibt sie; Kopieren kopiert genau diese Version. Label + Sichtbarkeit werden pro Render gepflegt. */
+  private addVersionActions(host: HTMLElement, i: number, versionIdx: number): { writeBtn: HTMLElement; writeLbl: HTMLElement } {
+    const actions = host.createDiv({ cls: "img2md-card-actions" });
+    const copyBtn = actions.createEl("button", { cls: "img2md-copy clickable-icon", attr: { "aria-label": t("view.copyTranscript") } });
+    setIcon(copyBtn, "copy");
+    copyBtn.addEventListener("click", () => this.deps.copyText(this.versionText(i, versionIdx)));
+    const wb = actions.createEl("button", { cls: "img2md-write" });
+    setIcon(wb.createSpan({ cls: "img2md-write-icon" }), "file-plus");
+    const writeLbl = wb.createSpan({ cls: "img2md-write-lbl" });
+    wb.addEventListener("click", () => { this.state.selectRefineVersion(i, versionIdx); void this.writeOne(i); });
+    return { writeBtn: wb, writeLbl };
+  }
+
+  /** Rendert/aktualisiert den Nachbesserungs-Verlauf inkrementell: je committete Runde eine Karte
+   *  (Feedback-Kopf, Thinking-<details>, Versionstext, [Kopieren][Notiz anlegen] — gleicher Aufbau
+   *  wie das Original oben), plus einen transienten Live-Eintrag beim Streamen. Auto-Scroll (stick-
+   *  to-bottom), solange der Nutzer nicht selbst hochgescrollt hat. */
   private syncRefineLog(i: number, refs: CardRefs, cardEl: HTMLElement): void {
     const card = this.state.cards[i];
     const draft = this.refineDrafts.get(i);
@@ -541,7 +567,6 @@ export class ImgToMdView extends ItemView {
       if (refs.refineLog) {
         cardEl.removeChild(refs.refineLog);
         refs.refineLog = undefined; refs.refineEntryEls = undefined;
-        refs.refineOrigRow = undefined; refs.refineOrigUse = undefined;
         refs.refineLiveEl = undefined; refs.refineLiveReasoning = undefined; refs.refineLiveVersion = undefined;
       }
       return;
@@ -550,17 +575,16 @@ export class ImgToMdView extends ItemView {
     if (!refs.refineLog) {
       const log = cardEl.createDiv({ cls: "img2md-refine-log" });
       log.createDiv({ cls: "img2md-refine-section", text: t("view.refineSection") });
-      // Original als eigene Auswahl-Zeile (der Original-Text steht oben in der Karte, nicht doppelt hier).
-      const origRow = log.createDiv({ cls: "img2md-refine-select-row img2md-refine-orig" });
-      origRow.createSpan({ cls: "img2md-refine-select-lbl", text: t("view.refineOriginal") });
-      const origUse = origRow.createEl("button", { cls: "img2md-refine-use" });
-      origUse.addEventListener("click", () => { this.state.selectRefineVersion(i, 0); this.updateCard(i); });
-      refs.refineLog = log; refs.refineOrigRow = origRow; refs.refineOrigUse = origUse; refs.refineEntryEls = [];
+      refs.refineLog = log; refs.refineEntryEls = [];
+      // Eingabefeld unter den Verlauf schieben (Chat-Stil: Eingabe immer unten). Einmalig beim Anlegen
+      // des Logs — nicht bei jedem Render (sonst Fokusverlust beim Tippen); move via remove+append.
+      if (refs.refineRow) { cardEl.removeChild(refs.refineRow); cardEl.appendChild(refs.refineRow); }
     }
     const log = refs.refineLog;
     const entries = refs.refineEntryEls!;
 
-    // Committete Runden inkrementell als abgegrenzte Karten anhängen.
+    // Committete Runden inkrementell als abgegrenzte Karten anhängen — je Runde derselbe Aufbau wie das
+    // Original oben: Titel, aufklappbarer Denkprozess, Versionstext, [Kopieren][Notiz anlegen].
     for (let k = entries.length; k < rounds.length; k++) {
       const r = rounds[k];
       const round = log.createDiv({ cls: "img2md-refine-round" });
@@ -574,24 +598,16 @@ export class ImgToMdView extends ItemView {
         det.createDiv({ cls: "img2md-reasoning-body" }).setText(r.reasoning);
       }
       round.createDiv({ cls: "img2md-refine-version", text: r.text });
-      const selRow = round.createDiv({ cls: "img2md-refine-select-row" });
-      const useBtn = selRow.createEl("button", { cls: "img2md-refine-use" });
-      const idx = k + 1;   // rounds[k] hat Auswahl-Index k+1
-      useBtn.addEventListener("click", () => { this.state.selectRefineVersion(i, idx); this.updateCard(i); });
-      entries.push({ entryEl: round, useBtn });
+      const { writeBtn, writeLbl } = this.addVersionActions(round, i, k + 1);   // Runde k → Version k+1
+      entries.push({ entryEl: round, writeBtn, writeLbl });
     }
 
-    // Auswahl-Markierung (Original-Zeile + je Runden-Karte: Rahmen/Badge, nicht nur Farbe).
-    const selected = card.refine?.selected ?? 0;
-    const mark = (container: HTMLElement | undefined, btn: HTMLElement | undefined, on: boolean) => {
-      container?.toggleClass("is-selected", on);
-      if (!btn) return;
-      btn.toggleClass("is-selected", on);
-      btn.setText(on ? t("view.refineSelected") : t("view.refineUse"));
-      btn.setAttribute("aria-pressed", String(on));
-    };
-    mark(refs.refineOrigRow, refs.refineOrigUse, selected === 0);
-    entries.forEach((e, k) => mark(e.entryEl, e.useBtn, selected === k + 1));
+    // Pro Render: „Notiz anlegen" je Runde nur bei done (kein Lauf) sichtbar; Label create vs. update.
+    const writable = card.status === "done" && !this.running;
+    entries.forEach((e) => {
+      e.writeBtn.toggleClass("is-hidden", !writable);
+      e.writeLbl.setText(t(card.item.existingTranscriptPath ? "view.updateNote" : "view.createNote"));
+    });
 
     // Live-Eintrag (transient) während des Streamens — Denkprozess als aufklappbarer Block, beim Denken offen.
     if (draft) {

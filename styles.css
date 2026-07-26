@@ -51,17 +51,11 @@
 .img2md-refine-error { flex-basis: 100%; font-size: 12px; color: var(--text-error); }
 .img2md-refine-log { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
 .img2md-refine-section { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
-/* Original-Auswahlzeile + Runden-Auswahlzeile: Label links, Button rechts, sauber getrennt. */
-.img2md-refine-select-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.img2md-refine-select-lbl { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-.img2md-refine-orig.is-selected .img2md-refine-select-lbl { color: var(--text-normal); }
-/* Jede Nachbesserung eine abgegrenzte Karte. */
+/* Jede Nachbesserung eine abgegrenzte Karte — gleicher Aufbau wie die Ursprungstranskription. */
 .img2md-refine-round { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--background-modifier-border); border-radius: 6px; background: var(--background-primary); }
-.img2md-refine-round.is-selected { border-color: var(--interactive-accent); box-shadow: inset 2px 0 0 var(--interactive-accent); }
 .img2md-refine-round-head { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 .img2md-refine-version { white-space: pre-wrap; font-size: 13px; }
-.img2md-refine-use { font-size: 12px; }
-.img2md-refine-use.is-selected { color: var(--text-on-accent); background: var(--interactive-accent); }
+.img2md-write.is-hidden { display: none; }
 /* Kategorie/Tags-Zeile (Beschreiben-Karte, editierbar vor dem Speichern). Kategorie ist ein
    Text-Input mit Taxonomie-Datalist (Vorschlag, keine Beschränkung) — Spec §2 "Dropdown der
    Taxonomie + freie Eingabe". */

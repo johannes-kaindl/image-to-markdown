@@ -1017,7 +1017,7 @@ describe("Refine-Zeile (#7)", () => {
     expect((view as any).state.cards[0].status).toBe("done");
     const root = (view as any).contentEl;
     expect(all(root, "img2md-written").length).toBe(0);       // stale „✓ created" entfernt
-    expect(all(root, "img2md-write").length).toBe(1);         // erneut schreibbar
+    expect(all(root, "img2md-write").length).toBe(2);         // erneut schreibbar: Original oben + Runde
   });
 
   it("Critical 2: zweiter Write nach Refine überschreibt dieselbe Notiz statt eine Dublette anzulegen", async () => {
@@ -1060,25 +1060,29 @@ describe("Refine-Zeile (#7)", () => {
       return view;
     }
 
-    it("nach einer Runde rendert der Verlauf Original + Runde + Auswahl-Buttons", async () => {
+    it("nach einer Runde: 1 Runden-Karte, keine Auswahl-Zeile, je Version ein 'Notiz anlegen'", async () => {
       const view = await withOneRound();
       const root = (view as any).contentEl;
       expect(all(root, "img2md-refine-log").length).toBe(1);
-      // Original-Auswahlzeile + 1 Runden-Karte:
-      expect(all(root, "img2md-refine-orig").length).toBe(1);
       expect(all(root, "img2md-refine-round").length).toBe(1);
-      // je Version ein „diese verwenden"-Button (Original + Runde):
-      expect(all(root, "img2md-refine-use").length).toBe(2);
+      expect(all(root, "img2md-refine-orig").length).toBe(0);   // redundante Original-Zeile entfernt
+      expect(all(root, "img2md-refine-use").length).toBe(0);    // kein „diese verwenden" mehr
+      // Original oben + Runde je ein „Notiz anlegen":
+      expect(all(root, "img2md-write").length).toBe(2);
     });
 
-    it("Klick auf 'diese verwenden' am Original wählt Version 0 und spiegelt card.text", async () => {
+    it("Klick auf 'Notiz anlegen' einer Runde schreibt genau diese Version (card.text gespiegelt)", async () => {
       const view = await withOneRound();
-      const root = (view as any).contentEl;
-      const useBtns = all(root, "img2md-refine-use");
-      // Reihenfolge: [0]=Original, [1]=Runde 1
-      useBtns[0].click();
-      expect((view as any).state.cards[0].refine.selected).toBe(0);
-      expect((view as any).state.cards[0].text).toBe("Hallo");   // Original (Default-Transkript)
+      const writes = all((view as any).contentEl, "img2md-write");   // [0]=Original oben, [1]=Runde 1
+      writes[1].click();
+      expect((view as any).state.cards[0].text).toBe("VERBESSERT");
+    });
+
+    it("Klick auf 'Notiz anlegen' oben schreibt die Original-Version", async () => {
+      const view = await withOneRound();
+      const writes = all((view as any).contentEl, "img2md-write");
+      writes[0].click();
+      expect((view as any).state.cards[0].text).toBe("Hallo");   // Basis/Original
     });
 
     it("Beschreiben-Karte zeigt keinen Verlauf", async () => {
