@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.15.2] — 2026-07-26
+
 ### Geändert
 
 - **Nachbesserungs-Verlauf vereinheitlicht:** Jede Nachbesserung ist jetzt genauso aufgebaut wie die
