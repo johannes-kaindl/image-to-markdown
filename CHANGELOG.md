@@ -6,6 +6,14 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Nachbesserungs-Verlauf vereinheitlicht:** Jede Nachbesserung ist jetzt genauso aufgebaut wie die
+  ursprüngliche Transkription — Version mit **[Kopieren]** und **[Notiz anlegen]** darunter. Du
+  schreibst direkt die Version, die du willst (kein separates „Auswählen" mehr); die redundante
+  „Original / Diese Version verwenden"-Zeile ist entfallen. Das Feedback-Eingabefeld sitzt jetzt
+  immer **unten** (Chat-Stil), statt mitten im Verlauf.
+
 ## [0.15.1] — 2026-07-25
 
 ### Geändert
