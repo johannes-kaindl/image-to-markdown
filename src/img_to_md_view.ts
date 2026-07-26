@@ -38,6 +38,7 @@ interface CardRefs {
   refineSubmit?: HTMLButtonElement;
   refineErrEl?: HTMLElement;
   refineLog?: HTMLElement;                    // scrollbarer Verlauf-Container
+  refineOrigBlock?: HTMLElement;              // Original als erster Block im Log (Text/Reasoning/Aktionen hinein verschoben)
   refineEntryEls?: { entryEl: HTMLElement; writeBtn: HTMLElement; writeLbl: HTMLElement }[];  // je Runde (Karte + „Notiz anlegen")
   refineLiveEl?: HTMLElement;                 // transienter Live-Eintrag während des Streamens
   refineLiveReasoning?: HTMLElement;          // Reasoning-Body des Live-Eintrags (im <details>)
@@ -164,11 +165,12 @@ export class ImgToMdView extends ItemView {
     this.listEl = c.createDiv({ cls: "img2md-list" });
     this.cardsEl = c.createDiv({ cls: "img2md-cards" });
     const foot = c.createDiv({ cls: "img2md-foot" });
-    this.allBtn = foot.createEl("button", { cls: "img2md-all is-hidden", text: t("view.createAll") });
-    this.allBtn.addEventListener("click", () => void this.writeAll());
+    // Links: „Ergebnisse verwerfen" (grau) + „Fehlgeschlagene erneut". Rechts: farbiger CTA „Anwenden".
+    this.clearBtn = foot.createEl("button", { cls: "img2md-clear is-hidden", text: t("view.clearResults") });
     this.retryAllBtn = foot.createEl("button", { cls: "img2md-retry-all is-hidden", text: t("view.retryAllFailed") });
     this.retryAllBtn.addEventListener("click", () => void this.retryAll());
-    this.clearBtn = foot.createEl("button", { cls: "img2md-clear is-hidden", text: t("view.clearResults") });
+    this.allBtn = foot.createEl("button", { cls: "img2md-apply mod-cta is-hidden", text: t("view.applyLatest") });
+    this.allBtn.addEventListener("click", () => void this.writeAll());
     this.clearBtn.addEventListener("click", () => {
       if (this.running) return;   // während eines Laufs kein Clear (Button ist dann ohnehin verborgen)
       this.state.clearCards();
@@ -471,7 +473,6 @@ export class ImgToMdView extends ItemView {
       refs.categoryInput!.value = card.category ?? "";
       refs.tagsInput!.value = (card.tags ?? []).join(", ");
     }
-    this.syncRefineLog(i, refs, cardEl);
     if (canRefine(card)) {
       if (!refs.refineRow) {
         const row = cardEl.createDiv({ cls: "img2md-refine-row" });
@@ -527,6 +528,9 @@ export class ImgToMdView extends ItemView {
         refs.writeBtn = undefined;
       }
     }
+    // Verlauf zuletzt — dann existieren alle Original-Elemente (Text/Reasoning/Aktionen) und können in
+    // den scrollbaren Log verschoben werden, damit die Ursprungstranskription gleichwertig mitscrollt.
+    this.syncRefineLog(i, refs, cardEl);
     this.updateRetryAll();
   }
 
@@ -565,8 +569,11 @@ export class ImgToMdView extends ItemView {
       // Kein Verlauf (mehr) — einen zuvor angelegten Container vollständig abräumen, sonst bleibt nach
       // einem fehlgeschlagenen/abgebrochenen ERSTEN Refine ein Geister-Live-Eintrag im DOM hängen.
       if (refs.refineLog) {
+        // Teardown greift nur ohne committete Runde (card.refine falsy) — dann wurde der Original-Block
+        // nie angelegt (er entsteht erst bei card.refine), die Original-Elemente liegen also noch
+        // top-level und überleben. refineOrigBlock ist hier immer undefined; defensiv trotzdem genullt.
         cardEl.removeChild(refs.refineLog);
-        refs.refineLog = undefined; refs.refineEntryEls = undefined;
+        refs.refineLog = undefined; refs.refineEntryEls = undefined; refs.refineOrigBlock = undefined;
         refs.refineLiveEl = undefined; refs.refineLiveReasoning = undefined; refs.refineLiveVersion = undefined;
       }
       return;
@@ -574,7 +581,6 @@ export class ImgToMdView extends ItemView {
 
     if (!refs.refineLog) {
       const log = cardEl.createDiv({ cls: "img2md-refine-log" });
-      log.createDiv({ cls: "img2md-refine-section", text: t("view.refineSection") });
       refs.refineLog = log; refs.refineEntryEls = [];
       // Eingabefeld unter den Verlauf schieben (Chat-Stil: Eingabe immer unten). Einmalig beim Anlegen
       // des Logs — nicht bei jedem Render (sonst Fokusverlust beim Tippen); move via remove+append.
@@ -582,6 +588,19 @@ export class ImgToMdView extends ItemView {
     }
     const log = refs.refineLog;
     const entries = refs.refineEntryEls!;
+
+    // Original als ERSTEN, gleichwertigen Block IN den scrollbaren Verlauf ziehen — erst nachdem eine
+    // Runde committet ist (card.refine gesetzt), NICHT während des Streamens: schlägt der erste Refine
+    // fehl, wird der Log abgeräumt und die noch top-level liegenden Original-Elemente bleiben erhalten.
+    // Vorhandene Elemente werden wiederverwendet (kein Neubau/kein Doppel). Einmalig via !refineOrigBlock.
+    if (card.refine && !refs.refineOrigBlock) {
+      const orig = log.createDiv({ cls: "img2md-refine-round img2md-refine-orig" });
+      orig.createDiv({ cls: "img2md-refine-round-head", text: t("view.refineOriginal") });
+      if (refs.reasoningDet) { cardEl.removeChild(refs.reasoningDet); orig.appendChild(refs.reasoningDet); }
+      if (refs.textEl) { cardEl.removeChild(refs.textEl); orig.appendChild(refs.textEl); }
+      if (refs.actionsEl) { cardEl.removeChild(refs.actionsEl); orig.appendChild(refs.actionsEl); }
+      refs.refineOrigBlock = orig;
+    }
 
     // Committete Runden inkrementell als abgegrenzte Karten anhängen — je Runde derselbe Aufbau wie das
     // Original oben: Titel, aufklappbarer Denkprozess, Versionstext, [Kopieren][Notiz anlegen].
@@ -637,11 +656,10 @@ export class ImgToMdView extends ItemView {
 
   /** Footer-Button „Fehlgeschlagene erneut" nur einblenden, wenn es Fehler-Karten gibt. */
   private updateRetryAll(): void {
-    // „Alle anlegen" nur zeigen, wenn es einen Grund gibt — mind. zwei fertige Karten (mehrere Bilder
-    // oder mehrere PDF-Seiten). Bei einem einzigen Ergebnis genügt der Pro-Karte-Button (keine
-    // verwirrende Doppelung „anlegen"/„Alle anlegen").
+    // „Anwenden" (CTA rechts) sichtbar, sobald es mind. eine fertige Karte gibt — schreibt die jeweils
+    // aktuellste Version (card.text) aller fertigen Karten. Die granulare Auswahl bleibt pro Version.
     const doneCount = this.state.cards.filter(c => c.status === "done").length;
-    this.allBtn?.toggleClass("is-hidden", doneCount < 2);
+    this.allBtn?.toggleClass("is-hidden", doneCount < 1 || this.running);
     const btn = this.retryAllBtn; if (!btn) return;
     if (this.state.cards.some(c => c.status === "error")) btn.removeClass("is-hidden");
     else btn.addClass("is-hidden");

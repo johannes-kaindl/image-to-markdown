@@ -6,6 +6,14 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Ursprungstranskription scrollt gleichwertig mit:** Sie ist jetzt der erste Block im scrollbaren
+  Nachbesserungs-Verlauf (statt oben festgepinnt) — gleicher Aufbau wie die Nachbesserungen, scrollt
+  mit ihnen.
+- **Footer:** „Ergebnisse verwerfen" (grau) links, rechts ein farbiger **„Anwenden"**-Knopf, der die
+  aktuellste Version schreibt.
+
 ## [0.15.2] — 2026-07-26
 
 ### Geändert

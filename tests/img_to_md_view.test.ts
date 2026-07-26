@@ -379,14 +379,14 @@ describe("ImgToMdView — Notiz anlegen", () => {
     all(view.contentEl, "img2md-written")[0].click();
     expect(calls.opened).toEqual(["foto.md"]);
   });
-  it("'Alle anlegen' schreibt alle fertigen Karten in einem Batch", async () => {
+  it("'Anwenden' schreibt alle fertigen Karten in einem Batch", async () => {
     const twoItems: ImgItem[] = [
       { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
       { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image" },
     ];
     const { view, calls } = mkView({ scan: async () => twoItems, writeTranscripts: async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((e: any, i: number) => ({ path: `n-${i}.md`, body: e.content })); } });
     await view.onOpen(); await view.run();
-    all(view.contentEl, "img2md-all")[0].click();
+    all(view.contentEl, "img2md-apply")[0].click();
     await Promise.resolve(); await Promise.resolve();
     expect(calls.written.length).toBe(1);
     expect(calls.written[0].length).toBe(2);
@@ -535,10 +535,10 @@ describe("ImgToMdView — PDF", () => {
     expect(cards.length).toBe(2);
     expect(all(view.contentEl, "img2md-card-head")[0].textContent).toContain("page 1/2");
   });
-  it("Alle anlegen ruft writePdf einmal mit beiden Seiten", async () => {
+  it("Anwenden ruft writePdf einmal mit beiden Seiten", async () => {
     const { view, calls } = mkView({ scan: async () => PDF_ITEMS });
     await view.onOpen(); await view.run();
-    all(view.contentEl, "img2md-all")[0].click();
+    all(view.contentEl, "img2md-apply")[0].click();
     await Promise.resolve(); await Promise.resolve();
     expect(calls.written.length).toBe(1);
     expect(calls.written[0].map((p: any) => p.page)).toEqual([1, 2]);
@@ -561,7 +561,7 @@ describe("ImgToMdView — PDF", () => {
     const { view } = mkView({ scan: async () => freshPdf, writePdf, transcribeStream });
     await view.onOpen(); await view.run();
     expect(all(view.contentEl, "img2md-error").length).toBe(1);
-    all(view.contentEl, "img2md-all")[0].click();
+    all(view.contentEl, "img2md-apply")[0].click();
     await new Promise(r => setTimeout(r, 0));
     expect(capturedRange).toEqual({ from: 1, to: 2 });            // volle gewählte Range
     expect(capturedPages.map((p: any) => p.page)).toEqual([1]);   // nur die erfolgreiche Seite
@@ -878,7 +878,7 @@ describe("ImgToMdView — Beschreiben-Modus: Lauf + Karte", () => {
     expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("desc-0.md");
   });
 
-  it("'Alle anlegen' schreibt Beschreiben-Karten via writeDescriptions, nicht writeTranscripts", async () => {
+  it("'Anwenden' schreibt Beschreiben-Karten via writeDescriptions, nicht writeTranscripts", async () => {
     const twoItems: ImgItem[] = [
       { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
       { raw: "![[b.png]]", link: "b.png", ext: "png", supported: true, kind: "image" },
@@ -886,7 +886,7 @@ describe("ImgToMdView — Beschreiben-Modus: Lauf + Karte", () => {
     const writeTranscripts = vi.fn();
     const { view, calls } = mkView({ initialMode: "describe", scan: async () => twoItems, writeTranscripts });
     await view.onOpen(); await view.run();
-    all(view.contentEl, "img2md-all")[0].click();
+    all(view.contentEl, "img2md-apply")[0].click();
     await Promise.resolve(); await Promise.resolve();
     expect(writeTranscripts).not.toHaveBeenCalled();
     expect(calls.written.length).toBe(1);
@@ -1031,9 +1031,9 @@ describe("Refine-Zeile (#7)", () => {
     expect(calls.written[1][0].item.existingTranscriptPath).toBe("note-0.md");
   });
 
-  it("Critical 2 (writeAll): zweiter 'Alle anlegen'-Write nach Refine überschreibt dieselbe Notiz statt eine Dublette anzulegen", async () => {
+  it("Critical 2 (writeAll): zweiter 'Anwenden'-Write nach Refine überschreibt dieselbe Notiz statt eine Dublette anzulegen", async () => {
     const { view, calls } = await runToDone();
-    await (view as any).writeAll();   // erster Write über den „Alle anlegen"-Button-Pfad → legt "note-0.md" an
+    await (view as any).writeAll();   // erster Write über den „Anwenden"-Button-Pfad → legt "note-0.md" an
     expect((view as any).state.cards[0].item.existingTranscriptPath).toBe("note-0.md");
     await (view as any).refineCard(0, "f1");   // Refine → written zurück auf done
     expect((view as any).state.cards[0].status).toBe("done");
@@ -1060,15 +1060,20 @@ describe("Refine-Zeile (#7)", () => {
       return view;
     }
 
-    it("nach einer Runde: 1 Runden-Karte, keine Auswahl-Zeile, je Version ein 'Notiz anlegen'", async () => {
+    it("nach einer Runde: Original-Block im Log + 1 Runden-Karte, je Version ein 'Notiz anlegen'", async () => {
       const view = await withOneRound();
       const root = (view as any).contentEl;
       expect(all(root, "img2md-refine-log").length).toBe(1);
-      expect(all(root, "img2md-refine-round").length).toBe(1);
-      expect(all(root, "img2md-refine-orig").length).toBe(0);   // redundante Original-Zeile entfernt
-      expect(all(root, "img2md-refine-use").length).toBe(0);    // kein „diese verwenden" mehr
-      // Original oben + Runde je ein „Notiz anlegen":
+      // Original ist jetzt der erste Block IM Log (scrollt mit) + 1 Runden-Karte:
+      expect(all(root, "img2md-refine-orig").length).toBe(1);
+      expect(all(root, "img2md-refine-round").length).toBe(2);   // Original-Block + Runde (gleiche Klasse)
+      expect(all(root, "img2md-refine-use").length).toBe(0);     // kein „diese verwenden" mehr
+      // Original + Runde je ein „Notiz anlegen":
       expect(all(root, "img2md-write").length).toBe(2);
+      // Der Original-Text ist IN den scrollbaren Log verschoben (scrollt gleichwertig mit):
+      const logEl = all(root, "img2md-refine-log")[0];
+      expect(all(logEl, "img2md-text").length).toBe(1);
+      expect(all(logEl, "img2md-write").length).toBe(2);   // Original- + Runden-Button beide im Log
     });
 
     it("Klick auf 'Notiz anlegen' einer Runde schreibt genau diese Version (card.text gespiegelt)", async () => {
@@ -1110,26 +1115,20 @@ describe("Refine-Zeile (#7)", () => {
 });
 
 describe("Write-Button-Klarheit (A, #0.14.1)", () => {
-  it("Footer 'Alle anlegen' ist versteckt bei genau einer fertigen Karte", async () => {
+  it("Footer 'Anwenden' ist sichtbar ab einer fertigen Karte", async () => {
     const { view } = mkView();
     await view.onOpen();
     await (view as any).run();   // Default-ITEMS: nur a.png → 1 done-Karte
-    const allBtn = all((view as any).contentEl, "img2md-all")[0];
+    const applyBtn = all((view as any).contentEl, "img2md-apply")[0];
     expect((view as any).state.cards.filter((c: any) => c.status === "done").length).toBe(1);
-    expect(String(allBtn.className)).toContain("is-hidden");
+    expect(String(applyBtn.className)).not.toContain("is-hidden");
   });
 
-  it("Footer 'Alle anlegen' ist sichtbar bei zwei fertigen Karten", async () => {
-    const two: ImgItem[] = [
-      { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
-      { raw: "![[c.png]]", link: "c.png", ext: "png", supported: true, kind: "image" },
-    ];
-    const { view } = mkView({ scan: async () => two.map(i => ({ ...i })) });
-    await view.onOpen();
-    await (view as any).run();   // 2 done-Karten
-    const allBtn = all((view as any).contentEl, "img2md-all")[0];
-    expect((view as any).state.cards.filter((c: any) => c.status === "done").length).toBe(2);
-    expect(String(allBtn.className)).not.toContain("is-hidden");
+  it("Footer 'Anwenden' ist versteckt ohne fertige Karte", async () => {
+    const { view } = mkView();
+    await view.onOpen();   // noch kein run → keine done-Karte
+    const applyBtn = all((view as any).contentEl, "img2md-apply")[0];
+    expect(String(applyBtn.className)).toContain("is-hidden");
   });
 
   it("Pro-Karte-Button sagt 'anlegen' für ein neues Bild", async () => {

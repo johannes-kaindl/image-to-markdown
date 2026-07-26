@@ -50,8 +50,7 @@
 .img2md-refine-submit { font-size: 12px; }
 .img2md-refine-error { flex-basis: 100%; font-size: 12px; color: var(--text-error); }
 .img2md-refine-log { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
-.img2md-refine-section { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
-/* Jede Nachbesserung eine abgegrenzte Karte — gleicher Aufbau wie die Ursprungstranskription. */
+/* Jede Version (Original + Nachbesserung) eine abgegrenzte Karte im scrollbaren Verlauf. */
 .img2md-refine-round { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--background-modifier-border); border-radius: 6px; background: var(--background-primary); }
 .img2md-refine-round-head { font-size: 12px; font-weight: 600; color: var(--text-muted); }
 .img2md-refine-version { white-space: pre-wrap; font-size: 13px; }
@@ -79,10 +78,11 @@
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }
-.img2md-all.is-hidden { display: none; }
 .img2md-retry-all.is-hidden { display: none; }
-.img2md-clear { margin-left: auto; }
 .img2md-clear.is-hidden { display: none; }
+/* „Anwenden" (CTA) rechts, „Ergebnisse verwerfen" bleibt links. */
+.img2md-apply { margin-left: auto; font-size: 12px; }
+.img2md-apply.is-hidden { display: none; }
 
 /* Settings-QoL */
 .img2md-prompt-textarea { width: 100%; min-height: 8rem; resize: vertical; }
