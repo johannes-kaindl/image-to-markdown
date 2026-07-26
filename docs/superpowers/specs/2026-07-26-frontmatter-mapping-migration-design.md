@@ -33,7 +33,7 @@ nicht-destruktiv, idempotent.
 | 1 | Auslöser | **Beim Ändern anbieten** — ändert man ein FM-Feld im Settings-Tab und committet (blur), erkennt das Plugin die Änderung sofort. `alt→neu` ist damit **exakt** bekannt (kein Raten des Alt-Mappings). |
 | 2 | Vorschau-Format | **Diff pro Notiz** — Wiederverwendung des bewährten `diff.ts`/`diff_modal.ts`-Renderings: pro betroffener Notiz ein Vorher/Nachher der Frontmatter-Zeilen, scrollbar; Kopf zeigt `alt → neu` je Key. |
 | 3 | Verhalten bei Abbruch | **Drei-Wege-Dialog** — „Migrieren & anwenden" · „Ohne Migration anwenden" (Eskalations-Ausstieg mit Dubletten-Warnung) · „Abbrechen" (Änderung verfällt, Feld springt zurück). |
-| 4 | Teilerfolg | **Best-effort + Bericht** — über einzelne Schreibfehler hinweggehen, am Ende „N migriert · M fehlgeschlagen · K Konflikte" berichten. Sicher wiederholbar dank Idempotenz. |
+| 4 | Teilerfolg | **Best-effort + Bericht** — über einzelne Schreibfehler hinweggehen, am Ende „N migriert · M fehlgeschlagen · K Konflikte" berichten. Idempotenz schützt vor Doppelanwendung, ersetzt aber keinen automatischen Wiederholungslauf (siehe „Fehlerbehandlung & Idempotenz"). |
 
 ## Architektur
 
@@ -140,8 +140,13 @@ entfällt für diese Felder.
   Fingerabdruck nicht mehr → fällt aus dem Scan; (b) ändert sie **keinen** Quell-Key, wird die
   Notiz zwar re-gescannt, aber die Umschrift ist ein reines alt→neu-Remap **ohne
   Domain/Range-Überlappung** (Ketten/Swaps sind ja verweigert) → die migrierten Keys sind alle
-  neue Keys ∉ Domain → `migrateNoteFrontmatter` liefert `changed: false`. So bleibt der
-  Wiederholungslauf (Partial-Failure-Recovery) sicher.
+  neue Keys ∉ Domain → `migrateNoteFrontmatter` liefert `changed: false`. Das macht
+  `migrateNoteFrontmatter` selbst robust gegen Doppelanwendung und Ketten/Swap-Korruption —
+  **aber** das ist keine Recovery-Garantie: „Migrieren" persistiert `newMap` sofort, danach gibt
+  es im Plugin keinen Auslöser, denselben alt→neu-Lauf erneut anzustoßen, um bei einzelnen
+  Schreibfehlern liegen gebliebene Notizen nachzuheilen. Fehlgeschlagene Pfade werden nur über
+  die Abschluss-Notice und `console.error("[i2m-migration]", …)` sichtbar gemacht — die
+  manuelle Nachbehandlung bleibt Aufgabe der Nutzerin.
 - **Nicht-destruktiv bei Unerwartetem:** Notizen ohne Frontmatter, ohne alten Fingerabdruck
   oder mit Kollision werden **nie** angefasst.
 

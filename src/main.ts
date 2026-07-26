@@ -104,24 +104,29 @@ export default class ImageToMarkdownPlugin extends Plugin {
     return new Promise<void>((resolve) => {
       new MigrationModal(this.app, plan, changes, (choice) => {
         void (async () => {
-          if (choice === "migrate") {
-            this.settings.frontmatterMap = newMap;
-            await this.saveSettings();
-            let ok = 0, fail = 0;
-            for (const p of plan.migrations) {
-              const file = this.app.vault.getAbstractFileByPath(p.path);
-              if (!(file instanceof TFile)) { fail++; continue; }
-              try { await this.app.vault.modify(file, p.next); ok++; }
-              catch (e) { fail++; console.error("[i2m-migration]", p.path, e); }
+          try {
+            if (choice === "migrate") {
+              this.settings.frontmatterMap = newMap;
+              await this.saveSettings();
+              let ok = 0, fail = 0;
+              for (const p of plan.migrations) {
+                const file = this.app.vault.getAbstractFileByPath(p.path);
+                if (!(file instanceof TFile)) { fail++; continue; }
+                try { await this.app.vault.modify(file, p.next); ok++; }
+                catch (e) { fail++; console.error("[i2m-migration]", p.path, e); }
+              }
+              new Notice(t("migration.reportDone", String(ok), String(fail), String(plan.conflicts.length)));
+            } else if (choice === "apply") {
+              this.settings.frontmatterMap = newMap;
+              await this.saveSettings();
+              new Notice(t("migration.appliedNoMigrate", String(plan.migrations.length + plan.conflicts.length)));
             }
-            new Notice(t("migration.reportDone", String(ok), String(fail), String(plan.conflicts.length)));
-          } else if (choice === "apply") {
-            this.settings.frontmatterMap = newMap;
-            await this.saveSettings();
-            new Notice(t("migration.appliedNoMigrate", String(plan.migrations.length)));
+            // "cancel": nichts speichern — settings.ts rendert das Feld aus dem unveränderten settings neu.
+          } catch (e) {
+            console.error("[i2m-migration]", e);
+          } finally {
+            resolve();
           }
-          // "cancel": nichts speichern — settings.ts rendert das Feld aus dem unveränderten settings neu.
-          resolve();
         })();
       }).open();
     });

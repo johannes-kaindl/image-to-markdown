@@ -340,7 +340,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
             const oldMap = fmMapFromSettings(this.plugin.settings);
             const candidate: FrontmatterMap = { ...oldMap, [field]: tx.getValue().trim() || DEFAULT_FM_MAP[field] };
             if (candidate[field] === oldMap[field]) return;   // unverändert → kein Diff, kein Re-Render
-            void this.plugin.offerFmMigration(oldMap, candidate).then(() => this.render());
+            void this.plugin.offerFmMigration(oldMap, candidate).then(() => this.render()).catch((e: unknown) => { console.error("[i2m-migration]", e); this.render(); });
           });
         });
     }
