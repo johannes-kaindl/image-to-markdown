@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { diffMappings, isI2mNote } from "../src/fm_migration";
+import { diffMappings, isI2mNote, migrateNoteFrontmatter } from "../src/fm_migration";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("diffMappings", () => {
@@ -49,5 +49,51 @@ describe("isI2mNote", () => {
   });
   it("Notiz mit embedded --- in FM-Wert erkannt", () => {
     expect(isI2mNote(`---\ntitle: "a---b"\nsource_image: "[[a.png]]"\nkind: transcript\n---\n![[a.png]]\n`, DEFAULT_FM_MAP)).toBe(true);
+  });
+});
+
+describe("migrateNoteFrontmatter", () => {
+  const base = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncreated: 2026-01-01\ntranscribed_by: "m"\n---\n![[a.png]]\n\nBody\n`;
+
+  it("benennt Key um, Rest der Zeile bleibt", () => {
+    const r = migrateNoteFrontmatter(base, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, created: "erstellt" });
+    expect(r.changed).toBe(true);
+    expect(r.next).toContain(`erstellt: 2026-01-01`);
+    expect(r.next).not.toContain(`created:`);
+  });
+  it("benennt kind-Key UND -Wert auf einer Zeile um", () => {
+    const r = migrateNoteFrontmatter(base, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, kindKey: "type", kindTranscript: "Transkript" });
+    expect(r.next).toContain(`type: Transkript`);
+    expect(r.next).not.toMatch(/^kind:/m);
+  });
+  it("erhält fremde Keys + Body zeichengenau", () => {
+    const withForeign = `---\nsource_image: "[[a.png]]"\nkind: transcript\naliases: [foo]\n---\n![[a.png]]\n\nBody\n`;
+    const r = migrateNoteFrontmatter(withForeign, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, kindKey: "type" });
+    expect(r.next).toContain(`aliases: [foo]`);
+    expect(r.next.endsWith(`![[a.png]]\n\nBody\n`)).toBe(true);
+  });
+  it("CRLF-Notiz behält \\r\\n", () => {
+    const crlf = base.replace(/\n/g, "\r\n");
+    const r = migrateNoteFrontmatter(crlf, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, created: "erstellt" });
+    expect(r.next).toContain(`erstellt: 2026-01-01\r\n`);
+    expect(r.next).not.toContain(`\ncreated:`);
+  });
+  it("verkettete Umbenennung a→b, b→c ohne Doppelanwendung", () => {
+    const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncategory: X\ntags: Y\n---\nB\n`;
+    // category→tags, tags→foo  (Kette)
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "tags", tags: "foo" });
+    expect(r.next).toContain(`tags: X`);   // altes category
+    expect(r.next).toContain(`foo: Y`);    // altes tags
+  });
+  it("Idempotenz — zweimal anwenden = No-op beim 2. Mal", () => {
+    const newMap = { ...DEFAULT_FM_MAP, kindKey: "type" };
+    const once = migrateNoteFrontmatter(base, DEFAULT_FM_MAP, newMap).next;
+    const twice = migrateNoteFrontmatter(once, DEFAULT_FM_MAP, newMap);
+    expect(twice.changed).toBe(false);
+    expect(twice.next).toBe(once);
+  });
+  it("Notiz ohne Frontmatter unverändert", () => {
+    const r = migrateNoteFrontmatter("kein FM\nBody\n", DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, kindKey: "type" });
+    expect(r.changed).toBe(false);
   });
 });

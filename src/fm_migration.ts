@@ -36,3 +36,47 @@ export function isI2mNote(content: string, oldMap: FrontmatterMap): boolean {
   if (kind === null) return true; // Pre-0.13-Notizen ohne kind-Zeile gehören uns
   return kind === oldMap.kindTranscript || kind === oldMap.kindDescription;
 }
+
+export interface MigrationResult { changed: boolean; next: string; conflict: boolean }
+
+export function migrateNoteFrontmatter(content: string, oldMap: FrontmatterMap, newMap: FrontmatterMap): MigrationResult {
+  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)/.exec(content);
+  if (!m) return { changed: false, next: content, conflict: false };
+  const [full, open, block, close] = m;
+
+  // Key-Umbenennungen (die zwei reinen Wert-Felder ausgenommen).
+  const rename = new Map<string, string>();
+  (Object.keys(oldMap) as (keyof FrontmatterMap)[]).forEach((f) => {
+    if (f === "kindTranscript" || f === "kindDescription") return;
+    if (oldMap[f] !== newMap[f]) rename.set(oldMap[f], newMap[f]);
+  });
+
+  const kindValueChanged = oldMap.kindTranscript !== newMap.kindTranscript || oldMap.kindDescription !== newMap.kindDescription;
+  const keyOf = (bare: string): string | null => {
+    const mm = /^([^\r\n:]+):/.exec(bare);
+    return mm ? mm[1] : null;
+  };
+
+  const outLines = block.split("\n").map((line) => {
+    const cr = line.endsWith("\r") ? "\r" : "";
+    const bare = cr ? line.slice(0, -1) : line;
+    const k = keyOf(bare);
+    if (k === null) return line;
+    const newKey = rename.get(k) ?? k;
+    let rest = bare.slice(k.length); // ":" + Wert
+    if (k === oldMap.kindKey && kindValueChanged) {
+      const vm = /^:[ \t]*(.*)$/.exec(rest);
+      if (vm) {
+        const val = vm[1].trim();
+        const nv = val === oldMap.kindTranscript ? newMap.kindTranscript
+                 : val === oldMap.kindDescription ? newMap.kindDescription
+                 : val;
+        if (nv !== val) rest = `: ${nv}`;
+      }
+    }
+    return newKey + rest + cr;
+  });
+
+  const next = open + outLines.join("\n") + close + content.slice(full.length);
+  return { changed: next !== content, next, conflict: false };
+}
