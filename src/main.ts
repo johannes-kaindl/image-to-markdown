@@ -16,6 +16,9 @@ import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from 
 import { DiffModal } from "./diff_modal";
 import { effectiveSuppress } from "./reasoning_toggle";
 import { CardCache } from "./card_cache";
+import { diffMappings, planMigration } from "./fm_migration";
+import { MigrationModal } from "./migration_modal";
+import type { FrontmatterMap } from "./frontmatter_map";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -78,6 +81,56 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   // Kein Caching: die Settings-UI mutiert this.settings live, jeder Aufruf muss den aktuellen Stand lesen.
   private fmMap() { return fmMapFromSettings(this.settings); }
+
+  /** Bietet vor dem Übernehmen eines geänderten Frontmatter-Mappings die Vault-weite Migration an.
+   *  Ohne Diff (keine Vault-Notiz betroffen) wird `newMap` still übernommen — sonst entscheidet
+   *  der Nutzer per MigrationModal zwischen "migrieren+anwenden", "nur anwenden" und "abbrechen".
+   *  `frontmatterMap` wird ausschließlich hier persistiert (settings.ts committet nur bei blur
+   *  und ruft diese Methode auf; bei "cancel" bleibt der gespeicherte Stand unverändert). */
+  async offerFmMigration(oldMap: FrontmatterMap, newMap: FrontmatterMap): Promise<void> {
+    const changes = diffMappings(oldMap, newMap);
+    if (changes.length === 0) return;
+
+    const files = this.app.vault.getMarkdownFiles();
+    const withContent = await Promise.all(files.map(async f => ({ path: f.path, content: await this.app.vault.read(f) })));
+    const plan = planMigration(withContent, oldMap, newMap);
+
+    if (plan.migrations.length === 0 && plan.conflicts.length === 0) {
+      this.settings.frontmatterMap = newMap;
+      await this.saveSettings();
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      new MigrationModal(this.app, plan, changes, (choice) => {
+        void (async () => {
+          try {
+            if (choice === "migrate") {
+              this.settings.frontmatterMap = newMap;
+              await this.saveSettings();
+              let ok = 0, fail = 0;
+              for (const p of plan.migrations) {
+                const file = this.app.vault.getAbstractFileByPath(p.path);
+                if (!(file instanceof TFile)) { fail++; continue; }
+                try { await this.app.vault.modify(file, p.next); ok++; }
+                catch (e) { fail++; console.error("[i2m-migration]", p.path, e); }
+              }
+              new Notice(t("migration.reportDone", String(ok), String(fail), String(plan.conflicts.length)));
+            } else if (choice === "apply") {
+              this.settings.frontmatterMap = newMap;
+              await this.saveSettings();
+              new Notice(t("migration.appliedNoMigrate", String(plan.migrations.length + plan.conflicts.length)));
+            }
+            // "cancel": nichts speichern — settings.ts rendert das Feld aus dem unveränderten settings neu.
+          } catch (e) {
+            console.error("[i2m-migration]", e);
+          } finally {
+            resolve();
+          }
+        })();
+      }).open();
+    });
+  }
 
   private makeImgIO(): ImgToMdIO {
     return {

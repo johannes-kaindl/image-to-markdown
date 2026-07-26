@@ -181,6 +181,16 @@ const EN: Dict = {
   "diff.overwrite": "Apply",
   "diff.cancel": "Cancel",
   "diff.hunk.aria": "Apply change {0}",
+  "migration.title": "Migrate frontmatter keys",
+  "migration.summary": "{0} notes will be updated",
+  "migration.change": "{0} → {1}",
+  "migration.conflicts": "{0} notes skipped (key conflict)",
+  "migration.migrateApply": "Migrate & apply",
+  "migration.applyOnly": "Apply without migrating",
+  "migration.cancel": "Cancel",
+  "migration.confirm": "Rewrite {0} notes now? This cannot be undone.",
+  "migration.reportDone": "Migration: {0} updated · {1} failed · {2} conflicts",
+  "migration.appliedNoMigrate": "Mapping applied. {0} existing notes keep the old keys and won't be recognized (duplicate risk).",
 };
 
 const DE: Dict = {
@@ -347,6 +357,16 @@ const DE: Dict = {
   "diff.overwrite": "Übernehmen",
   "diff.cancel": "Abbrechen",
   "diff.hunk.aria": "Änderung {0} übernehmen",
+  "migration.title": "Frontmatter-Keys migrieren",
+  "migration.summary": "{0} Notizen werden aktualisiert",
+  "migration.change": "{0} → {1}",
+  "migration.conflicts": "{0} Notizen übersprungen (Key-Konflikt)",
+  "migration.migrateApply": "Migrieren & anwenden",
+  "migration.applyOnly": "Ohne Migration anwenden",
+  "migration.cancel": "Abbrechen",
+  "migration.confirm": "Jetzt {0} Notizen umschreiben? Das lässt sich nicht rückgängig machen.",
+  "migration.reportDone": "Migration: {0} aktualisiert · {1} fehlgeschlagen · {2} Konflikte",
+  "migration.appliedNoMigrate": "Mapping angewendet. {0} bestehende Notizen behalten die alten Keys und werden nicht mehr erkannt (Dubletten-Risiko).",
 };
 
 /** Exportiert für den EN/DE-Paritätstest; zur Laufzeit nur über t() lesen. */

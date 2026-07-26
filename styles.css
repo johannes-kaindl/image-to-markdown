@@ -128,3 +128,15 @@
 .img2md-diff-hunk-cb { margin-top: var(--size-2-3); }
 .img2md-diff-hunk-lines { flex: 1; min-width: 0; }
 .img2md-diff-hunk.is-off { opacity: 0.45; border-left-color: var(--background-modifier-border); }
+
+/* Migrations-Modal (Task 7) — reine Struktur-Klassen, Diff-Zeilen selbst nutzen die img2md-diff*-Regeln oben. */
+.img2md-migration-modal { min-width: 32rem; }
+.img2md-migration-summary { font-weight: var(--font-semibold); }
+.img2md-migration-changes { margin: var(--size-4-1) 0; }
+.img2md-migration-change { font-family: var(--font-monospace); font-size: var(--font-ui-small); color: var(--text-muted); }
+.img2md-migration-conflicts { color: var(--text-error); font-weight: var(--font-semibold); }
+.img2md-migration-conflict-path { font-family: var(--font-monospace); font-size: var(--font-ui-small); color: var(--text-error); }
+.img2md-migration-body { max-height: 40vh; overflow-y: auto; margin: var(--size-4-2) 0; }
+.img2md-migration-note { margin-bottom: var(--size-4-3); }
+.img2md-migration-note-path { font-size: var(--font-ui-medium); margin: 0 0 var(--size-4-1); }
+.img2md-migration-confirm-text { font-weight: var(--font-semibold); }
