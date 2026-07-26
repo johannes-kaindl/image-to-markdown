@@ -393,6 +393,15 @@ describe("migrateNoteFrontmatter — Kollision", () => {
     expect(r.conflict).toBe(true);
     expect(r.changed).toBe(false);
   });
+  it("idempotenter Re-Scan meldet KEINEN Kollisions-conflict (bereits migrierter Key)", () => {
+    // kind→type schon angewendet: Notiz hat 'type', nicht mehr 'kind'. 2. Lauf darf NICHT
+    // fälschlich 'type' als Kollision werten. Regression-Guard für den !existingKeys.has(from)-Check.
+    const newMap = { ...DEFAULT_FM_MAP, kindKey: "type" };
+    const migrated = migrateNoteFrontmatter(`---\nsource_image: "[[a.png]]"\nkind: transcript\n---\nB\n`, DEFAULT_FM_MAP, newMap).next;
+    const again = migrateNoteFrontmatter(migrated, DEFAULT_FM_MAP, newMap);
+    expect(again.conflict).toBe(false);
+    expect(again.changed).toBe(false);
+  });
 });
 ```
 
@@ -411,12 +420,14 @@ Expected: FAIL (`conflict` ist noch `false` für beide Fälle).
   }
   const targets = new Set<string>();
   for (const [from, to] of rename) {
-    if (to === from) continue;
+    if (!existingKeys.has(from)) continue;   // Notiz hat diesen Key nicht → nichts umzubenennen, keine Kollision. LOAD-BEARING für idempotenten Re-Scan: sonst würde ein bereits migrierter Key (= to) fälschlich als Kollision gewertet.
     if (existingKeys.has(to) && !rename.has(to)) return { changed: false, next: content, conflict: true };
     if (targets.has(to)) return { changed: false, next: content, conflict: true };
     targets.add(to);
   }
 ```
+
+Der `!existingKeys.has(from)`-Guard ist load-bearing: ohne ihn meldet ein idempotenter Re-Scan einer bereits migrierten Notiz (der neue Key `to` ist jetzt vorhanden, `from` nicht mehr) einen spuriösen Konflikt. Der frühere `if (to === from) continue;` war toter Code (`rename` enthält nur `from≠to`) und entfällt.
 
 (`keyOf` muss vor diesem Block definiert sein — ggf. die `keyOf`-Definition aus Task 3 nach oben ziehen.)
 
