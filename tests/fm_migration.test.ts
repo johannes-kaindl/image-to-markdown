@@ -44,4 +44,7 @@ describe("isI2mNote", () => {
   it("Notiz ohne Frontmatter abgelehnt", () => {
     expect(isI2mNote("kein FM\n![[a.png]]", DEFAULT_FM_MAP)).toBe(false);
   });
+  it("Notiz mit leerem Frontmatter abgelehnt", () => {
+    expect(isI2mNote("---\n---\n![[a.png]]\n", DEFAULT_FM_MAP)).toBe(false);
+  });
 });
