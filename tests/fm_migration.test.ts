@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { diffMappings, isI2mNote, migrateNoteFrontmatter } from "../src/fm_migration";
+import { diffMappings, isI2mNote, migrateNoteFrontmatter, planMigration } from "../src/fm_migration";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("diffMappings", () => {
@@ -139,5 +139,25 @@ describe("migrateNoteFrontmatter — Kollision", () => {
     const again = migrateNoteFrontmatter(migrated, DEFAULT_FM_MAP, newMap);
     expect(again.conflict).toBe(false);
     expect(again.changed).toBe(false);
+  });
+});
+
+describe("planMigration", () => {
+  const newMap = { ...DEFAULT_FM_MAP, kindKey: "type" };
+  const i2m = `---\nsource_image: "[[a.png]]"\nkind: transcript\n---\nB\n`;
+  const foreign = `---\ntitle: Foo\n---\nB\n`;
+  const conflict = `---\nsource_image: "[[b.png]]"\nkind: transcript\ntype: x\n---\nB\n`;
+
+  it("nimmt nur i2m-Notizen mit Änderung auf, sammelt Konflikte, ignoriert Fremdnotizen", () => {
+    const plan = planMigration(
+      [{ path: "a.md", content: i2m }, { path: "f.md", content: foreign }, { path: "c.md", content: conflict }],
+      DEFAULT_FM_MAP, newMap,
+    );
+    expect(plan.migrations.map(p => p.path)).toEqual(["a.md"]);
+    expect(plan.conflicts).toEqual(["c.md"]);
+  });
+  it("überspringt i2m-Notizen ohne effektive Änderung", () => {
+    const plan = planMigration([{ path: "a.md", content: i2m }], DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP });
+    expect(plan.migrations).toEqual([]);
   });
 });

@@ -108,3 +108,22 @@ export function migrateNoteFrontmatter(content: string, oldMap: FrontmatterMap, 
   const next = open + outLines.join("\n") + close + content.slice(full.length);
   return { changed: next !== content, next, conflict: false };
 }
+
+export interface NotePlan { path: string; old: string; next: string }
+export interface MigrationPlan { migrations: NotePlan[]; conflicts: string[] }
+
+export function planMigration(
+  files: { path: string; content: string }[],
+  oldMap: FrontmatterMap,
+  newMap: FrontmatterMap,
+): MigrationPlan {
+  const migrations: NotePlan[] = [];
+  const conflicts: string[] = [];
+  for (const f of files) {
+    if (!isI2mNote(f.content, oldMap)) continue;
+    const r = migrateNoteFrontmatter(f.content, oldMap, newMap);
+    if (r.conflict) { conflicts.push(f.path); continue; }
+    if (r.changed) migrations.push({ path: f.path, old: f.content, next: r.next });
+  }
+  return { migrations, conflicts };
+}
