@@ -70,6 +70,21 @@ export function migrateNoteFrontmatter(content: string, oldMap: FrontmatterMap, 
     }
   }
 
+  // Kollisions-Schutz: Ziel-Key kollidiert mit bestehendem fremdem Key
+  // oder zwei Umbenennungs-Quellen treffen auf denselben Ziel-Key.
+  const existingKeys = new Set<string>();
+  for (const line of block.split("\n")) {
+    const k = keyOf(line.endsWith("\r") ? line.slice(0, -1) : line);
+    if (k) existingKeys.add(k);
+  }
+  const targets = new Set<string>();
+  for (const [from, to] of rename) {
+    if (to === from) continue;
+    if (existingKeys.has(to) && !rename.has(to)) return { changed: false, next: content, conflict: true };
+    if (targets.has(to)) return { changed: false, next: content, conflict: true };
+    targets.add(to);
+  }
+
   const outLines = block.split("\n").map((line) => {
     const cr = line.endsWith("\r") ? "\r" : "";
     const bare = cr ? line.slice(0, -1) : line;

@@ -117,3 +117,20 @@ describe("migrateNoteFrontmatter", () => {
     expect(r.changed).toBe(false);
   });
 });
+
+describe("migrateNoteFrontmatter — Kollision", () => {
+  it("Ziel-Key existiert schon als fremder Key → conflict, unverändert", () => {
+    const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ntype: manuell\n---\nB\n`;
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, kindKey: "type" });
+    expect(r.conflict).toBe(true);
+    expect(r.changed).toBe(false);
+    expect(r.next).toBe(note);
+  });
+  it("zwei Quellen auf denselben Ziel-Key → conflict", () => {
+    const note = `---\nsource_image: "[[a.png]]"\nkind: transcript\ncategory: X\ntags: Y\n---\nB\n`;
+    // category→z UND tags→z (kein Domain/Range-Overlap, aber Ziel-Kollision)
+    const r = migrateNoteFrontmatter(note, DEFAULT_FM_MAP, { ...DEFAULT_FM_MAP, category: "z", tags: "z" });
+    expect(r.conflict).toBe(true);
+    expect(r.changed).toBe(false);
+  });
+});
