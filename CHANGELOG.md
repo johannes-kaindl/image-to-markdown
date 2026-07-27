@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-07-27
+
 ### Hinzugefügt
 
 - **Frontmatter-Keys nachträglich vaultweit umbenennen:** Änderst du in den Einstellungen einen
