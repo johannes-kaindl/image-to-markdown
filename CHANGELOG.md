@@ -6,6 +6,19 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Frontmatter-Keys nachträglich vaultweit umbenennen:** Änderst du in den Einstellungen einen
+  Schlüssel des Frontmatter-Mappings (z. B. `kind` → `type`), bietet das Plugin an, die
+  **bestehenden** Transkript-, PDF- und Beschreibungs-Notizen im ganzen Vault mitzuziehen. Vorher
+  zeigt ein Dialog eine **Vorschau pro betroffener Notiz** (zeilenweiser Diff) und fragt **doppelt**
+  nach: „Migrieren & anwenden", „Ohne Migration anwenden" (nur die Einstellung greift, Notizen
+  bleiben) oder „Abbrechen" (Änderung verfällt). Nicht-destruktiv — fremde Frontmatter-Felder und
+  der Notiz-Text bleiben unangetastet, Notizen mit einem Schlüssel-Konflikt werden sicher
+  übersprungen, und ein Abschlussbericht nennt „N migriert · M fehlgeschlagen · K Konflikte".
+  Schließt die seit 0.13.0 offene Lücke, dass nachträglich geänderte Keys bestehende Notizen
+  unauffindbar machten (Dubletten-Risiko).
+
 ## [0.15.3] — 2026-07-26
 
 ### Geändert
