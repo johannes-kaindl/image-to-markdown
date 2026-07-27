@@ -100,8 +100,9 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
 - **Konfigurierbares Frontmatter-Mapping.** Alle Frontmatter-Schlüssel der erzeugten Notizen — plus
   der `type`-Wert selbst — lassen sich unter „Frontmatter-Mapping" in den Einstellungen an dein
   eigenes Vault-Schema anpassen (z. B. `kind` → `type`) — einheitlich für Transkript-, PDF- und
-  Beschreibungs-Notizen. (Nachträgliches vaultweites Umbenennen bestehender Notizen folgt in einem
-  späteren Release.)
+  Beschreibungs-Notizen. Beim späteren Ändern eines Keys wird eine **vaultweite Migration** der
+  bestehenden Notizen angeboten — mit Diff-Vorschau pro Notiz und Drei-Wege-Bestätigung
+  (migrieren & anwenden / ohne Migration anwenden / abbrechen).
 - **Zweisprachige Oberfläche (Deutsch / English)** — alle nutzersichtbaren Texte folgen der
   Sprach-Einstellung von Obsidian; Englisch ist kanonisch, Deutsch wird automatisch geliefert.
   Die Sprache wird einmalig beim Laden des Plugins erkannt (zum Wechseln neu laden).
@@ -181,7 +182,7 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 | **Eingebetteten PDF-Text nutzen** | An | Hat eine born-digital PDF-Seite einen echten Text-Layer, wird ihr exakter Text ans Modell geschickt und nach Markdown formatiert, statt ein gerendertes Bild zu OCR'en — schneller und ohne OCR-Fehler. Scan-/Figuren-Seiten fallen aufs Vision-Modell zurück. |
 | **Denkprozess standardmäßig aufgeklappt** | Aus | Ob der Denkprozess-Block (Reasoning) jeder Nachbesserungs-Runde aufgeklappt startet. Aus = er klappt zu, sobald das Modell zu Ende gedacht hat (jederzeit von Hand zu öffnen). |
 | **Beschreibungs-Kategorien** | Eine eingebaute Liste, editierbar | Die feste Menge an Kategorien, die dem Modell im Beschreiben-Modus angeboten wird (ein Feld pro Kategorie, hinzufügen/entfernen wie bei der Endpoint-Liste). |
-| **Frontmatter-Mapping** | Die Standard-Keys des Plugins | Jeden Frontmatter-Schlüssel der erzeugten Notizen — und den `type`-Wert — an dein eigenes Vault-Schema anpassen (z. B. `kind` → `type`), einheitlich für Transkript-, PDF- und Beschreibungs-Notizen. Vorsichtig ändern: bestehende Notizen behalten ihre alten Keys (eine vaultweite Migration ist geplant). |
+| **Frontmatter-Mapping** | Die Standard-Keys des Plugins | Jeden Frontmatter-Schlüssel der erzeugten Notizen — und den `type`-Wert — an dein eigenes Vault-Schema anpassen (z. B. `kind` → `type`), einheitlich für Transkript-, PDF- und Beschreibungs-Notizen. Beim späteren Ändern eines Keys wird eine **vaultweite Migration** der bestehenden Notizen angeboten (Diff-Vorschau pro Notiz + doppelte Bestätigung). |
 
 Default-Prompt:
 
