@@ -3,7 +3,7 @@
 **Der Plan (SSOT) liegt im Pallas-Vault-Coding-Cockpit, nicht in diesem Repo.** Nur ein Zeiger — keine Inhaltskopie.
 
 - **Dateisystem (Agenten/Implementierung):**
-  `/Users/Shared/10_ObsidianVaults/10_Pallas/25_Coding/image-to-markdown/Plan-Pending-Ergebnis-Persistenz.md`
+  `$VAULT/25_Coding/image-to-markdown/Plan-Pending-Ergebnis-Persistenz.md`
 - **Obsidian:**
   `obsidian://open?vault=10_Pallas&file=25_Coding%2Fimage-to-markdown%2FPlan-Pending-Ergebnis-Persistenz.md`
 
