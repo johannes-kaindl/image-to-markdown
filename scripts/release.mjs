@@ -45,10 +45,10 @@ if (!tagExists && !dryRun && currentBranch !== defaultBranch) {
   die(`Release nur vom Default-Branch „${defaultBranch}" — aktuell „${currentBranch}".`);
 }
 
-// origin → "owner/name" (Codeberg) parsen.
+// origin → "owner/name" (Forgejo) parsen.
 const originUrl = sh("git", ["remote", "get-url", "origin"]);
-const repoMatch = originUrl.match(/codeberg\.org[/:]([^/]+)\/(.+?)(?:\.git)?$/);
-if (!repoMatch) die(`origin ist kein Codeberg-Remote: ${originUrl}`);
+const repoMatch = originUrl.match(/git\.jkaindl\.de[/:]([^/]+)\/(.+?)(?:\.git)?$/);
+if (!repoMatch) die(`origin ist kein git.jkaindl.de-Remote: ${originUrl}`);
 const repo = `${repoMatch[1]}/${repoMatch[2]}`;
 
 // 2.–6. Nur wenn der Tag noch nicht existiert; sonst Resume (direkt Build + Codeberg-Release).
