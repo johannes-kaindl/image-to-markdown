@@ -1,6 +1,6 @@
-// scripts/lib/codeberg-release.test.ts
+// scripts/lib/forge-release.test.ts
 import { describe, it, expect, vi } from "vitest";
-import { createCodebergRelease } from "./codeberg-release.mjs";
+import { createForgeRelease } from "./forge-release.mjs";
 
 // Minimaler Fake einer fetch-Response.
 function res(ok: boolean, body: unknown = {}, status = ok ? 200 : 404) {
@@ -12,7 +12,7 @@ function res(ok: boolean, body: unknown = {}, status = ok ? 200 : 404) {
   } as Response;
 }
 
-describe("createCodebergRelease", () => {
+describe("createForgeRelease", () => {
   it("legt ein Release an, wenn keins existiert, und lädt Assets hoch", async () => {
     const calls: { url: string; method: string }[] = [];
     const fetch = vi.fn(async (url: string, init: any = {}) => {
@@ -24,7 +24,7 @@ describe("createCodebergRelease", () => {
       return res(false);
     });
 
-    const out = await createCodebergRelease({
+    const out = await createForgeRelease({
       fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n",
       assets: [{ name: "main.js", body: new Uint8Array([1]) }],
     });
@@ -44,7 +44,7 @@ describe("createCodebergRelease", () => {
       return res(false);
     });
 
-    const out = await createCodebergRelease({
+    const out = await createForgeRelease({
       fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n",
       assets: [{ name: "main.js", body: new Uint8Array([1]) }],
     });
@@ -65,7 +65,7 @@ describe("createCodebergRelease", () => {
       return res(false);
     });
 
-    const out = await createCodebergRelease({
+    const out = await createForgeRelease({
       fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n", assets: [], sleep: async () => {},
     });
     expect(out).toEqual({ id: 7, htmlUrl: "h" });
@@ -84,7 +84,7 @@ describe("createCodebergRelease", () => {
       return res(false);
     });
 
-    const out = await createCodebergRelease({
+    const out = await createForgeRelease({
       fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n", assets: [], sleep: async () => {},
     });
     expect(out.id).toBe(9);
@@ -99,7 +99,7 @@ describe("createCodebergRelease", () => {
       return res(false);
     });
 
-    await expect(createCodebergRelease({
+    await expect(createForgeRelease({
       fetch, token: "t", repo: "o/r", tag: "0.8.0", notes: "n", assets: [], retries: 3, sleep: async () => {},
     })).rejects.toThrow(/500/);
     expect(posts).toBe(3);

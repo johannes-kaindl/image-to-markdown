@@ -1,10 +1,10 @@
 # Image to Markdown
 
-> [🇬🇧 English](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/README.md) · 🇩🇪 Deutsch
+> [🇬🇧 English](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.md) · 🇩🇪 Deutsch
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE)
-[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS)
-[![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fcodeberg.org&label=release)](https://codeberg.org/jkaindl/image-to-markdown/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE)
+[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS)
+[![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fgit.jkaindl.de&label=release)](https://git.jkaindl.de/jkaindl/image-to-markdown/releases)
 ![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
 **Transkribiert Bilder und PDFs einer Notiz per lokalem Vision-LLM nach Markdown — komplett offline, nicht-destruktiv, live in die Sidebar gestreamt.**
@@ -132,14 +132,14 @@ Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 ### Manuell
 
 `main.js`, `manifest.json` und `styles.css` aus dem
-[letzten Release](https://codeberg.org/jkaindl/image-to-markdown/releases) nach
+[letzten Release](https://git.jkaindl.de/jkaindl/image-to-markdown/releases) nach
 `<vault>/.obsidian/plugins/image-to-markdown/` legen, dann unter **Settings → Community
 plugins** aktivieren.
 
 ### From source
 
 ```bash
-git clone https://codeberg.org/jkaindl/image-to-markdown
+git clone https://git.jkaindl.de/jkaindl/image-to-markdown
 cd image-to-markdown
 npm install
 npm run build   # → main.js
@@ -196,7 +196,7 @@ akzeptiert).
 
 Der Settings-Tab zeigt außerdem einen **Verbindungs-Status** mit „**Verbindung testen**" sowie
 eine **„Vision-Fähigkeit"**-Zeile mit „**Vision testen**"-Button, der aktiv prüft, ob das gewählte
-Modell wirklich Bilder lesen kann — Details im [Handbuch](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/docs/manual/reference.md#vision-capability-detection).
+Modell wirklich Bilder lesen kann — Details im [Handbuch](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/reference.md#vision-capability-detection).
 
 ## Funktionsweise
 
@@ -207,7 +207,7 @@ Modell wirklich Bilder lesen kann — Details im [Handbuch](https://codeberg.org
   `transcribed_by`-Frontmatter (Modell aus `response.model`) und ersetzt den Bild-Embed in der
   Quellnotiz durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
 
-Architektur- und Modul-Layout stehen in [AGENTS.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
+Architektur- und Modul-Layout stehen in [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
 
 ## Unterstützte Formate
 
@@ -230,8 +230,8 @@ Architektur- und Modul-Layout stehen in [AGENTS.md](https://codeberg.org/jkaindl
 
 ## Dokumentation
 
-- Handbuch: [docs/manual/index.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md)
-- Changelog: [CHANGELOG.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md)
+- Handbuch: [docs/manual/index.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md)
+- Changelog: [CHANGELOG.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md)
 
 ## Entwicklung
 
@@ -243,7 +243,7 @@ npm test        # vitest
 ```
 
 Konventionen (Branch-Modell, Conventional Commits, Qualitäts-Gates vor Commit) stehen in
-[AGENTS.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
+[AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
 
 ## Sicherheit
 
@@ -256,12 +256,12 @@ Sicherheitslücken bitte **nicht** öffentlich als Issue melden, sondern per E-M
 
 ## Verwandtes
 
-**[vault-rag](https://codeberg.org/jkaindl/vault-rag)** — das Schwester-Plugin mit dem RAG-Kern (Related-Notes, semantische Suche, Chat). Image to Markdown wurde am 2026-06-21 aus vault-rag 0.2.0 ausgegliedert, weil Bild-Transkription kein RAG ist; geteilt wurde nur der SSE-Transport.
+**[vault-rag](https://git.jkaindl.de/jkaindl/vault-rag)** — das Schwester-Plugin mit dem RAG-Kern (Related-Notes, semantische Suche, Chat). Image to Markdown wurde am 2026-06-21 aus vault-rag 0.2.0 ausgegliedert, weil Bild-Transkription kein RAG ist; geteilt wurde nur der SSE-Transport.
 
 ## Lizenz
 
-- Code: [AGPL-3.0-or-later](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE). Eine kommerzielle Dual-License ist auf Anfrage verfügbar,
+- Code: [AGPL-3.0-or-later](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE). Eine kommerzielle Dual-License ist auf Anfrage verfügbar,
   falls die AGPL-Copyleft nicht passt.
-- Dokumentation/Text: [CC BY-SA 4.0](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS).
+- Dokumentation/Text: [CC BY-SA 4.0](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS).
 
 Copyright © 2026 Johannes Kaindl.

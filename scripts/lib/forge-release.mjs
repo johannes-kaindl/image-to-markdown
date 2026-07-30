@@ -1,13 +1,13 @@
-// scripts/lib/codeberg-release.mjs
-// Reiner Helfer: erzeugt/aktualisiert ein Codeberg-(Forgejo-)Release + Assets über die Forgejo-API.
+// scripts/lib/forge-release.mjs
+// Reiner Helfer: erzeugt/aktualisiert ein Forgejo-Release + Assets über die Forgejo-API.
 // `fetch` wird injiziert → ohne Netz testbar. Kein Prozess-/Datei-Zugriff hier; der Orchestrator
 // (release.mjs) liest Token/Assets und reicht sie herein.
 //
-//   createCodebergRelease({ fetch, token, repo, tag, notes, assets }) → { id, htmlUrl }
+//   createForgeRelease({ fetch, token, repo, tag, notes, assets }) → { id, htmlUrl }
 //   repo   = "owner/name" (z.B. "jkaindl/image-to-markdown")
 //   assets = [{ name, body }]   body = Uint8Array/Buffer des Datei-Inhalts
 
-const API = "https://codeberg.org/api/v1";
+const API = "https://git.jkaindl.de/api/v1";
 
 /** Standard-Backoff: exponentiell 1s,2s,4s,8s… gedeckelt bei 8s. */
 const defaultSleep = (attempt) => new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** (attempt - 1), 8000)));
@@ -31,7 +31,7 @@ async function fetchWithRetry(doFetch, retries, sleep) {
   }
 }
 
-export async function createCodebergRelease({ fetch, token, repo, tag, notes, assets, retries = 5, sleep = defaultSleep }) {
+export async function createForgeRelease({ fetch, token, repo, tag, notes, assets, retries = 5, sleep = defaultSleep }) {
   const auth = { Authorization: `token ${token}` };
   const jsonHeaders = { ...auth, "Content-Type": "application/json" };
 

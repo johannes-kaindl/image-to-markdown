@@ -1,10 +1,10 @@
 # Image to Markdown
 
-> 🇬🇧 English · [🇩🇪 Deutsch](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/README.de.md)
+> 🇬🇧 English · [🇩🇪 Deutsch](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.de.md)
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE)
-[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS)
-[![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fcodeberg.org&label=release)](https://codeberg.org/jkaindl/image-to-markdown/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE)
+[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS)
+[![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fgit.jkaindl.de&label=release)](https://git.jkaindl.de/jkaindl/image-to-markdown/releases)
 ![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
 **Transcribe images and PDFs in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming live into the sidebar.**
@@ -63,12 +63,12 @@ Search for **Image to Markdown** in **Settings → Community plugins → Browse*
 
 ### Manual
 
-Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://codeberg.org/jkaindl/image-to-markdown/releases) and place them in `<vault>/.obsidian/plugins/image-to-markdown/`, then enable the plugin under **Settings → Community plugins**.
+Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://git.jkaindl.de/jkaindl/image-to-markdown/releases) and place them in `<vault>/.obsidian/plugins/image-to-markdown/`, then enable the plugin under **Settings → Community plugins**.
 
 ### From source
 
 ```bash
-git clone https://codeberg.org/jkaindl/image-to-markdown
+git clone https://git.jkaindl.de/jkaindl/image-to-markdown
 cd image-to-markdown
 npm install
 npm run build   # produces main.js
@@ -105,7 +105,7 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 
-Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/docs/manual/reference.md#vision-capability-detection).
+Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/reference.md#vision-capability-detection).
 
 ## How it works
 
@@ -113,18 +113,18 @@ For each selected image, the plugin builds a multimodal chat-completions request
 
 For PDFs, each page is rendered to a canvas by the bundled pdf.js (offline, no CDN; worker embedded as a Blob URL), converted to a PNG data URL, and sent to the same vision endpoint as a regular image. Pages stream as individual cards in the sidebar, and one transcript note is produced for the whole PDF.
 
-The architecture and module layout are documented in [AGENTS.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
+The architecture and module layout are documented in [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
 
 ## Manual
 
-The full documentation follows the [Diátaxis](https://diataxis.fr) framework — see [docs/manual/index.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md):
+The full documentation follows the [Diátaxis](https://diataxis.fr) framework — see [docs/manual/index.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md):
 
 - **Tutorial** — get from zero to your first transcript.
 - **How-to guides** — task-focused recipes (configuring LM Studio, handling HEIC, batch transcription).
 - **Reference** — settings, commands, supported formats.
 - **Explanation** — the non-destructive/idempotent design and the streaming mechanism.
 
-See the [changelog](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md) for release notes.
+See the [changelog](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md) for release notes.
 
 ### Supported image formats
 
@@ -132,15 +132,15 @@ Sent to the model: **PNG, JPG, JPEG, WebP, GIF.** Recognized but **skipped** (wi
 
 ## Related
 
-**[vault-rag](https://codeberg.org/jkaindl/vault-rag)** — the sister plugin, home of the RAG core (related notes, semantic search, chat). Image to Markdown was split out of vault-rag 0.2.0 on 2026-06-21 because image transcription is not RAG; the two only ever shared the SSE transport.
+**[vault-rag](https://git.jkaindl.de/jkaindl/vault-rag)** — the sister plugin, home of the RAG core (related notes, semantic search, chat). Image to Markdown was split out of vault-rag 0.2.0 on 2026-06-21 because image transcription is not RAG; the two only ever shared the SSE transport.
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Codeberg](https://codeberg.org/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
+Contributions are welcome. Please read [CONTRIBUTING.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
 
 ## License
 
-- **Code:** [AGPL-3.0-or-later](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE). A commercial dual-license is available on request if the AGPL copyleft does not fit your use case.
-- **Documentation and text:** [CC BY-SA 4.0](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS).
+- **Code:** [AGPL-3.0-or-later](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE). A commercial dual-license is available on request if the AGPL copyleft does not fit your use case.
+- **Documentation and text:** [CC BY-SA 4.0](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS).
 
 Copyright © 2026 Johannes Kaindl.

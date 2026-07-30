@@ -1,8 +1,8 @@
 # Screenshots — capture guide
 
-This folder holds the screenshots referenced by [`README.md`](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/README.md),
-[`README.de.md`](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/README.de.md) and the
-[manual](https://codeberg.org/jkaindl/image-to-markdown/src/branch/main/docs/manual/). The images do **not** exist
+This folder holds the screenshots referenced by [`README.md`](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.md),
+[`README.de.md`](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.de.md) and the
+[manual](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/). The images do **not** exist
 yet — this document is the contract for producing them: exact filenames, what each must show,
 the recommended format, and a reproducible capture recipe so anyone can regenerate them
 consistently.
@@ -24,7 +24,7 @@ verbatim under "Strings visible in the UI" below. (German variants can be added 
 - **Width:** ~1200 px (retina/2x capture downscaled to ~1200 px CSS width is ideal; never
   upscale a small grab).
 - **Theme:** capture in Obsidian's default theme, light mode, so the images read well on both
-  Codeberg and GitHub. Optionally provide a dark-mode variant later, but the names below are
+  Forgejo and GitHub. Optionally provide a dark-mode variant later, but the names below are
   the canonical light-mode set.
 - **Chrome:** show just enough Obsidian window to give context (sidebar + the relevant pane).
   Trim OS window decorations and unrelated panes.
@@ -36,8 +36,8 @@ verbatim under "Strings visible in the UI" below. (German variants can be added 
 
 Every filename below is referenced by at least one doc; together they are the complete set.
 Keep this table in sync whenever a doc adds or renames an image. The README embeds images with
-**absolute** Codeberg raw URLs (relative paths break on community.obsidian.md), e.g.
-`https://codeberg.org/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png`.
+**absolute** Forgejo raw URLs (relative paths break on community.obsidian.md), e.g.
+`https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png`.
 
 | Filename | Referenced by | Must show |
 | --- | --- | --- |
@@ -310,4 +310,4 @@ Verified against `src/i18n.ts` (`STRINGS.en`) — do not guess these, quote them
 - Commands: **"Open sidebar"**, **"Transcribe images in the active note"**
 
 Once the real images land here, embed them in `README.md` / `README.de.md` (top hero + Features)
-with **absolute Codeberg raw URLs** and add the relevant ones to the manual.
+with **absolute Forgejo raw URLs** and add the relevant ones to the manual.

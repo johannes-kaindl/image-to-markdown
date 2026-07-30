@@ -13,7 +13,7 @@ Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem
 **Projekt:** `image-to-markdown` (Plugin-id) — Obsidian-Plugin, das die **Bilder einer Notiz**
 per **lokalem Vision-LLM** nach Markdown transkribiert. Komplett offline, ohne Cloud. Autor: Johannes Kaindl.
 
-**Warum es existiert:** Ausgegliedert aus [`vault-rag`](https://codeberg.org/jkaindl/vault-rag) 0.2.0
+**Warum es existiert:** Ausgegliedert aus [`vault-rag`](https://git.jkaindl.de/jkaindl/vault-rag) 0.2.0
 (2026-06-21). Bild-Transkription ist **kein RAG** — sie teilte mit vault-rag nur den SSE-Transport,
 nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanker RAG-Kern und
 `image-to-markdown` ein fokussiertes Werkzeug mit eigener Registry-/Feedback-Fläche.
@@ -141,8 +141,8 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
 - **Nicht in-place** (anders als vault-rag): nach Build `main.js`/`manifest.json`/`styles.css` ins
   Vault-Plugin-Verzeichnis kopieren, dann reloaden.
 - **Release-CI ist GitHub-only:** `.github/workflows/release.yml` läuft auf dem **GitHub-Mirror**
-  (Codeberg/Forgejo ignoriert `.github/`). SemVer-Tag pushen → Mirror trägt ihn zu GitHub → Pipeline
-  baut + attestiert (`actions/attest-build-provenance`) + legt das GitHub-Release an. Das **Codeberg**-Release
+  (Forgejo ignoriert `.github/`). SemVer-Tag pushen → Mirror trägt ihn zu GitHub → Pipeline
+  baut + attestiert (`actions/attest-build-provenance`) + legt das GitHub-Release an. Das **Forgejo**-Release
   (kanonisch) bleibt manuell via Forgejo-API (siehe Memory `codeberg-release-gotcha`).
 
 ## Memory
@@ -167,7 +167,7 @@ Stand 2026-06-23 — **Release 0.3.0**. Verbleibende bewusste, begründete Abwei
 - **PROF-OBS-06** — Settings-Tab nutzt noch `display()` (deklarative `getSettingDefinitions`-API ist 1.13-Enhancement). *Grund:* Recommendation, kein Blocker; eigener Zyklus.
 - **PROF-TS-04** — kein `tsconfig.build.json`-Split (ein `tsconfig.json` + `vitest.config.ts` reicht). *Grund:* klein genug.
 
-Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Diátaxis-Manual `docs/manual/`), CORE-META-06 (`CONTRIBUTING.md`/`SECURITY.md`), CORE-META-09 (`README.de.md`), PROF-OBS-02 (`npm run deploy`), PROF-OBS-07 (UI-Lokalisierung EN/DE). Codeberg-`origin` + GitHub-Push-Mirror aktiv (CORE-GIT-01).
+Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Diátaxis-Manual `docs/manual/`), CORE-META-06 (`CONTRIBUTING.md`/`SECURITY.md`), CORE-META-09 (`README.de.md`), PROF-OBS-02 (`npm run deploy`), PROF-OBS-07 (UI-Lokalisierung EN/DE). Forgejo-`origin` + GitHub-Push-Mirror aktiv (CORE-GIT-01).
 
 Erfüllt mit 0.3.0 (2026-06-23): CORE-META-02/03 (Badge-Zeile/Hero + Feature-Screenshots) — README mit Badge 1.8.7, Aufnahme-Vertrag (Screenshots) auf aktuellen Stand (PDF-/Idempotenz-Shots, EN-UI, Slider).
 

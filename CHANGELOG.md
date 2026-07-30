@@ -391,7 +391,7 @@ Submission-Readiness für die Obsidian-Community-Registry (Lint-/API-Konformitä
 
 ## [0.1.0] — 2026-06-21
 
-Erstes Release. Ausgegliedert aus [vault-rag](https://codeberg.org/jkaindl/vault-rag) 0.2.0.
+Erstes Release. Ausgegliedert aus [vault-rag](https://git.jkaindl.de/jkaindl/vault-rag) 0.2.0.
 
 ### Hinzugefügt
 

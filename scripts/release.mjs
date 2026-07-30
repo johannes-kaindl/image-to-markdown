@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createCodebergRelease } from "./lib/codeberg-release.mjs";
+import { createForgeRelease } from "./lib/forge-release.mjs";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -25,8 +25,8 @@ function run(cmd, cmdArgs) {
 if (!target || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(target)) {
   die("gültige Ziel-Version erwartet — z.B. `npm run release 0.8.0`.");
 }
-const tokenPath = join(homedir(), ".codeberg-token");
-if (!existsSync(tokenPath)) die("~/.codeberg-token fehlt.");
+const tokenPath = join(homedir(), ".forgejo-token");
+if (!existsSync(tokenPath)) die("~/.forgejo-token fehlt.");
 const tagExists = sh("git", ["tag", "--list", target]) === target;
 if (!tagExists && !dryRun && sh("git", ["status", "--porcelain"]) !== "") {
   die("Arbeitsbaum nicht sauber — committe oder stashe erst.");
@@ -75,7 +75,7 @@ if (dryRun) {
   console.log(`[dry-run] Codeberg-Release ${repo} ${target} mit Assets: ${assets.map((a) => a.name).join(", ")}`);
 } else {
   const token = readFileSync(tokenPath, "utf8").trim();
-  const out = await createCodebergRelease({ fetch, token, repo, tag: target, notes, assets });
+  const out = await createForgeRelease({ fetch, token, repo, tag: target, notes, assets });
   console.log(`release: Codeberg-Release ${out.htmlUrl}`);
 }
 

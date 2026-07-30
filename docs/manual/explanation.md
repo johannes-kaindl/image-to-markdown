@@ -124,7 +124,7 @@ memory for sharpness only when a particular document needs it.
 
 ## Why a separate plugin from vault-rag
 
-Image to Markdown was split out of [vault-rag](https://codeberg.org/jkaindl/vault-rag) 0.2.0
+Image to Markdown was split out of [vault-rag](https://git.jkaindl.de/jkaindl/vault-rag) 0.2.0
 on 2026-06-21. It is worth understanding *why* it became its own plugin rather than staying
 a feature of its sibling.
 
