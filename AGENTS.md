@@ -29,8 +29,11 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`capabilities.ts`, `i18n.ts`, `sse.ts`, `think_splitter.ts`, `pdf_to_md.ts`, `backlinks.ts`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
-`settings.ts`, `img_to_md_view.ts`, `http.ts`, `pdf_render.ts` importieren `obsidian` (bzw. DOM/Canvas). Die View bekommt alle Abhängigkeiten
+`capabilities.ts`, `i18n.ts`, `sse.ts`, `pdf_to_md.ts`, `backlinks.ts`, `diff.ts`, `refine.ts`,
+`describe.ts`, `prompts.ts`, `reasoning_toggle.ts`, `card_cache.ts`, `frontmatter_map.ts`,
+`fm_migration.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
+`settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` importieren
+`obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten
 über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
 ### Modul-Layout (`src/`)
@@ -67,8 +70,27 @@ http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via 
 capabilities.ts     Vision-Capability-Detektion (vision-only, Fork aus vault-rag): guessVision (Namens-
                     Heuristik) · parse* (Ollama/LM Studio v0/v1) · fetchVisionCapability · resolveVision ·
                     visionDisplay · isVisionConfirmed. Reiner Kern, DOM-frei.
-sse.ts              streamSSE + parseSSE (OpenAI-SSE, content + reasoning_content). Kopiert aus vault-rag.
-think_splitter.ts   ThinkSplitter (inline <think>-Tags). Kopiert aus vault-rag.
+sse.ts              streamSSE (Transport): liest den SSE-Stream aus einer Response, delegiert
+                    Parsing an vendor/kit/sse.ts (parseSSE) + vendor/kit/think.ts (ThinkSplitter).
+diff.ts             Reiner Zeilen-Diff (LCS): diffLines · groupHunks · applySelection. Obsidian-frei.
+diff_modal.ts       DiffModal (Modal): Zeilen-Diff alt↔neu mit Checkbox pro Hunk (Default: alle an),
+                    liefert den gemergten Body zurück. Obsidian-abhängig.
+refine.ts           Reiner Kern: buildRefineMessages — Multi-Turn-Chat-Messages für die iterative
+                    Nachbesserung (Original + Feedback-Verlauf + neues Feedback).
+describe.ts         Beschreiben-Modus: buildDescribePrompt (festes CATEGORY/TAGS/---/Prosa-Format,
+                    Taxonomie-Auswahl) + Parsing nach ParsedDescription. Reiner Kern.
+prompts.ts          Prompt-Presets (default/tables/handwriting/math/code): PROMPT_PRESETS ·
+                    isPromptPreset · normalizePreset · Preset-Auflösung. Reiner Kern.
+reasoning_toggle.ts thinkToggleView: mappt (Modell, Suppress-Flag) auf den Anzeige-Zustand des
+                    Thinking-Toggles (Always-on-Thinker → disabled + „immer an"). Reiner Kern.
+card_cache.ts       CardCache: In-Session-Cache der Sidebar-Ergebnis-Karten pro Quelldatei
+                    (Plugin-Ebene, überlebt View-Close; kein Disk-Persist). Reiner Kern.
+frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskriminator-Werte aller
+                    i2m-Notizen (Setup-Zeit-Entscheidung). Reiner Kern.
+fm_migration.ts     Frontmatter-Mapping-Migration: diffMappings + Migrationsplan
+                    (MigrationPlan/NotePlan) über bestehende i2m-Notizen. Reiner Kern.
+migration_modal.ts  MigrationModal (Modal): Vorschau der Frontmatter-Migration (read-only
+                    Frontmatter-Diff, migrate/apply/cancel). Obsidian-abhängig.
 i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t() (Fallback lang→en→key,
                     {0}-Interpolation) · pickLang · setLang/getLang · defaultVisionPrompt. EN kanonisch.
 settings.ts         ImageToMarkdownSettings (enthält `visionEndpoints: string[]` statt eines einzelnen
@@ -87,6 +109,12 @@ main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setL
 pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
                     gebündelten pdf.js-Worker als eingebetteten String (Blob-URL-Quelle). Nicht
                     manuell editieren; wird bei `npm run build` neu erzeugt.
+vendor/kit/         Aus obsidian-kit vendored (Quell-Version steht im Datei-Header):
+  endpoint.ts       normalizeEndpoint + Endpoint-Fallback-Auflösung.
+  reasoning.ts      Reasoning-Unterdrückung (suppressParams) + isAlwaysOnThinker.
+  settings.ts       mergeSettings (Defaults-Merge mit Referenz-Schutz).
+  sse.ts            parseSSE (OpenAI-SSE-Delta-Parser, content + reasoning_content).
+  think.ts          ThinkSplitter (inline <think>-Tags; früher src/think_splitter.ts).
 ```
 
 **pdf.js-Worker-Build:** `scripts/build-pdf-worker.mjs` bündelt `pdfjs-dist/build/pdf.worker.mjs`
@@ -94,8 +122,9 @@ via esbuild zu einem Single-File-Bundle, das als Template-Literal in
 `pdf-worker-src.generated.ts` eingebettet wird. Zur Laufzeit erzeugt `pdf_render.ts` daraus
 eine Blob-URL — kein CDN, kein Netz, kein Import-Assertion-Trick.
 
-**Geteilter Transport ist kopiert, nicht geteilt:** `sse.ts`/`think_splitter.ts` existieren identisch
-in vault-rag und hier. Ein npm-Shared-Package wäre für ~5 KB stabilen Code Overengineering (YAGNI).
+**Geteilter Code ist vendored, nicht als Package geteilt:** die mit den Schwester-Plugins
+gemeinsamen reinen Teile liegen als Kopien aus `obsidian-kit` unter `src/vendor/kit/`
+(Kit-first-Regel des Dachs); der Transport `streamSSE` bleibt bewusst plugin-lokal.
 
 ## Commands
 
@@ -161,7 +190,9 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
 
 ## Abweichungen von der Leitkonvention
 
-Stand 2026-06-23 — **Release 0.3.0**. Verbleibende bewusste, begründete Abweichungen (comply-or-explain):
+Stand: siehe `CHANGELOG.md` / `manifest.json` (dort steht die maßgebliche Version — hier bewusst
+keine, damit dieser Block nicht durch Zeitablauf falsch wird). Verbleibende bewusste, begründete
+Abweichungen (comply-or-explain):
 
 - **CORE-META-07** — `LICENSE` (AGPL-3.0) + `LICENSE-DOCS` (CC BY-SA 4.0) vorhanden; separate `LICENSING.md`/`CLA.md` (Dual-License-Option) noch nicht. *Grund:* rechtliche Entscheidung, bei Bedarf — CONTRIBUTING nennt „commercial dual-license on request".
 - **PROF-OBS-06** — Settings-Tab nutzt noch `display()` (deklarative `getSettingDefinitions`-API ist 1.13-Enhancement). *Grund:* Recommendation, kein Blocker; eigener Zyklus.
