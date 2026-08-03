@@ -1,7 +1,15 @@
 # Spec: Kit-Capability-Extraktion (Zyklus B)
 
-**Datum:** 2026-07-30
+**Datum:** 2026-07-30 (Fakten-Nachtrag 2026-08-03)
 **Status:** Design freigegeben (Brainstorming), Plan ausstehend
+
+> **Fakten-Nachtrag 2026-08-03** (Design unverändert, nur überholte Ist-Angaben berichtigt):
+> Das Kit steht inzwischen auf **0.20.0** — die Zielversion dieses Zyklus ist deshalb
+> **0.21.0**, nicht 0.19.0. Der `KIT_VERSION`-Lag besteht weiter (Konstante `0.19.0` bei
+> `package.json`/Tag `0.20.0`), ist also **zweimal in Folge** aufgetreten und braucht einen
+> Prozess-Fix, nicht nur eine Einmal-Korrektur. Codeberg ist als Forge ausgestiegen
+> (`207bfd0`): kanonisch ist Forgejo `git.jkaindl.de` (`origin`), GitHub ist der
+> Push-Mirror.
 **Baut auf:** Thinking-Toggle 0.10.0 — `2026-07-11-thinking-toggle-design.md`, das die
 Capability-Erkennung ausdrücklich ausklammerte und diesen Zyklus als Follow-up benannte.
 
@@ -35,7 +43,7 @@ sichtbaren Nebeneffekt, dass der Thinking-Toggle ehrlicher beschriftet ist.
 ## Scope
 
 **In Scope:**
-- Neues Kit-Modul `src/pure/capabilities.ts` (Kit-Release **0.19.0**).
+- Neues Kit-Modul `src/pure/capabilities.ts` (Kit-Release **0.21.0**).
 - i2m vendored das Modul und ersetzt seine Fork-Datei durch einen Adapter.
 - i2ms `reasoning_toggle.ts` nutzt die Kit-Heuristik für einen **Hinweistext**.
 - Pflege von `KIT-MATRIX.md` und `REGISTRY.md`.
@@ -112,15 +120,18 @@ Versuch**, damit ein werfender Adapter die Sequenz Ollama → LM Studio v1 → v
 `mergeCapability`, `resolveCapabilities`, `fetchCapabilities` — plus der neue Typ
 `CapabilityFetch`. Dazu ein Re-Export in `src/pure/index.ts`.
 
-**Versions-Korrektur:** `KIT_VERSION` in `src/pure/index.ts` steht auf `"0.17.1"`, obwohl
-Tag und `package.json` bereits auf `0.18.0` sind — der 0.18.0-Release zog den
-`package.json`-Lag ausdrücklich nach, übersah aber die Konstante, die laut Kit-`AGENTS.md`
-Teil der Versions-Wahrheit ist. Der Bump auf `0.19.0` zieht das mit gerade.
+**Versions-Korrektur:** `KIT_VERSION` in `src/pure/index.ts` läuft der wahren Version
+hinterher — Stand 2026-08-03 steht die Konstante auf `"0.19.0"`, während Tag und
+`package.json` bereits `0.20.0` sind. Beim 0.18.0-Release war es derselbe Fehler eine
+Version früher (Konstante `0.17.1`). Zweimal in Folge heißt: der Bump auf `0.21.0`
+korrigiert nicht nur den Wert, sondern **verriegelt ihn** — ein Test, der `KIT_VERSION`
+gegen `package.json` prüft, damit der nächste Release-Bump nicht wieder still divergiert.
+Die Konstante ist laut Kit-`AGENTS.md` Teil der Versions-Wahrheit.
 
 ### i2m: `src/capabilities.ts` wird zum Adapter
 
 Neu: `src/vendor/kit/capabilities.ts` mit Herkunfts-Header
-(`// vendored from obsidian-kit#0.19.0, src/pure/capabilities.ts`), wie die fünf
+(`// vendored from obsidian-kit#0.21.0, src/pure/capabilities.ts`), wie die fünf
 bestehenden Vendor-Module.
 
 Die Datei **verliert** `guessVision`, `parseOllamaShow`, `parseLmStudioV1`,
@@ -237,10 +248,10 @@ Absichtserklärung statt einer Eigenschaft.
 
 ## Reihenfolge & Release
 
-1. **Kit:** Modul + Tests + `index.ts`-Re-Export + `KIT_VERSION` → `0.19.0` (inkl. der
-   übersehenen 0.18.0-Korrektur) + CHANGELOG-Eintrag + Tag + Dual-Forge-Push
-   (Codeberg kanonisch, GitHub-Mirror).
-2. **i2m:** gegen Tag `0.19.0` vendoren, Adapter, Toggle, i18n, Tests.
+1. **Kit:** Modul + Tests + `index.ts`-Re-Export + `KIT_VERSION` → `0.21.0` (inkl. des
+   nachgezogenen Lags **und** des verriegelnden Tests) + CHANGELOG-Eintrag + Tag +
+   Dual-Push (Forgejo `git.jkaindl.de` kanonisch, GitHub-Mirror).
+2. **i2m:** gegen Tag `0.21.0` vendoren, Adapter, Toggle, i18n, Tests.
 3. **Dach:** `KIT-MATRIX.md` + `REGISTRY.md` nachziehen — die Registry hat bisher
    **keinen** Eintrag für Capability-Erkennung.
 4. Geräte-Abnahme, dann i2m-Release **0.17.0** (neues sichtbares Verhalten → Minor).
