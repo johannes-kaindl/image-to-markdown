@@ -1,92 +1,51 @@
-// Vision-Capability-Detektion — vision-only-Adaptation von vault-rag/src/capabilities.ts.
+// i2m-Adapter über das vendored Kit-Modul: projiziert die Vision-Achse heraus und übersetzt
+// den plugin-eigenen HttpFetch in den vom Kit erwarteten CapabilityFetch.
 // Reiner Kern: keine obsidian-/DOM-Imports (in Node testbar, PROF-OBS-03/04).
 
 import { t } from "./i18n";
 import type { HttpFetch } from "./vision_client";
+import {
+  type Capabilities, type CapabilityFetch, type Confidence,
+  fetchCapabilities, resolveCapabilities,
+} from "./vendor/kit/capabilities";
 
-export type Confidence = "no" | "likely" | "confirmed";
+// Re-Export, damit vision_client.ts und settings.ts ihren Import nicht ändern müssen.
+export type { Confidence };
 
-const RANK: Record<Confidence, number> = { no: 0, likely: 1, confirmed: 2 };
-const stronger = (a: Confidence, b: Confidence): Confidence => (RANK[a] >= RANK[b] ? a : b);
-const norm = (m: string): string => m.toLowerCase();
-
-// ── L2: Namens-Heuristik ──────────────────────────────────────────────
-const VISION = [
-  "llava", "bakllava", "vision", "pixtral", "moondream", "minicpm-v", "internvl",
-  "smolvlm", "cogvlm", "molmo", "nvlm", "aya-vision", "kimi-vl", "ovis", "multimodal",
-];
-const VISION_TOKEN = /(^|[-_:/. ])vl([-_:/. ]|$)/;   // qwen2-vl, qwen3-vl
-const GLM_V = /glm-4(\.\d+)?v/;                       // glm-4v, glm-4.1v, glm-4.5v
-const GEMMA3_VISION = /gemma3/;                       // ≥4B; 1b/270m sind text-only
-const GEMMA3_TEXT = /gemma3:(1b|270m)/;
-const MISTRAL_VISION = /mistral-small.*(3\.1|3\.2)/;
-
-export function guessVision(model: string): Confidence {
-  const m = norm(model);
-  if (GEMMA3_TEXT.test(m)) return "no";
-  if (GEMMA3_VISION.test(m)) return "likely";
-  if (MISTRAL_VISION.test(m)) return "likely";
-  if (/mistral-small/.test(m)) return "no";
-  if (GLM_V.test(m)) return "likely";
-  if (VISION_TOKEN.test(m)) return "likely";
-  if (VISION.some(v => m.includes(v))) return "likely";
-  return "no";
+/** Übersetzt den plugin-eigenen HttpFetch in die schmale Kit-Form: Status prüfen, Text parsen,
+ *  bei allem anderen `null`. Das HTTP-Wissen bleibt damit im Plugin, wo es ohnehin sitzt. */
+function asJsonFetch(http: HttpFetch): CapabilityFetch {
+  return async (req) => {
+    const r = await http(req.url, { method: req.method, headers: req.headers, body: req.body });
+    if (!r.ok) return null;
+    try {
+      return { json: JSON.parse(r.text) as unknown };
+    } catch {
+      return null;   // HTTP 200 mit nicht-JSON-Body (LM Studio antwortet so auf falsche Pfade)
+    }
+  };
 }
 
-// ── L1: Metadaten-Parser (vision-only) ────────────────────────────────
-export function parseOllamaShow(json: unknown): Confidence | null {
-  const caps = (json as { capabilities?: unknown })?.capabilities;
-  if (!Array.isArray(caps)) return null;
-  const arr = caps.filter((x): x is string => typeof x === "string");
-  return arr.includes("vision") ? "confirmed" : "no";
+/** Probiert native Capability-Endpoints gegen eine Basis-URL (OHNE /v1) und gibt nur die
+ *  Vision-Achse zurück. http wird injiziert (Obsidian: requestUrl-Adapter; Tests: Mock). */
+export async function fetchVisionCapability(
+  http: HttpFetch, baseUrl: string, model: string,
+): Promise<Confidence | null> {
+  const caps = await fetchCapabilities(asJsonFetch(http), baseUrl, model);
+  return caps ? caps.vision : null;
 }
 
-function findModel(json: unknown, model: string): Record<string, unknown> | null {
-  const data = (json as { data?: unknown[] })?.data;
-  if (!Array.isArray(data)) return null;
-  const hit = data.find(x => (x as { id?: unknown })?.id === model);
-  return (hit as Record<string, unknown>) ?? null;
-}
-
-export function parseLmStudioV1(json: unknown, model: string): Confidence | null {
-  const m = findModel(json, model);
-  if (!m) return null;
-  const caps = (m.capabilities ?? {}) as { vision?: unknown };
-  return caps.vision === true ? "confirmed" : "no";
-}
-
-export function parseLmStudioV0(json: unknown, model: string): Confidence | null {
-  const m = findModel(json, model);
-  if (!m) return null;
-  return m.type === "vlm" ? "confirmed" : "no";
-}
-
-/** Probiert native Capability-Endpoints gegen eine Basis-URL (OHNE /v1). http wird injiziert
- *  (Obsidian: requestUrl-Adapter; Tests: Mock) → reiner Kern bleibt obsidian-frei. */
-export async function fetchVisionCapability(http: HttpFetch, baseUrl: string, model: string): Promise<Confidence | null> {
-  try {
-    const r = await http(`${baseUrl}/api/show`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }),
-    });
-    if (r.ok) { const c = parseOllamaShow(JSON.parse(r.text) as unknown); if (c) return c; }
-  } catch { /* weiter */ }
-  try {
-    const r = await http(`${baseUrl}/api/v1/models`);
-    if (r.ok) { const c = parseLmStudioV1(JSON.parse(r.text) as unknown, model); if (c) return c; }
-  } catch { /* weiter */ }
-  try {
-    const r = await http(`${baseUrl}/api/v0/models`);
-    if (r.ok) { const c = parseLmStudioV0(JSON.parse(r.text) as unknown, model); if (c) return c; }
-  } catch { /* weiter */ }
-  return null;
-}
-
-/** Merge: Metadaten (falls vorhanden) gegen Namens-Heuristik, stärkere Confidence gewinnt. */
+/** Merge: Metadaten (falls vorhanden) gegen Namens-Heuristik, stärkere Confidence gewinnt.
+ *  Hebt die Vision-Confidence in die Kit-Form und projiziert das Ergebnis zurück — der
+ *  Thinking-Teil ist dabei belanglos, weil mergeCapability für Vision nur base.vision liest. */
 export function resolveVision(meta: Confidence | null, model: string): Confidence {
-  return stronger(meta ?? "no", guessVision(model));
+  const base: Capabilities | null =
+    meta === null ? null : { vision: meta, thinking: { support: "none", confidence: "no" } };
+  return resolveCapabilities(base, model).vision;
 }
 
-/** UI-Display: Lucide-Icon-Name + Kurz-Text + State-Klasse. */
+/** UI-Display: Lucide-Icon-Name + Kurz-Text + State-Klasse. Bleibt plugin-lokal — hängt an
+ *  i2ms t()-Katalog und an Lucide-Icon-Namen, ist also UI-Entscheidung, nicht Modell-Wissen. */
 export function visionDisplay(c: Confidence): { icon: string; text: string; state: "ok" | "likely" | "error" } {
   if (c === "confirmed") return { icon: "eye", text: t("cap.confirmed"), state: "ok" };
   if (c === "likely") return { icon: "help-circle", text: t("cap.likely"), state: "likely" };
@@ -94,6 +53,7 @@ export function visionDisplay(c: Confidence): { icon: string; text: string; stat
 }
 
 // ── Aktiver Vision-Test (Bild-Erzeugung lebt in der DOM-Schicht settings.ts) ──
+// Bewusst plugin-lokal: pur und generisch, aber mit n=1 noch kein Kit-Kandidat.
 export const VISION_TEST_TOKEN = "VX7";
 // Interne Vision-Probe (nicht nutzersichtbar) — bewusst EN-kanonisch, keine Lokalisierung.
 export const VISION_TEST_PROMPT = "Output only the text in the image.";
