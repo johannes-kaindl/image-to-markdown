@@ -246,8 +246,12 @@ export class ImgToMdView extends ItemView {
     btn.createSpan({ cls: "img2md-think-lbl", text: t(v.labelKey) });
     btn.removeClass("is-off"); btn.removeClass("is-disabled");
     if (v.cls) btn.addClass(v.cls);
-    btn.setAttribute("aria-label", t(v.labelKey));
-    btn.setAttribute("title", t(v.labelKey));
+    // Der Hinweis steht nur in title + aria-label: der sichtbare Button-Text bleibt unverändert,
+    // damit der Sidebar-Breiten-Fix aus 0.10.1 heil bleibt. Bewusst keine CSS-Markierung —
+    // eine gedimmte Variante wäre Bedeutung-über-Farbe (WCAG 1.4.1).
+    const label = v.hintKey ? `${t(v.labelKey)} — ${t(v.hintKey)}` : t(v.labelKey);
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
     if (v.disabled) btn.setAttribute("aria-disabled", "true"); else btn.removeAttribute("aria-disabled");
   }
 
