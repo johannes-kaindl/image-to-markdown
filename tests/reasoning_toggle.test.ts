@@ -15,8 +15,8 @@ describe("thinkToggleView — Label, Klasse, disabled", () => {
 });
 
 describe("thinkToggleView — hintKey aus der Kit-Heuristik", () => {
-  it("support 'none' → Hinweis, dass das Modell vermutlich nicht denkt", () => {
-    expect(thinkToggleView("llama3.1:8b", false).hintKey).toBe("view.thinkingHintNone");
+  it("support 'none' (erkannter Nicht-Denker) → kein Hinweis (die Heuristik kann „bekannt kein Denker“ nicht von „unbekannter Name“ unterscheiden)", () => {
+    expect(thinkToggleView("llama3.1:8b", false).hintKey).toBeNull();
   });
   it("support 'hybrid' → kein Hinweis (der Toggle tut genau, was er verspricht)", () => {
     expect(thinkToggleView("qwen3:8b", false).hintKey).toBeNull();

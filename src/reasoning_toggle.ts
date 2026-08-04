@@ -7,23 +7,22 @@ export interface ThinkToggleView {
   labelKey: "view.thinkingOn" | "view.thinkingOff" | "view.thinkingAlways";
   /** Zusatz für Tooltip + aria-label; null = kein Hinweis. Ändert NIE den sichtbaren Button-Text
    *  (der Sidebar-Breiten-Fix aus 0.10.1 hängt daran) und NIE das Request-Verhalten. */
-  hintKey: "view.thinkingHintNone" | "view.thinkingHintAlways" | null;
+  hintKey: "view.thinkingHintAlways" | null;
   cls: "" | "is-off" | "is-disabled";
   disabled: boolean;
 }
 
-/** Hinweis aus der Kit-Namens-Heuristik. Zwei Vorrang-Regeln:
- *  - gesperrtes Modell (gpt-oss/harmony) → kein Hinweis; das Label sagt schon „immer an".
- *    Der interessante Gegenfall: deepseek-r1 ist support:"always", aber NICHT
- *    isAlwaysOnThinker — dort steht das normale an/aus-Label MIT Hinweis.
- *  - leerer Modellname → kein Hinweis; guessFromName("") liefert "none", daraus „denkt
- *    vermutlich nicht" abzuleiten wäre eine Aussage über ein Modell, das es nicht gibt. */
-function hintFor(model: string, disabled: boolean): ThinkToggleView["hintKey"] {
-  if (disabled || model === "") return null;
-  const support = guessFromName(model).thinking.support;
-  if (support === "none") return "view.thinkingHintNone";
-  if (support === "always") return "view.thinkingHintAlways";
-  return null;   // hybrid: der Toggle tut genau, was er verspricht
+/** Hinweis aus der Kit-Namens-Heuristik — nur für support:"always". Es gibt bewusst KEIN
+ *  Gegenstück für support:"none": guessThinking liefert {support:"none", confidence:"no"}
+ *  sowohl für bekannte Nicht-Denker als auch für jeden nicht erkannten Namen — bei frei
+ *  benannten lokalen Modellen der Mehrheitsfall. Ein Hinweis „denkt vermutlich nicht" wäre
+ *  dort eine Aussage, die die Heuristik nicht stützen kann (Abwesenheit von Evidenz ist keine
+ *  Evidenz für Abwesenheit). Ein Confidence-Gate hilft nicht: support==="none" und
+ *  confidence==="no" treten in guessFromName immer zusammen auf, ein Gate darauf würde den
+ *  Hinweis in 100% der Fälle unterdrücken — also stattdessen ganz weglassen. */
+function hintFor(model: string): ThinkToggleView["hintKey"] {
+  if (model === "") return null;   // kein Modell gewählt → keine Aussage über ein Modell, das es nicht gibt
+  return guessFromName(model).thinking.support === "always" ? "view.thinkingHintAlways" : null;
 }
 
 /** gpt-oss/harmony lassen sich nicht abschalten → disabled + „immer an". Sonst: an/aus je Suppress-Flag. */
@@ -31,7 +30,7 @@ export function thinkToggleView(model: string, suppress: boolean): ThinkToggleVi
   if (isAlwaysOnThinker(model)) {
     return { labelKey: "view.thinkingAlways", hintKey: null, cls: "is-disabled", disabled: true };
   }
-  const hintKey = hintFor(model, false);
+  const hintKey = hintFor(model);
   if (suppress) return { labelKey: "view.thinkingOff", hintKey, cls: "is-off", disabled: false };
   return { labelKey: "view.thinkingOn", hintKey, cls: "", disabled: false };
 }
