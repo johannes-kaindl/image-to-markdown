@@ -133,7 +133,7 @@ export class ImgToMdView extends ItemView {
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
     this.modelSel.addEventListener("change", () => { this.deps.setModel(this.modelSel?.value ?? ""); this.renderThinkToggle(); });
-    this.modelStatusEl = modelRow.createEl("span", { cls: "img2md-model-status" });
+    this.modelStatusEl = modelRow.createSpan({ cls: "img2md-model-status" });
     this.refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
     setIcon(this.refreshBtn, "refresh-cw");
     this.refreshBtn.addEventListener("click", () => void this.refreshModels(true));
@@ -335,13 +335,13 @@ export class ImgToMdView extends ItemView {
       if (item.kind === "pdf") {
         const r = item.range ?? { from: 1, to: item.pageCount ?? 1 };
         const max = item.pageCount ?? 1;
-        const name = row.createEl("span", { cls: "img2md-name", text: this.basename(item.link) });
+        const name = row.createSpan({ cls: "img2md-name", text: this.basename(item.link) });
         name.setAttribute("title", t("view.pdfPages", this.basename(item.link), max));
-        const range = row.createEl("span", { cls: "img2md-pdf-range" });
-        range.createEl("span", { cls: "img2md-pdf-lbl", text: t("view.pdfRangePrefix") });
+        const range = row.createSpan({ cls: "img2md-pdf-range" });
+        range.createSpan({ cls: "img2md-pdf-lbl", text: t("view.pdfRangePrefix") });
         const from = range.createEl("input", { cls: "img2md-pdf-from" }); from.type = "number"; from.value = String(r.from);
         from.setAttribute("min", "1"); from.setAttribute("max", String(max)); from.setAttribute("aria-label", t("view.pdfRangeFrom"));
-        range.createEl("span", { cls: "img2md-pdf-lbl", text: t("view.pdfRangeMid") });
+        range.createSpan({ cls: "img2md-pdf-lbl", text: t("view.pdfRangeMid") });
         const to = range.createEl("input", { cls: "img2md-pdf-to" }); to.type = "number"; to.value = String(r.to);
         to.setAttribute("min", "1"); to.setAttribute("max", String(max)); to.setAttribute("aria-label", t("view.pdfRangeTo"));
         const clamp = () => {
@@ -352,20 +352,20 @@ export class ImgToMdView extends ItemView {
         from.addEventListener("change", clamp); to.addEventListener("change", clamp);
       } else {
         const label = item.supported ? this.basename(item.link) : t("view.unsupportedSuffix", this.basename(item.link));
-        row.createEl("span", { cls: "img2md-name", text: label });
+        row.createSpan({ cls: "img2md-name", text: label });
       }
-      if (item.selfSource) row.createEl("span", { cls: "img2md-linked", text: t("view.thisFile") });
-      else if (item.embed === false) row.createEl("span", { cls: "img2md-linked", text: t("view.linked") });
+      if (item.selfSource) row.createSpan({ cls: "img2md-linked", text: t("view.thisFile") });
+      else if (item.embed === false) row.createSpan({ cls: "img2md-linked", text: t("view.linked") });
       // Idempotenz-Zeile: eigene Achse je Modus (Transkript vs. Beschreibung existieren unabhängig
       // voneinander — siehe findExistingTranscript/findExistingDescription).
       if (this.deps.getMode() === "describe") {
         if (item.existingDescriptionPath) {
-          row.createEl("span", { cls: "img2md-exists", text: t("view.descriptionExists") });
+          row.createSpan({ cls: "img2md-exists", text: t("view.descriptionExists") });
           const open = row.createEl("a", { cls: "img2md-exists-open", text: t("view.open") });
           open.addEventListener("click", () => this.deps.openPath(item.existingDescriptionPath!));
         }
       } else if (item.existingTranscriptPath) {
-        row.createEl("span", { cls: "img2md-exists", text: t("view.transcriptExists") });
+        row.createSpan({ cls: "img2md-exists", text: t("view.transcriptExists") });
         const open = row.createEl("a", { cls: "img2md-exists-open", text: t("view.open") });
         open.addEventListener("click", () => this.deps.openPath(item.existingTranscriptPath!));
         row.setAttribute("title", t("view.overwriteHint"));
