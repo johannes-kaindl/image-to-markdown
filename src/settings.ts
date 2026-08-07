@@ -1,10 +1,11 @@
-import { App, PluginSettingTab, Setting, setIcon, Notice } from "obsidian";
+import { App, PluginSettingTab, Setting, setIcon, Notice, type SettingDefinitionItem } from "obsidian";
 import type ImageToMarkdownPlugin from "./main";
 import { VisionClient, normalizeEndpoint } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
 import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
+import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab } from "./vendor/kit-obsidian/settings_walker";
 
 /** Endpoint-Liste aus geladenen Settings: vorhandene visionEndpoints (leere gefiltert),
  *  sonst der alte Einzel-visionEndpoint als 1-Element-Liste, sonst leer. Reiner Helfer. */
@@ -108,27 +109,132 @@ export function makeVisionTestImage(token: string = VISION_TEST_TOKEN): string {
 
 export class ImageToMarkdownSettingTab extends PluginSettingTab {
   private confirmedModels = new Set<string>();
+  /** Cleanups der render-Hatches aus dem Fallback-Pfad — vor jedem Rebuild ausführen. */
+  private cleanupPrevious: () => void = () => { /* erster Lauf: nichts aufzuräumen */ };
+  /** Von der Capability-Hatch gesetzt; das Modell-Dropdown ruft sie nach einem Wechsel. */
+  private showCaps: (model: string) => void = () => { /* bis die Capability-Zeile gerendert ist */ };
 
   constructor(app: App, private plugin: ImageToMarkdownPlugin) { super(app, plugin); }
 
-  // display() ist seit Obsidian 1.13 deprecated, bleibt aber der Fallback-Override für
-  // minAppVersion < 1.13. Es delegiert an render(); interne Re-Renders rufen render() direkt,
-  // damit kein deprecated this.display()-Aufruf entsteht (Community-Review SOURCE-CODE-Check).
-  display(): void { this.render(); }
+  private endpoint(): string {
+    return this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0] ?? "";
+  }
 
-  private render(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    const endpoint = (): string => this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0] ?? "";
+  // ── Die eine Wahrheit ──────────────────────────────────────────────────────
+  // Ab Obsidian 1.13 fragt der Host diese Struktur ab und ruft display() nie; nur so
+  // erscheinen die Einstellungen in der Settings-Suche. minAppVersion ist 1.8.7, dort
+  // gibt es die deklarative API noch nicht — deshalb zeichnet display() DIESELBE
+  // Struktur mit der klassischen Setting-API nach (Kit-Walker). Kein zweiter
+  // Definitionsbaum, der auseinanderlaufen kann.
+  //
+  // Zeilen mit generischem Control sind deklarativ; alles Stateful (Endpunkt-Liste mit
+  // Live-Erreichbarkeit, asynchron befülltes Modell-Dropdown, Taxonomie-Liste, die
+  // migrationsauslösenden Frontmatter-Felder) sind `render`-Hatches: EIN Code, der in
+  // beiden Pfaden unverändert läuft.
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    const fmFields: Array<[keyof FrontmatterMap, string]> = [
+      ["sourceImage", "settings.fmMap.sourceImage"],
+      ["sourcePdf", "settings.fmMap.sourcePdf"],
+      ["sourceNote", "settings.fmMap.sourceNote"],
+      ["category", "settings.fmMap.category"],
+      ["tags", "settings.fmMap.tags"],
+      ["authorTranscribed", "settings.fmMap.authorTranscribed"],
+      ["authorDescribed", "settings.fmMap.authorDescribed"],
+      ["created", "settings.fmMap.created"],
+      ["pages", "settings.fmMap.pages"],
+      ["kindKey", "settings.fmMap.kindKey"],
+      ["kindTranscript", "settings.fmMap.kindTranscript"],
+      ["kindDescription", "settings.fmMap.kindDescription"],
+    ];
+    return [
+      {
+        type: "group",
+        heading: t("settings.heading"),
+        items: [
+          { name: t("settings.endpoints.name"), desc: t("settings.endpoints.desc"),
+            render: (s: Setting) => { this.renderEndpoints(s); } },
+          { name: t("settings.model.name"), desc: t("settings.model.desc"),
+            render: (s: Setting) => { this.renderModel(s); } },
+          { name: t("settings.capability.name"),
+            render: (s: Setting) => { this.renderCapability(s); } },
+          { name: t("settings.prompt.name"), desc: t("settings.prompt.desc"),
+            render: (s: Setting) => { this.renderPrompt(s); } },
+          // min/max sind die UI-Seite derselben Grenze, die setControlValue erzwingt: das
+          // native 1.13-Zahlenfeld zeigt sie an, der Fallback (Textfeld) kennt sie nicht —
+          // deshalb bleibt die Prüfung in setControlValue die verbindliche.
+          { name: t("settings.pdfMaxPages.name"), desc: t("settings.pdfMaxPages.desc"),
+            control: { type: "number", key: "pdfMaxPages", min: 1, max: 500 } },
+          { name: t("settings.pdfRenderScale.name"), desc: t("settings.pdfRenderScale.desc"),
+            control: { type: "slider", key: "pdfRenderScale", min: 1, max: 4, step: 0.5 } },
+          { name: t("settings.pdfPageSep.name"), desc: t("settings.pdfPageSep.desc"),
+            control: { type: "dropdown", key: "pdfPageSeparator", options: {
+              comment: t("settings.pdfPageSep.comment"),
+              heading: t("settings.pdfPageSep.heading"),
+              rule: t("settings.pdfPageSep.rule"),
+              pagebreak: t("settings.pdfPageSep.pagebreak"),
+              none: t("settings.pdfPageSep.none"),
+            } } },
+          { name: t("settings.pdfUseTextLayer.name"), desc: t("settings.pdfUseTextLayer.desc"),
+            control: { type: "toggle", key: "pdfUseTextLayer" } },
+          { name: t("settings.reasoningExpanded.name"), desc: t("settings.reasoningExpanded.desc"),
+            control: { type: "toggle", key: "reasoningExpanded" } },
+        ],
+      },
+      {
+        type: "group",
+        heading: t("settings.taxonomy.heading"),
+        items: [
+          { name: t("settings.taxonomy.name"), desc: t("settings.taxonomy.desc"),
+            render: (s: Setting) => { this.renderTaxonomy(s); } },
+        ],
+      },
+      {
+        type: "group",
+        heading: t("settings.fmMap.heading"),
+        items: [
+          // Reine Beschreibungszeile ohne eigenen Namen (wie zuvor `new Setting().setDesc()`):
+          // der Walker setzt den Namen nur, wenn er nicht leer ist.
+          { name: "", desc: t("settings.fmMap.desc"), render: () => { /* nur Text */ } },
+          ...fmFields.map(([field, labelKey]) => ({
+            name: t(labelKey),
+            render: (s: Setting) => { this.renderFmField(s, field); },
+          })),
+        ],
+      },
+    ];
+  }
 
-    new Setting(containerEl).setName(t("settings.heading")).setHeading();
+  // ── Werte-Brücke für die deklarativen Controls ────────────────────────────
+  getControlValue(key: string): unknown {
+    return (this.plugin.settings as unknown as Record<string, unknown>)[key];
+  }
 
-    // ── Vision-Endpunkte (geordnete Fallback-Liste) ──
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    const settings = this.plugin.settings as unknown as Record<string, unknown>;
+    // pdfMaxPages kommt aus einem Textfeld (die klassische API kennt kein Zahlenfeld) —
+    // ungültige oder unsinnige Eingaben werden verworfen statt gespeichert, sonst landet
+    // NaN in den Settings und die PDF-Schleife läuft ins Leere.
+    if (key === "pdfMaxPages") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return;
+      settings[key] = Math.min(Math.floor(n), 500);
+    } else {
+      settings[key] = value;
+    }
+    await this.plugin.saveSettings();
+  }
+
+  // ── Render-Hatches (ein Code, beide Pfade) ────────────────────────────────
+
+  /** Endpunkt-Liste: N Felder + leeres Add-Feld, je mit Live-Erreichbarkeits-Icon,
+   *  dazu der „Verbindung testen"-Knopf. Eine Zeile wird dafür zum Block-Container. */
+  private renderEndpoints(setting: Setting): void {
+    const host = settingBodyHost(setting);
     const eps = this.plugin.settings.visionEndpoints;
     const rows = [...eps, ""];   // leeres Zusatzfeld am Ende
     rows.forEach((value, i) => {
       const isAdder = i >= eps.length;
-      const s = new Setting(containerEl);
+      const s = new Setting(host);
       if (i === 0) s.setName(t("settings.endpoints.name")).setDesc(t("settings.endpoints.desc"));
       const statusIcon = s.controlEl.createSpan({ cls: "img2md-ep-status" });
       s.addText(tx => {
@@ -145,7 +251,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           this.plugin.settings.visionEndpoints = updated;
           void this.plugin.saveSettings()
             .then(() => this.plugin.resolveAndReconnect())
-            .then(() => this.render());
+            .then(() => { this.refresh(); });
         });
       });
       // Löschen: expliziter Mülleimer-Button (nicht am leeren Add-Feld) — entfernt den Eintrag.
@@ -158,7 +264,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
             this.plugin.settings.visionEndpoints = applyEndpointEdit(this.plugin.settings.visionEndpoints, i, "", false);
             void this.plugin.saveSettings()
               .then(() => this.plugin.resolveAndReconnect())
-              .then(() => this.render());
+              .then(() => { this.refresh(); });
           }));
       }
       // Pro-Feld-Status in A11y-Form (Form + Text + Farbe)
@@ -175,15 +281,39 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         });
       }
     });
-    new Setting(containerEl).addButton(b => b.setButtonText(t("settings.testConnection")).onClick(() => this.render()));
+    new Setting(host).addButton(b => b.setButtonText(t("settings.testConnection")).onClick(() => { this.refresh(); }));
+  }
 
-    // ── Modell ──
-    const modelSetting = new Setting(containerEl).setName(t("settings.model.name")).setDesc(t("settings.model.desc"));
-    modelSetting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => this.render()));
+  /** Modell: Dropdown wird asynchron aus dem Endpunkt befüllt; offline stattdessen ein
+   *  Textfeld + „Modelle laden". */
+  private renderModel(setting: Setting): void {
+    setting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => { this.refresh(); }));
+    void new VisionClient(this.endpoint(), "").listModels().then((models: string[]) => {
+      const cur = this.plugin.settings.visionModel;
+      const list = models.includes(cur) || !cur ? models : [cur, ...models];
+      if (list.length) {
+        setting.addDropdown(d => {
+          for (const m of list) d.addOption(m, m);
+          d.setValue(cur);
+          d.onChange(async (v: string) => {
+            this.plugin.settings.visionModel = v;
+            await this.plugin.saveSettings();
+            void this.plugin.resolveAndReconnect();
+            this.showCaps(v);
+          });
+        });
+      } else {
+        setting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
+          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); }));
+        setting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => { this.refresh(); }));
+      }
+      this.showCaps(this.plugin.settings.visionModel);
+    });
+  }
 
-    // ── Vision-Fähigkeit (Icon + Text) + aktiver Test ──
-    const capSetting = new Setting(containerEl).setName(t("settings.capability.name"));
-    const capEl = capSetting.descEl.createSpan({ cls: "img2md-cap" });
+  /** Vision-Fähigkeit: Icon + Text (Bedeutung nie über Farbe allein) + aktiver Test. */
+  private renderCapability(setting: Setting): void {
+    const capEl = setting.descEl.createSpan({ cls: "img2md-cap" });
     const capIcon = capEl.createSpan();
     const capText = capEl.createSpan();
     const renderCap = (c: Confidence): void => {
@@ -193,15 +323,15 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       capEl.toggleClass("is-ok", d.state === "ok");
       capEl.toggleClass("is-error", d.state === "error");
     };
-    const showCaps = (model: string): void => {
+    this.showCaps = (model: string): void => {
       if (this.confirmedModels.has(model)) { renderCap("confirmed"); return; }
-      void new VisionClient(endpoint(), "").visionConfidence(model).then(renderCap);
+      void new VisionClient(this.endpoint(), "").visionConfidence(model).then(renderCap);
     };
-    capSetting.addButton(b => b.setButtonText(t("settings.testVision")).onClick(async () => {
+    setting.addButton(b => b.setButtonText(t("settings.testVision")).onClick(async () => {
       const model = this.plugin.settings.visionModel;
       b.setDisabled(true);
       try {
-        const ok = await new VisionClient(endpoint(), model).testVision(makeVisionTestImage());
+        const ok = await new VisionClient(this.endpoint(), model).testVision(makeVisionTestImage());
         if (ok) { this.confirmedModels.add(model); renderCap("confirmed"); } else { renderCap("no"); }
       } catch {
         new Notice(t("settings.endpointUnreachable"));
@@ -209,84 +339,28 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         b.setDisabled(false);
       }
     }));
+    this.showCaps(this.plugin.settings.visionModel);
+  }
 
-    // Modell-Dropdown asynchron befüllen (+ Offline-Fallback mit „Modelle laden")
-    void new VisionClient(endpoint(), "").listModels().then((models: string[]) => {
-      const cur = this.plugin.settings.visionModel;
-      const list = models.includes(cur) || !cur ? models : [cur, ...models];
-      if (list.length) {
-        modelSetting.addDropdown(d => {
-          for (const m of list) d.addOption(m, m);
-          d.setValue(cur);
-          d.onChange(async (v: string) => { this.plugin.settings.visionModel = v; await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); showCaps(v); });
-        });
-      } else {
-        modelSetting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
-          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); }));
-        modelSetting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => this.render()));
-      }
-      showCaps(this.plugin.settings.visionModel);
+  /** Prompt-Textarea — Hatch statt `textarea`-Control, weil sie zusätzlich die
+   *  Layout-Klasse `img2md-prompt-textarea` braucht (der Walker setzt nur `rows`). */
+  private renderPrompt(setting: Setting): void {
+    setting.addTextArea(ta => {
+      ta.setValue(this.plugin.settings.visionPrompt)
+        .onChange(async (v: string) => { this.plugin.settings.visionPrompt = v; await this.plugin.saveSettings(); });
+      ta.inputEl.rows = 8;
+      ta.inputEl.addClass("img2md-prompt-textarea");
     });
+  }
 
-    // ── Prompt (große Textarea) ──
-    new Setting(containerEl)
-      .setName(t("settings.prompt.name"))
-      .setDesc(t("settings.prompt.desc"))
-      .addTextArea(ta => {
-        ta.setValue(this.plugin.settings.visionPrompt)
-          .onChange(async (v: string) => { this.plugin.settings.visionPrompt = v; await this.plugin.saveSettings(); });
-        ta.inputEl.rows = 8;
-        ta.inputEl.addClass("img2md-prompt-textarea");
-      });
-
-    // ── PDF Max Pages ──
-    new Setting(containerEl)
-      .setName(t("settings.pdfMaxPages.name")).setDesc(t("settings.pdfMaxPages.desc"))
-      .addText(tx => tx.setValue(String(this.plugin.settings.pdfMaxPages))
-        .onChange(async (v: string) => {
-          const n = Number(v); if (Number.isFinite(n) && n > 0) { this.plugin.settings.pdfMaxPages = Math.min(Math.floor(n), 500); await this.plugin.saveSettings(); }
-        }));
-
-    // ── PDF Render Scale ──
-    new Setting(containerEl)
-      .setName(t("settings.pdfRenderScale.name")).setDesc(t("settings.pdfRenderScale.desc"))
-      .addSlider(sl => sl
-        .setLimits(1, 4, 0.5)
-        .setValue(this.plugin.settings.pdfRenderScale)
-        .onChange(async (v: number) => { this.plugin.settings.pdfRenderScale = v; await this.plugin.saveSettings(); }));
-
-    // ── PDF Page Separator ──
-    new Setting(containerEl)
-      .setName(t("settings.pdfPageSep.name")).setDesc(t("settings.pdfPageSep.desc"))
-      .addDropdown(d => {
-        d.addOption("comment", t("settings.pdfPageSep.comment"));
-        d.addOption("heading", t("settings.pdfPageSep.heading"));
-        d.addOption("rule", t("settings.pdfPageSep.rule"));
-        d.addOption("pagebreak", t("settings.pdfPageSep.pagebreak"));
-        d.addOption("none", t("settings.pdfPageSep.none"));
-        d.setValue(this.plugin.settings.pdfPageSeparator);
-        d.onChange(async (v: string) => { this.plugin.settings.pdfPageSeparator = v as PdfPageSeparator; await this.plugin.saveSettings(); });
-      });
-
-    // ── PDF Text-Layer ──
-    new Setting(containerEl)
-      .setName(t("settings.pdfUseTextLayer.name")).setDesc(t("settings.pdfUseTextLayer.desc"))
-      .addToggle(tg => tg.setValue(this.plugin.settings.pdfUseTextLayer)
-        .onChange(async (v: boolean) => { this.plugin.settings.pdfUseTextLayer = v; await this.plugin.saveSettings(); }));
-
-    // ── Denkprozess-Blöcke standardmäßig auf/zu (Nachbesserungs-Verlauf) ──
-    new Setting(containerEl)
-      .setName(t("settings.reasoningExpanded.name")).setDesc(t("settings.reasoningExpanded.desc"))
-      .addToggle(tg => tg.setValue(this.plugin.settings.reasoningExpanded)
-        .onChange(async (v: boolean) => { this.plugin.settings.reasoningExpanded = v; await this.plugin.saveSettings(); }));
-
-    // ── Beschreibungs-Taxonomie (geordnete Kategorie-Liste, gleiches blur-Muster wie Endpunkte) ──
-    new Setting(containerEl).setName(t("settings.taxonomy.heading")).setHeading();
+  /** Beschreibungs-Taxonomie: geordnete Kategorie-Liste, gleiches blur-Muster wie die Endpunkte. */
+  private renderTaxonomy(setting: Setting): void {
+    const host = settingBodyHost(setting);
     const taxonomy = this.plugin.settings.describeTaxonomy;
-    const taxonomyRows = [...taxonomy, ""];   // leeres Zusatzfeld am Ende
-    taxonomyRows.forEach((value, i) => {
+    const rows = [...taxonomy, ""];   // leeres Zusatzfeld am Ende
+    rows.forEach((value, i) => {
       const isAdder = i >= taxonomy.length;
-      const s = new Setting(containerEl);
+      const s = new Setting(host);
       if (i === 0) s.setName(t("settings.taxonomy.name")).setDesc(t("settings.taxonomy.desc"));
       s.addText(tx => {
         tx.setPlaceholder(isAdder ? t("settings.taxonomy.addPlaceholder") : "").setValue(value);
@@ -296,7 +370,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           const updated = applyTaxonomyEdit(before, i, tx.getValue(), isAdder);
           if (updated.length === before.length && updated.every((e, k) => e === before[k])) return;   // unverändert → kein Re-Render
           this.plugin.settings.describeTaxonomy = updated;
-          void this.plugin.saveSettings().then(() => this.render());
+          void this.plugin.saveSettings().then(() => { this.refresh(); });
         });
       });
       if (!isAdder) {
@@ -305,48 +379,59 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           .setTooltip(t("settings.taxonomy.remove"))
           .onClick(() => {
             this.plugin.settings.describeTaxonomy = applyTaxonomyEdit(this.plugin.settings.describeTaxonomy, i, "", false);
-            void this.plugin.saveSettings().then(() => this.render());
+            void this.plugin.saveSettings().then(() => { this.refresh(); });
           }));
       }
     });
+  }
 
-    // ── Frontmatter-Mapping (ein Textfeld je Key + die zwei Diskriminator-Wertfelder) ──
-    new Setting(containerEl).setName(t("settings.fmMap.heading")).setHeading();
-    new Setting(containerEl).setDesc(t("settings.fmMap.desc"));
-    const fmFields: Array<[keyof FrontmatterMap, string]> = [
-      ["sourceImage", "settings.fmMap.sourceImage"],
-      ["sourcePdf", "settings.fmMap.sourcePdf"],
-      ["sourceNote", "settings.fmMap.sourceNote"],
-      ["category", "settings.fmMap.category"],
-      ["tags", "settings.fmMap.tags"],
-      ["authorTranscribed", "settings.fmMap.authorTranscribed"],
-      ["authorDescribed", "settings.fmMap.authorDescribed"],
-      ["created", "settings.fmMap.created"],
-      ["pages", "settings.fmMap.pages"],
-      ["kindKey", "settings.fmMap.kindKey"],
-      ["kindTranscript", "settings.fmMap.kindTranscript"],
-      ["kindDescription", "settings.fmMap.kindDescription"],
-    ];
+  /** Ein Frontmatter-Key-Feld. Hatch, weil ein geänderter Key eine vaultweite Migration
+   *  auslösen kann (offerFmMigration fragt per Modal) — das darf nicht pro Tastendruck feuern. */
+  private renderFmField(setting: Setting, field: keyof FrontmatterMap): void {
     // Über fmMapFromSettings lesen, nicht direkt this.plugin.settings.frontmatterMap: nach dem
     // Shallow-Merge-Laden (mergeSettings) kann Letzteres bei älterem/unvollständigem data.json
     // noch Lücken haben, bis der erste Edit sie schließt — sonst zeigt das Feld "undefined".
     const currentFmMap = fmMapFromSettings(this.plugin.settings);
-    for (const [field, labelKey] of fmFields) {
-      new Setting(containerEl)
-        .setName(t(labelKey))
-        .addText(tx => {
-          tx.setPlaceholder(DEFAULT_FM_MAP[field]).setValue(currentFmMap[field]);
-          // Mutation NUR bei blur, NICHT in onChange: ein geänderter Key kann Vault-weit migriert
-          // werden müssen (offerFmMigration fragt vorher per Modal nach) — pro Tastendruck wäre
-          // das weder sinnvoll noch performant. Bei "cancel" speichert offerFmMigration nichts;
-          // render() zeichnet das Feld dann unverändert aus den gespeicherten settings neu.
-          tx.inputEl.addEventListener("blur", () => {
-            const oldMap = fmMapFromSettings(this.plugin.settings);
-            const candidate: FrontmatterMap = { ...oldMap, [field]: tx.getValue().trim() || DEFAULT_FM_MAP[field] };
-            if (candidate[field] === oldMap[field]) return;   // unverändert → kein Diff, kein Re-Render
-            void this.plugin.offerFmMigration(oldMap, candidate).then(() => this.render()).catch((e: unknown) => { console.error("[i2m-migration]", e); this.render(); });
-          });
-        });
-    }
+    setting.addText(tx => {
+      tx.setPlaceholder(DEFAULT_FM_MAP[field]).setValue(currentFmMap[field]);
+      // Mutation NUR bei blur, NICHT in onChange: ein geänderter Key kann Vault-weit migriert
+      // werden müssen (offerFmMigration fragt vorher per Modal nach) — pro Tastendruck wäre
+      // das weder sinnvoll noch performant. Bei "cancel" speichert offerFmMigration nichts;
+      // der Re-Render zeichnet das Feld dann unverändert aus den gespeicherten settings neu.
+      tx.inputEl.addEventListener("blur", () => {
+        const oldMap = fmMapFromSettings(this.plugin.settings);
+        const candidate: FrontmatterMap = { ...oldMap, [field]: tx.getValue().trim() || DEFAULT_FM_MAP[field] };
+        if (candidate[field] === oldMap[field]) return;   // unverändert → kein Diff, kein Re-Render
+        void this.plugin.offerFmMigration(oldMap, candidate)
+          .then(() => { this.refresh(); })
+          .catch((e: unknown) => { console.error("[i2m-migration]", e); this.refresh(); });
+      });
+    });
+  }
+
+  // ── Imperativer Fallback (Obsidian < 1.13) ────────────────────────────────
+
+  // display() ist seit Obsidian 1.13 deprecated, bleibt aber der Fallback-Override für
+  // minAppVersion < 1.13. Interne Re-Renders gehen über refresh(), damit kein deprecated
+  // this.display()-Aufruf entsteht (Community-Review SOURCE-CODE-Check).
+  display(): void { this.renderFallback(); }
+
+  /** Zeichnet die Definitionen mit der klassischen Setting-API nach. Eigene Methode, damit
+   *  interne Re-Renders sie direkt aufrufen können, statt über das deprecated display(). */
+  private renderFallback(): void {
+    this.cleanupPrevious();
+    this.containerEl.empty();
+    this.cleanupPrevious = renderSettingDefinitions(
+      this.containerEl,
+      this.getSettingDefinitions(),
+      this,
+      this.app,
+    );
+  }
+
+  /** Re-Render nach einer Struktur-Änderung: nutzt die native 1.13-update()-API, wenn der
+   *  Host sie mitbringt, sonst den vollen Rebuild über den Fallback-Pfad. */
+  private refresh(): void {
+    refreshSettingsTab(this, () => { this.renderFallback(); });
   }
 }
