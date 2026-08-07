@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-08-07
+
 ### Geändert
 
 - **Der Thinking-Toggle erkennt mehr Modelle, die sich nicht abschalten lassen.** Bisher kannte er
