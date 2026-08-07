@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-08-07
+
 ### Hinzugefügt
 
 - **Die Einstellungen erscheinen ab Obsidian 1.13 in der Einstellungs-Suche.** Wer dort nach
