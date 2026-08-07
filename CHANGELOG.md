@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-08-07
+
 ### Intern
 
 - **Store-Konformität: `prefer-create-el`.** Zehn `createEl("span")`-Aufrufe in der Sidebar-View
