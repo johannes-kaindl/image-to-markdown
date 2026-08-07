@@ -67,9 +67,10 @@ vision_client.ts    VisionClient → OpenAI-kompatibler /v1/chat/completions (tr
                     Transport injiziert (HttpFetch/setHttp): non-streaming via requestUrl-Adapter,
                     Streaming via fetch (requestUrl streamt nicht). Reiner Kern, obsidian-frei.
 http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert.
-capabilities.ts     Vision-Capability-Detektion (vision-only, Fork aus vault-rag): guessVision (Namens-
-                    Heuristik) · parse* (Ollama/LM Studio v0/v1) · fetchVisionCapability · resolveVision ·
-                    visionDisplay · isVisionConfirmed. Reiner Kern, DOM-frei.
+capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projiziert): asJsonFetch
+                    (übersetzt HttpFetch → CapabilityFetch) · fetchVisionCapability · resolveVision ·
+                    visionDisplay · aktiver Vision-Test (VISION_TEST_TOKEN/VISION_TEST_PROMPT/
+                    isVisionConfirmed). Reiner Kern, DOM-frei.
 sse.ts              streamSSE (Transport): liest den SSE-Stream aus einer Response, delegiert
                     Parsing an vendor/kit/sse.ts (parseSSE) + vendor/kit/think.ts (ThinkSplitter).
 diff.ts             Reiner Zeilen-Diff (LCS): diffLines · groupHunks · applySelection. Obsidian-frei.
@@ -82,7 +83,10 @@ describe.ts         Beschreiben-Modus: buildDescribePrompt (festes CATEGORY/TAGS
 prompts.ts          Prompt-Presets (default/tables/handwriting/math/code): PROMPT_PRESETS ·
                     isPromptPreset · normalizePreset · Preset-Auflösung. Reiner Kern.
 reasoning_toggle.ts thinkToggleView: mappt (Modell, Suppress-Flag) auf den Anzeige-Zustand des
-                    Thinking-Toggles (Always-on-Thinker → disabled + „immer an"). Reiner Kern.
+                    Thinking-Toggles (Always-on-Thinker → disabled + „immer an"). Speist zusätzlich
+                    einen Tooltip-Hinweis (hintKey) aus der reicheren Kit-Namens-Heuristik
+                    (guessFromName) für support:"always"-Modelle — ändert dabei NIE effectiveSuppress,
+                    das bewusst nur an isAlwaysOnThinker gebunden bleibt. Reiner Kern.
 card_cache.ts       CardCache: In-Session-Cache der Sidebar-Ergebnis-Karten pro Quelldatei
                     (Plugin-Ebene, überlebt View-Close; kein Disk-Persist). Reiner Kern.
 frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskriminator-Werte aller
@@ -115,6 +119,9 @@ vendor/kit/         Aus obsidian-kit vendored (Quell-Version steht im Datei-Head
   settings.ts       mergeSettings (Defaults-Merge mit Referenz-Schutz).
   sse.ts            parseSSE (OpenAI-SSE-Delta-Parser, content + reasoning_content).
   think.ts          ThinkSplitter (inline <think>-Tags; früher src/think_splitter.ts).
+  capabilities.ts   guessFromName (Namens-Heuristik Vision+Thinking) · parse* (Ollama/LM Studio
+                    v0/v1) · mergeCapability/resolveCapabilities · fetchCapabilities, Typ
+                    CapabilityFetch.
 ```
 
 **pdf.js-Worker-Build:** `scripts/build-pdf-worker.mjs` bündelt `pdfjs-dist/build/pdf.worker.mjs`
@@ -134,7 +141,7 @@ npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
 npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
 npm run lint                      # eslint src (reproduziert die Obsidian-Community-Review-Checks)
-npm test                          # vitest run (145 Tests)
+npm test                          # vitest run (481 Tests)
 npx vitest run tests/<datei>      # eine Test-Datei
 npm run typecheck                 # tsc --noEmit (separat von vitest)
 npm run version-bump 0.3.0        # Version synct package.json/manifest.json/versions.json

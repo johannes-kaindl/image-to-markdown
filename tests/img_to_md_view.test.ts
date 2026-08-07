@@ -698,6 +698,32 @@ describe("ImgToMdView — Thinking-Toggle", () => {
     btn.click();
     expect(setSuppress).not.toHaveBeenCalled();
   });
+
+  it("Modell mit 'always'-Hinweis → aria-label/title enthalten Label UND Hinweis, sichtbarer Text nur das Label", async () => {
+    setLang("en");
+    const { view } = mkView({ getModel: () => "deepseek-r1:8b", getSuppress: () => false });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "img2md-think-toggle");
+    const label = t("view.thinkingOn");
+    const hint = t("view.thinkingHintAlways");
+    expect(btn.getAttribute("aria-label")).toContain(label);
+    expect(btn.getAttribute("aria-label")).toContain(hint);
+    expect(btn.getAttribute("title")).toContain(label);
+    expect(btn.getAttribute("title")).toContain(hint);
+    // 0.10.1-Sidebar-Breiten-Garantie: der Hinweis darf NIE im sichtbaren Button-Text landen.
+    const [lbl] = all(btn, "img2md-think-lbl");
+    expect(lbl.textContent).toBe(label);
+    expect(lbl.textContent).not.toContain(hint);
+    expect(btn.textContent).not.toContain(hint);
+  });
+
+  it("Modell ohne Hinweis → aria-label ist genau das Label, kein trailing Separator", async () => {
+    setLang("en");
+    const { view } = mkView({ getModel: () => "qwen3:8b", getSuppress: () => false });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "img2md-think-toggle");
+    expect(btn.getAttribute("aria-label")).toBe(t("view.thinkingOn"));
+  });
 });
 
 describe("ImgToMdView — Pending-Ergebnis-Persistenz", () => {

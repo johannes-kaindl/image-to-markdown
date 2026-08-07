@@ -68,10 +68,12 @@ describe("i18n", () => {
     expect(t("view.thinkingOn")).toBe("Thinking: on");
     expect(t("view.thinkingOff")).toBe("Thinking: off");
     expect(t("view.thinkingAlways")).toBe("Thinking: always on");
+    expect(t("view.thinkingHintAlways")).toBe("This model probably always thinks — turning it off likely has no effect");
     setLang("de");
     expect(t("view.thinkingOn")).toBe("Thinking: an");
     expect(t("view.thinkingOff")).toBe("Thinking: aus");
     expect(t("view.thinkingAlways")).toBe("Thinking: immer an");
+    expect(t("view.thinkingHintAlways")).toBe("Dieses Modell denkt vermutlich immer — Abschalten wirkt wahrscheinlich nicht");
     setLang("en");
   });
 
