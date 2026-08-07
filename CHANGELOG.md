@@ -6,6 +6,23 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Die Einstellungen erscheinen ab Obsidian 1.13 in der Einstellungs-Suche.** Wer dort nach
+  „PDF", „Endpunkt" oder „Frontmatter" sucht, findet die Zeilen dieses Plugins jetzt direkt,
+  statt sich durch den Tab scrollen zu müssen. Auf 1.13 rendert Obsidian die Einstellungen
+  zudem selbst — sichtbar an einem echten Zahlenfeld (mit Grenzen 1–500) statt eines Textfelds.
+
+### Intern
+
+- **Zweigleisiger Settings-Tab nach dem Kit-Muster:** `getSettingDefinitions()` ist ab sofort die
+  einzige Definition; für Obsidian < 1.13 (`minAppVersion` ist 1.8.7) zeichnet `display()`
+  dieselbe Struktur mit der klassischen `Setting`-API nach — über den vendorten Kit-Walker
+  `renderSettingDefinitions` (obsidian-kit 0.25.0). Kein zweiter Definitionsbaum, der
+  auseinanderlaufen kann. Stateful Zeilen (Endpunkt-Liste mit Live-Erreichbarkeit, asynchron
+  befülltes Modell-Dropdown, Vision-Test, Kategorien-Liste, die migrationsauslösenden
+  Frontmatter-Felder) bleiben `render`-Hatches: ein Code, der in beiden Pfaden unverändert läuft.
+
 ## [0.17.1] — 2026-08-07
 
 ### Intern
