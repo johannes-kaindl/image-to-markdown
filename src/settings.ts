@@ -89,7 +89,11 @@ const FALLBACK_PNG =
 /** Kleines PNG mit dem Token (für den aktiven Vision-Test). Canvas → Data-URL; Fallback bei fehlendem DOM. */
 export function makeVisionTestImage(token: string = VISION_TEST_TOKEN): string {
   try {
-    const canvas = activeDocument.createElement("canvas");
+    // Globales createEl (nicht node.createEl): die Node-Methode HÄNGT das Element an
+    // ("append it to this node") — activeDocument.createEl("canvas") wirft dadurch
+    // HierarchyRequestError. Die freie Funktion liefert ein detached Element, und genau
+    // das braucht ein Offscreen-Canvas, das nie ins DOM soll.
+    const canvas = createEl("canvas");
     canvas.width = 160; canvas.height = 64;
     const ctx = canvas.getContext("2d");
     if (!ctx) return FALLBACK_PNG;

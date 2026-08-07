@@ -6,6 +6,18 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Intern
+
+- **Store-Konformität: `prefer-create-el`.** Zehn `createEl("span")`-Aufrufe in der Sidebar-View
+  nutzen jetzt `createSpan()`. Die beiden Offscreen-Canvas-Stellen (PDF-Seitenrender,
+  Vision-Testbild) verwenden die freie Funktion `createEl("canvas")` statt
+  `activeDocument.createElement` — die gleichnamige *Node*-Methode hängt das Element an den Node
+  an und wirft für ein Dokument `HierarchyRequestError`, die freie Funktion liefert das benötigte
+  detached Element.
+- **Lint reproduziert den Store-Review wieder vollständig:** `eslint-plugin-obsidianmd` von 0.3.0
+  auf 0.4.1 angehoben. Die ältere Version kannte die Regel nicht, wodurch der lokale Lauf sauber
+  aussah, während der Store-Scan Warnungen meldete.
+
 ## [0.17.0] — 2026-08-07
 
 ### Geändert
