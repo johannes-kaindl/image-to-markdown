@@ -6,6 +6,28 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Der Thinking-Toggle erkennt mehr Modelle, die sich nicht abschalten lassen.** Bisher kannte er
+  zwei Namensmuster, jetzt zwölf Modellfamilien. Wählst du ein Modell, das vermutlich immer denkt
+  (`deepseek-r1`, `qwq`, `magistral` …), steht der Hinweis „Dieses Modell denkt vermutlich immer —
+  Abschalten wirkt wahrscheinlich nicht" im Tooltip des Toggles.
+  **Der Button bleibt dabei bedienbar:** die Erkennung ändert nur die Beschriftung, nie das
+  Verhalten. Gesperrt wird weiterhin ausschließlich bei `gpt-oss`/`harmony` — die lehnen die
+  Abschalt-Parameter tatsächlich ab, während die übrigen sie als wirkungslos schlucken. Eine
+  Namensvermutung soll keinen funktionierenden Button totlegen, zumal lokale Modelle frei
+  gewählte Namen tragen.
+  Die sichtbare Beschriftung des Buttons ist unverändert, damit die Sidebar schmal bleibt.
+
+### Intern
+
+- **Capability-Erkennung kommt jetzt aus dem `obsidian-kit`** (0.21.0) statt aus einer
+  plugin-eigenen Kopie: Das Modul liegt als vendored Kopie unter `src/vendor/kit/capabilities.ts`,
+  `src/capabilities.ts` ist auf einen Adapter geschrumpft, der die Vision-Achse rausprojiziert.
+  Dieselbe Heuristik lag zuvor doppelt unter dem Entwicklungs-Dach — in `vault-rag` vollständig,
+  hier als vision-only-Fork mit byte-gleichen Listen. Keine Verhaltensänderung an der
+  Vision-Anzeige.
+
 ## [0.16.0] — 2026-07-27
 
 ### Hinzugefügt
