@@ -1,7 +1,8 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
-import { VisionClient, setHttp, setStreamFetch, resolveActiveEndpoint } from "./vision_client";
+import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
+import { resolveActiveEndpointConfig, type EndpointConfig } from "./vendor/kit/endpoint_config";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
@@ -23,7 +24,9 @@ import type { FrontmatterMap } from "./frontmatter_map";
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
   visionClient!: VisionClient;
-  activeEndpoint: string | null = null;
+  /** Zuletzt aufgelöster Endpunkt — die GANZE Config, nicht nur die URL: der Schlüssel muss
+   *  an jeden Folge-Call. `url` ist bereits normalisiert (resolveActiveEndpointConfig). */
+  activeEndpoint: EndpointConfig | null = null;
   private pendingCards = new CardCache();
 
   private openPath = (p: string): void => {
@@ -40,7 +43,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
     const migratedEps = migrateEndpoints(saved);
     this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
     this.settings.promptPreset = normalizePreset(this.settings.promptPreset);
-    this.visionClient = new VisionClient(this.settings.visionEndpoints[0] ?? "", this.settings.visionModel);
+    const first = this.settings.visionEndpoints[0];
+    this.visionClient = new VisionClient(first?.url ?? "", this.settings.visionModel, first?.apiKey);
     void this.resolveAndReconnect();
 
     this.addSettingTab(new ImageToMarkdownSettingTab(this.app, this));
@@ -71,10 +75,15 @@ export default class ImageToMarkdownPlugin extends Plugin {
   }
 
   async resolveAndReconnect(): Promise<void> {
-    const active = await resolveActiveEndpoint(this.settings.visionEndpoints, ep => new VisionClient(ep, "").ping());
+    // Der Schlüssel geht auch an die PROBE mit: ohne ihn antwortet ein gehosteter Endpunkt mit 401,
+    // gilt damit als nicht erreichbar und wird still übersprungen — das Feature wirkt tot, ohne Fehler.
+    const active = await resolveActiveEndpointConfig(
+      this.settings.visionEndpoints,
+      cfg => new VisionClient(cfg.url, "", cfg.apiKey).ping(),
+    );
     this.activeEndpoint = active;
-    const ep = active ?? this.settings.visionEndpoints[0] ?? "";
-    this.visionClient = new VisionClient(ep, this.settings.visionModel);
+    const ep = active ?? this.settings.visionEndpoints[0];
+    this.visionClient = new VisionClient(ep?.url ?? "", this.settings.visionModel, ep?.apiKey);
   }
 
   private mimeOf(ext: string): string { const e = ext.toLowerCase(); return e === "jpg" ? "jpeg" : e; }
@@ -323,8 +332,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
       },
       getMode: () => this.settings.mode,
       setMode: (m) => { this.settings.mode = m; void this.saveSettings(); },
-      connectionStatus: async () => { await this.resolveAndReconnect(); return { ok: this.activeEndpoint !== null, endpoint: this.activeEndpoint }; },
-      listModels: () => new VisionClient(this.activeEndpoint ?? this.settings.visionEndpoints[0] ?? "", "").listModels(),
+      connectionStatus: async () => { await this.resolveAndReconnect(); return { ok: this.activeEndpoint !== null, endpoint: this.activeEndpoint?.url ?? null }; },
+      listModels: () => {
+        const ep = this.activeEndpoint ?? this.settings.visionEndpoints[0];
+        return new VisionClient(ep?.url ?? "", "", ep?.apiKey).listModels();
+      },
       getModel: () => this.settings.visionModel,
       setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); void this.resolveAndReconnect(); },
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),

@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { VisionClient, setHttp, setStreamFetch, parseErrorEnvelope, type HttpResponse } from "../src/vision_client";
 
 // Mock-Transport für nicht-streamende Calls (ping/listModels/transcribe/visionConfidence/testVision).
-function mockHttp(impl: (url: string, init?: { method?: string; body?: string }) => HttpResponse): { url: string; body?: string }[] {
-  const calls: { url: string; body?: string }[] = [];
-  setHttp((url, init) => { calls.push({ url, body: init?.body }); return Promise.resolve(impl(url, init)); });
+function mockHttp(impl: (url: string, init?: { method?: string; body?: string }) => HttpResponse): { url: string; body?: string; headers?: Record<string, string> }[] {
+  const calls: { url: string; body?: string; headers?: Record<string, string> }[] = [];
+  setHttp((url, init) => { calls.push({ url, body: init?.body, headers: init?.headers }); return Promise.resolve(impl(url, init)); });
   return calls;
 }
 const ok = (obj: unknown): HttpResponse => ({ ok: true, status: 200, text: JSON.stringify(obj) });
@@ -300,5 +300,46 @@ describe("VisionClient — suppressThinking Body-Merge", () => {
     setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
     await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {});
     expect("reasoning_effort" in JSON.parse(calls[0].body!)).toBe(false);
+  });
+});
+
+describe("VisionClient — API-Schlüssel je Endpunkt", () => {
+  it("legt auf allen nicht-streamenden Wegen einen Bearer-Header an", async () => {
+    const calls = mockHttp(() => ok({ data: [{ id: "m" }], choices: [{ message: { content: "x" } }] }));
+    const c = new VisionClient("https://openrouter.ai/api", "vm", "sk-geheim");
+    await c.ping();
+    await c.listModels();
+    await c.transcribe("d", "p");
+    expect(calls.length).toBe(3);
+    for (const call of calls) expect(call.headers?.Authorization).toBe("Bearer sk-geheim");
+  });
+
+  it("ohne Schlüssel bleibt der Header weg (lokale Server mögen keinen leeren Bearer)", async () => {
+    const calls = mockHttp(() => ok({ data: [], choices: [{ message: { content: "x" } }] }));
+    const c = new VisionClient("http://localhost:1234", "vm");
+    await c.ping();
+    await c.transcribe("d", "p");
+    for (const call of calls) expect(call.headers?.Authorization).toBeUndefined();
+  });
+
+  it("trägt den Schlüssel auch in den Streaming-Pfad — sonst schlägt genau der Nutzweg fehl", async () => {
+    const seen: (Record<string, string> | undefined)[] = [];
+    setStreamFetch((_u, init) => {
+      seen.push(init?.headers as Record<string, string> | undefined);
+      return Promise.resolve(streamRes(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n', "data: [DONE]\n\n"]));
+    });
+    const c = new VisionClient("https://openrouter.ai/api", "vm", "sk-geheim");
+    await c.transcribeStream("d", "p", () => {}, () => {});
+    await c.transcribeTextStream("t", "p", () => {}, () => {});
+    await c.refineStream([{ role: "user", content: "x" }], () => {}, () => {});
+    expect(seen.length).toBe(3);
+    for (const h of seen) expect(h?.Authorization).toBe("Bearer sk-geheim");
+  });
+
+  it("die Capability-Probe trägt den Schlüssel — ohne ihn gilt ein gehosteter Endpunkt als vision-los", async () => {
+    const calls = mockHttp(() => ok({ data: [{ id: "vm", capabilities: { vision: true } }] }));
+    await new VisionClient("https://openrouter.ai/api", "vm", "sk-geheim").visionConfidence("vm");
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call.headers?.Authorization).toBe("Bearer sk-geheim");
   });
 });

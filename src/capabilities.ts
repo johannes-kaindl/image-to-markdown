@@ -14,9 +14,9 @@ export type { Confidence };
 
 /** Übersetzt den plugin-eigenen HttpFetch in die schmale Kit-Form: Status prüfen, Text parsen,
  *  bei allem anderen `null`. Das HTTP-Wissen bleibt damit im Plugin, wo es ohnehin sitzt. */
-function asJsonFetch(http: HttpFetch): CapabilityFetch {
+function asJsonFetch(http: HttpFetch, extraHeaders?: Record<string, string>): CapabilityFetch {
   return async (req) => {
-    const r = await http(req.url, { method: req.method, headers: req.headers, body: req.body });
+    const r = await http(req.url, { method: req.method, headers: { ...req.headers, ...extraHeaders }, body: req.body });
     if (!r.ok) return null;
     try {
       return { json: JSON.parse(r.text) as unknown };
@@ -29,9 +29,9 @@ function asJsonFetch(http: HttpFetch): CapabilityFetch {
 /** Probiert native Capability-Endpoints gegen eine Basis-URL (OHNE /v1) und gibt nur die
  *  Vision-Achse zurück. http wird injiziert (Obsidian: requestUrl-Adapter; Tests: Mock). */
 export async function fetchVisionCapability(
-  http: HttpFetch, baseUrl: string, model: string,
+  http: HttpFetch, baseUrl: string, model: string, extraHeaders?: Record<string, string>,
 ): Promise<Confidence | null> {
-  const caps = await fetchCapabilities(asJsonFetch(http), baseUrl, model);
+  const caps = await fetchCapabilities(asJsonFetch(http, extraHeaders), baseUrl, model);
   return caps ? caps.vision : null;
 }
 

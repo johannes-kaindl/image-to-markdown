@@ -91,6 +91,9 @@
 .img2md-ep-status.is-ok { color: var(--text-success); }
 .img2md-ep-status.is-error { color: var(--text-error); }
 .img2md-ep-status.is-active { color: var(--interactive-accent); outline: 1px solid var(--interactive-accent); border-radius: 3px; }
+/* Schlüsselfeld je Endpunkt-Zeile: schmaler als das URL-Feld — es trägt ein optionales
+   Geheimnis, keine zu lesende Adresse. */
+.img2md-ep-key { max-width: 11em; }
 .img2md-cap { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
 .img2md-cap .svg-icon { width: var(--icon-s); height: var(--icon-s); }
 .img2md-cap.is-ok { color: var(--text-success); }

@@ -2,6 +2,7 @@ import { streamSSE } from "./sse";
 import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
 import { normalizeEndpoint, resolveActiveEndpoint } from "./vendor/kit/endpoint";
 import { suppressParams } from "./vendor/kit/reasoning";
+import { authHeaders } from "./vendor/kit/endpoint_config";
 
 // normalizeEndpoint + resolveActiveEndpoint sind aus obsidian-kit#0.3.0 vendored — hier
 // re-exportiert, damit main.ts/settings.ts/Tests sie weiterhin aus ./vision_client beziehen.
@@ -53,19 +54,27 @@ function http(): HttpFetch {
 
 export class VisionClient {
   private endpoint: string;
-  constructor(endpoint: string, private model: string) {
+  /** `apiKey` gilt genau für DIESEN Endpunkt (eine Fallback-Liste darf lokale und gehostete
+   *  Anbieter mischen). Fehlt er, geht kein Authorization-Header raus — lokale Server lehnen
+   *  einen leeren Bearer teils ab. */
+  constructor(endpoint: string, private model: string, private apiKey?: string) {
     this.endpoint = normalizeEndpoint(endpoint);
+  }
+
+  /** Header für jeden ausgehenden Call: Auth (falls Schlüssel) plus die übergebenen. */
+  private headers(extra?: Record<string, string>): Record<string, string> {
+    return { ...extra, ...authHeaders(this.apiKey) };
   }
 
   /** Verbindungs-Check gegen den OpenAI-kompatiblen Endpoint (GET /v1/models). */
   async ping(): Promise<boolean> {
-    try { return (await http()(`${this.endpoint}/v1/models`)).ok; } catch { return false; }
+    try { return (await http()(`${this.endpoint}/v1/models`, { headers: this.headers() })).ok; } catch { return false; }
   }
 
   /** Verfügbare Modelle vom Endpoint (GET /v1/models). [] bei Fehler/Offline. */
   async listModels(): Promise<string[]> {
     try {
-      const r = await http()(`${this.endpoint}/v1/models`);
+      const r = await http()(`${this.endpoint}/v1/models`, { headers: this.headers() });
       if (!r.ok) return [];
       const j = JSON.parse(r.text) as { data?: { id?: string }[] };
       return (j.data ?? []).map(m => m.id).filter((x): x is string => typeof x === "string").sort();
@@ -87,7 +96,7 @@ export class VisionClient {
   async transcribe(dataUrl: string, prompt: string, opts?: { suppressThinking?: boolean }): Promise<{ content: string; model: string }> {
     const res = await http()(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: false, ...suppressParams(opts?.suppressThinking ?? false) }),
     });
     // LM Studio & Co. liefern Fehler teils als HTTP 200 mit {error:{message}} → echte Meldung heben
@@ -103,7 +112,7 @@ export class VisionClient {
   /** Passive Vision-Erkennung: native Metadaten-Probe + Namens-Heuristik.
    *  this.endpoint ist bereits /v1-frei (normalizeEndpoint) → korrekte Basis-URL. */
   async visionConfidence(model: string): Promise<Confidence> {
-    return resolveVision(await fetchVisionCapability(http(), this.endpoint, model), model);
+    return resolveVision(await fetchVisionCapability(http(), this.endpoint, model, this.headers()), model);
   }
 
   /** Aktiver Vision-Test: schickt das übergebene Test-Bild und prüft, ob die Antwort
@@ -124,7 +133,7 @@ export class VisionClient {
     if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
     const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
       signal,
     });
@@ -150,7 +159,7 @@ export class VisionClient {
     if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
     const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ model: this.model, messages, stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
       signal,
     });

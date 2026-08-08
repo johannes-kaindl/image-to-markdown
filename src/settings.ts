@@ -6,20 +6,25 @@ import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab } from "./vendor/kit-obsidian/settings_walker";
+import { migrateEndpointList, applyEndpointEdit, type EndpointConfig } from "./vendor/kit/endpoint_config";
 
-/** Endpoint-Liste aus geladenen Settings: vorhandene visionEndpoints (leere gefiltert),
- *  sonst der alte Einzel-visionEndpoint als 1-Element-Liste, sonst leer. Reiner Helfer. */
-export function migrateEndpoints(saved: { visionEndpoint?: string; visionEndpoints?: string[] } | null | undefined): string[] {
-  if (saved?.visionEndpoints) return saved.visionEndpoints.filter(e => e && e.trim());
-  if (saved?.visionEndpoint && saved.visionEndpoint.trim()) return [saved.visionEndpoint];
-  return [];
+export type { EndpointConfig };
+
+/** Endpoint-Liste aus geladenen Settings → `EndpointConfig[]`. Deckt drei Alt-Stände ab:
+ *  das ur-alte Einzelfeld `visionEndpoint`, die String-Liste `visionEndpoints` (bis 0.18.x)
+ *  und bereits migrierte Configs. Delegiert an das Kit; hier bleibt nur die Feld-Zuordnung. */
+export function migrateEndpoints(
+  saved: { visionEndpoint?: string; visionEndpoints?: (string | EndpointConfig)[] } | null | undefined,
+): EndpointConfig[] {
+  return migrateEndpointList(saved?.visionEndpoint, saved?.visionEndpoints);
 }
 
-/** Wendet die Bearbeitung eines Endpoint-Felds auf die Liste an — bewusst EINMAL bei `blur`,
+/** Wendet die Bearbeitung eines Listen-Felds auf die Liste an — bewusst EINMAL bei `blur`,
  *  nicht pro `onChange`/Tastendruck (sonst hängt das Add-Feld jeden Zwischenstand `l`,`lo`,`loc`,…
  *  als eigenen Eintrag an). `isAdder=true`: nicht-leerer Wert wird angehängt, leer → unverändert.
- *  `isAdder=false`: Index wird gesetzt (leer → Eintrag entfernt). Ergebnis getrimmt + leer-gefiltert. Reiner Helfer. */
-export function applyEndpointEdit(endpoints: string[], index: number, value: string, isAdder: boolean): string[] {
+ *  `isAdder=false`: Index wird gesetzt (leer → Eintrag entfernt). Ergebnis getrimmt + leer-gefiltert.
+ *  Reiner Helfer für die Taxonomie-Liste; Endpunkte nutzen das Kit-`applyEndpointEdit` (Configs). */
+export function applyListEdit(endpoints: string[], index: number, value: string, isAdder: boolean): string[] {
   const v = value.trim();
   const next = [...endpoints];
   if (isAdder) {
@@ -33,7 +38,7 @@ export function applyEndpointEdit(endpoints: string[], index: number, value: str
 }
 
 export interface ImageToMarkdownSettings {
-  visionEndpoints: string[];
+  visionEndpoints: EndpointConfig[];
   visionModel: string;
   visionPrompt: string;
   promptPreset: string;
@@ -52,7 +57,7 @@ export interface ImageToMarkdownSettings {
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
 export function defaultSettings(): ImageToMarkdownSettings {
   return {
-    visionEndpoints: ["http://localhost:8080"],
+    visionEndpoints: [{ url: "http://localhost:8080" }],
     visionModel: "",
     visionPrompt: defaultVisionPrompt(),
     promptPreset: "default",
@@ -68,10 +73,10 @@ export function defaultSettings(): ImageToMarkdownSettings {
   };
 }
 
-/** Wendet die Bearbeitung eines Taxonomie-Felds auf die Liste an — analog `applyEndpointEdit`
+/** Wendet die Bearbeitung eines Taxonomie-Felds auf die Liste an — analog `applyListEdit`
  *  (siehe dort für die blur-statt-onChange-Begründung). Reiner Helfer. */
 export function applyTaxonomyEdit(list: string[], index: number, value: string, isAdder: boolean): string[] {
-  return applyEndpointEdit(list, index, value, isAdder);
+  return applyListEdit(list, index, value, isAdder);
 }
 
 /** Frontmatter-Mapping aus geladenen Settings: fehlende Keys werden aus DEFAULT_FM_MAP
@@ -116,8 +121,16 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
 
   constructor(app: App, private plugin: ImageToMarkdownPlugin) { super(app, plugin); }
 
-  private endpoint(): string {
-    return this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0] ?? "";
+  /** Der Endpunkt, gegen den die Settings-UI arbeitet (Modell-Liste, Vision-Test): der aktive,
+   *  sonst der erste konfigurierte. GANZE Config, weil jeder dieser Calls den Schlüssel braucht. */
+  private endpointCfg(): EndpointConfig | undefined {
+    return this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0];
+  }
+
+  /** VisionClient für die Settings-UI — immer über endpointCfg(), damit der Schlüssel mitgeht. */
+  private client(model: string): VisionClient {
+    const cfg = this.endpointCfg();
+    return new VisionClient(cfg?.url ?? "", model, cfg?.apiKey);
   }
 
   // ── Die eine Wahrheit ──────────────────────────────────────────────────────
@@ -231,29 +244,44 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   private renderEndpoints(setting: Setting): void {
     const host = settingBodyHost(setting);
     const eps = this.plugin.settings.visionEndpoints;
-    const rows = [...eps, ""];   // leeres Zusatzfeld am Ende
-    rows.forEach((value, i) => {
-      const isAdder = i >= eps.length;
+    const rows: (EndpointConfig | null)[] = [...eps, null];   // null = leeres Zusatzfeld am Ende
+    rows.forEach((cfg, i) => {
+      const isAdder = cfg === null;
+      const value = cfg?.url ?? "";
       const s = new Setting(host);
       if (i === 0) s.setName(t("settings.endpoints.name")).setDesc(t("settings.endpoints.desc"));
       const statusIcon = s.controlEl.createSpan({ cls: "img2md-ep-status" });
+      // Ein Feld-Editor für eine Zeile: schreibt bei blur GENAU ein Feld über das Kit-Modell.
+      // Listen-Mutation NUR bei blur, NICHT in onChange: onChange feuert pro Tastendruck und
+      // würde im Add-Feld jeden Zwischenstand (l, lo, loc, …) als eigenen Eintrag anhängen.
+      const commit = (field: "url" | "apiKey", read: () => string): void => {
+        const before = this.plugin.settings.visionEndpoints;
+        const updated = applyEndpointEdit(before, i, field, read(), isAdder);
+        const same = updated.length === before.length
+          && updated.every((e, k) => e.url === before[k]?.url && e.apiKey === before[k]?.apiKey);
+        if (same) return;   // unverändert → kein Re-Render
+        this.plugin.settings.visionEndpoints = updated;
+        void this.plugin.saveSettings()
+          .then(() => this.plugin.resolveAndReconnect())
+          .then(() => { this.refresh(); });
+      };
       s.addText(tx => {
         tx
           .setPlaceholder(isAdder ? t("settings.endpoints.addPlaceholder") : "http://localhost:1234")
           .setValue(value);
-        // Listen-Mutation NUR bei blur, NICHT in onChange: onChange feuert pro Tastendruck und
-        // würde im Add-Feld jeden Zwischenstand (l, lo, loc, …) als eigenen Eintrag anhängen.
-        // Bei blur einmal den finalen Feldwert anwenden, dann Struktur-Re-Render + Auflösen.
-        tx.inputEl.addEventListener("blur", () => {
-          const before = this.plugin.settings.visionEndpoints;
-          const updated = applyEndpointEdit(before, i, tx.getValue(), isAdder);
-          if (updated.length === before.length && updated.every((e, k) => e === before[k])) return;   // unverändert → kein Re-Render
-          this.plugin.settings.visionEndpoints = updated;
-          void this.plugin.saveSettings()
-            .then(() => this.plugin.resolveAndReconnect())
-            .then(() => { this.refresh(); });
-        });
+        tx.inputEl.addEventListener("blur", () => commit("url", () => tx.getValue()));
       });
+      // Schlüsselfeld NUR an bestehenden Zeilen: applyEndpointEdit verwirft mit isAdder=true
+      // alles außer der URL — ein hier eingetippter Schlüssel wäre beim Blur stillschweigend weg.
+      if (!isAdder) {
+        s.addText(tx => {
+          tx.setPlaceholder(t("settings.endpoints.apiKeyPlaceholder")).setValue(cfg?.apiKey ?? "");
+          tx.inputEl.type = "password";
+          tx.inputEl.addClass("img2md-ep-key");
+          tx.inputEl.setAttribute("title", t("settings.endpoints.apiKeyTooltip"));
+          tx.inputEl.addEventListener("blur", () => commit("apiKey", () => tx.getValue()));
+        });
+      }
       // Löschen: expliziter Mülleimer-Button (nicht am leeren Add-Feld) — entfernt den Eintrag.
       // Das circle-x links ist nur Erreichbarkeits-Status, kein Lösch-Button (häufiges Missverständnis).
       if (!isAdder) {
@@ -261,7 +289,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           .setIcon("trash-2")
           .setTooltip(t("settings.endpoints.remove"))
           .onClick(() => {
-            this.plugin.settings.visionEndpoints = applyEndpointEdit(this.plugin.settings.visionEndpoints, i, "", false);
+            this.plugin.settings.visionEndpoints = applyEndpointEdit(this.plugin.settings.visionEndpoints, i, "url", "", false);
             void this.plugin.saveSettings()
               .then(() => this.plugin.resolveAndReconnect())
               .then(() => { this.refresh(); });
@@ -271,11 +299,13 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       const ep = value.trim();
       if (!isAdder && ep) {
         setIcon(statusIcon, "loader"); statusIcon.setAttribute("title", t("view.checking"));
-        void new VisionClient(ep, "").ping().then(ok => {
+        void new VisionClient(ep, "", cfg?.apiKey).ping().then(ok => {
           statusIcon.empty();
           setIcon(statusIcon, ok ? "circle-check" : "circle-x");
           statusIcon.toggleClass("is-ok", ok); statusIcon.toggleClass("is-error", !ok);
-          const active = normalizeEndpoint(ep) === (this.plugin.activeEndpoint ?? "");
+          // Beide Seiten normalisiert vergleichen: die gespeicherte URL ist roh, activeEndpoint.url
+          // kommt normalisiert aus dem Resolver — ein `/v1`-Suffix ließe den Vergleich sonst scheitern.
+          const active = normalizeEndpoint(ep) === (this.plugin.activeEndpoint?.url ?? "");
           statusIcon.toggleClass("is-active", active);
           statusIcon.setAttribute("title", (ok ? t("settings.connected") : t("settings.offline")) + (active ? " · " + t("settings.endpoints.active") : ""));
         });
@@ -288,7 +318,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
    *  Textfeld + „Modelle laden". */
   private renderModel(setting: Setting): void {
     setting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => { this.refresh(); }));
-    void new VisionClient(this.endpoint(), "").listModels().then((models: string[]) => {
+    void this.client("").listModels().then((models: string[]) => {
       const cur = this.plugin.settings.visionModel;
       const list = models.includes(cur) || !cur ? models : [cur, ...models];
       if (list.length) {
@@ -325,13 +355,13 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     };
     this.showCaps = (model: string): void => {
       if (this.confirmedModels.has(model)) { renderCap("confirmed"); return; }
-      void new VisionClient(this.endpoint(), "").visionConfidence(model).then(renderCap);
+      void this.client("").visionConfidence(model).then(renderCap);
     };
     setting.addButton(b => b.setButtonText(t("settings.testVision")).onClick(async () => {
       const model = this.plugin.settings.visionModel;
       b.setDisabled(true);
       try {
-        const ok = await new VisionClient(this.endpoint(), model).testVision(makeVisionTestImage());
+        const ok = await this.client(model).testVision(makeVisionTestImage());
         if (ok) { this.confirmedModels.add(model); renderCap("confirmed"); } else { renderCap("no"); }
       } catch {
         new Notice(t("settings.endpointUnreachable"));
