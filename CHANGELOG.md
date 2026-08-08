@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-08-08
+
 ### Hinzugefügt
 
 - **API-Schlüssel je Endpunkt.** Jede Zeile der Endpunkt-Liste trägt jetzt ihren eigenen,
