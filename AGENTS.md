@@ -60,12 +60,15 @@ backlinks.ts        Reiner Kern: Backlink-Idempotenz-Lookup — `findExistingTra
                     der Frontmatter-Filter ist load-bearing: Body-Embeds allein reichen nicht).
                     Interface `BacklinkLookup` (von der Obsidian-Schicht injiziert, obsidian-frei
                     testbar). Verwendet von `img_to_md_state.ts` via Scan.
-vision_client.ts    VisionClient → OpenAI-kompatibler /v1/chat/completions (transcribe +
+vision_client.ts    VisionClient(endpoint, model, apiKey?) → OpenAI-kompatibler /v1/chat/completions (transcribe +
                     transcribeStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint ·
                     resolveActiveEndpoint (pingt Endpoint-Liste der Reihe nach, gibt den ersten
                     erreichbaren zurück oder null wenn alle offline).
                     Transport injiziert (HttpFetch/setHttp): non-streaming via requestUrl-Adapter,
-                    Streaming via fetch (requestUrl streamt nicht). Reiner Kern, obsidian-frei.
+                    Streaming via fetch (requestUrl streamt nicht). Der optionale API-Schlüssel wird per
+                    authHeaders auf ALLE Wege gelegt (inkl. ping/listModels/Capability-Probe — ohne ihn
+                    gälte ein gehosteter Endpunkt als offline und würde still übersprungen).
+                    Reiner Kern, obsidian-frei.
 http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert.
 capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projiziert): asJsonFetch
                     (übersetzt HttpFetch → CapabilityFetch) · fetchVisionCapability · resolveVision ·
@@ -97,19 +100,24 @@ migration_modal.ts  MigrationModal (Modal): Vorschau der Frontmatter-Migration (
                     Frontmatter-Diff, migrate/apply/cancel). Obsidian-abhängig.
 i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t() (Fallback lang→en→key,
                     {0}-Interpolation) · pickLang · setLang/getLang · defaultVisionPrompt. EN kanonisch.
-settings.ts         ImageToMarkdownSettings (enthält `visionEndpoints: string[]` statt eines einzelnen
-                    Endpunkts) · migrateEndpoints (liest altes `visionEndpoint`-Feld aus data.json und
-                    überführt es nach `visionEndpoints`) · defaultSettings() (Prompt sprachabhängig) ·
-                    SettingTab: dynamische Endpunkt-Felder (ein Feld pro Eintrag + leeres „Neu"-Feld;
-                    Pro-Feld-Erreichbarkeits-Icon circle-check/circle-x/loader + title-Text; aktiver
-                    Endpoint markiert; „Verbindung testen") · Modell + „Vision-Fähigkeit"
+settings.ts         ImageToMarkdownSettings (enthält `visionEndpoints: EndpointConfig[]` — je Eintrag
+                    URL + optionaler API-Schlüssel) · migrateEndpoints (überführt beide Alt-Stände aus
+                    data.json — Einzelfeld `visionEndpoint` und String-Liste — via Kit-`migrateEndpointList`
+                    auf Configs) · applyListEdit (String-Listen, Basis für applyTaxonomyEdit; Endpunkte
+                    nutzen das Kit-`applyEndpointEdit` mit Feld-Diskriminator) · defaultSettings()
+                    (Prompt sprachabhängig) · SettingTab: dynamische Endpunkt-Felder (URL + Passwortfeld
+                    pro Eintrag + leeres „Neu"-Feld OHNE Schlüsselfeld — der Adder verwirft alles außer
+                    der URL; Pro-Feld-Erreichbarkeits-Icon circle-check/circle-x/loader + title-Text;
+                    aktiver Endpoint markiert, Vergleich über normalisierte URLs; „Verbindung testen") · Modell + „Vision-Fähigkeit"
                     (visionConfidence + aktiver „Vision testen") · Prompt (große Textarea) ·
                     PDF-Einstellungen (pdfMaxPages, pdfRenderScale, pdfPageSeparator) ·
                     makeVisionTestImage (Canvas, DOM-Schicht).
 main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setLang) beim onload,
                     View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient. Hält `activeEndpoint`
-                    (zuletzt aufgelöster Endpunkt) + `resolveAndReconnect` (ruft
-                    resolveActiveEndpoint auf, speichert Ergebnis, informiert View).
+                    (zuletzt aufgelöste EndpointConfig — die ganze Config, weil der Schlüssel an jeden
+                    Folge-Call muss; `url` bereits normalisiert) + `resolveAndReconnect` (ruft
+                    resolveActiveEndpointConfig auf und reicht den Schlüssel auch an die Ping-Probe,
+                    speichert Ergebnis, informiert View).
 pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
                     gebündelten pdf.js-Worker als eingebetteten String (Blob-URL-Quelle). Nicht
                     manuell editieren; wird bei `npm run build` neu erzeugt.
@@ -119,6 +127,8 @@ vendor/kit/         Aus obsidian-kit vendored (Quell-Version steht im Datei-Head
   settings.ts       mergeSettings (Defaults-Merge mit Referenz-Schutz).
   sse.ts            parseSSE (OpenAI-SSE-Delta-Parser, content + reasoning_content).
   think.ts          ThinkSplitter (inline <think>-Tags; früher src/think_splitter.ts).
+  endpoint_config.ts EndpointConfig (url + optionaler apiKey/model) · authHeaders · migrateEndpointList ·
+                    applyEndpointEdit (Feld-Diskriminator) · resolveActiveEndpointConfig.
   capabilities.ts   guessFromName (Namens-Heuristik Vision+Thinking) · parse* (Ollama/LM Studio
                     v0/v1) · mergeCapability/resolveCapabilities · fetchCapabilities, Typ
                     CapabilityFetch.

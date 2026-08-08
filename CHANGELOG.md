@@ -6,6 +6,35 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-08-08
+
+### Hinzugefügt
+
+- **API-Schlüssel je Endpunkt.** Jede Zeile der Endpunkt-Liste trägt jetzt ihren eigenen,
+  optionalen Schlüssel (Passwortfeld neben der Adresse). Damit dürfen lokale und gehostete
+  Anbieter in **einer** Fallback-Kette stehen — bisher ging nur lokal, weil es keinen Weg gab,
+  einen `Authorization`-Header zu setzen. Lokale Server bleiben unberührt: ohne Schlüssel geht
+  auch kein Header raus. Der Schlüssel erreicht **alle** Netzwege, ausdrücklich auch den Ping
+  und die Vision-Fähigkeits-Probe — sonst gälte ein gehosteter Endpunkt als nicht erreichbar
+  und würde still übersprungen.
+
+### Behoben
+
+- **Gemma-Modelle wurden fälschlich als „Keine Vision" angezeigt.** Die Namens-Heuristik kannte
+  nur die Ollama-Schreibweise `gemma3`; LM Studios `google/gemma-3-4b-it` und die gesamte
+  Gemma-4-Reihe fielen durch, obwohl beide multimodal sind. `google/gemma-3-1b-it` und
+  `-270m` bleiben korrekt text-only. Fix liegt in obsidian-kit 0.25.1, hier neu vendored.
+- Eine `null`-Antwort eines Endpunkts ließ die Fähigkeits-Probe mit einem `TypeError`
+  abbrechen, statt schlicht „keine Metadaten" zu bedeuten (ebenfalls Kit 0.25.1).
+
+### Intern
+
+- Endpunkt-Einträge sind `EndpointConfig`-Objekte statt blanker Strings (vendored
+  `obsidian-kit#0.25.1` `pure/endpoint_config`). Alte `data.json`-Stände — sowohl das ur-alte
+  Einzelfeld `visionEndpoint` als auch die String-Liste — werden beim Laden migriert.
+- `check-no-nul-bytes.mjs` hängt in der Test-Kette (drift-audit 2026-08-05, damals wegen
+  Feature-Branch ausgelassen).
+
 ## [0.18.0] — 2026-08-07
 
 ### Hinzugefügt
