@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.21.0, src/pure/capabilities.ts
+// vendored from obsidian-kit#0.25.1, src/pure/capabilities.ts
 import { ThinkingSupport } from "./reasoning";
 
 export type Confidence = "no" | "likely" | "confirmed";
@@ -18,8 +18,10 @@ const VISION = [
 ];
 const VISION_TOKEN = /(^|[-_:/. ])vl([-_:/. ]|$)/;        // qwen2-vl, qwen3-vl
 const GLM_V = /glm-4(\.\d+)?v/;                            // glm-4v, glm-4.1v, glm-4.5v
-const GEMMA3_VISION = /gemma3/;                            // ≥4B; 1b/270m sind text-only
-const GEMMA3_TEXT = /gemma3:(1b|270m)/;
+// Gemma 3/4 sind multimodal; Schreibweise je Anbieter (Ollama `gemma3:4b`,
+// LM Studio `google/gemma-3-4b-it`). Ausnahme: Gemma 3 1b/270m sind text-only.
+const GEMMA_VISION = /gemma[-_]?[34]/;
+const GEMMA_TEXT = /gemma[-_]?3[-_:]?(1b|270m)/;
 const MISTRAL_VISION = /mistral-small.*(3\.1|3\.2)/;
 
 // Thinking always-on
@@ -36,8 +38,8 @@ const HYBRID = [
 const QWEN3_NONTHINK = /qwen3-instruct-2507/;
 
 function guessVision(m: string): Confidence {
-  if (GEMMA3_TEXT.test(m)) return "no";
-  if (GEMMA3_VISION.test(m)) return "likely";
+  if (GEMMA_TEXT.test(m)) return "no";
+  if (GEMMA_VISION.test(m)) return "likely";
   if (MISTRAL_VISION.test(m)) return "likely";
   if (/mistral-small/.test(m)) return "no";
   if (GLM_V.test(m)) return "likely";
@@ -72,7 +74,7 @@ export function parseOllamaShow(json: unknown): Capabilities | null {
 }
 
 function findModel(json: unknown, model: string): Record<string, unknown> | null {
-  const data = (json as { data?: unknown }).data;
+  const data = (json as { data?: unknown } | null)?.data;
   if (!Array.isArray(data)) return null;
   const hit = (data as unknown[]).find(x => (x as { id?: unknown }).id === model);
   return (hit as Record<string, unknown> | undefined) ?? null;

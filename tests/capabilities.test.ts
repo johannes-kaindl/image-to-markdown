@@ -76,6 +76,11 @@ describe("resolveVision (Merge meta + Name)", () => {
   it("nimmt die stärkere Confidence", () => {
     expect(resolveVision("no", "llava")).toBe("likely");
   });
+  it("erkennt Gemma in beiden Schreibweisen und Gemma 4", () => {
+    expect(resolveVision(null, "google/gemma-3-4b-it")).toBe("likely");
+    expect(resolveVision(null, "google/gemma-3-1b-it")).toBe("no");
+    expect(resolveVision(null, "google/gemma-4-31b-qat")).toBe("likely");
+  });
   it("behält die version-gegateten Ausnahmen der Kit-Heuristik", () => {
     expect(resolveVision(null, "gemma3:4b")).toBe("likely");
     expect(resolveVision(null, "gemma3:1b")).toBe("no");
