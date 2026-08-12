@@ -1,7 +1,7 @@
 name: Release
 
 # Baut das Plugin, attestiert die Assets und veröffentlicht ein GitHub-Release.
-# Läuft auf der GitHub-Seite (Mirror von Codeberg) bei einem SemVer-Tag (ohne v) oder manuell.
+# Läuft auf der GitHub-Seite (Mirror von Forgejo (git.jkaindl.de)) bei einem SemVer-Tag (ohne v) oder manuell.
 on:
   push:
     tags:
@@ -25,19 +25,22 @@ jobs:
         id: tag
         run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ steps.tag.outputs.tag }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: npm
 
       - run: npm ci
 
-      - name: Gate (typecheck + test + lint + build)
-        run: npm run typecheck && npm test && npm run lint && npm run build
+      - name: Gate
+        # Ruft bewusst NUR npm run gate — eine zweite Gate-Definition hier hat schon zweimal
+        # zu "lokal grün, CI rot" geführt (json_viewer via biome, image-to-markdown 0.6.0).
+        # Die Reihenfolge der Teilschritte gehört in package.json, nicht hierher.
+        run: npm run gate
 
       - name: Verify tag == package.json == manifest.json and versions.json covers it
         run: |
@@ -54,7 +57,15 @@ jobs:
             exit 1
           fi
 
+      # Build-Provenance gibt es bei GitHub NICHT fuer private Repos eines
+      # Nutzer-Accounts ("Feature not available for user-owned private
+      # repositories"). Ohne diese Bedingung bricht der Schritt ab, BEVOR das
+      # Release entsteht — der Tag steht dann auf beiden Forgen, das Release
+      # fehlt, und `release.mjs` hat laengst "veroeffentlicht" gemeldet.
+      # Gemessen 2026-08-12 an wikijs-maintainer 0.1.0. Wird das Repo spaeter
+      # oeffentlich, greift die Attestation von selbst.
       - name: Attest build provenance
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: |

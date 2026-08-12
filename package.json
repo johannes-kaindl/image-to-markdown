@@ -18,12 +18,13 @@
     "build": "npm run build:worker && node esbuild.config.mjs production",
     "dev": "npm run build:worker && node esbuild.config.mjs",
     "test": "node scripts/check-no-abs-paths.mjs && node scripts/check-no-nul-bytes.mjs && vitest run",
-    "lint": "eslint src",
+    "lint": "node scripts/check-no-inline-disables.mjs && eslint src --max-warnings 0",
     "pretypecheck": "npm run build:worker",
     "typecheck": "tsc --noEmit",
     "version-bump": "node scripts/version-bump.mjs",
     "release": "node scripts/release.mjs",
-    "deploy": "npm run build && cp main.js manifest.json styles.css \"${OBSIDIAN_PLUGIN_DIR:?Setze OBSIDIAN_PLUGIN_DIR auf dein Vault-Plugin-Verzeichnis}\"/"
+    "deploy": "npm run build && cp main.js manifest.json styles.css \"${OBSIDIAN_PLUGIN_DIR:?Setze OBSIDIAN_PLUGIN_DIR auf dein Vault-Plugin-Verzeichnis}\"/",
+    "gate": "npm run typecheck && npm test && npm run lint && npm run build"
   },
   "devDependencies": {
     "esbuild": "^0.21.0",

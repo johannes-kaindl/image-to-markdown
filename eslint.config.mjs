@@ -1,34 +1,30 @@
-import tseslint from "typescript-eslint";
+// Kanonischer Kern — Quelle: obsidian-plugins/tools/release-template/eslint.config.mjs.
+// NIE von Hand editieren: tools/template_drift_check.py prueft Byte-Gleichheit gegen das
+// Template; Aenderungen passieren IM Template und rollen per Vendoring in alle Repos.
+//
+// Das ist der lokale Spiegel des Community-Store-Scanners — dieselbe Regelquelle
+// (eslint-plugin-obsidianmd), damit `npm run lint` == Store-Scan gilt. Repo-eigene
+// Abweichungen (parserOptions aufs richtige tsconfig, begruendete file-scoped
+// Overrides) gehoeren AUSSCHLIESSLICH nach ./eslint.overrides.mjs. Inline-
+// `eslint-disable` blockt scripts/check-no-inline-disables.mjs im lint-Script.
 import obsidianmd from "eslint-plugin-obsidianmd";
+import overrides from "./eslint.overrides.mjs";
 
-// Reproduziert die Obsidian-Community-Review-Checks lokal (eslint-plugin-obsidianmd)
-// plus typescript-eslint type-checked. Gelintet wird nur src/ (das gebündelte Plugin).
-export default tseslint.config(
+export default [
   {
     ignores: [
       "main.js",
-      "esbuild.config.mjs",
-      "eslint.config.mjs",
-      "scripts/**",
+      "node_modules/**",
+      "coverage/**",
       "tests/**",
-      "vitest.config.ts",
+      "docs/**",
+      "scripts/**",
+      ".remember/**",
+      "*.config.mjs",
+      "*.config.ts",
+      "*.config.js",
     ],
   },
-  ...tseslint.configs.recommendedTypeChecked,
   ...obsidianmd.configs.recommended,
-  {
-    languageOptions: {
-      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
-    },
-    rules: {
-      // ui/sentence-case meldet False-Positives auf Marken-/URL-Strings ("IMG → MD",
-      // "http://localhost:8080") und wird vom offiziellen Community-Review nicht erzwungen.
-      "obsidianmd/ui/sentence-case": "off",
-      "obsidianmd/ui/sentence-case-json": "off",
-      "obsidianmd/ui/sentence-case-locale-module": "off",
-      // display() ist seit 1.13 deprecated (Recommendation); getSettingDefinitions-Migration
-      // ist als bewusste Abweichung deferred → Warnung statt Fehler.
-      "@typescript-eslint/no-deprecated": "warn",
-    },
-  },
-);
+  ...overrides,
+];
