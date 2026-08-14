@@ -8,19 +8,28 @@ reproducible capture recipe so anyone can regenerate them consistently.
 
 ## Status (2026-08-14)
 
-**13 of the 15 assets below exist.** They were captured against a throwaway demo vault driven through
+**14 of the 15 assets below exist.** They were captured against a throwaway demo vault driven through
 Obsidian's remote-debugging port, so the recipe below is reproducible rather than hand-made:
 `field-notes.png` / `recipe-card.png` (generated text sheets), `water-cycle.png` (a schematic for describe
 mode) and `trail-handbook.pdf` (a three-page born-digital PDF) were generated for the purpose — nothing
 private, nothing copyrighted. Models: `google/gemma-4-e4b` for the transcription shots,
 `qwen/qwen3.6-27b` (vision **and** `reasoning_content`) for the thinking shots.
 
-Two are still open, both for reasons that have nothing to do with the plugin:
+One is still open, for a reason that has nothing to do with the plugin:
 
 | Missing | Why |
 | --- | --- |
-| `tutorial-lmstudio.png` | The only asset outside Obsidian. It needs an OS-level window grab; macOS denied `screencapture` (screen-recording permission), so it cannot be produced from the automated path. |
 | `diff-modal.png` | Could not be triggered reproducibly from the automated path: after re-transcribing a source whose note exists and pressing "Update note"/"Apply", no modal appeared and — importantly — **the note was not overwritten either** (hand-made edits survived, verified). So this is not a silent-overwrite regression; the trigger condition simply differs from what step 9 below describes. Worth pinning down before the next capture run. |
+
+> **`tutorial-lmstudio.png` is the one hand-captured asset** (2026-08-14) — it shows LM Studio, not
+> Obsidian, so the CDP path cannot reach it, and macOS denied `screencapture` to the automated run
+> (screen-recording permission). It was grabbed with ⇧⌘4 instead.
+>
+> **It is also the one retouched asset:** LM Studio displayed the server address as a private
+> LAN IP in two places — the header field and the "API Usage" panel. Both were
+> repainted to `http://localhost:1234`, which is equally true for a local server and keeps a private
+> network address out of a public repository. Nothing else in the image was altered. If you re-capture
+> it, do the same, or bind LM Studio to localhost before capturing.
 
 > ⚠️ **Correction to step 6 / `context-menu.png`:** right-clicking the *rendered* image opens Obsidian's own
 > file menu ("Copy image", "Swap file…") — the plugin's entry is **not** in it. The "Image → Markdown" item

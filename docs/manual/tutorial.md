@@ -37,7 +37,7 @@ its address is `http://localhost:1234`. Keep this in mind: the plugin's default 
 will need to change it. Mixing these two ports up is the single most common reason a
 first run produces nothing, so we will get it right in Step 3.
 
-<!-- TODO(submission): screenshot of LM Studio with a vision model loaded and the local server running, port 1234 visible — CORE-META-03. Still open: this is the only asset outside Obsidian, so it cannot be captured through the plugin/CDP path that produced the others; it needs an OS-level window grab (macOS screen-recording permission). -->
+![LM Studio's Developer tab: the local server running (“Status: Running”) with the vision-capable model google/gemma-4-e4b loaded and ready, reachable on port 1234](../images/tutorial-lmstudio.png)
 ![LM Studio serving a vision model on port 1234](../images/tutorial-lmstudio.png)
 
 ## Step 2 — Install and enable the plugin
