@@ -54,6 +54,10 @@
 
 ![Sidebar-Zeile mit „✓ transcript exists“, einem „open“-Link und nicht gesetztem Häkchen](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png)
 
+**Diff vor dem Überschreiben** — der einzige zerstörende Schritt fragt vorher, Hunk für Hunk:
+
+![Der Dialog „Overwrite field-notes (transcript).md?“: ein Zeilen-Diff mit einer Checkbox je geändertem Hunk (eine abgewählt), unveränderte Kontextzeilen ohne Checkbox, dazu die Knöpfe Cancel und Apply](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png)
+
 **Thinking-Schalter** — die Wartezeit großer Reasoning-Modelle überspringen:
 
 ![Die Preset-Zeile der Sidebar mit dem Thinking-Schalter auf „Thinking: on“](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png)

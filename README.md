@@ -54,6 +54,10 @@
 
 ![Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png)
 
+**Diff before overwriting** — the one destructive operation asks first, hunk by hunk:
+
+![The “Overwrite field-notes (transcript).md?” dialog: a line-by-line diff with a checkbox per changed hunk (one unticked), unchanged context lines without one, and Cancel / Apply buttons](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png)
+
 **Thinking toggle** — skip a big reasoning model's wait when you don't need it:
 
 ![The sidebar preset row with the thinking toggle reading “Thinking: on”](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png)

@@ -8,18 +8,12 @@ reproducible capture recipe so anyone can regenerate them consistently.
 
 ## Status (2026-08-14)
 
-**14 of the 15 assets below exist.** They were captured against a throwaway demo vault driven through
+**All 15 assets below exist.** They were captured against a throwaway demo vault driven through
 Obsidian's remote-debugging port, so the recipe below is reproducible rather than hand-made:
 `field-notes.png` / `recipe-card.png` (generated text sheets), `water-cycle.png` (a schematic for describe
 mode) and `trail-handbook.pdf` (a three-page born-digital PDF) were generated for the purpose — nothing
 private, nothing copyrighted. Models: `google/gemma-4-e4b` for the transcription shots,
 `qwen/qwen3.6-27b` (vision **and** `reasoning_content`) for the thinking shots.
-
-One is still open, for a reason that has nothing to do with the plugin:
-
-| Missing | Why |
-| --- | --- |
-| `diff-modal.png` | Could not be triggered reproducibly from the automated path: after re-transcribing a source whose note exists and pressing "Update note"/"Apply", no modal appeared and — importantly — **the note was not overwritten either** (hand-made edits survived, verified). So this is not a silent-overwrite regression; the trigger condition simply differs from what step 9 below describes. Worth pinning down before the next capture run. |
 
 > **`tutorial-lmstudio.png` is the one hand-captured asset** (2026-08-14) — it shows LM Studio, not
 > Obsidian, so the CDP path cannot reach it, and macOS denied `screencapture` to the automated run
@@ -288,11 +282,18 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
    its thinking block and capture `refine.png` — the log (original + at least one round), the
    refine input, and the sidebar footer's **"Discard results"** / **"Apply"** buttons.
 
-9. **Diff-modal shot.** Pick a source that already has a transcript note (from step 6/7 above);
-   optionally hand-edit that note slightly first so the diff has more than one hunk. Tick the row's
-   checkbox to force override and press **"Transcribe"** again — capture the resulting
-   **"Overwrite `<file>`?"** modal (with its per-hunk checkboxes) for `diff-modal.png` before
-   confirming or cancelling.
+9. **Diff-modal shot.** Pick a source that already has a transcript note; hand-edit that note
+   slightly first so the diff has more than one hunk. Tick the row's checkbox to force override,
+   press **"Transcribe"**, and then — this is the step that actually triggers the gate — press the
+   card's **"Update note"**. The modal appears on the *write*, not on the transcription.
+
+   ⚠️ **The plugin must not consider that note session-owned.** The view remembers every note it
+   wrote itself during the session (`sessionOwned` → `knownBody`); for those it compares bodies and
+   stays silent when they match. Writing the note via "Create note" and then overwriting it in the
+   *same* session is therefore the one path where the dialog may not appear. Capture it after a
+   fresh plugin load (reopen the vault, or disable/enable the plugin) so `sessionOwned` is empty —
+   then the gate fires reliably. Untick one hunk before capturing to show that per-hunk selection
+   exists, and leave with **"Cancel"** so the note stays as it was.
 
 10. **PDF shots.** With `PdfDemo.md` active, the PDF appears with **"N pages" + "Page [ ] to [ ]"**
     — capture `pdf-sidebar.png`. Press **"Transcribe"** and capture the **page cards** mid-stream

@@ -8,7 +8,7 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Dokumentation
 
-- **Screenshots (CORE-META-03).** `docs/images/` enthält jetzt 14 der 15 im Aufnahme-Vertrag
+- **Screenshots (CORE-META-03).** `docs/images/` enthält jetzt **alle 15** im Aufnahme-Vertrag
   benannten Assets; README (EN/DE) tragen Hero + Galerie, das Manual seine Abbildungen.
   Aufgenommen gegen einen Wegwerf-Demo-Vault über Obsidians Debug-Port, mit eigens erzeugtem
   Material (zwei Textblätter, ein Schema, ein dreiseitiges PDF) — nichts Privates, nichts
