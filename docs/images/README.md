@@ -228,6 +228,13 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 
 ## Reproducible capture recipe
 
+> **Driver:** `scripts/shots.mjs` automates the Obsidian side of this recipe (CDP against a
+> running Obsidian, content-aware cropping, tall-window simulation for the long settings and
+> refine captures). It carries the three fallstricke that cost the most time — throttled
+> background windows, the settings living in their own `about:blank` window, and content that
+> is taller than the viewport. Start there instead of clicking by hand.
+
+
 1. **Set Obsidian to English** (*Settings → About → Language → English*, reload) so the UI strings
    match this contract. Switch back to your language afterwards.
 
