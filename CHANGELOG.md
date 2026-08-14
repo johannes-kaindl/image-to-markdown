@@ -6,6 +6,19 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Dokumentation
+
+- **Screenshots (CORE-META-03).** `docs/images/` enthält jetzt 13 der 15 im Aufnahme-Vertrag
+  benannten Assets; README (EN/DE) tragen Hero + Galerie, das Manual seine Abbildungen.
+  Aufgenommen gegen einen Wegwerf-Demo-Vault über Obsidians Debug-Port, mit eigens erzeugtem
+  Material (zwei Textblätter, ein Schema, ein dreiseitiges PDF) — nichts Privates, nichts
+  Fremdes. Offen bleiben `tutorial-lmstudio.png` (Fenster außerhalb Obsidians, braucht eine
+  Bildschirmaufnahme-Freigabe) und `diff-modal.png` (Dialog ließ sich automatisiert nicht
+  auslösen; die Notiz wurde dabei aber auch **nicht** überschrieben — kein stiller Überschreiber).
+- **Aufnahme-Vertrag korrigiert.** Der Editor-Eintrag „Image → Markdown" hängt am
+  `editor-menu`-Event: ein Rechtsklick auf das *gerenderte* Bild öffnet Obsidians Datei-Menü und
+  enthält ihn nicht. Nötig ist der Cursor auf der Embed-Quellzeile.
+
 ## [0.19.0] — 2026-08-08
 
 ### Hinzugefügt

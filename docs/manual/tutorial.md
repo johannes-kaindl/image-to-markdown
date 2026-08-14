@@ -37,7 +37,7 @@ its address is `http://localhost:1234`. Keep this in mind: the plugin's default 
 will need to change it. Mixing these two ports up is the single most common reason a
 first run produces nothing, so we will get it right in Step 3.
 
-<!-- TODO(submission): screenshot of LM Studio with a vision model loaded and the local server running, port 1234 visible — CORE-META-03 -->
+<!-- TODO(submission): screenshot of LM Studio with a vision model loaded and the local server running, port 1234 visible — CORE-META-03. Still open: this is the only asset outside Obsidian, so it cannot be captured through the plugin/CDP path that produced the others; it needs an OS-level window grab (macOS screen-recording permission). -->
 ![LM Studio serving a vision model on port 1234](../images/tutorial-lmstudio.png)
 
 ## Step 2 — Install and enable the plugin
@@ -116,7 +116,7 @@ pre-selected, so you do not have to hunt for checkboxes on your first run. (If a
 contained an unsupported format like HEIC, that entry would appear greyed out and
 disabled, which is your cue to convert it.)
 
-<!-- TODO(submission): screenshot of the "IMG → MD" sidebar listing one pre-selected image with the "Transkribieren" button — CORE-META-03 -->
+![The “IMG → MD” sidebar listing the embedded images of the active note as a checkbox list — supported formats pre-selected, an unsupported .heic disabled — above the “Transcribe” button](../images/tutorial-sidebar.png)
 ![The IMG → MD sidebar with the image pre-selected](../images/tutorial-sidebar.png)
 
 ## Step 6 — Click "Transcribe" and watch it stream

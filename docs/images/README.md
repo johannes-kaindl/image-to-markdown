@@ -2,10 +2,31 @@
 
 This folder holds the screenshots referenced by [`README.md`](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.md),
 [`README.de.md`](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.de.md) and the
-[manual](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/). The images do **not** exist
-yet — this document is the contract for producing them: exact filenames, what each must show,
-the recommended format, and a reproducible capture recipe so anyone can regenerate them
-consistently.
+[manual](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/). This document is the
+contract for producing them: exact filenames, what each must show, the recommended format, and a
+reproducible capture recipe so anyone can regenerate them consistently.
+
+## Status (2026-08-14)
+
+**13 of the 15 assets below exist.** They were captured against a throwaway demo vault driven through
+Obsidian's remote-debugging port, so the recipe below is reproducible rather than hand-made:
+`field-notes.png` / `recipe-card.png` (generated text sheets), `water-cycle.png` (a schematic for describe
+mode) and `trail-handbook.pdf` (a three-page born-digital PDF) were generated for the purpose — nothing
+private, nothing copyrighted. Models: `google/gemma-4-e4b` for the transcription shots,
+`qwen/qwen3.6-27b` (vision **and** `reasoning_content`) for the thinking shots.
+
+Two are still open, both for reasons that have nothing to do with the plugin:
+
+| Missing | Why |
+| --- | --- |
+| `tutorial-lmstudio.png` | The only asset outside Obsidian. It needs an OS-level window grab; macOS denied `screencapture` (screen-recording permission), so it cannot be produced from the automated path. |
+| `diff-modal.png` | Could not be triggered reproducibly from the automated path: after re-transcribing a source whose note exists and pressing "Update note"/"Apply", no modal appeared and — importantly — **the note was not overwritten either** (hand-made edits survived, verified). So this is not a silent-overwrite regression; the trigger condition simply differs from what step 9 below describes. Worth pinning down before the next capture run. |
+
+> ⚠️ **Correction to step 6 / `context-menu.png`:** right-clicking the *rendered* image opens Obsidian's own
+> file menu ("Copy image", "Swap file…") — the plugin's entry is **not** in it. The "Image → Markdown" item
+> comes from the `editor-menu` event and therefore needs the cursor on the embed's **source line**: switch the
+> note to source mode (or put the cursor in the embed line), then right-click the `![[…]]` text. Live preview
+> keeps the embed rendered even with the cursor on it, so the source-mode route is the only reliable one.
 
 > Note: the project prefers script-generated screenshots, but the subject is an interactive
 > Obsidian UI plugin (sidebar view, live SSE stream, reasoning block, PDF page cards) with no

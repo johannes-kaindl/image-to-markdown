@@ -9,6 +9,8 @@
 
 **Transkribiert Bilder und PDFs einer Notiz per lokalem Vision-LLM nach Markdown — komplett offline, nicht-destruktiv, live in die Sidebar gestreamt.**
 
+![Links eine Notiz mit eingebettetem dreiseitigem PDF, rechts die Sidebar „IMG → MD“ mitten in der Transkription: eine Karte pro Seite, die erste streamt Markdown live](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png)
+
 ## Funktionen
 
 - Transkribiert **Bilder und PDFs** einer Notiz über ein beliebiges OpenAI-kompatibles lokales Vision-Modell
@@ -27,6 +29,34 @@
 - **Endpoint-Fallback-Liste** — eine geordnete Liste von Vision-Endpunkten konfigurieren; das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren automatisch — eine einzige gesyncte Config funktioniert auf allen Geräten und Netzen
 - **Thinking-Toggle** — ein Schalter neben der Modellauswahl schaltet das Nachdenken (Reasoning) von Hybrid-Modellen ab, um Wartezeit zu sparen; bleibt erhalten (Default: an); Modelle, die sich nicht abschalten lassen, zeigen „immer an"
 - **Konfigurierbares Frontmatter-Mapping** — jeder Frontmatter-Schlüssel der erzeugten Notizen (und der `type`-Wert) lässt sich auf dein eigenes Vault-Schema anpassen — einheitlich für Transkript-, PDF- und Beschreibungs-Notizen
+
+### Screenshots
+
+**Live in die Sidebar** — eine Karte pro Bild, mit Denk-Block und Kopier-Knopf:
+
+![Eine Sidebar-Karte mit fertiger Transkription: Überschriften, Aufzählung und GFM-Tabelle, dazu ein eingeklappter „Thoughts“-Block und ein Kopier-Knopf](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/sidebar-streaming.png)
+
+**PDFs** — erst den Seitenbereich wählen, dann füllt sich eine Karte pro Seite:
+
+![Sidebar-Zeile eines eingebetteten PDFs mit der Seitenbereichs-Auswahl „Page 1 to 3“](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-sidebar.png)
+
+![Drei Seitenkarten eines PDFs, die erste streamt Markdown live](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-streaming.png)
+
+**Beschreiben-Modus** — für Bilder ohne transkribierbaren Text:
+
+![Aktiver Beschreiben-Modus: eine Karte mit der erzeugten Beschreibung eines Diagramms samt editierbarer Kategorie und Tags](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/describe-mode.png)
+
+**Nachbessern per Feedback** — das Transkript zurechtreden, ohne neu zu starten:
+
+![Eine Transkript-Karte mit scrollbarem Verlauf: die Originaltranskription, eine Feedback-Runde mit der Überschrift „You: …“ und darunter das Nachbesserungs-Feld](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/refine.png)
+
+**Idempotent** — eine bereits transkribierte Quelle wird markiert statt still verdoppelt:
+
+![Sidebar-Zeile mit „✓ transcript exists“, einem „open“-Link und nicht gesetztem Häkchen](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png)
+
+**Thinking-Schalter** — die Wartezeit großer Reasoning-Modelle überspringen:
+
+![Die Preset-Zeile der Sidebar mit dem Thinking-Schalter auf „Thinking: on“](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png)
 
 ### Im Detail
 
@@ -171,6 +201,8 @@ aktive Notiz im Batch zu transkribieren. Oder im Editor mit Rechtsklick auf ein 
 
 Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 
+![Der Einstellungen-Tab des Plugins: die Endpunkt-Liste mit Erreichbarkeits-Icons und Schlüsselfeld, Modell-Auswahl und Vision-Test, das Prompt-Feld, die PDF-Einstellungen mit dem Render-Scale-Regler sowie die Beschreibungs-Kategorien](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/settings.png)
+
 | Einstellung | Default | Hinweis |
 |---|---|---|
 | **Vision-Endpunkte** | `["http://localhost:8080"]` | Geordnete Liste OpenAI-kompatibler Server. Das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren. MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
@@ -183,6 +215,8 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 | **Denkprozess standardmäßig aufgeklappt** | Aus | Ob der Denkprozess-Block (Reasoning) jeder Nachbesserungs-Runde aufgeklappt startet. Aus = er klappt zu, sobald das Modell zu Ende gedacht hat (jederzeit von Hand zu öffnen). |
 | **Beschreibungs-Kategorien** | Eine eingebaute Liste, editierbar | Die feste Menge an Kategorien, die dem Modell im Beschreiben-Modus angeboten wird (ein Feld pro Kategorie, hinzufügen/entfernen wie bei der Endpoint-Liste). |
 | **Frontmatter-Mapping** | Die Standard-Keys des Plugins | Jeden Frontmatter-Schlüssel der erzeugten Notizen — und den `type`-Wert — an dein eigenes Vault-Schema anpassen (z. B. `kind` → `type`), einheitlich für Transkript-, PDF- und Beschreibungs-Notizen. Beim späteren Ändern eines Keys wird eine **vaultweite Migration** der bestehenden Notizen angeboten (Diff-Vorschau pro Notiz + doppelte Bestätigung). |
+
+![Der Abschnitt „Frontmatter mapping“ im Einstellungen-Tab mit je einem Textfeld pro Frontmatter-Schlüssel und den beiden kind-Werten](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/frontmatter-mapping.png)
 
 Default-Prompt:
 

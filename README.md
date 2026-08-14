@@ -9,6 +9,8 @@
 [![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fgit.jkaindl.de&label=release)](https://git.jkaindl.de/jkaindl/image-to-markdown/releases)
 ![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
+![A note embedding a three-page PDF on the left, the “IMG → MD” sidebar on the right mid-transcription: one card per page, the first streaming Markdown live](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png)
+
 ## Features
 
 - Transcribes **images and PDFs** embedded in a note via any OpenAI-compatible local vision model
@@ -27,6 +29,34 @@
 - **Endpoint fallback list** — configure an ordered list of Vision endpoints, each with an optional API key; the plugin pings them in order and uses the first reachable one automatically, so a single synced config works across devices, networks and hosted providers
 - **Thinking toggle** — a switch next to the model picker turns off the reasoning of hybrid models to skip the wait; sticky, on by default; models that can't be toggled show "always on"
 - **Configurable frontmatter mapping** — every frontmatter key written into generated notes (and the `type` value) can be remapped to your own vault schema, consistently across transcript, PDF and description notes
+
+### Screenshots
+
+**Streaming into the sidebar** — one card per image with the model's thinking block and a copy button:
+
+![A sidebar card showing a finished transcription with headings, a bullet list and a GFM table, plus a collapsed “Thoughts” block and a copy button](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/sidebar-streaming.png)
+
+**PDFs** — pick a page range, then watch one card per page fill up:
+
+![Sidebar row for an embedded PDF with a “Page 1 to 3” range picker](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-sidebar.png)
+
+![Three page cards for a PDF, the first one streaming Markdown live](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-streaming.png)
+
+**Describe mode** — for images that carry no text worth transcribing:
+
+![Describe mode active: a card showing the generated description of a diagram with an editable category and tags](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/describe-mode.png)
+
+**Refine with feedback** — talk the transcript into shape without starting over:
+
+![A transcript card with a scrollable history: the original transcription, a feedback round headed “You: …”, and the refine input below](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/refine.png)
+
+**Idempotent** — an already-transcribed source is marked instead of silently duplicated:
+
+![Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png)
+
+**Thinking toggle** — skip a big reasoning model's wait when you don't need it:
+
+![The sidebar preset row with the thinking toggle reading “Thinking: on”](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png)
 
 ### In detail
 
@@ -90,6 +120,8 @@ Prefer to skip the sidebar? Run the command **"Transcribe images in the active n
 
 Open **Settings → Community plugins → Image to Markdown**. The settings live under the heading **"Vision (Image → Markdown)"**.
 
+![The plugin's settings tab: the endpoint list with per-entry reachability icons and an API key field, the model picker and vision test, the prompt area, the PDF settings with the render-scale slider, and the description categories](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/settings.png)
+
 | Setting | What it does | Default |
 |---|---|---|
 | **Vision endpoints** | Ordered list of OpenAI-compatible servers, each with an optional API key. The plugin pings them in order and uses the first reachable one. | `[{"url": "http://localhost:8080"}]` (the MLX default — note that LM Studio uses `:1234`) |
@@ -102,6 +134,8 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 | **Expand thinking by default** | Whether each refinement round's thinking (reasoning) block starts expanded. Off = it collapses once the model finishes thinking (you can still open it by hand). | Off |
 | **Description categories** | The fixed set of categories offered to the model in Describe mode (one per field, add/remove like the endpoint list). | A built-in list, editable |
 | **Frontmatter mapping** | Remap every frontmatter key written into generated notes — and the `type` value — to your own vault schema (e.g. `kind` → `type`), consistently across transcript, PDF and description notes. Changing a key later offers a **vault-wide migration** of existing notes (per-note diff preview + double confirmation). | The plugin's default keys |
+
+![The “Frontmatter mapping” section of the settings tab with one text field per frontmatter key and the two kind values](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/frontmatter-mapping.png)
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 

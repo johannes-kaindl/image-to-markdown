@@ -46,7 +46,7 @@ original text is never overwritten, and running it again on an
 already-transcribed image creates no duplicate.
 
 ![Editor context menu with the Image → Markdown entry](../images/context-menu.png)
-<!-- TODO(submission): editor context menu opened on an image embed, "Image → Markdown" entry highlighted — CORE-META-03 -->
+![The editor context menu opened on an image embed line, with the “Image → Markdown” entry highlighted](../images/context-menu.png)
 
 ---
 
@@ -111,7 +111,7 @@ ephemeral and never enters the model's conversation history, and it is not part
 of the written transcript.
 
 ![A transcription card with an expanded thinking block](../images/thinking-block.png)
-<!-- TODO(submission): a sidebar card mid-stream with the thinking/reasoning block expanded — CORE-META-03 -->
+![A sidebar card with its thinking block expanded, showing the model’s reasoning above the transcription](../images/thinking-block.png)
 
 ---
 
