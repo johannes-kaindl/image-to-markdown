@@ -8,13 +8,25 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Dokumentation
 
+- **Bild-Standard (2026-08-16).** Beide READMEs betten mit `<img width>` ein statt mit
+  Markdown-Syntax — sonst bestimmt der Container die Breite, und GitHub, Forgejo und die
+  Store-Seite sind verschieden breit. `settings.png` und `refine.png` sind zu Recht hoch
+  (eine lange Seite je Bild) und stehen als 380-px-Vorschau aus `docs/images/thumbs/` mit
+  Link auf die Vollauflösung. Drei Bilder trugen toten Weißraum aus dem simulierten hohen
+  Aufnahmefenster (bei `describe-mode.png` 871 px **mitten im Bild**) und wurden
+  zugeschnitten; vier lagen über oder nahe am 400-KB-Budget und wurden neu komprimiert
+  (Ordner 3,3 → 1,9 MB). Vier Abbildungen im Manual waren doppelt eingebettet. Geprüft mit
+  `npm run shots:check` (neu verdrahtet) sowie gegen GitHub und Forgejo.
+
 - **Screenshots (CORE-META-03).** `docs/images/` enthält jetzt **alle 15** im Aufnahme-Vertrag
   benannten Assets; README (EN/DE) tragen Hero + Galerie, das Manual seine Abbildungen.
   Aufgenommen gegen einen Wegwerf-Demo-Vault über Obsidians Debug-Port, mit eigens erzeugtem
   Material (zwei Textblätter, ein Schema, ein dreiseitiges PDF) — nichts Privates, nichts
-  Fremdes. Offen bleiben `tutorial-lmstudio.png` (Fenster außerhalb Obsidians, braucht eine
-  Bildschirmaufnahme-Freigabe) und `diff-modal.png` (Dialog ließ sich automatisiert nicht
-  auslösen; die Notiz wurde dabei aber auch **nicht** überschrieben — kein stiller Überschreiber).
+  Fremdes. Zwei Assets brauchten einen Sonderweg: `tutorial-lmstudio.png` (Fenster außerhalb
+  Obsidians, von Hand aufgenommen und retuschiert — die LAN-Adresse durch `localhost` ersetzt)
+  und `diff-modal.png` (Dialog ließ sich automatisiert nicht auslösen; die Notiz wurde dabei
+  aber auch **nicht** überschrieben — kein stiller Überschreiber). Beide sind seit dem
+  2026-08-14 vorhanden.
 - **Aufnahme-Vertrag korrigiert.** Der Editor-Eintrag „Image → Markdown" hängt am
   `editor-menu`-Event: ein Rechtsklick auf das *gerenderte* Bild öffnet Obsidians Datei-Menü und
   enthält ihn nicht. Nötig ist der Cursor auf der Embed-Quellzeile.
