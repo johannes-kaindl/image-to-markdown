@@ -38,7 +38,6 @@ will need to change it. Mixing these two ports up is the single most common reas
 first run produces nothing, so we will get it right in Step 3.
 
 ![LM Studio's Developer tab: the local server running (“Status: Running”) with the vision-capable model google/gemma-4-e4b loaded and ready, reachable on port 1234](../images/tutorial-lmstudio.png)
-![LM Studio serving a vision model on port 1234](../images/tutorial-lmstudio.png)
 
 ## Step 2 — Install and enable the plugin
 
@@ -117,7 +116,6 @@ contained an unsupported format like HEIC, that entry would appear greyed out an
 disabled, which is your cue to convert it.)
 
 ![The “IMG → MD” sidebar listing the embedded images of the active note as a checkbox list — supported formats pre-selected, an unsupported .heic disabled — above the “Transcribe” button](../images/tutorial-sidebar.png)
-![The IMG → MD sidebar with the image pre-selected](../images/tutorial-sidebar.png)
 
 ## Step 6 — Click "Transcribe" and watch it stream
 

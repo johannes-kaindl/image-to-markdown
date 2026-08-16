@@ -9,7 +9,7 @@
 [![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fgit.jkaindl.de&label=release)](https://git.jkaindl.de/jkaindl/image-to-markdown/releases)
 ![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
-![A note embedding a three-page PDF on the left, the “IMG → MD” sidebar on the right mid-transcription: one card per page, the first streaming Markdown live](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png)
+<p align="center"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png" width="820" alt="A note embedding a three-page PDF on the left, the “IMG → MD” sidebar on the right mid-transcription: one card per page, the first streaming Markdown live"></p>
 
 ## Features
 
@@ -34,33 +34,34 @@
 
 **Streaming into the sidebar** — one card per image with the model's thinking block and a copy button:
 
-![A sidebar card showing a finished transcription with headings, a bullet list and a GFM table, plus a collapsed “Thoughts” block and a copy button](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/sidebar-streaming.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/sidebar-streaming.png" width="820" alt="A sidebar card showing a finished transcription with headings, a bullet list and a GFM table, plus a collapsed “Thoughts” block and a copy button">
 
 **PDFs** — pick a page range, then watch one card per page fill up:
 
-![Sidebar row for an embedded PDF with a “Page 1 to 3” range picker](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-sidebar.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-sidebar.png" width="820" alt="Sidebar row for an embedded PDF with a “Page 1 to 3” range picker">
 
-![Three page cards for a PDF, the first one streaming Markdown live](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-streaming.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-streaming.png" width="820" alt="Three page cards for a PDF, the first one streaming Markdown live">
 
 **Describe mode** — for images that carry no text worth transcribing:
 
-![Describe mode active: a card showing the generated description of a diagram with an editable category and tags](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/describe-mode.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/describe-mode.png" width="820" alt="Describe mode active: a card showing the generated description of a diagram with an editable category and tags">
 
 **Refine with feedback** — talk the transcript into shape without starting over:
 
-![A transcript card with a scrollable history: the original transcription, a feedback round headed “You: …”, and the refine input below](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/refine.png)
+<a href="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/refine.png"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thumbs/refine.png" width="380" alt="A transcript card with a scrollable history: the original transcription, a feedback round headed “You: …”, and the refine input below"></a>
+<sub>Click the preview for the full-resolution screenshot.</sub>
 
 **Idempotent** — an already-transcribed source is marked instead of silently duplicated:
 
-![Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png" width="820" alt="Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox">
 
 **Diff before overwriting** — the one destructive operation asks first, hunk by hunk:
 
-![The “Overwrite field-notes (transcript).md?” dialog: a line-by-line diff with a checkbox per changed hunk (one unticked), unchanged context lines without one, and Cancel / Apply buttons](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png" width="820" alt="The “Overwrite field-notes (transcript).md?” dialog: a line-by-line diff with a checkbox per changed hunk (one unticked), unchanged context lines without one, and Cancel / Apply buttons">
 
 **Thinking toggle** — skip a big reasoning model's wait when you don't need it:
 
-![The sidebar preset row with the thinking toggle reading “Thinking: on”](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png" width="820" alt="The sidebar preset row with the thinking toggle reading “Thinking: on”">
 
 ### In detail
 
@@ -124,7 +125,8 @@ Prefer to skip the sidebar? Run the command **"Transcribe images in the active n
 
 Open **Settings → Community plugins → Image to Markdown**. The settings live under the heading **"Vision (Image → Markdown)"**.
 
-![The plugin's settings tab: the endpoint list with per-entry reachability icons and an API key field, the model picker and vision test, the prompt area, the PDF settings with the render-scale slider, and the description categories](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/settings.png)
+<a href="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/settings.png"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thumbs/settings.png" width="380" alt="The plugin's settings tab: the endpoint list with per-entry reachability icons and an API key field, the model picker and vision test, the prompt area, the PDF settings with the render-scale slider, and the description categories"></a>
+<sub>Click the preview for the full-resolution screenshot.</sub>
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -139,7 +141,7 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 | **Description categories** | The fixed set of categories offered to the model in Describe mode (one per field, add/remove like the endpoint list). | A built-in list, editable |
 | **Frontmatter mapping** | Remap every frontmatter key written into generated notes — and the `type` value — to your own vault schema (e.g. `kind` → `type`), consistently across transcript, PDF and description notes. Changing a key later offers a **vault-wide migration** of existing notes (per-note diff preview + double confirmation). | The plugin's default keys |
 
-![The “Frontmatter mapping” section of the settings tab with one text field per frontmatter key and the two kind values](https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/frontmatter-mapping.png)
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/frontmatter-mapping.png" width="820" alt="The “Frontmatter mapping” section of the settings tab with one text field per frontmatter key and the two kind values">
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 

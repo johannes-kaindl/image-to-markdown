@@ -19,6 +19,8 @@
     "dev": "npm run build:worker && node esbuild.config.mjs",
     "test": "node scripts/check-no-abs-paths.mjs && node scripts/check-no-nul-bytes.mjs && vitest run",
     "lint": "node scripts/check-no-inline-disables.mjs && eslint src --max-warnings 0",
+    "shots": "node scripts/shots.mjs",
+    "shots:check": "test -f ../../_docs/readme/readme_lint.py && python3 ../../_docs/readme/readme_lint.py . || echo 'readme_lint.py nicht gefunden (maintainer-lokal) — uebersprungen'",
     "pretypecheck": "npm run build:worker",
     "typecheck": "tsc --noEmit",
     "version-bump": "test -f ../tools/release/version-bump.mjs || { echo \"FEHLER: ../tools/release/ fehlt. Dieses Repo muss im Dach-Verzeichnis obsidian-plugins/ neben tools/ liegen — das Release-Tooling liegt dort zentral, nicht im Plugin. Ein Clone ohne Dach ist nicht release-faehig.\" >&2; exit 1; }; node ../tools/release/version-bump.mjs",

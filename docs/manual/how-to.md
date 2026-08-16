@@ -45,7 +45,6 @@ replaces the image embed in the source note with an embed of the new note. The
 original text is never overwritten, and running it again on an
 already-transcribed image creates no duplicate.
 
-![Editor context menu with the Image → Markdown entry](../images/context-menu.png)
 ![The editor context menu opened on an image embed line, with the “Image → Markdown” entry highlighted](../images/context-menu.png)
 
 ---
@@ -110,7 +109,6 @@ The thinking content comes from the stream's `reasoning_content` plus any inline
 ephemeral and never enters the model's conversation history, and it is not part
 of the written transcript.
 
-![A transcription card with an expanded thinking block](../images/thinking-block.png)
 ![A sidebar card with its thinking block expanded, showing the model’s reasoning above the transcription](../images/thinking-block.png)
 
 ---

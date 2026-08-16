@@ -6,7 +6,31 @@ This folder holds the screenshots referenced by [`README.md`](https://git.jkaind
 contract for producing them: exact filenames, what each must show, the recommended format, and a
 reproducible capture recipe so anyone can regenerate them consistently.
 
-## Status (2026-08-14)
+## Status (2026-08-16)
+
+**All 15 assets exist and follow the workspace image standard**
+(`_docs/readme/readme-spec.json`, block `images` — maintainer-local; the checks run via
+`npm run shots:check`). What that added on top of the 2026-08-14 capture run:
+
+- **Embedding form:** both READMEs embed with `<img src=… width=…>` instead of Markdown
+  syntax. Markdown lets the *container* decide the width, and the containers differ
+  (GitHub ~820 px, Forgejo unbounded, the Obsidian store page again different) — the same
+  file then reads differently on each surface.
+- **Height limit:** an inline image may not exceed H/W 1.6, because height is scroll
+  distance. Two images are legitimately taller — `settings.png` (2.25) and `refine.png`
+  (2.08) show one long page each — and are therefore embedded as **380 px previews from
+  `thumbs/` that link to the full-resolution file**. Regenerate a preview whenever its
+  source changes: `thumbs/<name>.png` = the same image scaled to 380 px wide.
+- **Budget:** 400 KB per PNG, 5 MB for this folder. Re-encode with
+  `pngquant --quality 82-98` rather than re-capturing; on these UI screenshots it saves
+  60–70 % with no visible loss (verified by eye, not just by size).
+- **Three images carried dead white space** from the simulated tall window the driver uses
+  for long content — `frontmatter-mapping.png` (777 px below the content),
+  `thinking-block.png` (512 px) and `describe-mode.png` (an 871 px *gap in the middle*,
+  with the footer still glued to the bottom edge). All three were cropped, no re-capture.
+  If you re-run the driver, check for this: it costs nothing to spot and nothing fails.
+
+### Earlier status (2026-08-14)
 
 **All 15 assets below exist.** They were captured against a throwaway demo vault driven through
 Obsidian's remote-debugging port, so the recipe below is reproducible rather than hand-made:
@@ -55,6 +79,12 @@ verbatim under "Strings visible in the UI" below. (German variants can be added 
 - **Privacy:** use the throwaway demo vault described below — never a real vault. No personal
   note titles, no file paths that leak a username.
 - **Filenames:** lowercase, exactly as listed. Do not add suffixes or change the extension.
+- **Embedding:** `<img src="<absolute raw URL>" width="820" alt="…">` in the READMEs; the
+  hero additionally wrapped in `<p align="center">`. Never Markdown image syntax — see Status.
+- **Height:** keep H/W at or below 1.6. If the subject is genuinely a long page, keep the tall
+  capture and embed `thumbs/<name>.png` at `width="380"` inside a link to the full file.
+- **Trim:** crop away empty space the capture window leaves behind — the checks measure the
+  *file*, so an image can pass every check and still be 40 % white.
 
 ## Required assets
 
@@ -70,7 +100,7 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 | `pdf-streaming.png` | `README.md`, `README.de.md` (Features) | PDF transcription in progress: **one card per page** (`<name> · page k/n`), at least one streaming live. Shows that a PDF becomes one note from many page cards. |
 | `exists-open.png` | `README.md`, `README.de.md` (idempotency) | A sidebar entry whose source already has a transcript: the **"✓ transcript exists"** badge + **"open"** link, checkbox **off** (override is opt-in). |
 | `diff-modal.png` | `README.md`, `README.de.md` (non-destructive / idempotency) | The **"Overwrite `<file>`?"** diff modal shown before an opt-in re-transcribe overwrites an existing transcript note: a line-by-line diff with a **checkbox per changed hunk** (selective apply, all ticked by default) and the **"Cancel"** / **"Apply"** buttons. |
-| `sidebar-streaming.png` | `README.md`, `README.de.md` (Features) | A single transcription card with the **live stream**, the expandable **thinking block**, and the **copy button** all visible. |
+| `sidebar-streaming.png` | `README.md`, `README.de.md` (Features) | A single transcription card with the **finished** Markdown (headings, bullet list, GFM table), the collapsed **thinking block** and the **copy button**. ⚠️ The name says streaming, the image shows the **result** — deliberately: the live stream is already carried by `hero.png` and `pdf-streaming.png`, and this shot's job is to show what comes out. Renaming it would break the URLs in both READMEs for no gain. |
 | `describe-mode.png` | `README.md`, `README.de.md` (Features) | The sidebar's mode switch **"Transcribe"** / **"Describe"** (with **"Describe"** active) plus a finished description card: image + description text, an editable **Category** field (with taxonomy suggestions) and free-form **Tags**, and the **"Save description"** button. |
 | `refine.png` | `README.md`, `README.de.md` (Features) | A transcript card mid-refinement: the **"Refine"** feedback field, a scrollable history with the original transcription plus at least one refinement round, a per-round expandable **thinking** block, a **[Copy] [Create note]** action pair on each version, and the sidebar footer's **"Discard results"** / **"Apply"** buttons. |
 | `thinking-toggle.png` | `README.md`, `README.de.md` (Features) | The sidebar's preset row with the **Thinking toggle** (brain icon) visible, showing one of **"Thinking: on"**, **"Thinking: off"**, or **"Thinking: always on"**. |
