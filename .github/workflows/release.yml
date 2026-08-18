@@ -21,9 +21,24 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve tag
+      # Werte aus Actions-Ausdruecken (${{ }}) NIE direkt in ein `run:`-Skript
+      # interpolieren — env: haelt sie aus der Shell-Parsing-Stufe raus, das ist
+      # der Unterschied zwischen "Variable" und "Text, den die Shell auswertet".
+      # Zusaetzlich: die SemVer-Validierung hier ist auch der Riegel dafuer, dass
+      # `workflow_dispatch` (frei waehlbarer Tag-Input) keinen beliebigen Ref
+      # zum Checkout weiterreichen kann — nur ein Format, das ohnehin nur der
+      # Maintainer beim echten Release-Tag erzeugt, kommt durch.
+      - name: Resolve and validate tag
         id: tag
-        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          tag="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          if ! [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$tag' is not a valid SemVer tag (X.Y.Z)"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v5
         with:
@@ -43,8 +58,9 @@ jobs:
         run: npm run gate
 
       - name: Verify tag == package.json == manifest.json and versions.json covers it
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
           PKG="$(node -p "require('./package.json').version")"
           MAN="$(node -p "require('./manifest.json').version")"
           HAS="$(node -p "require('./versions.json')['$TAG'] ? 'yes' : 'no'")"
@@ -76,12 +92,12 @@ jobs:
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          tag="${{ steps.tag.outputs.tag }}"
-          notes=$(awk -v t="## [$tag]" 'index($0,t)==1{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
-          [ -z "$notes" ] && notes="Release $tag"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" main.js manifest.json styles.css --clobber
+          notes=$(awk -v t="## [$TAG]" 'index($0,t)==1{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
+          [ -z "$notes" ] && notes="Release $TAG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" main.js manifest.json styles.css --clobber
           else
-            gh release create "$tag" main.js manifest.json styles.css --title "$tag" --notes "$notes"
+            gh release create "$TAG" main.js manifest.json styles.css --title "$TAG" --notes "$notes"
           fi
