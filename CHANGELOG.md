@@ -6,6 +6,27 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **„Kopiert" erscheint jetzt erst, wenn wirklich kopiert wurde.** Die Erfolgsmeldung stand
+  bisher unbedingt hinter dem Schreibvorgang. Lehnt die Zwischenablage ab — Fokusverlust oder
+  fehlende Berechtigung, der Normalfall auf Android und in einem unfokussierten Fenster —, las
+  man „Kopiert" bei leerer Zwischenablage.
+- **Schlägt das Kopieren fehl, sagt das Plugin es jetzt.** Bisher passierte in diesem Fall
+  sichtbar nichts. Neue Meldung „Konnte nicht in die Zwischenablage kopieren" (EN: „Could not
+  copy to clipboard").
+
+### Intern
+
+- **`diff`, `error_body` und `clipboard` kommen aus `obsidian-kit` 0.27.0 statt aus lokalem
+  Code.** Die lokale `src/diff.ts` ist gelöscht (sie war die kanonische Quelle der Kit-Fassung
+  und byte-identisch mit ihr), `parseErrorEnvelope` in `vision_client.ts` ist ein dünner Adapter
+  über das Kit-Modul geworden. Neu: `tools/sync-kit.sh` (erneuert den Vendor-Baum) und je eine
+  `VENDOR.json` in `src/vendor/kit/` und `src/vendor/kit-obsidian/`, die den Pin an einer Stelle
+  statt pro Dateikopf halten. Nicht nutzersichtbar bis auf die zwei Punkte oben; eine dritte,
+  unbeobachtbare Änderung betrifft die Fehlermeldungs-Kaskade (`message` gewinnt jetzt gegen
+  `detail`, sichtbar nur bei einem Fehlerkörper mit beiden Feldern).
+
 ### Dokumentation
 
 - **Bild-Standard (2026-08-16).** Beide READMEs betten mit `<img width>` ein statt mit

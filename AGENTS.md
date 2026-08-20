@@ -32,8 +32,8 @@ Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision
 `capabilities.ts`, `i18n.ts`, `sse.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
 `describe.ts`, `prompts.ts`, `reasoning_toggle.ts`, `card_cache.ts`, `frontmatter_map.ts`,
 `fm_migration.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
-`settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` importieren
-`obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten
+`settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und die
+vendorte Schicht `vendor/kit-obsidian/*` importieren `obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten
 über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
 ### Modul-Layout (`src/`)
@@ -179,9 +179,11 @@ npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
 npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
 npm run lint                      # eslint src (reproduziert die Obsidian-Community-Review-Checks)
-npm test                          # vitest run (481 Tests)
+npm test                          # vitest run (482 Tests)
 npx vitest run tests/<datei>      # eine Test-Datei
 npm run typecheck                 # tsc --noEmit (separat von vitest)
+npm run gate                      # typecheck + test + lint + build (die Abnahme-Schleife)
+sh tools/sync-kit.sh              # Vendor-Baum aus ../obsidian-kit erneuern (bzw. $KIT_DIR)
 npm run version-bump 0.3.0        # Version synct package.json/manifest.json/versions.json
 ```
 
