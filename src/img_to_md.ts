@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 import type { ImgItem } from "./img_to_md_state";
-import { diffLines, type DiffLine } from "./diff";
+import { diffLines, type DiffLine } from "./vendor/kit/diff";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];

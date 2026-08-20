@@ -1,6 +1,6 @@
 // src/migration_modal.ts
 import { App, Modal } from "obsidian";
-import { DiffLine, diffLines } from "./diff";
+import { DiffLine, diffLines } from "./vendor/kit/diff";
 import { t } from "./i18n";
 import { MigrationPlan, NotePlan, MappingChange } from "./fm_migration";
 

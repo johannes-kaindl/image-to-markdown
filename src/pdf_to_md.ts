@@ -1,6 +1,6 @@
 import { ImgToMdIO, replaceEmbed, transcriptNotePath, basenameNoExt, rewriteTranscript, extractTranscriptBody } from "./img_to_md";
 import { t } from "./i18n";
-import { diffLines } from "./diff";
+import { diffLines } from "./vendor/kit/diff";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 
 export interface PdfPageTranscript { page: number; text: string }

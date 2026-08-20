@@ -29,7 +29,7 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`capabilities.ts`, `i18n.ts`, `sse.ts`, `pdf_to_md.ts`, `backlinks.ts`, `diff.ts`, `refine.ts`,
+`capabilities.ts`, `i18n.ts`, `sse.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
 `describe.ts`, `prompts.ts`, `reasoning_toggle.ts`, `card_cache.ts`, `frontmatter_map.ts`,
 `fm_migration.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
 `settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` importieren
@@ -68,7 +68,11 @@ vision_client.ts    VisionClient(endpoint, model, apiKey?) → OpenAI-kompatible
                     Streaming via fetch (requestUrl streamt nicht). Der optionale API-Schlüssel wird per
                     authHeaders auf ALLE Wege gelegt (inkl. ping/listModels/Capability-Probe — ohne ihn
                     gälte ein gehosteter Endpunkt als offline und würde still übersprungen).
-                    Reiner Kern, obsidian-frei.
+                    `parseErrorEnvelope` ist seit 0.27.0 ein Adapter über das vendored Kit-Modul
+                    (`vendor/kit/error_body.ts` → errorMessageFromText mit `bodyMayBeSuccess: true`);
+                    dieses Repo ist laut Kit-Dateikopf die kanonische Quelle der Kaskade. Die Option
+                    ist Pflicht: alle drei Aufrufstellen reichen einen Body herein, von dem noch nicht
+                    feststeht, ob er ein Fehler ist. Reiner Kern, obsidian-frei.
 http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert.
 capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projiziert): asJsonFetch
                     (übersetzt HttpFetch → CapabilityFetch) · fetchVisionCapability · resolveVision ·
@@ -76,7 +80,6 @@ capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projizier
                     isVisionConfirmed). Reiner Kern, DOM-frei.
 sse.ts              streamSSE (Transport): liest den SSE-Stream aus einer Response, delegiert
                     Parsing an vendor/kit/sse.ts (parseSSE) + vendor/kit/think.ts (ThinkSplitter).
-diff.ts             Reiner Zeilen-Diff (LCS): diffLines · groupHunks · applySelection. Obsidian-frei.
 diff_modal.ts       DiffModal (Modal): Zeilen-Diff alt↔neu mit Checkbox pro Hunk (Default: alle an),
                     liefert den gemergten Body zurück. Obsidian-abhängig.
 refine.ts           Reiner Kern: buildRefineMessages — Multi-Turn-Chat-Messages für die iterative
@@ -121,7 +124,9 @@ main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setL
 pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
                     gebündelten pdf.js-Worker als eingebetteten String (Blob-URL-Quelle). Nicht
                     manuell editieren; wird bei `npm run build` neu erzeugt.
-vendor/kit/         Aus obsidian-kit vendored (Quell-Version steht im Datei-Header):
+vendor/kit/         Aus obsidian-kit vendored — obsidian-freie Schicht (`obsidian-kit/src/pure/*`).
+                    Pin steht in `vendor/kit/VENDOR.json`, Herkunft zusätzlich je Datei-Header;
+                    erneuert wird ausschließlich über `tools/sync-kit.sh`, nie von Hand:
   endpoint.ts       normalizeEndpoint + Endpoint-Fallback-Auflösung.
   reasoning.ts      Reasoning-Unterdrückung (suppressParams) + isAlwaysOnThinker.
   settings.ts       mergeSettings (Defaults-Merge mit Referenz-Schutz).
@@ -132,6 +137,24 @@ vendor/kit/         Aus obsidian-kit vendored (Quell-Version steht im Datei-Head
   capabilities.ts   guessFromName (Namens-Heuristik Vision+Thinking) · parse* (Ollama/LM Studio
                     v0/v1) · mergeCapability/resolveCapabilities · fetchCapabilities, Typ
                     CapabilityFetch.
+  diff.ts           Reiner Zeilen-Diff (LCS): diffLines · groupHunks · applySelection. Bis 0.27.0
+                    lokal als src/diff.ts — dieses Repo ist die kanonische Quelle der Kit-Fassung.
+                    ⚠️ Die Literale "ctx"|"add"|"del" sind load-bearing: diff_modal.ts und
+                    migration_modal.ts bauen daraus die CSS-Klasse `img2md-diff-${kind}` gegen
+                    styles.css. Eine Umbenennung im Kit bräche das Styling still.
+  error_body.ts     errorMessageFromBody/errorMessageFromText — Fehlermeldung aus einem
+                    JSON-Fehlerkörper. Konsument ist der Adapter `parseErrorEnvelope` in
+                    vision_client.ts (s. o.).
+  clipboard.ts      writeClipboard (obsidian-frei) — Abhängigkeit von kit-obsidian/clipboard.ts.
+vendor/kit-obsidian/ Aus obsidian-kit vendored — obsidian-abhängige Schicht
+                    (`obsidian-kit/src/obsidian/*`), eigener Pin in `VENDOR.json`:
+  clipboard.ts      copyToClipboard: Zwischenablage mit Notice-Quittung. Genutzt von main.ts
+                    (copyText in ImgToMdViewDeps). ⚠️ Einzige nicht-verbatime Kopie im Repo: die
+                    kit-internen Importe `../pure/` heißen hier `../kit/` (Vendor-Layout). Der
+                    Umschrieb ist mechanisch, wird von sync-kit.sh reproduziert und ist in Zeile 2
+                    der Datei sowie im note-Feld der VENDOR.json deklariert.
+  folder-suggest.ts FolderSuggest (Ordner-Autovervollständigung in Settings-Feldern).
+  settings_walker.ts Deklarative Settings-Zeilen (Settings-Tab).
 ```
 
 **pdf.js-Worker-Build:** `scripts/build-pdf-worker.mjs` bündelt `pdfjs-dist/build/pdf.worker.mjs`
@@ -140,8 +163,13 @@ via esbuild zu einem Single-File-Bundle, das als Template-Literal in
 eine Blob-URL — kein CDN, kein Netz, kein Import-Assertion-Trick.
 
 **Geteilter Code ist vendored, nicht als Package geteilt:** die mit den Schwester-Plugins
-gemeinsamen reinen Teile liegen als Kopien aus `obsidian-kit` unter `src/vendor/kit/`
-(Kit-first-Regel des Dachs); der Transport `streamSSE` bleibt bewusst plugin-lokal.
+gemeinsamen Teile liegen als Kopien aus `obsidian-kit` unter `src/vendor/kit/` (obsidian-frei,
+aus `obsidian-kit/src/pure/`) und `src/vendor/kit-obsidian/` (obsidian-abhängig, aus
+`obsidian-kit/src/obsidian/`) — Kit-first-Regel des Dachs. Die Trennung ist Vertrag, nicht
+Geschmack: ein obsidian-importierendes Modul unter `vendor/kit/` fällt in den Nachbar-Repos
+durch deren `check:pure`. Erneuert wird über `tools/sync-kit.sh` (`sh tools/sync-kit.sh`,
+liest `../obsidian-kit` bzw. `$KIT_DIR`), nie von Hand; die beiden `VENDOR.json` tragen den Pin.
+Der Transport `streamSSE` bleibt bewusst plugin-lokal.
 
 ## Commands
 

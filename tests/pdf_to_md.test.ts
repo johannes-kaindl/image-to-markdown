@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildPdfNote, writePdfTranscript, buildPdfBody, reconstructPdfText, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "../src/pdf_to_md";
-import { applySelection, DiffLine } from "../src/diff";
+import { applySelection, DiffLine } from "../src/vendor/kit/diff";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("reconstructPdfText", () => {

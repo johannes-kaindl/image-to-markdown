@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { diffLines, groupHunks, applySelection, DiffLine } from "../src/diff";
+import { diffLines, groupHunks, applySelection, DiffLine } from "../src/vendor/kit/diff";
 
 describe("diffLines", () => {
   it("identischer Text → nur ctx", () => {

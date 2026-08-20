@@ -20,6 +20,7 @@ import { CardCache } from "./card_cache";
 import { diffMappings, planMigration } from "./fm_migration";
 import { MigrationModal } from "./migration_modal";
 import type { FrontmatterMap } from "./frontmatter_map";
+import { copyToClipboard } from "./vendor/kit-obsidian/clipboard";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -346,7 +347,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       getReasoningExpanded: () => this.settings.reasoningExpanded,
       setSuppress: (v: boolean) => { this.settings.suppressThinking = v; void this.saveSettings(); },
       openPath: this.openPath,
-      copyText: (text: string) => { void navigator.clipboard.writeText(text); new Notice(t("notice.copied")); },
+      copyText: (text: string) => { void copyToClipboard(text, { copiedMessage: t("notice.copied"), failedMessage: t("notice.copyFailed") }); },
       cardCache: this.pendingCards,
     };
   }

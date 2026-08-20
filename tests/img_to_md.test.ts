@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody, buildDescriptionNote, descriptionNotePath, writeDescriptions } from "../src/img_to_md";
-import { applySelection } from "../src/diff";
+import { applySelection } from "../src/vendor/kit/diff";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("stripFrontmatter", () => {

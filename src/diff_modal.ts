@@ -1,6 +1,6 @@
 // src/diff_modal.ts
 import { App, Modal } from "obsidian";
-import { DiffLine, groupHunks, applySelection } from "./diff";
+import { DiffLine, groupHunks, applySelection } from "./vendor/kit/diff";
 import { t } from "./i18n";
 import { basename } from "./img_to_md";
 

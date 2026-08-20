@@ -3,6 +3,7 @@ import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PR
 import { normalizeEndpoint, resolveActiveEndpoint } from "./vendor/kit/endpoint";
 import { suppressParams } from "./vendor/kit/reasoning";
 import { authHeaders } from "./vendor/kit/endpoint_config";
+import { errorMessageFromText } from "./vendor/kit/error_body";
 
 // normalizeEndpoint + resolveActiveEndpoint sind aus obsidian-kit#0.3.0 vendored — hier
 // re-exportiert, damit main.ts/settings.ts/Tests sie weiterhin aus ./vision_client beziehen.
@@ -20,28 +21,17 @@ export type StreamFetch = (url: string, init?: RequestInit) => Promise<Response>
 /** Erkennt einen OpenAI-kompatiblen Fehler-Envelope in einem Antwort-Body. Lokale Server (LM Studio)
  *  antworten auf Fehler oft mit **HTTP 200 + `{error:{message}}`** → der Aufrufer kann die echte
  *  Servermeldung statt eines generischen Fehlers zeigen. Gibt `null` zurück, wenn der Body eine (auch
- *  leere) Completion ist oder kein erkennbarer Fehler/kein JSON. Reine Funktion, obsidian-frei. */
-export function parseErrorEnvelope(text: string): string | null {
-  if (!text || !text.trim()) return null;
-  let j: unknown;
-  try { j = JSON.parse(text); } catch { return null; }
-  if (!j || typeof j !== "object") return null;
-  const o = j as Record<string, unknown>;
-  const err = o.error;
-  if (typeof err === "string" && err.trim()) return err.trim();
-  if (err && typeof err === "object") {
-    const m = (err as Record<string, unknown>).message;
-    if (typeof m === "string" && m.trim()) return m.trim();
-  }
-  // Nur ohne reguläre Completion-Felder zusätzliche Fehlerformen (FastAPI {detail}, schlichtes {message}).
-  if (!("choices" in o)) {
-    const detail = o.detail;
-    if (typeof detail === "string" && detail.trim()) return detail.trim();
-    const msg = o.message;
-    if (typeof msg === "string" && msg.trim()) return msg.trim();
-  }
-  return null;
-}
+ *  leere) Completion ist oder kein erkennbarer Fehler/kein JSON.
+ *
+ *  Adapter über das vendorte Kit-Modul (wie `src/capabilities.ts`): die Kaskade selbst steht seit
+ *  0.27.0 in `vendor/kit/error_body.ts` — dieses Repo ist laut Kit-Dateikopf ihre kanonische Quelle.
+ *  `bodyMayBeSuccess: true` ist hier **Pflicht, nicht Geschmack**: im Kit ist der `choices`-Wächter
+ *  optional, alle drei Aufrufstellen unten reichen aber einen Body herein, von dem sie noch nicht
+ *  wissen, ob er überhaupt ein Fehler ist. Ohne die Option läse `{"choices":[],"detail":"stray"}`
+ *  als Fehler (geprüft in tests/vision_client.test.ts). Die Option steht deshalb genau einmal —
+ *  hier — statt dreimal an den Aufrufstellen. */
+export const parseErrorEnvelope = (text: string): string | null =>
+  errorMessageFromText(text, { bodyMayBeSuccess: true });
 
 let httpFn: HttpFetch | null = null;
 let streamFn: StreamFetch | null = null;
