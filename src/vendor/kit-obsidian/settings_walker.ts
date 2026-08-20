@@ -1,4 +1,5 @@
-// vendored from obsidian-kit#0.25.0, src/obsidian/settings_walker.ts
+// vendored from obsidian-kit#0.27.0, src/obsidian/settings_walker.ts
+// obsidian-kit/src/obsidian/settings_walker.ts
 //
 // Der gemeinsame Fallback-Walker fuer zweigleisige deklarative Settings-Tabs
 // (Obsidian >=1.13 fragt getSettingDefinitions() selbst ab; darunter ruft der

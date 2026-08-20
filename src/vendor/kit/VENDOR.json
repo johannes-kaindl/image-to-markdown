@@ -1,0 +1,7 @@
+{
+  "source": "obsidian-kit",
+  "version": "0.27.0",
+  "sha": "fbb42d4",
+  "vendored": "capabilities.ts, clipboard.ts, diff.ts, endpoint.ts, endpoint_config.ts, error_body.ts, reasoning.ts, settings.ts, sse.ts, think.ts",
+  "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. think.ts ist obsidian-kit/src/pure/think-splitter.ts — nur der Dateiname weicht ab, der Inhalt ist verbatim. kit-obsidian/ siehe dessen VENDOR.json; tests/vendor/kit/obsidian-mock.ts steht weiter auf 0.3.0 und wird von diesem Skript bewusst nicht angefasst (Begruendung im Skript-Kopf)."
+}

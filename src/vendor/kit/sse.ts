@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.3.0, src/pure/sse.ts
+// vendored from obsidian-kit#0.27.0, src/pure/sse.ts
 /** Akkumuliert OpenAI-SSE-Deltas (content + reasoning_content) aus einem (Teil-)Buffer;
  *  unvollständige letzte Zeile → rest. `model` = erstes im Buffer gesehenes Chunk-`model`-Feld.
  *  `finishReason` = erstes non-empty `choices[0].finish_reason` (OpenAI sendet in Zwischen-Chunks

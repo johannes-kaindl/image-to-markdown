@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.25.1, src/pure/capabilities.ts
+// vendored from obsidian-kit#0.27.0, src/pure/capabilities.ts
 import { ThinkingSupport } from "./reasoning";
 
 export type Confidence = "no" | "likely" | "confirmed";

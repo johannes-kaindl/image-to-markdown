@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.4.0, src/pure/settings.ts
+// vendored from obsidian-kit#0.27.0, src/pure/settings.ts
 /** Shallow-Merge gespeicherter Plugin-Settings über Defaults — das gemeinsame
  *  `Object.assign({}, DEFAULTS, await loadData())`-Muster der Plugins, plus Referenz-Schutz:
  *  Default-*Werte* werden eine Ebene tief geklont (Arrays slice(), Plain-Objects Spread),
