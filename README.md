@@ -53,15 +53,15 @@
 
 **Idempotent** — an already-transcribed source is marked instead of silently duplicated:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png" width="820" alt="Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox">
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png" width="500" alt="Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox">
 
 **Diff before overwriting** — the one destructive operation asks first, hunk by hunk:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png" width="820" alt="The “Overwrite field-notes (transcript).md?” dialog: a line-by-line diff with a checkbox per changed hunk (one unticked), unchanged context lines without one, and Cancel / Apply buttons">
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png" width="522" alt="The “Overwrite field-notes (transcript).md?” dialog: a line-by-line diff with a checkbox per changed hunk (one unticked), unchanged context lines without one, and Cancel / Apply buttons">
 
 **Thinking toggle** — skip a big reasoning model's wait when you don't need it:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png" width="820" alt="The sidebar preset row with the thinking toggle reading “Thinking: on”">
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png" width="450" alt="The sidebar preset row with the thinking toggle reading “Thinking: on”">
 
 ### In detail
 

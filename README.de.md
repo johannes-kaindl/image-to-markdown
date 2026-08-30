@@ -53,15 +53,15 @@
 
 **Idempotent** — eine bereits transkribierte Quelle wird markiert statt still verdoppelt:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png" width="820" alt="Sidebar-Zeile mit „✓ transcript exists“, einem „open“-Link und nicht gesetztem Häkchen">
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png" width="500" alt="Sidebar-Zeile mit „✓ transcript exists“, einem „open“-Link und nicht gesetztem Häkchen">
 
 **Diff vor dem Überschreiben** — der einzige zerstörende Schritt fragt vorher, Hunk für Hunk:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png" width="820" alt="Der Dialog „Overwrite field-notes (transcript).md?“: ein Zeilen-Diff mit einer Checkbox je geändertem Hunk (eine abgewählt), unveränderte Kontextzeilen ohne Checkbox, dazu die Knöpfe Cancel und Apply">
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png" width="522" alt="Der Dialog „Overwrite field-notes (transcript).md?“: ein Zeilen-Diff mit einer Checkbox je geändertem Hunk (eine abgewählt), unveränderte Kontextzeilen ohne Checkbox, dazu die Knöpfe Cancel und Apply">
 
 **Thinking-Schalter** — die Wartezeit großer Reasoning-Modelle überspringen:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png" width="820" alt="Die Preset-Zeile der Sidebar mit dem Thinking-Schalter auf „Thinking: on“">
+<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png" width="450" alt="Die Preset-Zeile der Sidebar mit dem Thinking-Schalter auf „Thinking: on“">
 
 ### Im Detail
 
