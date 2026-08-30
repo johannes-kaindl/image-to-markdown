@@ -29,6 +29,9 @@ export interface ImgCard {
   status: CardStatus;
   page?: number;
   error?: string;
+  /** Antwort endete mit finish_reason "length" — am Token-Limit abgeschnitten, also unvollständig.
+   *  Kein Fehler: der Teiltext bleibt verwendbar, die Karte weist nur darauf hin. */
+  truncated?: boolean;
   writtenPath?: string;
   mode?: "transcript" | "description";
   category?: string | null;
@@ -93,21 +96,28 @@ export class ImgToMdState {
   appendContent(i: number, t: string): void { const c = this.cards[i]; if (c) c.text += t; }
   appendReasoning(i: number, t: string): void { const c = this.cards[i]; if (c) c.reasoning += t; }
 
-  setDone(i: number): void {
+  setDone(i: number, finishReason?: string): void {
     const c = this.cards[i]; if (!c) return;
+    const truncated = finishReason === "length";
+    if (truncated) c.truncated = true;
     if (c.text.trim()) c.status = "done";
-    else { c.status = "error"; c.error = t("core.emptyTranscript"); }
+    // Leer UND abgeschnitten ist der haeufige Reasoning-Fall: das Denken hat das Antwortbudget
+    // aufgebraucht. "Leeres Transkript" liest sich dann wie "nichts erkannt" und schickt die
+    // Fehlersuche ans Bild statt ans Limit.
+    else { c.status = "error"; c.error = t(truncated ? "core.truncatedEmpty" : "core.emptyTranscript"); }
   }
 
-  setDescribed(i: number, parsed: ParsedDescription, model: string): void {
+  setDescribed(i: number, parsed: ParsedDescription, model: string, finishReason?: string): void {
     const c = this.cards[i]; if (!c) return;
+    const truncated = finishReason === "length";
+    if (truncated) c.truncated = true;
     c.text = parsed.prose;
     c.category = parsed.category;
     c.tags = parsed.tags;
     c.mode = "description";
     c.model = model;
     if (parsed.prose.trim()) c.status = "done";
-    else { c.status = "error"; c.error = t("core.emptyTranscript"); }
+    else { c.status = "error"; c.error = t(truncated ? "core.truncatedEmpty" : "core.emptyTranscript"); }
   }
 
   setError(i: number, msg: string): void { const c = this.cards[i]; if (c) { c.status = "error"; c.error = msg; } }
@@ -115,7 +125,7 @@ export class ImgToMdState {
   /** Setzt eine Karte für einen Retry zurück: leert Inhalt/Modell/Fehler, Status → streaming. */
   resetCard(i: number): void {
     const c = this.cards[i]; if (!c) return;
-    c.text = ""; c.reasoning = ""; c.model = ""; c.status = "streaming"; c.error = undefined; c.writtenPath = undefined;
+    c.text = ""; c.reasoning = ""; c.model = ""; c.status = "streaming"; c.error = undefined; c.truncated = undefined; c.writtenPath = undefined;
   }
   /** Committet eine erfolgreiche Nachbesserung als neue Runde: setzt beim ersten Mal die Basis
    *  (die vorige card.text — während des Streamens nicht mutiert), hängt {feedback,text,reasoning}

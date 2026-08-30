@@ -52,6 +52,13 @@ describe("parseErrorEnvelope", () => {
 });
 
 describe("VisionClient (non-streaming, injizierter http)", () => {
+  it("transcribe meldet finish_reason 'length' — der Fall mit leerem content", async () => {
+    mockHttp(() => ok({ model: "m", choices: [{ message: { content: "" }, finish_reason: "length" }] }));
+    const r = await new VisionClient("http://x", "vm").transcribe("d", "p");
+    expect(r.content).toBe("");
+    expect(r.finishReason).toBe("length");
+  });
+
   it("transcribe schickt text+image_url, non-streaming, und parst content", async () => {
     const calls = mockHttp(() => ok({ choices: [{ message: { content: "# Titel" } }] }));
     const out = await new VisionClient("http://x", "vm").transcribe("data:image/jpeg;base64,AAAA", "Transkribiere");
@@ -87,6 +94,23 @@ describe("VisionClient (non-streaming, injizierter http)", () => {
 });
 
 describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
+  it("meldet finishReason 'length' an den Aufrufer (Token-Limit erreicht)", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes([
+      'data: {"model":"m","choices":[{"delta":{"content":"Kapitel"},"finish_reason":null}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n',
+    ])));
+    const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
+    expect(r.content).toBe("Kapitel");
+    expect(r.finishReason).toBe("length");
+  });
+  it("meldet finishReason 'stop' bei regulaerem Ende", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes([
+      'data: {"model":"m","choices":[{"delta":{"content":"fertig"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+    ])));
+    const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
+    expect(r.finishReason).toBe("stop");
+  });
+
   it("streamt content-Deltas und liefert {content,reasoning,model}", async () => {
     setStreamFetch(() => Promise.resolve(streamRes([
       'data: {"model":"qwen2-vl","choices":[{"delta":{"content":"# Ti"}}]}\n\n',
@@ -132,6 +156,14 @@ describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
 });
 
 describe("VisionClient.transcribeTextStream (text-only)", () => {
+  it("meldet finishReason 'length' (text-only-Pfad)", async () => {
+    setStreamFetch(() => Promise.resolve(streamRes([
+      'data: {"model":"m","choices":[{"delta":{"content":"# A"},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n',
+    ])));
+    const r = await new VisionClient("http://x", "vm").transcribeTextStream("txt", "p", () => {}, () => {});
+    expect(r.finishReason).toBe("length");
+  });
+
   it("streamt content, Body ist text-only (String-content, kein image_url)", async () => {
     const calls: { body?: string }[] = [];
     setStreamFetch((_url, init) => { calls.push({ body: init?.body as string | undefined }); return Promise.resolve(streamRes(['data: {"model":"m","choices":[{"delta":{"content":"# A"}}]}\n\ndata: [DONE]\n\n'])); });

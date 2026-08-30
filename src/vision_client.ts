@@ -83,7 +83,7 @@ export class VisionClient {
   }
 
   /** Non-streaming /v1/chat/completions-Call. Modell autoritativ aus der Response. */
-  async transcribe(dataUrl: string, prompt: string, opts?: { suppressThinking?: boolean }): Promise<{ content: string; model: string }> {
+  async transcribe(dataUrl: string, prompt: string, opts?: { suppressThinking?: boolean }): Promise<{ content: string; model: string; finishReason?: string }> {
     const res = await http()(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers: this.headers({ "Content-Type": "application/json" }),
@@ -93,10 +93,14 @@ export class VisionClient {
     // statt sie als „leeres Transkript" zu verschlucken (siehe AGENTS.md-Gotcha).
     const envelope = parseErrorEnvelope(res.text);
     if (!res.ok) throw new Error(envelope ?? `Vision HTTP ${res.status}`);
-    const j = JSON.parse(res.text) as { model?: string; choices?: { message?: { content?: string } }[] };
-    const content = j.choices?.[0]?.message?.content ?? "";
+    const j = JSON.parse(res.text) as { model?: string; choices?: { message?: { content?: string }; finish_reason?: string | null }[] };
+    const c0 = j.choices?.[0];
+    const content = c0?.message?.content ?? "";
     if (!content.trim() && envelope) throw new Error(envelope);
-    return { content, model: j.model ?? this.model };
+    // finish_reason === "length" heisst: am Token-Limit abgeschnitten. Kein Fehler (der Teiltext ist
+    // gueltig), aber der Aufrufer muss es sagen koennen — sonst sieht ein leeres Transkript wie
+    // "nichts erkannt" aus.
+    return { content, model: j.model ?? this.model, finishReason: c0?.finish_reason ?? undefined };
   }
 
   /** Passive Vision-Erkennung: native Metadaten-Probe + Namens-Heuristik.
@@ -119,7 +123,7 @@ export class VisionClient {
     dataUrl: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string }> {
+  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
     if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
     const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
@@ -135,7 +139,7 @@ export class VisionClient {
       const envelope = parseErrorEnvelope(r.raw);
       if (envelope) throw new Error(envelope);
     }
-    return { content: r.content, reasoning: r.reasoning, model: r.model || this.model };
+    return { content: r.content, reasoning: r.reasoning, model: r.model || this.model, finishReason: r.finishReason };
   }
 
   /** Gemeinsamer Streaming-Kern für die text-basierten Calls (transcribeTextStream + refineStream):
@@ -145,7 +149,7 @@ export class VisionClient {
     messages: unknown[],
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string }> {
+  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
     if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
     const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
       method: "POST",
@@ -159,7 +163,7 @@ export class VisionClient {
       const envelope = parseErrorEnvelope(r.raw);
       if (envelope) throw new Error(envelope);
     }
-    return { content: r.content, reasoning: r.reasoning, model: r.model || this.model };
+    return { content: r.content, reasoning: r.reasoning, model: r.model || this.model, finishReason: r.finishReason };
   }
 
   /** Wie transcribeStream, aber sendet reinen TEXT (kein Bild) — für born-digital PDF-Seiten, deren
@@ -168,7 +172,7 @@ export class VisionClient {
     text: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string }> {
+  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
     return this.streamChat([{ role: "user", content: `${prompt}\n\n${text}` }], onContent, onReasoning, signal, opts);
   }
 
@@ -178,7 +182,7 @@ export class VisionClient {
     messages: unknown[],
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string }> {
+  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
     return this.streamChat(messages, onContent, onReasoning, signal, opts);
   }
 }

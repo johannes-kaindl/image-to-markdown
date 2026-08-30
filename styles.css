@@ -33,6 +33,12 @@
 .img2md-retry.clickable-icon { color: var(--text-error); padding: 2px 4px; height: auto; width: auto; flex: 0 0 auto; }
 .img2md-retry.clickable-icon:hover { color: var(--text-normal); }
 .img2md-retry.clickable-icon svg { width: 14px; height: 14px; }
+/* Abschneide-Hinweis: Warnung, kein Fehler — der Teiltext bleibt gueltig und anlegbar.
+   Geschwister von .img2md-error, deshalb dieselbe Zeilen-Grammatik mit --text-warning. */
+.img2md-truncated { color: var(--text-warning); font-size: 12px; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.img2md-truncated-msg { flex: 1 1 auto; min-width: 0; }
+.img2md-truncated-icon { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.img2md-truncated-icon svg { width: 14px; height: 14px; }
 .img2md-written { color: var(--text-accent); font-size: 11px; cursor: pointer; margin-top: 4px; }
 .img2md-reasoning { font-size: 12px; margin: 2px 0; }
 .img2md-reasoning-sum { color: var(--text-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }

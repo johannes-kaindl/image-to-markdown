@@ -27,6 +27,7 @@ interface CardRefs {
   reasoningBody?: HTMLElement;
   textEl?: HTMLElement;
   errorEl?: HTMLElement;
+  truncatedEl?: HTMLElement;
   writtenEl?: HTMLElement;
   actionsEl?: HTMLElement;
   writeBtn?: HTMLElement;
@@ -50,7 +51,7 @@ interface CardRefs {
 export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
   scan: (sourcePath: string) => Promise<ImgItem[]>;
-  transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string }>;
+  transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string; finishReason?: string }>;
   writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; knownBody?: string }[]) => Promise<{ path: string | null; body: string | null }[]>;
   writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }, knownBody?: string) => Promise<{ path: string | null; body: string | null }>;
   /** Modus des „Los"-Buttons (Transkribieren ⇄ Beschreiben). Rein Lauf-Typ-Steuerung — Bild-Auswahl
@@ -61,7 +62,7 @@ export interface ImgToMdViewDeps {
   /** Wie transcribeStream, aber für den Beschreiben-Modus: liefert nur den Rohtext (`raw`) — das
    *  Parsen (CATEGORY:/TAGS:/Prosa) übernimmt die View via parseDescription. Kein page-Parameter
    *  (Beschreiben zielt auf Einzelbilder, nicht auf mehrseitige PDF-Läufe). */
-  describeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ raw: string; reasoning: string; model: string }>;
+  describeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ raw: string; reasoning: string; model: string; finishReason?: string }>;
   /** Iterative Nachbesserung einer Transkript-Karte (#7): baut (in main.ts) aus base + steps +
    *  feedback das Multi-Turn-Messages-Array und streamt es text-only. Modell/Endpoint/Suppress
    *  kommen aus den Settings — die View gibt nur Verlauf + neues Feedback + Stream-Callbacks. */
@@ -434,6 +435,16 @@ export class ImgToMdView extends ItemView {
       if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
       refs.textEl.setText(shownText);
     }
+    // Abschneide-Hinweis (lazy, bei card.truncated): das Modell hat am Token-Limit aufgehört.
+    // Kein Fehler — der Teiltext ist gueltig und anlegbar; ohne diese Zeile endete der Lauf still
+    // und ein halbes Transkript sähe aus wie ein vollstaendiges.
+    if (card.truncated && !refs.truncatedEl) {
+      const warn = cardEl.createDiv({ cls: "img2md-truncated" });
+      const icon = warn.createSpan({ cls: "img2md-truncated-icon" });
+      setIcon(icon, "alert-triangle");
+      warn.createSpan({ cls: "img2md-truncated-msg", text: t("core.truncated") });
+      refs.truncatedEl = warn;
+    }
     // Fehlerzeile (lazy, bei error) — Meldung + Retry-Button (re-läuft genau diese Seite/Karte).
     if (card.status === "error" && !refs.errorEl) {
       const errLine = cardEl.createDiv({ cls: "img2md-error" });
@@ -784,7 +795,7 @@ export class ImgToMdView extends ItemView {
             signal,
           );
           const parsed = parseDescription(r.raw, this.deps.getTaxonomy());
-          this.state.setDescribed(i, parsed, r.model);
+          this.state.setDescribed(i, parsed, r.model, r.finishReason);
         } else {
           card.mode = "transcript";
           const r = await this.deps.transcribeStream(
@@ -794,7 +805,7 @@ export class ImgToMdView extends ItemView {
             signal, card.page,
           );
           card.model = r.model;
-          this.state.setDone(i);
+          this.state.setDone(i, r.finishReason);
         }
       } catch (e) {
         if (signal.aborted) break;   // Stop gedrückt — Rest unten als „Abgebrochen" markieren

@@ -6,6 +6,19 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Ein am Token-Limit abgeschnittenes Transkript endet nicht mehr still.** Reasoning-Modelle
+  verbrauchen ihr Antwortbudget mitunter komplett fürs Denken und liefern danach wenige Zeichen
+  oder gar nichts — gemessen am 2026-08-14: 921 Zeichen Gedanken, 15 Zeichen Transkript. Die
+  Karte galt trotzdem als fertig, ohne Meldung; für Nutzende sah das aus wie „das Plugin hat
+  nichts erkannt". Der Server sagt es sehr wohl (`finish_reason: "length"`), und der
+  SSE-Parser las es bereits — der Transport hat es eine Ebene darüber verworfen. Jetzt trägt
+  die Kette es bis in die Sidebar: eine abgeschnittene Karte zeigt „Am Token-Limit
+  abgeschnitten — unvollständig" und bleibt anlegbar (der Teiltext ist gültig), und kam gar
+  kein Text, nennt die Fehlermeldung das Limit statt „Leeres Transkript". Gilt für
+  Transkribieren, Beschreiben, PDF-Seiten und den Kommando-Weg ohne Sidebar.
+
 ### Geändert
 
 - **„Kopiert" erscheint jetzt erst, wenn wirklich kopiert wurde.** Die Erfolgsmeldung stand

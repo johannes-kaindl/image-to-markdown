@@ -441,6 +441,26 @@ describe("runImgToMd", () => {
     expect(r).toEqual({ transcribed: 0, skipped: 1 });
     expect(Object.keys(created)).toEqual([]);
   });
+  it("am Token-Limit abgeschnitten → Notiz entsteht, Hinweis nennt das Limit", async () => {
+    const { io, created, notices } = fakeIO({
+      notes: [["q.md", "![[foto.jpg]]"]],
+      transcribe: async () => ({ content: "# Halbes Transkript", model: "vmodel", finishReason: "length" }),
+    });
+    const r = await runImgToMd(io, "q.md");
+    expect(r).toEqual({ transcribed: 1, skipped: 0 });                     // Teiltext bleibt verwendbar
+    expect(created["foto (transcript).md"]).toContain("# Halbes Transkript");
+    expect(notices.some(n => n.includes("Cut off at the token limit"))).toBe(true);
+  });
+  it("leer UND abgeschnitten → Hinweis nennt das Token-Limit, nicht 'leeres Transkript'", async () => {
+    const { io, notices } = fakeIO({
+      notes: [["q.md", "![[foto.jpg]]"]],
+      transcribe: async () => ({ content: "", model: "vmodel", finishReason: "length" }),
+    });
+    const r = await runImgToMd(io, "q.md");
+    expect(r).toEqual({ transcribed: 0, skipped: 1 });
+    expect(notices.some(n => n.includes("Token limit reached before any text"))).toBe(true);
+    expect(notices.some(n => n.includes("Empty transcript"))).toBe(false);
+  });
   it("Transkriptions-Fehler → skip, kein Crash", async () => {
     const { io } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]], transcribe: async () => { throw new Error("offline"); } });
     const r = await runImgToMd(io, "q.md");

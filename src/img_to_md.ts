@@ -215,7 +215,7 @@ export interface ImgToMdIO {
   noteExists(path: string): boolean;
   resolveImage(link: string, sourcePath: string): { path: string; ext: string } | null;
   readImageDataUrl(path: string, ext: string): Promise<string>;
-  transcribe(dataUrl: string): Promise<{ content: string; model: string }>;
+  transcribe(dataUrl: string): Promise<{ content: string; model: string; finishReason?: string }>;
   notify(msg: string): void;
   confirmOverwrite?(ctx: { path: string; diff: DiffLine[] }): Promise<string | null>;
 }
@@ -316,12 +316,15 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
     if (e.kind === "pdf") { io.notify(t("core.pdfUseSidebar", e.link)); skipped++; continue; }
     if (!SUPPORTED_EXTS.includes(resolved.ext.toLowerCase())) { io.notify(t("core.unsupportedFormat", resolved.ext, e.link)); skipped++; continue; }
     io.notify(t("core.transcribing", i + 1, embeds.length));
-    let res: { content: string; model: string };
+    let res: { content: string; model: string; finishReason?: string };
     try {
       const dataUrl = await io.readImageDataUrl(resolved.path, resolved.ext);
       res = await io.transcribe(dataUrl);
     } catch (err) { io.notify(t("core.transcribeFailed", e.link, err instanceof Error ? err.message : String(err))); skipped++; continue; }
-    if (!res.content.trim()) { io.notify(t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
+    const truncated = res.finishReason === "length";
+    if (!res.content.trim()) { io.notify(truncated ? t("core.truncatedEmpty") : t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
+    // Teiltext ist gueltig und wird geschrieben — aber ungesagt saehe die Notiz vollstaendig aus.
+    if (truncated) io.notify(t("core.truncatedLink", e.link));
     entries.push({ raw: e.raw, link: e.link, content: res.content, model: res.model, embed: e.embed });
   }
   const { results } = await writeTranscripts(io, sourcePath, entries, { map: opts?.map });

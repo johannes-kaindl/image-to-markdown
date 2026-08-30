@@ -181,6 +181,29 @@ describe("ImgToMdView — Transkribieren", () => {
     expect(all(view.contentEl, "img2md-error")[0].textContent).toContain("Empty transcript");
     expect(all(view.contentEl, "img2md-write").length).toBe(0);
   });
+  it("abgeschnittene Antwort → Warnhinweis auf der Karte, Ergebnis bleibt anlegbar", async () => {
+    const { view } = mkView({ transcribeStream: async (_sp: string, _it: ImgItem, onC: any) => {
+      onC("# Kapitel 1"); return { content: "# Kapitel 1", reasoning: "", model: "vm", finishReason: "length" };
+    } });
+    await view.onOpen(); await view.run();
+    const warn = all(view.contentEl, "img2md-truncated");
+    expect(warn.length).toBe(1);
+    expect(warn[0].textContent).toContain(t("core.truncated"));
+    expect(all(view.contentEl, "img2md-error").length).toBe(0);   // kein Fehler — der Teiltext gilt
+    expect(all(view.contentEl, "img2md-write").length).toBe(1);   // anlegbar bleibt es
+  });
+  it("regulaer beendete Antwort traegt keinen Abschneide-Hinweis", async () => {
+    const { view } = mkView({ transcribeStream: async (_sp: string, _it: ImgItem, onC: any) => {
+      onC("fertig"); return { content: "fertig", reasoning: "", model: "vm", finishReason: "stop" };
+    } });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-truncated").length).toBe(0);
+  });
+  it("leere Antwort am Token-Limit nennt das Limit statt 'Empty transcript'", async () => {
+    const { view } = mkView({ transcribeStream: async () => ({ content: "", reasoning: "", model: "vm", finishReason: "length" }) });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-error")[0].textContent).toContain(t("core.truncatedEmpty"));
+  });
   it("Fehler-Karte zeigt einen Retry-Button; Klick re-läuft genau diese Karte → done", async () => {
     let call = 0;
     const transcribeStream = async (_sp: string, _it: ImgItem, onC: any) => {
@@ -838,6 +861,17 @@ describe("ImgToMdView — Beschreiben-Modus: Lauf + Karte", () => {
     expect(all(view.contentEl, "img2md-text")[0].textContent).toBe("Ein Foto.");
   });
 
+  it("abgeschnittene Beschreibung traegt denselben Warnhinweis wie ein Transkript", async () => {
+    const { view } = mkView({
+      initialMode: "describe",
+      describeStream: async (_sp: string, _it: ImgItem, onC: any) => {
+        const raw = "CATEGORY: Foto\nTAGS: a\n---\nEin angefangener";
+        onC(raw); return { raw, reasoning: "", model: "vm", finishReason: "length" };
+      },
+    });
+    await view.onOpen(); await view.run();
+    expect(all(view.contentEl, "img2md-truncated").length).toBe(1);
+  });
   it("fertige Beschreiben-Karte zeigt Kategorie-Input (Taxonomie als Datalist-Vorschlag) + Tags-Input, keine 'Create note'-Beschriftung", async () => {
     const { view } = mkView({ initialMode: "describe" });
     await view.onOpen(); await view.run();

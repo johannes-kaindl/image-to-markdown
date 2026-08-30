@@ -57,6 +57,32 @@ describe("ImgToMdState — Karten", () => {
     expect(s2.cards[0].status).toBe("error");
     expect(s2.cards[0].error).toBe("Empty transcript");
   });
+  it("setDone mit finish_reason 'length': Text bleibt done, wird aber als abgeschnitten markiert", () => {
+    const s = new ImgToMdState(); s.setItems(items); s.startCards();
+    s.appendContent(0, "# Kapitel 1"); s.setDone(0, "length");
+    expect(s.cards[0].status).toBe("done");
+    expect(s.cards[0].text).toBe("# Kapitel 1");   // Teilergebnis bleibt verwendbar
+    expect(s.cards[0].truncated).toBe(true);
+  });
+  it("setDone mit finish_reason 'stop': nicht abgeschnitten", () => {
+    const s = new ImgToMdState(); s.setItems(items); s.startCards();
+    s.appendContent(0, "fertig"); s.setDone(0, "stop");
+    expect(s.cards[0].status).toBe("done");
+    expect(s.cards[0].truncated).toBeFalsy();
+  });
+  it("setDone: leerer Text MIT 'length' nennt das Token-Limit statt 'Leeres Transkript'", () => {
+    const s = new ImgToMdState(); s.setItems(items); s.startCards();
+    s.setDone(0, "length");
+    expect(s.cards[0].status).toBe("error");
+    expect(s.cards[0].error).toBe("Token limit reached before any text — the model spent its budget on thinking");
+    expect(s.cards[0].truncated).toBe(true);
+  });
+  it("resetCard raeumt das truncated-Flag mit ab", () => {
+    const s = new ImgToMdState(); s.setItems(items); s.startCards();
+    s.appendContent(0, "x"); s.setDone(0, "length");
+    s.resetCard(0);
+    expect(s.cards[0].truncated).toBeFalsy();
+  });
   it("setError + markWritten setzen Status", () => {
     const s = new ImgToMdState(); s.setItems(items); s.startCards();
     s.setError(0, "Vision HTTP 500");

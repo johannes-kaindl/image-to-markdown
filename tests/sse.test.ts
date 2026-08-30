@@ -51,6 +51,23 @@ describe("parseSSE", () => {
 });
 
 describe("streamSSE", () => {
+  it("reicht finish_reason aus dem letzten Chunk an den Aufrufer durch", async () => {
+    const r = await streamSSE(streamRes([
+      'data: {"choices":[{"delta":{"content":"Titel"},"finish_reason":null}]}\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n',
+      "data: [DONE]\n",
+    ]), () => {}, () => {});
+    expect(r.content).toBe("Titel");
+    expect(r.finishReason).toBe("length");
+  });
+  it("liefert finishReason undefined, wenn der Server keinen sendet", async () => {
+    const r = await streamSSE(streamRes([
+      'data: {"choices":[{"delta":{"content":"ok"}}]}\n',
+      "data: [DONE]\n",
+    ]), () => {}, () => {});
+    expect(r.finishReason).toBeUndefined();
+  });
+
   it("akkumuliert content + ruft onContent pro Delta", async () => {
     const got: string[] = [];
     const r = await streamSSE(streamRes([

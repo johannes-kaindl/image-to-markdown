@@ -8,18 +8,23 @@ export async function streamSSE(
   res: Response,
   onContent: (t: string) => void,
   onReasoning: (t: string) => void,
-): Promise<{ content: string; reasoning: string; model: string; raw: string }> {
+): Promise<{ content: string; reasoning: string; model: string; finishReason?: string; raw: string }> {
   const reader = (res as unknown as { body: { getReader(): { read(): Promise<{ done: boolean; value?: Uint8Array }> } } }).body.getReader();
   const dec = new TextDecoder();
   const splitter = new ThinkSplitter();
   // raw = kompletter dekodierter Body — erlaubt dem Aufrufer, einen 200-Fehler-Body (kein SSE) zu erkennen.
   let buffer = "", content = "", reasoning = "", model = "", raw = "";
+  let finishReason: string | undefined;
   const emit = (c: string, r: string) => {
     if (c) { content += c; onContent(c); }
     if (r) { reasoning += r; onReasoning(r); }
   };
-  const drain = (p: { content: string[]; reasoning: string[]; model?: string }) => {
+  const drain = (p: { content: string[]; reasoning: string[]; model?: string; finishReason?: string }) => {
     if (!model && p.model) model = p.model;
+    // finish_reason steht im LETZTEN Chunk (Zwischen-Chunks senden null) — er entscheidet, ob die
+    // Antwort am Token-Limit abgeschnitten wurde ("length"). Ohne Durchreichen endet ein
+    // abgeschnittenes Transkript still, siehe CHANGELOG 0.20.0.
+    if (finishReason === undefined && p.finishReason) finishReason = p.finishReason;
     for (const r of p.reasoning) emit("", r);
     for (const c of p.content) { const s = splitter.push(c); emit(s.content, s.reasoning); }
   };
@@ -40,5 +45,5 @@ export async function streamSSE(
   drain(parseSSE(buffer));
   const tail = splitter.flush();
   emit(tail.content, tail.reasoning);
-  return { content, reasoning, model, raw };
+  return { content, reasoning, model, finishReason, raw };
 }

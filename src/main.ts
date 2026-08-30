@@ -299,12 +299,12 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const opts = { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) };
         try {
           const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
-          return { raw: r.content, reasoning: r.reasoning, model: r.model };
+          return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
         } catch (err) {
           await this.resolveAndReconnect();
           if (this.activeEndpoint) {
             const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
-            return { raw: r.content, reasoning: r.reasoning, model: r.model };
+            return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
           }
           throw err;
         }
