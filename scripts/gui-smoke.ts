@@ -1,0 +1,459 @@
+/**
+ * GUI-Smoke — die Pruefpunkte aus `docs/SMOKE.md` gegen ein LAUFENDES Obsidian.
+ *
+ * Warum es das gibt (CORE-TEST-02): 498 gruene Unit-Tests sagen nichts darueber, ob die
+ * Sidebar im echten Workspace entsteht, ob `metadataCache` die Backlinks liefert, aus
+ * denen die Idempotenz-Anzeige folgt, oder ob pdf.js mit seinem als Blob-URL
+ * eingebetteten Worker im Renderer laedt. Was gegen einen Mock geprueft ist, ist
+ * spezifiziert — nicht getestet.
+ *
+ * Die CDP-Bruecke wird IMPORTIERT, nicht kopiert: sie liegt zentral im Dach
+ * (`obsidian-plugins/tools/obsidian-cdp/`). Fehlt ihr etwas, wird es DORT ergaenzt.
+ *
+ * ## Ablauf
+ *
+ * ```bash
+ * npm run build && npm run shots -- --setup     # Vault aus dem getrackten Fixture
+ * npm run smoke:gui -- --vault image-to-markdown
+ * npm run smoke:gui -- --vault image-to-markdown --with-model   # + die zwei Modell-Punkte
+ * ```
+ *
+ * Obsidian muss mit `--remote-debugging-port=9222` laufen. **Laeuft schon eine Instanz,
+ * wird sie mitbenutzt** (`lsof -nP -iTCP:9222 -sTCP:LISTEN`) — ein `quit` trifft die
+ * Fenster anderer Sessions und zerstoert deren Zustand.
+ *
+ * ## Warum der Kernlauf kein Modell braucht
+ *
+ * Ein Smoke, der einen erreichbaren Vision-Endpoint voraussetzt, misst die Laune eines
+ * LLM mit und ist nicht reproduzierbar gruen. Alles, was ohne Lauf entscheidbar ist —
+ * Listen-Aufbau, Idempotenz, PDF-Seitenzahl, Empty-State — steht deshalb im Kernlauf;
+ * die zwei Punkte, die zwingend einen Lauf brauchen, hinter `--with-model`.
+ */
+
+import { execFileSync } from "node:child_process";
+import { argv, exit, platform } from "node:process";
+
+import {
+  Cdp,
+  clickReal,
+  closeExtraLeaves,
+  openExisting,
+  pollUntil,
+} from "../../tools/obsidian-cdp/cdp.js";
+
+const PLUGIN_ID = "image-to-markdown";
+const VIEW_TYPE = "image-to-markdown-view";
+const SIDEBAR = `.workspace-leaf-content[data-type='${VIEW_TYPE}']`;
+
+/** Notizen des Fixtures. Namen stehen hier EINMAL — ein Tippfehler soll ein roter Punkt
+ *  mit Dateinamen sein, kein stilles "0 Zeilen gefunden". */
+const NOTIZ = {
+  bilder: "Field notes.md",
+  transkript: "Field notes (transcript).md",
+  pdf: "Trail handbook.md",
+  leer: "Reading list.md",
+};
+
+interface Ergebnis {
+  ok: boolean;
+  /** Was gemessen wurde — bei Fehlschlag inklusive der Meldung, die der Pruefling selbst
+   *  anzeigt. Ein roter Punkt, der nur Zahlen nennt, blockiert die Fehlersuche aktiv
+   *  (CORE-TEST-14). */
+  detail: string;
+}
+
+interface Pruefpunkt {
+  key: string;
+  titel: string;
+  /** true = braucht einen erreichbaren Vision-Endpoint (nur mit --with-model). */
+  modell?: boolean;
+  run(cdp: Cdp): Promise<Ergebnis>;
+}
+
+/** Sichtbarer Meldungstext des Prueflings — fuer die Diagnose eines roten Punktes.
+ *  Bewusst ueber die plugin-eigenen Anker, nicht ueber Obsidians globalen `.notice`:
+ *  in den schreiben alle Plugins des Vaults. */
+async function meldungen(cdp: Cdp): Promise<string> {
+  return await cdp.evaluate<string>(`
+    const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+    if (!wurzel) return "(Sidebar nicht im DOM)";
+    const texte = [...wurzel.querySelectorAll(".img2md-error, .img2md-error-msg, .img2md-empty")]
+      .map((e) => e.textContent.trim()).filter(Boolean);
+    return texte.length ? texte.join(" | ") : "(keine Meldung sichtbar)";
+  `);
+}
+
+/** Notiz oeffnen und warten, bis die Sidebar sie verarbeitet hat.
+ *  `openExisting`, nicht `openNote`: letzteres UEBERSCHREIBT die Datei mit dem
+ *  uebergebenen Body — an Fixture-Notizen ist das fatal (gemessen 2026-08-15 in
+ *  3d-codeblocks: drei Fixture-Notizen auf 0 Bytes). */
+async function zeigeNotiz(cdp: Cdp, pfad: string): Promise<void> {
+  await openExisting(cdp, pfad, "preview");
+
+  // ⚠️ Nicht auf "Liste ODER Empty-State steht" warten: beides steht schon von der
+  // VORHERIGEN Notiz da, die Bedingung ist also sofort erfuellt und die Messung greift
+  // den alten Zustand ab. Gemessen am 2026-08-30 beim ersten Lauf — die Zeilenliste kam
+  // leer zurueck, obwohl die Sidebar zwei Zeilen zeigte. Das ist die Falle "der
+  // Pruefpunkt wartet auf eine andere Bedingung, als er behauptet", und sie ist teurer
+  // als ein dauerhaft roter Punkt, weil sie nur manchmal zuschlaegt.
+  const aktiv = await pollUntil<string>(cdp, `
+    const f = app.workspace.getActiveFile();
+    return f && f.path === ${JSON.stringify(pfad)} ? f.path : null;
+  `, 10_000, 200);
+  if (!aktiv) throw new Error(`"${pfad}" wurde nicht zur aktiven Datei`);
+
+  // Und dann auf den Marker der VIEW warten, nicht auf einen DOM-Zustand: `aktive Datei`
+  // wechselt, bevor die View reagiert hat, und ein blosses "Liste steht still" ist in
+  // dieser Luecke ebenfalls erfuellt — die alte Liste steht ja still. Genau so meldete
+  // B3 am 2026-08-30 "1 Zeile" fuer eine Notiz ohne Bilder: gemessen wurde die
+  // Transkript-Notiz des vorherigen Punktes.
+  //
+  // `cardsSourcePath` ist der einzige Zustand der View, der sagt "ich habe DIESE Datei
+  // verarbeitet" — deshalb wird er gefragt und nicht das DOM. Auf den erwarteten INHALT
+  // zu warten waere der andere Fehler: ein Punkt, der auf sein eigenes Soll wartet, kann
+  // nicht mehr rot werden.
+  const verarbeitet = await pollUntil<string>(cdp, `
+    const blatt = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0];
+    const gesehen = blatt?.view?.cardsSourcePath ?? null;
+    return gesehen === ${JSON.stringify(pfad)} ? gesehen : null;
+  `, 15_000, 250);
+  if (!verarbeitet) {
+    const gesehen = await cdp.evaluate<string>(`
+      const blatt = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0];
+      return String(blatt?.view?.cardsSourcePath ?? "(keine View)");
+    `);
+    throw new Error(`Sidebar verarbeitete "${pfad}" nicht — sie steht auf "${gesehen}"`);
+  }
+}
+
+const PRUEFPUNKTE: Pruefpunkt[] = [
+  {
+    key: "A1",
+    titel: "Plugin geladen, deployte Version gelesen",
+    async run(cdp) {
+      const roh = await cdp.evaluate<string>(`
+        const aktiv = app.plugins.enabledPlugins.has(${JSON.stringify(PLUGIN_ID)});
+        // Die Version aus plugin.manifest ist der Stand vom APP-START, nicht der
+        // deployte — Obsidian liest die Manifeste beim Start und aktualisiert sie bei
+        // enablePlugin NICHT. Eine Zahl, die genau dann irrefuehrt, wenn man ihr glaubt
+        // (gemessen 2026-08-22, json_viewer).
+        const pfad = app.vault.configDir + "/plugins/" + ${JSON.stringify(PLUGIN_ID)} + "/manifest.json";
+        let deployt = null;
+        try { deployt = JSON.parse(await app.vault.adapter.read(pfad)).version; } catch (e) { deployt = "(" + e.message + ")"; }
+        return JSON.stringify({ aktiv, deployt, speicher: app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}]?.manifest?.version ?? null });
+      `);
+      const d = JSON.parse(roh) as { aktiv: boolean; deployt: string; speicher: string | null };
+      return {
+        ok: d.aktiv && /^\d+\.\d+\.\d+/.test(d.deployt),
+        detail: `aktiv=${d.aktiv} · deployt=${d.deployt} · im Speicher=${d.speicher}`,
+      };
+    },
+  },
+  {
+    key: "A2",
+    titel: "Sidebar oeffnet beim ERSTEN Aufruf sichtbar",
+    async run(cdp) {
+      // Die Ausgangslage eines frisch installierten Plugins herstellen: KEINE View, und
+      // der rechte Split zu (so steht ein neuer Vault da). Ohne das misst der Punkt den
+      // ZWEITEN Aufruf — und der nimmt einen anderen Zweig (`revealLeaf` statt
+      // `setViewState`) und ist immer gruen. Ein Punkt, der den einzigen brechenden Pfad
+      // gar nicht betritt, ist gruen am Falschen.
+      await cdp.evaluate(`
+        app.workspace.detachLeavesOfType(${JSON.stringify(VIEW_TYPE)});
+        await new Promise((r) => setTimeout(r, 400));
+        app.workspace.rightSplit.collapse();
+        await new Promise((r) => setTimeout(r, 400));
+        return true;
+      `);
+      await cdp.evaluate(`
+        await app.commands.executeCommandById(${JSON.stringify(PLUGIN_ID + ":open-sidebar")});
+        await new Promise((r) => setTimeout(r, 900));
+        return true;
+      `);
+      // getClientRects statt querySelector: ein Banner, das nur `hidden` ist, haengt
+      // weiter im DOM — Existenz ist kein Beleg fuer Sichtbarkeit (json_viewer 2026-08-22).
+      const roh = await cdp.evaluate<string>(`
+        const el = document.querySelector(${JSON.stringify(SIDEBAR)});
+        if (!el) return JSON.stringify({ da: false });
+        const r = el.getBoundingClientRect();
+        return JSON.stringify({ da: true, rects: el.getClientRects().length, w: Math.round(r.width), h: Math.round(r.height), collapsed: app.workspace.rightSplit.collapsed });
+      `);
+      const d = JSON.parse(roh) as { da: boolean; rects?: number; w?: number; h?: number; collapsed?: boolean };
+      if (!d.da) return { ok: false, detail: "Blatt mit data-type='image-to-markdown-view' nicht im DOM" };
+      const sichtbar = (d.rects ?? 0) > 0 && (d.w ?? 0) > 50 && (d.h ?? 0) > 50;
+      // Fuer die FOLGENDEN Punkte ausklappen, egal wie dieser ausging: sie messen an
+      // einer sichtbaren View (Empty-State ueber getClientRects), und ein zugeklappter
+      // Split wuerde sie alle rot faerben — mit einer Ursache, die nicht ihre ist.
+      await cdp.evaluate(`app.workspace.rightSplit.expand(); await new Promise((r) => setTimeout(r, 500)); return true;`);
+      return {
+        ok: sichtbar,
+        detail: sichtbar
+          ? `${d.w}x${d.h} px, ${d.rects} Rect(s)`
+          : `View entstand (${d.w}x${d.h} px), blieb aber unsichtbar — rechter Split `
+            + `${d.collapsed ? "zugeklappt" : "offen"}. Fuer den Nutzer: Klick aufs `
+            + `Ribbon-Icon tut sichtbar nichts, erst der zweite Klick oeffnet.`,
+      };
+    },
+  },
+  {
+    key: "B1",
+    titel: "Quellen der Notiz erkannt (PNG + HEIC)",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      const roh = await cdp.evaluate<string>(`
+        const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+        const namen = [...wurzel.querySelectorAll(".img2md-item .img2md-name")].map((e) => e.textContent.trim());
+        return JSON.stringify(namen);
+      `);
+      const namen = JSON.parse(roh) as string[];
+      const ok = namen.length === 2
+        && namen.some((n) => n.includes("field-notes.png"))
+        && namen.some((n) => n.includes("photo.heic"));
+      return {
+        ok,
+        detail: ok ? namen.join(", ") : `erwartet 2 (field-notes.png, photo.heic), bekam ${namen.length}: [${namen.join(", ")}] · ${await meldungen(cdp)}`,
+      };
+    },
+  },
+  {
+    key: "B2",
+    titel: "HEIC angezeigt, aber nicht auswaehlbar",
+    async run(cdp) {
+      const roh = await cdp.evaluate<string>(`
+        const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+        const zeilen = [...wurzel.querySelectorAll(".img2md-item")].map((zeile) => ({
+          name: zeile.querySelector(".img2md-name")?.textContent.trim() ?? "?",
+          // :scope > erzwingt die direkte Kindschaft — ein querySelector im Container
+          // findet Nachfahren beliebiger Tiefe und mischt sonst fremde Zeilen (json_viewer)
+          deaktiviert: zeile.querySelector(":scope > .img2md-check")?.disabled ?? null,
+        }));
+        return JSON.stringify(zeilen);
+      `);
+      const zeilen = JSON.parse(roh) as { name: string; deaktiviert: boolean | null }[];
+      const heic = zeilen.find((z) => z.name.includes(".heic"));
+      const png = zeilen.find((z) => z.name.includes(".png"));
+      return {
+        ok: heic?.deaktiviert === true && png?.deaktiviert === false,
+        detail: zeilen.map((z) => `${z.name}: ${z.deaktiviert === null ? "keine Checkbox" : z.deaktiviert ? "deaktiviert" : "aktiv"}`).join(" · "),
+      };
+    },
+  },
+  {
+    key: "C1",
+    titel: "Vorhandenes Transkript erkannt (Backlink + Frontmatter)",
+    async run(cdp) {
+      const roh = await cdp.evaluate<string>(`
+        const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+        const zeile = [...wurzel.querySelectorAll(".img2md-item")]
+          .find((z) => (z.querySelector(".img2md-name")?.textContent ?? "").includes("field-notes.png"));
+        if (!zeile) return JSON.stringify({ zeile: false });
+        return JSON.stringify({
+          zeile: true,
+          badge: zeile.querySelector(".img2md-exists")?.textContent.trim() ?? null,
+          link: zeile.querySelector(".img2md-exists-open")?.textContent.trim() ?? null,
+        });
+      `);
+      const d = JSON.parse(roh) as { zeile: boolean; badge?: string | null; link?: string | null };
+      if (!d.zeile) return { ok: false, detail: "keine Zeile fuer field-notes.png" };
+      return {
+        ok: Boolean(d.badge) && Boolean(d.link),
+        detail: d.badge
+          ? `Badge "${d.badge}", Link "${d.link}"`
+          : `kein Badge — findExistingTranscript fand die Notiz "${NOTIZ.transkript}" nicht (Frontmatter source_image? kind?)`,
+      };
+    },
+  },
+  {
+    key: "C2",
+    titel: "\"open\" springt zur Transkript-Notiz",
+    async run(cdp) {
+      const geklickt = await clickReal(cdp, `
+        [...document.querySelectorAll(${JSON.stringify(SIDEBAR)} + " .img2md-item")]
+          .find((z) => (z.querySelector(".img2md-name")?.textContent ?? "").includes("field-notes.png"))
+          ?.querySelector(".img2md-exists-open")
+      `);
+      if (!geklickt) return { ok: false, detail: "Link .img2md-exists-open nicht klickbar" };
+      const aktiv = await pollUntil<string>(cdp, `
+        const f = app.workspace.getActiveFile();
+        return f && f.path === ${JSON.stringify(NOTIZ.transkript)} ? f.path : null;
+      `, 8_000, 200);
+      const jetzt = await cdp.evaluate<string>(`return app.workspace.getActiveFile()?.path ?? "(keine)";`);
+      return {
+        ok: aktiv === NOTIZ.transkript,
+        detail: aktiv ? `aktiv: ${aktiv}` : `erwartet "${NOTIZ.transkript}", aktiv ist "${jetzt}"`,
+      };
+    },
+  },
+  {
+    key: "B3",
+    titel: "Empty-State bei einer Notiz ohne Bilder",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.leer);
+      const roh = await cdp.evaluate<string>(`
+        const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+        const leer = wurzel.querySelector(".img2md-empty");
+        return JSON.stringify({
+          text: leer?.textContent.trim() ?? null,
+          sichtbar: leer ? leer.getClientRects().length > 0 : false,
+          zeilen: wurzel.querySelectorAll(".img2md-item").length,
+        });
+      `);
+      const d = JSON.parse(roh) as { text: string | null; sichtbar: boolean; zeilen: number };
+      return {
+        ok: d.sichtbar && d.zeilen === 0 && Boolean(d.text),
+        detail: d.text ? `"${d.text}" (${d.zeilen} Zeilen)` : `kein Empty-State, ${d.zeilen} Zeilen`,
+      };
+    },
+  },
+  {
+    key: "D1",
+    titel: "PDF geladen, Seitenzahl aus pdf.js",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.pdf);
+      // Die Seitenzahl kommt aus pdfPageCount — der Punkt prueft damit die
+      // Worker-Blob-Strategie mit, an der das ganze Bundling haengt.
+      const roh = await pollUntil<string>(cdp, `
+        const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+        const zeile = wurzel.querySelector(".img2md-item");
+        const von = zeile?.querySelector(".img2md-pdf-from");
+        const bis = zeile?.querySelector(".img2md-pdf-to");
+        if (!von || !bis || !bis.value) return null;
+        return JSON.stringify({
+          name: zeile.querySelector(".img2md-name")?.textContent.trim() ?? "?",
+          von: von.value, bis: bis.value, max: bis.max || null,
+        });
+      `, 20_000, 400);
+      if (!roh) {
+        return { ok: false, detail: `kein Seitenbereich erschienen · ${await meldungen(cdp)}` };
+      }
+      const d = JSON.parse(roh) as { name: string; von: string; bis: string; max: string | null };
+      return {
+        ok: d.von === "1" && d.bis === "3",
+        detail: `${d.name}: Seite ${d.von}–${d.bis} (max ${d.max ?? "—"})`,
+      };
+    },
+  },
+  {
+    key: "E1",
+    titel: "Einstellungen: Endpunkt-Liste rendert",
+    async run(cdp) {
+      const roh = await cdp.evaluate<string>(`
+        app.setting.open();
+        app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+        await new Promise((r) => setTimeout(r, 900));
+        // Ab 1.13 sind die Einstellungen ein EIGENES Fenster — dann ist das Modal hier
+        // null, ohne dass am Plugin etwas fehlt. Beide Faelle offen halten.
+        const modal = document.querySelector(".modal.mod-settings");
+        return JSON.stringify({
+          modalDa: Boolean(modal),
+          tab: app.setting.activeTab?.id ?? null,
+          felder: modal ? modal.querySelectorAll("input[type=text], input[type=password]").length : null,
+        });
+      `);
+      const d = JSON.parse(roh) as { modalDa: boolean; tab: string | null; felder: number | null };
+      await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+      if (!d.modalDa) {
+        return {
+          ok: d.tab === PLUGIN_ID,
+          detail: `Tab "${d.tab}" aktiv, Einstellungen aber in eigenem Fenster (ab Obsidian 1.13) — Feldzahl von hier nicht messbar`,
+        };
+      }
+      return {
+        ok: d.tab === PLUGIN_ID && (d.felder ?? 0) > 0,
+        detail: `Tab "${d.tab}", ${d.felder} Eingabefelder`,
+      };
+    },
+  },
+];
+
+async function main(): Promise<void> {
+  const args = argv.slice(2);
+  const flag = (name: string): string | undefined => {
+    const i = args.indexOf(`--${name}`);
+    return i === -1 ? undefined : args[i + 1];
+  };
+  const port = Number(flag("port") ?? 9222);
+  const vault = flag("vault") ?? "image-to-markdown";
+  const mitModell = args.includes("--with-model");
+
+  console.log(`GUI-Smoke ${PLUGIN_ID} — Port ${port}, Vault "${vault}"`);
+  const cdp = await Cdp.attach(port, vault);
+
+  // Ausserhalb des try: das finally muss auch nach einem Abbruch mitten im Lauf
+  // zurueckschreiben koennen.
+  let vorher: string | null = null;
+  const ergebnisse: { punkt: Pruefpunkt; ergebnis: Ergebnis }[] = [];
+
+  try {
+    // Ohne Fokus drosselt Chromium den Renderer, das DOM bleibt leer und JEDER Punkt
+    // waere rot — die Suche begaenne dann am Plugin statt am Fenster.
+    await cdp.send("Page.bringToFront");
+    if (platform === "darwin") {
+      try {
+        execFileSync("osascript", ["-e", 'tell application "Obsidian" to activate']);
+        await new Promise((r) => setTimeout(r, 1500));
+      } catch {
+        console.log("  (Hinweis: `osascript activate` schlug fehl — Fenster ggf. von Hand nach vorn holen)");
+      }
+      await cdp.send("Page.bringToFront");
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => undefined);
+
+    const bereit = await cdp.evaluate<boolean>(
+      `return document.hasFocus() && document.visibilityState === "visible";`,
+    );
+    if (!bereit) {
+      throw new Error(
+        "Das Obsidian-Fenster hat keinen Fokus — Chromium drosselt dann den Renderer und "
+        + "jeder Pruefpunkt waere rot, ohne dass am Plugin etwas fehlt.",
+      );
+    }
+
+    vorher = await cdp.evaluate<string>(`
+      const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+      return p ? JSON.stringify(p.settings ?? null) : "null";
+    `);
+    await closeExtraLeaves(cdp);
+
+    for (const punkt of PRUEFPUNKTE) {
+      if (punkt.modell && !mitModell) {
+        console.log(`  ○ ${punkt.key}  ${punkt.titel} — uebersprungen (--with-model)`);
+        continue;
+      }
+      try {
+        const ergebnis = await punkt.run(cdp);
+        ergebnisse.push({ punkt, ergebnis });
+        console.log(`  ${ergebnis.ok ? "✓" : "✗"} ${punkt.key}  ${punkt.titel}\n      ${ergebnis.detail}`);
+      } catch (fehler) {
+        const detail = `${(fehler as Error).message} · Pruefling meldet: ${await meldungen(cdp).catch(() => "(nicht lesbar)")}`;
+        ergebnisse.push({ punkt, ergebnis: { ok: false, detail } });
+        console.log(`  ✗ ${punkt.key}  ${punkt.titel}\n      ${detail}`);
+      }
+    }
+  } finally {
+    // Der Lauf oeffnet Notizen und die Sidebar, er schreibt keine. Zurueckgesetzt wird
+    // trotzdem, was er anfassen KOENNTE — und das Ergebnis kommt ins Protokoll, nicht
+    // ins Vertrauen.
+    //
+    // Was NICHT zurueckgesetzt wird: der Zustand des rechten Splits und das Blatt-Layout.
+    // Beides liegt in `workspace.json` des Staging-Vaults, und die entfernt `buildVault`
+    // bei jedem `--setup` ohnehin — der Vault ist Wegwerfware. Im Produktivvault waere
+    // dieselbe Zeile ein Eingriff; deshalb steht sie hier begruendet und nicht beilaeufig.
+    if (vorher && vorher !== "null") {
+      const gleich = await cdp.evaluate<boolean>(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        return JSON.stringify(p?.settings ?? null) === ${JSON.stringify(vorher)};
+      `).catch(() => false);
+      console.log(`  Einstellungen nach dem Lauf: ${gleich ? "byte-gleich" : "ABWEICHUNG — von Hand pruefen"}`);
+    }
+    await closeExtraLeaves(cdp).catch(() => 0);
+    cdp.close();
+  }
+
+  const gruen = ergebnisse.filter((e) => e.ergebnis.ok).length;
+  console.log(`\n${gruen}/${ergebnisse.length} Pruefpunkte gruen`);
+  if (gruen !== ergebnisse.length) exit(1);
+}
+
+await main();

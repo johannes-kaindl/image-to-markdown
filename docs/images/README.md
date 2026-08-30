@@ -261,20 +261,44 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 
 ## Reproducible capture recipe
 
-> **Driver:** `scripts/shots.mjs` automates the Obsidian side of this recipe (CDP against a
-> running Obsidian, content-aware cropping, tall-window simulation for the long settings and
-> refine captures). It carries the three fallstricke that cost the most time — throttled
-> background windows, the settings living in their own `about:blank` window, and content that
-> is taller than the viewport. Start there instead of clicking by hand.
+> **Driver:** `scripts/shots.ts` automates the Obsidian side of this recipe (CDP against a
+> running Obsidian, content-aware cropping, compression to the image budget). It carries the
+> fallstricke that cost the most time — throttled background windows, the settings living in
+> their own window, and a collapsed sidebar that photographs as a 64×64 crumb without anything
+> failing. Start there instead of clicking by hand.
+>
+> Since 2026-08-30 the driver **imports** the CDP bridge from `obsidian-plugins/tools/obsidian-cdp/`
+> instead of carrying its own copy, and the demo vault is no longer hand-made: it is built from
+> the **tracked fixture** in `docs/images/fixture/` into the directory `STAGING_VAULTS_DIR`
+> points at. A lost vault now costs one command, not an afternoon.
+>
+> ⚠️ **Coordinate before quitting Obsidian — it is shared infrastructure.** If an instance is
+> already listening on the debug port, reuse it (open your own window via the `vault-open` IPC
+> message); a `quit` takes down the windows of every other session with it.
 
 
 1. **Set Obsidian to English** (*Settings → About → Language → English*, reload) so the UI strings
    match this contract. Switch back to your language afterwards.
 
-2. **Demo vault.** Create a throwaway vault (e.g. `img2md-demo`) so nothing personal appears. Add:
-   - `Tutorial.md` — embeds two or three **images** (`png`/`jpg`/`webp`/`gif`); optionally one
-     `.heic` for the disabled state (`tutorial-sidebar.png`).
-   - `PdfDemo.md` — embeds one **multi-page PDF** (`![[doc.pdf]]`) for the PDF shots.
+2. **Demo vault — built, not hand-made.** `npm run build && npm run shots -- --setup` creates it
+   from `docs/images/fixture/` at `$STAGING_VAULTS_DIR/image-to-markdown`, with this repo's build
+   deployed into it (**not** whatever the plugin store installed — those carry the same version
+   number and are indistinguishable from the outside). The fixture ships:
+   - `Field notes.md` — embeds `field-notes.png` plus a `photo.heic` for the disabled state
+     (`tutorial-sidebar.png`), and `Field notes (transcript).md` gives it an existing transcript
+     for the idempotency shots (`exists-open.png`, `diff-modal.png`).
+   - `Trail handbook.md` — embeds a three-page born-digital PDF **with a real text layer**, for
+     the PDF shots and the "use embedded PDF text" path.
+   - `Water cycle.md` — a schematic for describe mode; `Reading list.md` — no images at all, for
+     the empty state.
+
+   The images and the PDF are **generated** by `fixture/make-assets.mjs` rather than committed as
+   binaries: a PNG in a diff is an opaque blob, and the lines printed on it belong in a file you
+   can read. Nothing personal, nothing copyrighted.
+
+   Note that `--setup` resets the plugin's `data.json` to defaults, so the sidebar will report
+   **"Vision LLM offline"** until you point it at your server (step 4) — the default endpoint is
+   MLX's `:8080`, while LM Studio listens on `:1234`.
 
 3. **Real content with structure.** Use an image / a PDF page that actually contains text with
    structure — headings, a paragraph, a bullet list, ideally a small table — so the streamed

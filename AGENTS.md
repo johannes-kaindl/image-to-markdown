@@ -179,10 +179,13 @@ npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
 npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
 npm run lint                      # eslint src (reproduziert die Obsidian-Community-Review-Checks)
-npm test                          # vitest run (482 Tests)
+npm test                          # vitest run (498 Tests)
 npx vitest run tests/<datei>      # eine Test-Datei
 npm run typecheck                 # tsc --noEmit (separat von vitest)
-npm run gate                      # typecheck + test + lint + build (die Abnahme-Schleife)
+npm run gate                      # typecheck + typecheck:scripts + test + lint + build (die Abnahme-Schleife)
+npm run shots -- --setup          # Staging-Vault aus dem getrackten Fixture bauen (docs/images/fixture/)
+npm run shots -- --vault image-to-markdown      # Aufnahme gegen ein laufendes Obsidian
+npm run smoke:gui -- --vault image-to-markdown  # GUI-Smoke, Pruefpunkte in docs/SMOKE.md
 sh tools/sync-kit.sh              # Vendor-Baum aus ../obsidian-kit erneuern (bzw. $KIT_DIR)
 npm run version-bump 0.3.0        # Version synct package.json/manifest.json/versions.json
 ```

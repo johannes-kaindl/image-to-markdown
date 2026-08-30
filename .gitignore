@@ -4,3 +4,5 @@ data.json
 .claude/
 .DS_Store
 src/pdf-worker-src.generated.ts
+.gui-smoke.mjs
+.shots.mjs
