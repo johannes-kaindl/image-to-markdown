@@ -8,6 +8,14 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Behoben
 
+- **Der erste Klick aufs Ribbon-Icon öffnet die Sidebar jetzt wirklich.** War der rechte
+  Bereich zugeklappt — der Normalzustand eines frisch eingerichteten Vaults —, entstand die
+  Ansicht mit 0×0 Pixeln: das Kommando meldete Erfolg, sichtbar passierte nichts, und erst
+  ein zweiter Klick öffnete sie. Ursache war ein fehlendes `revealLeaf` im Erstöffnungs-Pfad
+  (der Zweig für eine bereits vorhandene Ansicht hatte es). Gefunden hat das kein Unit-Test,
+  sondern der erste Lauf des neuen GUI-Smokes gegen ein echtes Obsidian — es ist keine
+  Aussage über Zustand, sondern über Sichtbarkeit.
+
 - **Ein am Token-Limit abgeschnittenes Transkript endet nicht mehr still.** Reasoning-Modelle
   verbrauchen ihr Antwortbudget mitunter komplett fürs Denken und liefern danach wenige Zeichen
   oder gar nichts — gemessen am 2026-08-14: 921 Zeichen Gedanken, 15 Zeichen Transkript. Die

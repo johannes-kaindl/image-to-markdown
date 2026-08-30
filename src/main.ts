@@ -362,7 +362,15 @@ export default class ImageToMarkdownPlugin extends Plugin {
     const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_IMGMD);
     if (existing.length) { await this.app.workspace.revealLeaf(existing[0]); return; }
     const leaf = this.app.workspace.getRightLeaf(false);
-    await leaf?.setViewState({ type: VIEW_TYPE_IMGMD, active: true });
+    if (!leaf) return;
+    await leaf.setViewState({ type: VIEW_TYPE_IMGMD, active: true });
+    // revealLeaf auch hier — nicht nur im Zweig darueber. setViewState ERZEUGT das Blatt,
+    // klappt aber den rechten Split nicht auf: ist er zu (der Normalzustand eines frischen
+    // Vaults), entsteht die View mit 0x0 px und der erste Klick aufs Ribbon-Icon tut
+    // sichtbar nichts. Erst der zweite nahm den Zweig oben und oeffnete sie. Gemessen am
+    // 2026-08-30 im GUI-Smoke (Pruefpunkt A2) — 498 Unit-Tests sehen das nicht, weil es
+    // keine Aussage ueber Zustand ist, sondern ueber Sichtbarkeit.
+    await this.app.workspace.revealLeaf(leaf);
   }
 
   async saveSettings() { await this.saveData(this.settings); }
