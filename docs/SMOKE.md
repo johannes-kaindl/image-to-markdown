@@ -30,12 +30,18 @@ bleiben optional.
 | D2 | Seitenbereich begrenzt | die `to`-Eingabe akzeptiert keinen Wert über der Seitenzahl |
 | E1 | Einstellungen rendern | der Settings-Tab zeigt die Endpunkt-Liste mit mindestens einem Eintrag und einem Erreichbarkeits-Icon |
 
-### Nur mit `--with-model`
+### Nur mit `--with-model` — **geplant, noch nicht gebaut**
 
-| # | Punkt | Was gemessen wird |
+Der Treiber kennt das Flag und die Skip-Mechanik; **Prüfpunkte dieser Art gibt es bisher
+keine.** Das steht hier als Absicht, nicht als Abdeckung — eine Checkliste, die Punkte
+führt, die nichts messen, ist schlimmer als eine kurze: sie wird beim Zitieren zu
+behaupteter Abdeckung. Erkennbar ist der Zustand auch am Lauf selbst, der weder eine
+Ergebniszeile noch ein „übersprungen" für sie ausgibt.
+
+| # | Punkt | Was gemessen werden soll |
 | --- | --- | --- |
 | M1 | Transkription läuft | ein Lauf über `field-notes.png` füllt eine Karte (`.img2md-card`) mit Text |
-| M2 | PDF rendert sichtbar | ein Lauf über Seite 1 des PDF liefert ein Bild mit Inhalt — die Gegenprobe darauf, dass die nicht eingebettete Standard-Schrift (Helvetica) im Renderer wirklich gezeichnet wird |
+| M2 | PDF rendert sichtbar | ein Lauf über Seite 1 des PDF liefert ein Bild mit Inhalt — die Gegenprobe darauf, dass die nicht eingebettete Standard-Schrift (Helvetica) im Renderer wirklich gezeichnet wird. Bis dahin ist **offen**, ob das Fixture-PDF im Plugin sichtbar rendert; strukturell geprüft ist es (pdf.js liest 3 Seiten und den Text-Layer), sichtbar geprüft nicht. |
 
 ## Was Handarbeit bleibt
 
