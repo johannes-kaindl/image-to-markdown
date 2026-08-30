@@ -14,9 +14,22 @@
 set -e
 
 KIT="${KIT_DIR:-../obsidian-kit}"
-[ -d "$KIT/src/pure" ] || { echo "Kit nicht gefunden unter $KIT (KIT_DIR setzen)" >&2; exit 1; }
-VER=$(node -p "require('$KIT/package.json').version")
-SHA=$(git -C "$KIT" rev-parse --short HEAD)
+[ -d "$KIT/.git" ] || { echo "Kit nicht gefunden unter $KIT (KIT_DIR setzen)" >&2; exit 1; }
+
+# CORE-META-22: aus einer FESTEN REF lesen, nicht aus dem Arbeitsstand. Ein `cp` aus
+# ../obsidian-kit liefert, was dort gerade ausgecheckt ist — ein Stand, den kein Commit
+# traegt und den der Stempel unten trotzdem beglaubigen wuerde. Konkret gemessen am
+# 2026-08-30: das Kit stand auf 0.28.0, wo endpoint-list.ts bereits aus ../vendor/code-kit/
+# importiert; ein Arbeitsstand-Lauf haette hier Importe ins Leere vendoriert.
+# Default ist der bereits gepinnte Stand — NICHT pauschal eine Versionsnummer.
+KIT_REF="${KIT_REF:-$(node -p "require('./src/vendor/kit/VENDOR.json').version" 2>/dev/null || echo HEAD)}"
+git -C "$KIT" rev-parse --verify --quiet "$KIT_REF^{commit}" >/dev/null \
+  || { echo "sync-kit: Ref '$KIT_REF' existiert nicht in $KIT (KIT_REF setzen)" >&2; exit 1; }
+kitcat() { git -C "$KIT" show "$KIT_REF:$1"; }   # eine Datei aus der Ref lesen
+kitcat src/pure/endpoint.ts >/dev/null 2>&1 \
+  || { echo "sync-kit: $KIT_REF traegt kein src/pure/ — falsche Ref?" >&2; exit 1; }
+VER=$(kitcat package.json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
+SHA=$(git -C "$KIT" rev-parse --short "$KIT_REF^{commit}")
 
 # Stempelform DIESES Repos: '#' statt '@', Kit-Pfad, kein Zusatz — so tragen es die neun
 # vorbestehenden Kopien seit 0.3.0. Bewusst nicht die koda-Form ('@' + "do not hand-edit;
@@ -75,15 +88,15 @@ mkdir -p src/vendor/kit src/vendor/kit-obsidian
 # Nur die Module, die DIESES Repo wirklich konsumiert. Form "kit-modul" oder
 # "kit-modul:lokaler-name" — der Name weicht genau einmal ab: think-splitter.ts heisst hier
 # seit 0.3.0 think.ts und wird von vier Stellen so importiert (Inhalt bleibt verbatim).
-for m in capabilities clipboard diff endpoint endpoint_config error_body reasoning settings sse think-splitter:think; do
+for m in capabilities clipboard diff endpoint endpoint_config endpoint_diagnostics error_body model-choice model-list-cache reasoning settings sse think-splitter:think; do
   case "$m" in *:*) src=${m%%:*}; dst=${m#*:} ;; *) src=$m; dst=$m ;; esac
-  cp "$KIT/src/pure/$src.ts" "src/vendor/kit/$dst.ts"
+  kitcat "src/pure/$src.ts" > "src/vendor/kit/$dst.ts"
   stamp "src/vendor/kit/$dst.ts" "src/pure/$src.ts"
   echo "vendored obsidian-kit#$VER/pure/$src.ts -> src/vendor/kit/$dst.ts"
 done
 
-for m in clipboard folder-suggest settings_walker; do
-  cp "$KIT/src/obsidian/$m.ts" "src/vendor/kit-obsidian/$m.ts"
+for m in clipboard endpoint-list folder-suggest model-picker settings_walker; do
+  kitcat "src/obsidian/$m.ts" > "src/vendor/kit-obsidian/$m.ts"
   relayer "src/vendor/kit-obsidian/$m.ts"
   stamp "src/vendor/kit-obsidian/$m.ts" "src/obsidian/$m.ts"
   echo "vendored obsidian-kit#$VER/obsidian/$m.ts"
@@ -94,7 +107,8 @@ cat > src/vendor/kit/VENDOR.json <<JSON
   "source": "obsidian-kit",
   "version": "$VER",
   "sha": "$SHA",
-  "vendored": "capabilities.ts, clipboard.ts, diff.ts, endpoint.ts, endpoint_config.ts, error_body.ts, reasoning.ts, settings.ts, sse.ts, think.ts",
+  "ref": "$KIT_REF",
+  "vendored": "capabilities.ts, clipboard.ts, diff.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, model-choice.ts, model-list-cache.ts, reasoning.ts, settings.ts, sse.ts, think.ts",
   "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. think.ts ist obsidian-kit/src/pure/think-splitter.ts — nur der Dateiname weicht ab, der Inhalt ist verbatim. kit-obsidian/ siehe dessen VENDOR.json; tests/vendor/kit/obsidian-mock.ts steht weiter auf 0.3.0 und wird von diesem Skript bewusst nicht angefasst (Begruendung im Skript-Kopf)."
 }
 JSON
@@ -103,8 +117,9 @@ cat > src/vendor/kit-obsidian/VENDOR.json <<JSON
   "source": "obsidian-kit",
   "version": "$VER",
   "sha": "$SHA",
-  "vendored": "clipboard.ts, folder-suggest.ts, settings_walker.ts",
+  "ref": "$KIT_REF",
+  "vendored": "clipboard.ts, endpoint-list.ts, folder-suggest.ts, model-picker.ts, settings_walker.ts",
   "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. EINE mechanische Abweichung in clipboard.ts: die kit-internen Importe ../pure/ -> ../kit/ (Vendor-Layout; im Kit sind src/obsidian und src/pure Geschwister, hier kit-obsidian und kit). Wird bei jedem Re-Vendor reproduziert, sonst darf nichts abweichen. Praezedenz: kuro-gamification, markdown-presentation, vault-crews, vim-dojo."
 }
 JSON
-echo "VENDOR.json → $VER ($SHA)"
+echo "VENDOR.json → $VER ($SHA, ref $KIT_REF)"
