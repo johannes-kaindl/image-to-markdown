@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-08-30
+
 ### Behoben
 
 - **Der erste Klick aufs Ribbon-Icon öffnet die Sidebar jetzt wirklich.** War der rechte
