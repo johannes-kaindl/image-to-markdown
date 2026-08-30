@@ -3,6 +3,7 @@ import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PR
 import { normalizeEndpoint, resolveActiveEndpoint } from "./vendor/kit/endpoint";
 import { suppressParams } from "./vendor/kit/reasoning";
 import { authHeaders } from "./vendor/kit/endpoint_config";
+import { classifyEndpointStatus, type EndpointStatus } from "./vendor/kit/endpoint_diagnostics";
 import { errorMessageFromText } from "./vendor/kit/error_body";
 
 // normalizeEndpoint + resolveActiveEndpoint sind aus obsidian-kit#0.3.0 vendored — hier
@@ -54,6 +55,29 @@ export class VisionClient {
   /** Header für jeden ausgehenden Call: Auth (falls Schlüssel) plus die übergebenen. */
   private headers(extra?: Record<string, string>): Record<string, string> {
     return { ...extra, ...authHeaders(this.apiKey) };
+  }
+
+  /** Diagnostische Probe gegen GET /v1/models — benannter Status statt true/false.
+   *
+   *  Braucht der Kit-Endpunkt-Editor (`vendor/kit-obsidian/endpoint-list.ts`), der im Tooltip
+   *  den GRUND zeigt. Bewusst strenger als `ping()`: eine HTTP-200-Antwort gilt nur dann als
+   *  erreichbar, wenn sie die Modell-Listen-Form (`data`-Array) hat. Genau das trennt den
+   *  dokumentierten LM-Studio-Footgun (falscher Pfad → 200 + Fehler-Body → still leeres
+   *  Transkript) von einem echten Endpunkt.
+   *
+   *  ⚠️ `ping()` und damit die Endpunkt-AUFLOESUNG bleiben absichtlich auf `res.ok`. Die
+   *  strengere Regel hier warnt sichtbar, verschiebt aber keinen Endpunkt aus der Liste —
+   *  das waere eine Verhaltensaenderung an der Aufloesung und gehoert in einen eigenen
+   *  Gate-Lauf (Task im Board). */
+  async probeStatus(): Promise<EndpointStatus> {
+    try {
+      const r = await http()(`${this.endpoint}/v1/models`, { headers: this.headers() });
+      let body: unknown = null;
+      try { body = JSON.parse(r.text); } catch { /* kein JSON → classify entscheidet über den Status */ }
+      return classifyEndpointStatus({ kind: "response", status: r.status, body });
+    } catch (e) {
+      return classifyEndpointStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   /** Verbindungs-Check gegen den OpenAI-kompatiblen Endpoint (GET /v1/models). */

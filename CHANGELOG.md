@@ -6,6 +6,39 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Geändert
+
+- **Die Endpunkt-Liste in den Einstellungen ist jetzt der gemeinsame Baustein aus
+  `obsidian-kit`** statt einer plugin-eigenen Zeilen-UI. Sichtbar bringt das pro Endpunkt ein
+  **Modell-Feld** (Override; leer = globales Modell), **Ein-Klick-Presets** für LM Studio und
+  Ollama, einen **„zuerst versuchen"**-Knopf, eine Zeile mit der **Rolle** des Endpunkts
+  („aktiv" / „erreichbar — Reserve 2" / „nicht erreichbar — wird übersprungen") und
+  nicht-blockierende Hinweise bei verdächtigen Adressen (fehlender Port, fehlendes Schema).
+
+### Behoben
+
+- **Ein API-Schlüssel konnte am falschen Endpunkt landen.** Wurde ein Eintrag gelöscht und
+  direkt danach — bevor die Liste neu gezeichnet war — ein Feld einer anderen Zeile verlassen,
+  buchte die Eingabe auf den **nachgerückten** Eintrag. Das Fenster dafür war real, weil das
+  Neuzeichnen erst nach dem Anpingen aller Endpunkte kommt (bei einem toten Endpunkt Sekunden).
+  Der Kit-Baustein sperrt die Zeilen währenddessen.
+- **Das Erreichbarkeits-Icon sagt jetzt, was los ist**, statt nur rot oder grün zu sein:
+  „Verbindung abgelehnt", „Hostname unbekannt", „Zugriff verweigert — Schlüssel fehlt oder ist
+  ungültig" oder „Antwortet, ist aber kein OpenAI-kompatibler Endpunkt". Letzteres ist der
+  dokumentierte LM-Studio-Fall (falscher Pfad → HTTP 200 mit Fehler-Body), der bisher wie ein
+  erreichbarer Endpunkt aussah und in ein still leeres Transkript lief.
+- **Ein einmal als offline gemessener Endpunkt bleibt das nicht mehr für die ganze Sitzung.**
+  Die Modell-Listen werden beim Schließen der Einstellungen verworfen; wer seinen LLM-Server
+  startet und die Einstellungen erneut öffnet, sieht den neuen Zustand.
+
+### Hinweis zum Verhalten
+
+- **Beim Öffnen der Einstellungen fragt das Plugin jetzt die Modell-Liste jedes eingetragenen
+  Endpunkts ab**, nicht erst auf Klick — nötig für das Modell-Feld je Zeile. Trägt ein Eintrag
+  einen API-Schlüssel eines gehosteten Anbieters, geht damit ohne weiteres Zutun eine
+  `/v1/models`-Anfrage dorthin. Es werden **keine Bilder und keine Notizinhalte** übertragen.
+  Wer das nicht möchte, entfernt den betreffenden Eintrag aus der Liste.
+
 ## [0.20.0] — 2026-08-30
 
 ### Behoben

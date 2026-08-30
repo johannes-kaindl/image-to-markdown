@@ -28,7 +28,7 @@ bleiben optional.
 | C2 | „open" springt | Klick auf den Link macht `Field notes (transcript).md` zur aktiven Datei |
 | D1 | PDF geladen | „Trail handbook" zeigt eine PDF-Zeile mit Seitenbereich `1`–`3`. Die `3` kommt aus `pdfPageCount` — der Punkt prüft damit die **Worker-Blob-Strategie** mit, an der das Bundling hängt |
 | D2 | Seitenbereich begrenzt | die `to`-Eingabe akzeptiert keinen Wert über der Seitenzahl |
-| E1 | Einstellungen rendern | der Settings-Tab zeigt die Endpunkt-Liste mit mindestens einem Eintrag und einem Erreichbarkeits-Icon |
+| E1 | Endpunkt-Editor + seine CSS-Hälfte | der Settings-Tab zeigt den Kit-Baustein (`.okit-ep-row`, `.okit-ep-status`) **und** dessen Darstellung greift: `.setting-item-info` der Zeile steht auf `display:none`. Das ist der inhaltliche Gegenpart zu `tools/ui_adoption_check.py` — der vergleicht nur die Regelmenge in `styles.css`, nicht ob sie wirkt |
 
 ### Nur mit `--with-model` — **geplant, noch nicht gebaut**
 
@@ -53,4 +53,5 @@ gut aussehen.
 
 | Datum | Obsidian | Ergebnis | Gegenprobe |
 | --- | --- | --- | --- |
+| 2026-08-30 (spät) | 1.13.7 | **9/9** | Geführt an E1: CSS-Hälfte im Staging-Vault entfernt → rot mit `display=block` und handlungsleitender Meldung, nach dem Zurückdrehen wieder grün, kein anderer Punkt sprang mit. **E1 hat dabei sich selbst korrigiert:** vorher meldete er „Einstellungen in eigenem Fenster — von hier nicht messbar" als *grünen* Punkt; ab Obsidian 1.13 sind die Einstellungen ein eigenes CDP-Target, gemessen wird jetzt über `attachTo("settings", …)`. Nebenbefund des ersten Laufs: `styles.css` war im Staging-Vault **nie deployt** — der alte E1 konnte das nicht sehen. |
 | 2026-08-30 | 1.13.7 | **9/9** | Geführt: A2 war rot am echten Defekt (Sidebar öffnete beim ersten Aufruf unsichtbar), grün nach dem Fix in `main.ts` — und **kein anderer Punkt fiel mit oder sprang mit**. Von den beiden roten Punkten des ersten Laufs war nur einer ein Plugin-Fehler: B3 maß die Notiz des vorherigen Punktes, weil die Wartebedingung (Liste *oder* Empty-State steht) schon vom alten Zustand erfüllt war. Behoben, indem auf `view.cardsSourcePath` gewartet wird — den einzigen Zustand der View, der sagt: ich habe *diese* Datei verarbeitet. |

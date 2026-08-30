@@ -1,12 +1,16 @@
 import { App, PluginSettingTab, Setting, setIcon, Notice, type SettingDefinitionItem } from "obsidian";
 import type ImageToMarkdownPlugin from "./main";
-import { VisionClient, normalizeEndpoint } from "./vision_client";
+import { VisionClient } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
 import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab } from "./vendor/kit-obsidian/settings_walker";
-import { migrateEndpointList, applyEndpointEdit, type EndpointConfig } from "./vendor/kit/endpoint_config";
+import { buildEndpointList, type EndpointListStrings } from "./vendor/kit-obsidian/endpoint-list";
+import { createModelListCache, type ModelListCache } from "./vendor/kit/model-list-cache";
+import { ENDPOINT_PRESETS, type EndpointStatusKind, type EndpointWarning } from "./vendor/kit/endpoint_diagnostics";
+import type { EndpointRole } from "./vendor/kit/endpoint_config";
+import { migrateEndpointList, type EndpointConfig } from "./vendor/kit/endpoint_config";
 
 export type { EndpointConfig };
 
@@ -112,14 +116,44 @@ export function makeVisionTestImage(token: string = VISION_TEST_TOKEN): string {
   }
 }
 
+/** Kit-Vokabel → eigener i18n-Key. Das Kit reicht `kind`/`rule` heraus und formuliert
+ *  bewusst nicht; sein eingebauter Klartext ist deutsch, EN ist hier aber kanonisch. */
+const STATUS_KEY: Record<Exclude<EndpointStatusKind, "unknown">, string> = {
+  "ok": "settings.endpoints.status.ok",
+  "refused": "settings.endpoints.status.refused",
+  "unknown-host": "settings.endpoints.status.unknownHost",
+  "timeout": "settings.endpoints.status.timeout",
+  "not-an-llm-api": "settings.endpoints.status.notAnLlmApi",
+  "unauthorized": "settings.endpoints.status.unauthorized",
+};
+const WARN_KEY: Record<string, string> = {
+  "scheme": "settings.endpoints.warn.scheme",
+  "malformed": "settings.endpoints.warn.malformed",
+  "port": "settings.endpoints.warn.port",
+  "placeholder-ip": "settings.endpoints.warn.placeholderIp",
+};
+
 export class ImageToMarkdownSettingTab extends PluginSettingTab {
   private confirmedModels = new Set<string>();
+  /** Modell-Listen je Endpunkt. Gehoert der Lebensdauer des TABS, nicht eines Renders —
+   *  deshalb Feld und nicht lokale Variable (Kit-Vertrag von ModelListCache). */
+  private modelLists: ModelListCache = createModelListCache();
   /** Cleanups der render-Hatches aus dem Fallback-Pfad — vor jedem Rebuild ausführen. */
   private cleanupPrevious: () => void = () => { /* erster Lauf: nichts aufzuräumen */ };
   /** Von der Capability-Hatch gesetzt; das Modell-Dropdown ruft sie nach einem Wechsel. */
   private showCaps: (model: string) => void = () => { /* bis die Capability-Zeile gerendert ist */ };
 
   constructor(app: App, private plugin: ImageToMarkdownPlugin) { super(app, plugin); }
+
+  /** Vertragspflicht des Kit-Modell-Cache, und sein Fehlen waere UNSICHTBAR: der Cache haelt
+   *  Promises absichtlich ueber jeden Tab-Neuaufbau hinweg. Ohne dieses clear() bliebe ein
+   *  einmal als „nicht erreichbar“ gemessener Endpunkt die restliche Sitzung so stehen — wer
+   *  seinen LLM-Server danach startet und die Einstellungen neu oeffnet, saehe dauerhaft den
+   *  alten Zustand, und kein Test schluege an. */
+  hide(): void {
+    this.modelLists.clear();
+    super.hide();
+  }
 
   /** Der Endpunkt, gegen den die Settings-UI arbeitet (Modell-Liste, Vision-Test): der aktive,
    *  sonst der erste konfigurierte. GANZE Config, weil jeder dieser Calls den Schlüssel braucht. */
@@ -239,79 +273,77 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
 
   // ── Render-Hatches (ein Code, beide Pfade) ────────────────────────────────
 
-  /** Endpunkt-Liste: N Felder + leeres Add-Feld, je mit Live-Erreichbarkeits-Icon,
-   *  dazu der „Verbindung testen"-Knopf. Eine Zeile wird dafür zum Block-Container. */
+  /** Endpunkt-Liste — der verbindliche §8-Baustein aus dem Kit
+   *  (`vendor/kit-obsidian/endpoint-list.ts`), nicht mehr die eigene Zeilen-UI.
+   *
+   *  Der Eigenbau davor konnte weniger (kein Modell-Override je Zeile, keine Presets, keine
+   *  Rollen-/Diagnose-Zeile) und hatte einen Fehlbuchungs-Pfad: die Zeilen-Indizes wurden erst
+   *  beim Re-Render neu vergeben, waehrend `resolveAndReconnect()` noch pingte — ein blur in
+   *  dem Fenster schrieb auf den NACHRUECKENDEN Eintrag, im schlimmsten Fall einen
+   *  API-Schluessel an den falschen Host. Der Kit-Baustein sperrt die Zeilen dafuer. */
   private renderEndpoints(setting: Setting): void {
-    const host = settingBodyHost(setting);
-    const eps = this.plugin.settings.visionEndpoints;
-    const rows: (EndpointConfig | null)[] = [...eps, null];   // null = leeres Zusatzfeld am Ende
-    rows.forEach((cfg, i) => {
-      const isAdder = cfg === null;
-      const value = cfg?.url ?? "";
-      const s = new Setting(host);
-      if (i === 0) s.setName(t("settings.endpoints.name")).setDesc(t("settings.endpoints.desc"));
-      const statusIcon = s.controlEl.createSpan({ cls: "img2md-ep-status" });
-      // Ein Feld-Editor für eine Zeile: schreibt bei blur GENAU ein Feld über das Kit-Modell.
-      // Listen-Mutation NUR bei blur, NICHT in onChange: onChange feuert pro Tastendruck und
-      // würde im Add-Feld jeden Zwischenstand (l, lo, loc, …) als eigenen Eintrag anhängen.
-      const commit = (field: "url" | "apiKey", read: () => string): void => {
-        const before = this.plugin.settings.visionEndpoints;
-        const updated = applyEndpointEdit(before, i, field, read(), isAdder);
-        const same = updated.length === before.length
-          && updated.every((e, k) => e.url === before[k]?.url && e.apiKey === before[k]?.apiKey);
-        if (same) return;   // unverändert → kein Re-Render
-        this.plugin.settings.visionEndpoints = updated;
-        void this.plugin.saveSettings()
-          .then(() => this.plugin.resolveAndReconnect())
-          .then(() => { this.refresh(); });
-      };
-      s.addText(tx => {
-        tx
-          .setPlaceholder(isAdder ? t("settings.endpoints.addPlaceholder") : "http://localhost:1234")
-          .setValue(value);
-        tx.inputEl.addEventListener("blur", () => commit("url", () => tx.getValue()));
-      });
-      // Schlüsselfeld NUR an bestehenden Zeilen: applyEndpointEdit verwirft mit isAdder=true
-      // alles außer der URL — ein hier eingetippter Schlüssel wäre beim Blur stillschweigend weg.
-      if (!isAdder) {
-        s.addText(tx => {
-          tx.setPlaceholder(t("settings.endpoints.apiKeyPlaceholder")).setValue(cfg?.apiKey ?? "");
-          tx.inputEl.type = "password";
-          tx.inputEl.addClass("img2md-ep-key");
-          tx.inputEl.setAttribute("title", t("settings.endpoints.apiKeyTooltip"));
-          tx.inputEl.addEventListener("blur", () => commit("apiKey", () => tx.getValue()));
-        });
-      }
-      // Löschen: expliziter Mülleimer-Button (nicht am leeren Add-Feld) — entfernt den Eintrag.
-      // Das circle-x links ist nur Erreichbarkeits-Status, kein Lösch-Button (häufiges Missverständnis).
-      if (!isAdder) {
-        s.addExtraButton(b => b
-          .setIcon("trash-2")
-          .setTooltip(t("settings.endpoints.remove"))
-          .onClick(() => {
-            this.plugin.settings.visionEndpoints = applyEndpointEdit(this.plugin.settings.visionEndpoints, i, "url", "", false);
-            void this.plugin.saveSettings()
-              .then(() => this.plugin.resolveAndReconnect())
-              .then(() => { this.refresh(); });
-          }));
-      }
-      // Pro-Feld-Status in A11y-Form (Form + Text + Farbe)
-      const ep = value.trim();
-      if (!isAdder && ep) {
-        setIcon(statusIcon, "loader"); statusIcon.setAttribute("title", t("view.checking"));
-        void new VisionClient(ep, "", cfg?.apiKey).ping().then(ok => {
-          statusIcon.empty();
-          setIcon(statusIcon, ok ? "circle-check" : "circle-x");
-          statusIcon.toggleClass("is-ok", ok); statusIcon.toggleClass("is-error", !ok);
-          // Beide Seiten normalisiert vergleichen: die gespeicherte URL ist roh, activeEndpoint.url
-          // kommt normalisiert aus dem Resolver — ein `/v1`-Suffix ließe den Vergleich sonst scheitern.
-          const active = normalizeEndpoint(ep) === (this.plugin.activeEndpoint?.url ?? "");
-          statusIcon.toggleClass("is-active", active);
-          statusIcon.setAttribute("title", (ok ? t("settings.connected") : t("settings.offline")) + (active ? " · " + t("settings.endpoints.active") : ""));
-        });
-      }
+    buildEndpointList({
+      containerEl: settingBodyHost(setting),
+      label: t("settings.endpoints.name"),
+      desc: t("settings.endpoints.desc"),
+      placeholder: "http://localhost:1234",
+      strings: this.endpointStrings(),
+      cache: this.modelLists,
+      get: () => this.plugin.settings.visionEndpoints,
+      set: eps => { this.plugin.settings.visionEndpoints = eps; },
+      active: () => this.plugin.activeEndpoint?.url ?? null,
+      // EIN Client je Zeile traegt Status-Icon UND Modell-Liste — so koennen die beiden nie
+      // ueber dieselbe Zeile auseinanderlaufen (Kit-Vertrag). probeStatus() statt ping():
+      // die Zeile zeigt den GRUND, nicht nur rot/gruen.
+      clientFor: cfg => {
+        const c = new VisionClient(cfg.url, cfg.model ?? "", cfg.apiKey);
+        return { probe: () => c.probeStatus(), listModels: () => c.listModels() };
+      },
+      globalModel: () => this.plugin.settings.visionModel,
+      save: () => this.plugin.saveSettings(),
+      reconnect: () => this.plugin.resolveAndReconnect(),
+      rerender: () => { this.refresh(); },
+      presets: ENDPOINT_PRESETS,
     });
-    new Setting(host).addButton(b => b.setButtonText(t("settings.testConnection")).onClick(() => { this.refresh(); }));
+  }
+
+  /** Jeder Text des Endpunkt-Editors. Gemappt ueber `kind`/`rule`, nicht der Kit-Klartext. */
+  private endpointStrings(): EndpointListStrings {
+    return {
+      addPlaceholder: t("settings.endpoints.addPlaceholder"),
+      apiKeyPlaceholder: t("settings.endpoints.apiKeyPlaceholder"),
+      modelPlaceholder: t("settings.endpoints.modelPlaceholder"),
+      ariaUrl: t("settings.endpoints.ariaUrl"),
+      ariaAdd: t("settings.endpoints.ariaAdd"),
+      ariaApiKey: (url: string) => t("settings.endpoints.ariaApiKey", url),
+      ariaModel: (url: string) => t("settings.endpoints.ariaModel", url),
+      emptyModelLabel: (globalModel: string) => globalModel
+        ? t("settings.endpoints.globalModel", globalModel)
+        : t("settings.endpoints.globalModelUnset"),
+      modelHint: key => key === "unreachable" ? t("settings.endpoints.hint.unreachable")
+        : key === "no-list" ? t("settings.endpoints.hint.noList")
+        : "",
+      savedSuffix: t("settings.endpoints.saved"),
+      refreshModels: t("settings.refreshModels"),
+      moveToFront: t("settings.endpoints.moveToFront"),
+      remove: t("settings.endpoints.remove"),
+      thirdParty: t("settings.endpoints.thirdParty"),
+      probing: t("view.checking"),
+      statusTooltip: status => status.kind === "unknown"
+        ? t("settings.endpoints.status.unknown", status.raw ?? "")
+        : t(STATUS_KEY[status.kind]),
+      role: (role: EndpointRole) => role.kind === "active" ? t("settings.endpoints.role.active")
+        : role.kind === "standby" ? t("settings.endpoints.role.standby", String(role.position))
+        : role.kind === "unreachable" ? t("settings.endpoints.role.unreachable")
+        : t("settings.endpoints.role.skippedModel"),
+      warnings: (warnings: EndpointWarning[]) => warnings
+        .map(w => WARN_KEY[w.rule] ? t(WARN_KEY[w.rule]) : w.message)
+        .join(" · "),
+      presetTooltip: preset => t("settings.endpoints.preset", preset.label),
+      presetLabel: preset => preset.label,
+      checkConnection: t("settings.testConnection"),
+      saveFailed: t("settings.endpoints.saveFailed"),
+    };
   }
 
   /** Modell: Dropdown wird asynchron aus dem Endpunkt befüllt; offline stattdessen ein

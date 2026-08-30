@@ -375,3 +375,50 @@ describe("VisionClient — API-Schlüssel je Endpunkt", () => {
     for (const call of calls) expect(call.headers?.Authorization).toBe("Bearer sk-geheim");
   });
 });
+
+// ── probeStatus: Diagnose statt true/false ────────────────────────────────────
+// Der Kit-Endpunkt-Editor (vendor/kit-obsidian/endpoint-list.ts) verlangt einen
+// EndpointStatus, nicht ein boolean — er zeigt den Grund im Tooltip. Die Klassifikation
+// selbst liegt im Kit (classifyEndpointStatus); geprüft wird hier die Verdrahtung:
+// dass jede Antwortform als das richtige Rohsignal hineingeht.
+describe("VisionClient.probeStatus", () => {
+  it("200 + Modell-Listen-Form → ok/erreichbar", async () => {
+    mockHttp(() => ok({ data: [{ id: "m" }] }));
+    const s = await new VisionClient("http://x:1", "").probeStatus();
+    expect(s.kind).toBe("ok");
+    expect(s.reachable).toBe(true);
+  });
+
+  it("200 OHNE Listen-Form → not-an-llm-api (der LM-Studio-Footgun)", async () => {
+    // Genau der dokumentierte Fall: falscher Pfad, HTTP 200, Fehler-Body. `ping()` sagt
+    // dazu bis heute „erreichbar" — die Zeile im Editor sagt jetzt, was wirklich los ist.
+    mockHttp(() => ok({ error: { message: "Unexpected endpoint" } }));
+    const s = await new VisionClient("http://x:1", "").probeStatus();
+    expect(s.kind).toBe("not-an-llm-api");
+    expect(s.reachable).toBe(false);
+  });
+
+  it("401 → unauthorized (nicht „offline“)", async () => {
+    mockHttp(() => ({ ok: false, status: 401, text: "" }));
+    const s = await new VisionClient("http://x:1", "", "wrong-key").probeStatus();
+    expect(s.kind).toBe("unauthorized");
+  });
+
+  it("Netzfehler → refused, mit der Rohmeldung als Signal", async () => {
+    setHttp(() => Promise.reject(new Error("connect ECONNREFUSED 127.0.0.1:1234")));
+    const s = await new VisionClient("http://x:1", "").probeStatus();
+    expect(s.kind).toBe("refused");
+  });
+
+  it("nicht-JSON-Body wirft nicht, sondern klassifiziert", async () => {
+    mockHttp(() => ({ ok: true, status: 200, text: "<html>proxy</html>" }));
+    const s = await new VisionClient("http://x:1", "").probeStatus();
+    expect(s.kind).toBe("not-an-llm-api");
+  });
+
+  it("legt den API-Schlüssel an — sonst gälte ein gehosteter Endpunkt als offline", async () => {
+    const calls = mockHttp(() => ok({ data: [] }));
+    await new VisionClient("http://x:1", "", "sk-key").probeStatus();
+    expect(calls[0]?.headers?.["Authorization"]).toBe("Bearer sk-key");
+  });
+});

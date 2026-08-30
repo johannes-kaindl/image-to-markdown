@@ -34,6 +34,7 @@ import { execFileSync } from "node:child_process";
 import { argv, exit, platform } from "node:process";
 
 import {
+  attachTo,
   Cdp,
   clickReal,
   closeExtraLeaves,
@@ -61,6 +62,11 @@ interface Ergebnis {
    *  (CORE-TEST-14). */
   detail: string;
 }
+
+/** Verbindungsdaten des Laufs. Zwei Pruefpunkte brauchen ein ZWEITES Fenster (die
+ *  Einstellungen sind ab Obsidian 1.13 ein eigenes CDP-Target); `run` bekommt aber nur
+ *  das Workspace-`cdp`. Wird in `main()` gesetzt, bevor ein Punkt laeuft. */
+let verbindung = { port: 9222, vault: "image-to-markdown" };
 
 interface Pruefpunkt {
   key: string;
@@ -335,33 +341,70 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "E1",
-    titel: "Einstellungen: Endpunkt-Liste rendert",
+    titel: "Einstellungen: Kit-Endpunkt-Editor rendert, inkl. seiner CSS-Haelfte",
     async run(cdp) {
-      const roh = await cdp.evaluate<string>(`
+      // Bis 2026-08-30 zaehlte dieser Punkt nur `input`-Felder. Das war zu grob, um etwas
+      // zu bemerken: die gesamte Endpunkt-UI wurde auf den Kit-Baustein umgestellt, und
+      // weder er noch ein Unit-Test schlug an — er haette weitergemessen (Stolperstelle 3
+      // des koda-Umzugs). Jetzt misst er die Grammatik des Bausteins UND ob dessen
+      // sichtbare Haelfte in styles.css angekommen ist. Letzteres ist der inhaltliche
+      // Gegenpart zu `tools/ui_adoption_check.py`, der nur die Regelmenge vergleicht:
+      // eine Regel kann in der Datei stehen und trotzdem nicht greifen.
+      // ⚠️ Ab Obsidian 1.13 sind die Einstellungen ein EIGENES CDP-Target. Die frühere
+      // Fassung dieses Punktes maß deshalb im Workspace-Fenster ins Leere und meldete
+      // „von hier nicht messbar" — als GRUENEN Punkt. Ein gruener Punkt, der nichts misst,
+      // ist schlimmer als ein roter: er wird beim Zitieren zu behaupteter Abdeckung.
+      // Deshalb wird hier ans Einstellungen-Fenster angedockt (`attachTo("settings", …)`
+      // aus der zentralen Bruecke) und dort gemessen.
+      const tab = await cdp.evaluate<string | null>(`
         app.setting.open();
         app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
         await new Promise((r) => setTimeout(r, 900));
-        // Ab 1.13 sind die Einstellungen ein EIGENES Fenster — dann ist das Modal hier
-        // null, ohne dass am Plugin etwas fehlt. Beide Faelle offen halten.
-        const modal = document.querySelector(".modal.mod-settings");
-        return JSON.stringify({
-          modalDa: Boolean(modal),
-          tab: app.setting.activeTab?.id ?? null,
-          felder: modal ? modal.querySelectorAll("input[type=text], input[type=password]").length : null,
-        });
+        return app.setting.activeTab?.id ?? null;
       `);
-      const d = JSON.parse(roh) as { modalDa: boolean; tab: string | null; felder: number | null };
-      await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
-      if (!d.modalDa) {
+
+      // `attachTo` liefert null, wenn kein Einstellungen-Fenster am Port haengt — das ist
+      // ein MESSERGEBNIS (die Einstellungen gingen nicht auf), kein Infrastrukturfehler.
+      const sicht = await attachTo("settings", verbindung.port, verbindung.vault)
+        .catch(() => null);
+      if (!sicht) {
+        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
         return {
-          ok: d.tab === PLUGIN_ID,
-          detail: `Tab "${d.tab}" aktiv, Einstellungen aber in eigenem Fenster (ab Obsidian 1.13) — Feldzahl von hier nicht messbar`,
+          ok: false,
+          detail: `Tab "${tab}", aber am Port haengt kein Einstellungen-Fenster — Einstellungen gingen nicht auf`,
         };
       }
-      return {
-        ok: d.tab === PLUGIN_ID && (d.felder ?? 0) > 0,
-        detail: `Tab "${d.tab}", ${d.felder} Eingabefelder`,
-      };
+
+      try {
+        const roh = await sicht.evaluate<string>(`
+          const wurzel = document.querySelector(".modal.mod-settings") ?? document.body;
+          const zeile = wurzel.querySelector(".okit-ep-row");
+          const info = zeile ? zeile.querySelector(".setting-item-info") : null;
+          return JSON.stringify({
+            zeilen: wurzel.querySelectorAll(".okit-ep-row").length,
+            status: wurzel.querySelectorAll(".okit-ep-status").length,
+            felder: wurzel.querySelectorAll("input[type=text], input[type=password]").length,
+            // Wirkt die uebernommene CSS-Haelfte? Der Baustein blendet den Info-Block der
+            // Zeile aus, damit die drei Felder die volle Breite bekommen. Fehlt die Regel
+            // in styles.css, steht hier "block" — sichtbar als gequetschte Felder. Genau
+            // diese Datei war im Staging-Vault nie deployt, ohne dass es auffiel.
+            infoDisplay: info ? getComputedStyle(info).display : null,
+          });
+        `);
+        const d = JSON.parse(roh) as {
+          zeilen: number; status: number; felder: number; infoDisplay: string | null;
+        };
+        const cssGreift = d.infoDisplay === "none";
+        return {
+          ok: tab === PLUGIN_ID && d.zeilen > 0 && d.status > 0 && cssGreift,
+          detail: `Tab "${tab}", ${d.zeilen} Kit-Zeilen (.okit-ep-row), ${d.status} Status-Icons, `
+            + `${d.felder} Eingabefelder, .setting-item-info display=${d.infoDisplay ?? "—"}`
+            + `${cssGreift ? "" : " — CSS-Haelfte greift NICHT (styles.css gegen ENDPOINT_LIST_CSS pruefen)"}`,
+        };
+      } finally {
+        sicht.close?.();
+        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+      }
     },
   },
 ];
@@ -376,6 +419,7 @@ async function main(): Promise<void> {
   const vault = flag("vault") ?? "image-to-markdown";
   const mitModell = args.includes("--with-model");
 
+  verbindung = { port, vault };   // E1 dockt damit ans Einstellungen-Fenster an
   console.log(`GUI-Smoke ${PLUGIN_ID} — Port ${port}, Vault "${vault}"`);
   const cdp = await Cdp.attach(port, vault);
 
