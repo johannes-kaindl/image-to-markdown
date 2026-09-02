@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-09-02
+
 ### Geändert
 
 - **Die Endpunkt-Liste in den Einstellungen ist jetzt der gemeinsame Baustein aus
