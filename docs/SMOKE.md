@@ -6,6 +6,35 @@ entsteht, ob `metadataCache` die Backlinks liefert, aus denen die Idempotenz-Anz
 und ob pdf.js mit seinem als Blob-URL eingebetteten Worker im Renderer wirklich lädt. Genau
 dort liegen die Fehler, die einem Nutzer zuerst begegnen.
 
+⚠️ **Zuerst prüfen, wer sonst an Obsidian hängt.** Die laufende Instanz ist geteilte
+Infrastruktur — ein `quit` trifft die Instanz, an der möglicherweise eine andere Session
+arbeitet, und zerstört deren Zustand. Der eigene Lauf ist danach sauber grün; der Schaden
+entsteht woanders und fällt nicht auf.
+
+```bash
+lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null && echo "läuft bereits — NICHT beenden"
+curl -s http://127.0.0.1:9222/json/list   # nennt die Vaults der offenen Fenster
+```
+
+Hört der Port schon, dann **mitnutzen statt neu starten**: ein eigenes Fenster öffnen
+(`obsidian://open?path=<URL-kodierter Pfad einer Datei im Vault>` — das registriert auch einen
+Vault, den Obsidian noch nicht kennt), dann `attachTo("workspace", port, vault)`; der
+Vault-Name wählt, nicht die Reihenfolge. Die Port-Prüfung ersetzt die Frage nicht: sie zeigt
+aktive CDP-Treiber, aber nicht, wer ein Fenster offen hält oder auf den Port wartet.
+
+**Vor dem Lauf den CDP-Lock nehmen** — er ist die Eintrittskarte, nicht die Kür: ohne ihn
+blockt der PreToolUse-Guard jeden Zugriff, auch bei freiem Port.
+
+```bash
+python3 ~/.claude/hooks/obsidian-cdp-lock.py acquire --label image-to-markdown \
+  --intent "GUI-Smoke" --exclusive focus     # danach: … release
+```
+
+`--exclusive focus`, weil dieser Treiber das Fenster nach vorn holt — ein fremdes `activate`
+würde eine laufende Messung zerschießen, und `quit-reload` deckt den Fokus nicht ab. Am
+2026-09-02 war der Lock von 15:20 bis 17:04 durchgehend von vier fremden Sessions gehalten:
+Wartezeit einplanen, nicht am Lock vorbeiarbeiten.
+
 `npm run smoke:gui -- --vault image-to-markdown` fährt die Punkte unten gegen ein laufendes
 Obsidian (CDP über `--remote-debugging-port`). Voraussetzungen und Vault-Aufbau:
 `npm run shots -- --setup`, Details in `docs/images/README.md`.

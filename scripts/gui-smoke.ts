@@ -25,9 +25,42 @@
  * Lauf gegen fremden Code ist schlimmer als kein Lauf, weil ein gruener Punkt nicht
  * untersucht wird.
  *
- * Obsidian muss mit `--remote-debugging-port=9222` laufen. **Laeuft schon eine Instanz,
- * wird sie mitbenutzt** (`lsof -nP -iTCP:9222 -sTCP:LISTEN`) — ein `quit` trifft die
- * Fenster anderer Sessions und zerstoert deren Zustand.
+ * Obsidian muss mit `--remote-debugging-port=9222` laufen.
+ *
+ * ⚠️ **Zuerst pruefen, wer sonst an Obsidian haengt.** Die laufende Instanz ist geteilte
+ * Infrastruktur — ein `quit` trifft die Instanz, an der moeglicherweise eine andere Session
+ * arbeitet, und zerstoert deren Zustand. Der eigene Lauf ist danach sauber gruen; der
+ * Schaden entsteht woanders und faellt nicht auf.
+ *
+ * ```bash
+ * lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null && echo "laeuft bereits — NICHT beenden"
+ * ```
+ *
+ * Hoert der Port schon, dann **mitnutzen statt neu starten**: ein eigenes Fenster per
+ * `vault-open` ueber IPC oeffnen, dann `attachTo("workspace", port, vault)` — der Vault-Name
+ * waehlt, nicht die Reihenfolge. ⚠️ Die Port-Pruefung ersetzt die Frage nicht: sie zeigt
+ * aktive CDP-Treiber, aber nicht, wer ein Fenster offen haelt oder auf den Port wartet.
+ * `curl -s http://127.0.0.1:9222/json/list` nennt die Vaults der offenen Fenster und
+ * beantwortet damit direkt, wen ein Quit traefe.
+ *
+ * Zwei Ergaenzungen zum Dach-Baustein, beide am 2026-09-02 in diesem Repo gemessen:
+ *
+ * 1. **Der CDP-Lock ist die Eintrittskarte, nicht die Kuer.** Ohne ihn blockt der
+ *    PreToolUse-Guard jeden Zugriff, auch wenn der Port frei ist:
+ *    `python3 ~/.claude/hooks/obsidian-cdp-lock.py acquire --label image-to-markdown
+ *    --intent "GUI-Smoke" --exclusive focus` — und danach `release`. `--exclusive focus`,
+ *    weil dieser Treiber das Fenster nach vorn holt und ein fremdes `activate` eine
+ *    laufende Messung zerschoesse. An dem Tag war der Lock von 15:20 bis 17:04
+ *    durchgehend von vier fremden Sessions gehalten; einplanen, nicht ueberrascht sein.
+ * 2. **Ein Vault, den Obsidian nicht kennt, ist KEIN Neustart-Grund.**
+ *    `obsidian://open?vault=<name>` tut bei einem frischen `buildVault`-Ergebnis nichts;
+ *    `open "obsidian://open?path=<URL-kodierter Pfad einer DATEI im Vault>"` oeffnet ihn
+ *    als zusaetzliches Fenster derselben Instanz und registriert ihn dabei.
+ *
+ * Erst wenn nichts laeuft — oder nach Absprache mit dem, der es benutzt — darf gequittet
+ * werden. Fuer destruktive Arbeit (Absturz reproduzieren, dutzendfach neu laden) ist die
+ * Zweitinstanz der richtige Ort statt einer Nachfrage: eigenes `--user-data-dir` plus
+ * eigener `--remote-debugging-port`, Rezept in der Dach-`AGENTS.md`.
  *
  * ## Warum der Kernlauf kein Modell braucht
  *
