@@ -10,6 +10,18 @@ dort liegen die Fehler, die einem Nutzer zuerst begegnen.
 Obsidian (CDP über `--remote-debugging-port`). Voraussetzungen und Vault-Aufbau:
 `npm run shots -- --setup`, Details in `docs/images/README.md`.
 
+**Vor dem Lauf gehört ein Deploy des gebauten Repo-Stands in den Vault, gegen den gemessen
+wird.** Der Treiber erzwingt das seit 2026-09-02 mit `requireEigenerBuild` (zentral in
+`tools/obsidian-cdp/vault.ts`): er vergleicht die `main.js` im Vault per sha1 mit der frisch
+gebauten und bricht ab, wenn dort ein anderer Build liegt — eine Store-Installation etwa.
+Die trägt dieselbe Versionsnummer, weshalb A1 sie nicht sehen kann; am 2026-08-30 standen
+workspace-weit 69 von 150 grünen Prüfpunkten auf Code, der nicht belegt der Repo-Stand war.
+Den geprüften Pfad holt der Guard aus der **laufenden** Instanz (`app.vault.adapter.basePath`),
+nicht aus dem konfigurierten Staging-Pfad: der Treiber dockt per `--vault` an ein beliebiges
+Fenster an, und geprüft werden muss, was gemessen wird. Fehlt die frisch gebaute `main.js`,
+bleibt nur der schwache Nachweis (Store-Suffix) — der Lauf warnt dann, statt abzubrechen,
+und die Warnung steht auch unter der Schlussbilanz.
+
 **Der Kernlauf braucht kein Modell.** Das ist Absicht: ein Smoke, der einen erreichbaren
 Vision-Endpoint voraussetzt, ist nicht reproduzierbar grün — er misst dann die Laune eines
 LLM mit. Die Punkte, die zwingend einen Lauf brauchen, stehen unter `--with-model` und

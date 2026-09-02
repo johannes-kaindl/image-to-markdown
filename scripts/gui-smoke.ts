@@ -14,9 +14,16 @@
  *
  * ```bash
  * npm run build && npm run shots -- --setup     # Vault aus dem getrackten Fixture
+ * npm run deploy                                # PFLICHT: der Lauf misst den deployten Build
  * npm run smoke:gui -- --vault image-to-markdown
  * npm run smoke:gui -- --vault image-to-markdown --with-model   # + die zwei Modell-Punkte
  * ```
+ *
+ * `npm run deploy` ist keine Bequemlichkeit: seit dem Herkunfts-Guard (`requireEigenerBuild`,
+ * s. `main()`) bricht der Lauf ab, wenn im Vault ein anderer Build liegt als der gebaute
+ * Repo-Stand — eine Store-Installation etwa, die dieselbe Versionsnummer traegt. Ein gruener
+ * Lauf gegen fremden Code ist schlimmer als kein Lauf, weil ein gruener Punkt nicht
+ * untersucht wird.
  *
  * Obsidian muss mit `--remote-debugging-port=9222` laufen. **Laeuft schon eine Instanz,
  * wird sie mitbenutzt** (`lsof -nP -iTCP:9222 -sTCP:LISTEN`) — ein `quit` trifft die
@@ -31,7 +38,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { argv, exit, platform } from "node:process";
+import { join } from "node:path";
+import { argv, cwd, exit, platform } from "node:process";
 
 import {
   attachTo,
@@ -41,6 +49,7 @@ import {
   openExisting,
   pollUntil,
 } from "../../tools/obsidian-cdp/cdp.js";
+import { requireEigenerBuild } from "../../tools/obsidian-cdp/vault.js";
 
 const PLUGIN_ID = "image-to-markdown";
 const VIEW_TYPE = "image-to-markdown-view";
@@ -427,6 +436,10 @@ async function main(): Promise<void> {
   // zurueckschreiben koennen.
   let vorher: string | null = null;
   const ergebnisse: { punkt: Pruefpunkt; ergebnis: Ergebnis }[] = [];
+  /** Der Ausgang `ungeklaert` des Herkunfts-Guards bricht nicht ab, gehoert aber in die
+   *  Abschlusszeile: eine Warnung, die nur oben im Protokoll steht, liest niemand mehr,
+   *  wenn unten "9/9 gruen" steht. */
+  const herkunftWarnungen: string[] = [];
 
   try {
     // Ohne Fokus drosselt Chromium den Renderer, das DOM bleibt leer und JEDER Punkt
@@ -453,6 +466,36 @@ async function main(): Promise<void> {
         + "jeder Pruefpunkt waere rot, ohne dass am Plugin etwas fehlt.",
       );
     }
+
+    // Laeuft dieser Lauf gegen den eigenen Stand? Die Frage, gegen die `manifest.version`
+    // strukturell blind ist: Store-Build und Repo-Build tragen dieselbe Nummer. Am
+    // 2026-08-30 standen dachweit 69 von 150 gruenen Pruefpunkten auf einem Build, der
+    // nicht belegt der Repo-Stand war.
+    //
+    // Der Pfad kommt aus der LAUFENDEN Instanz, nicht aus `stagingVaultDir(PLUGIN_ID)` —
+    // dieser Treiber dockt per `--vault` an ein beliebiges Fenster an, und `--vault
+    // 10_Pallas` ist im Kopf dieser Datei ausdruecklich vorgesehen. Ein Check gegen den
+    // Staging-Pfad pruefte dann eine Datei, die mit dem Lauf nichts zu tun hat.
+    // Geprueft wird, was gemessen wird.
+    const vaultInfo = await cdp.evaluate<{ name: string; basePath: string; configDir: string }>(`
+      return {
+        name: app.vault.getName(),
+        basePath: app.vault.adapter.basePath,
+        configDir: app.vault.configDir,
+      };
+    `);
+    console.log(`  Vault: ${vaultInfo.name}`);
+    requireEigenerBuild(
+      join(vaultInfo.basePath, vaultInfo.configDir, "plugins", PLUGIN_ID, "main.js"),
+      // Zweites Argument = der sha1-Beweis statt des billigen Nachweises. Es muss ein
+      // FRISCHER Build sein; `npm run deploy` baut ihn direkt davor. Fehlt die Datei,
+      // faellt der Guard von selbst auf `ungeklaert` zurueck (Warnung, kein Abbruch).
+      join(cwd(), "main.js"),
+      (meldung) => {
+        herkunftWarnungen.push(meldung);
+        console.log(`  ! ${meldung}`);
+      },
+    );
 
     vorher = await cdp.evaluate<string>(`
       const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
@@ -497,6 +540,7 @@ async function main(): Promise<void> {
 
   const gruen = ergebnisse.filter((e) => e.ergebnis.ok).length;
   console.log(`\n${gruen}/${ergebnisse.length} Pruefpunkte gruen`);
+  for (const meldung of herkunftWarnungen) console.log(`! ${meldung}`);
   if (gruen !== ergebnisse.length) exit(1);
 }
 
