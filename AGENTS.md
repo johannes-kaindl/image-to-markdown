@@ -64,6 +64,11 @@ vision_client.ts    VisionClient(endpoint, model, apiKey?) → OpenAI-kompatible
                     transcribeStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint ·
                     resolveActiveEndpoint (pingt Endpoint-Liste der Reihe nach, gibt den ersten
                     erreichbaren zurück oder null wenn alle offline).
+                    ⚠️ EIN Erreichbarkeits-Begriff, seit 0.22.0: `ping()` delegiert an
+                    `probeStatus()` (→ Kit-`classifyEndpointStatus`), gilt also nur bei HTTP 200
+                    MIT Modell-Listen-Form. Bis 0.21.0 fragte `ping()` nur `res.ok` — dann warnte
+                    die Endpunkt-Zeile vor einem Endpunkt, den die Auflösung gleich darauf nahm.
+                    Ein leeres `data`-Array bleibt gültig (frisches MLX ohne Modelle im Cache).
                     Transport injiziert (HttpFetch/setHttp): non-streaming via requestUrl-Adapter,
                     Streaming via fetch (requestUrl streamt nicht). Der optionale API-Schlüssel wird per
                     authHeaders auf ALLE Wege gelegt (inkl. ping/listModels/Capability-Probe — ohne ihn
@@ -213,7 +218,11 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
 - **Endpoint mit `/v1`-Suffix:** `normalizeEndpoint()` strippt ein trailing `/v1`, sonst baute der
   Client `…/v1/v1/chat/completions`. **LM Studio antwortet auf falsche Pfade mit HTTP 200 + Fehler-Body**
   (kein echter Fehler) → `res.ok` true, Stream leer → still leeres Transkript. (Genau dieser Bug beim
-  ersten Smoke-Test.)
+  ersten Smoke-Test.) **Seit 0.22.0 fällt so ein Endpunkt aus der Auflösung**, weil `ping()` die
+  Modell-Listen-Form verlangt — der Footgun ist damit strukturell abgefangen, nicht nur angezeigt.
+  Belegt vor der Umstellung: LM Studio (live, `n=9`), Ollama (live), MLX (`mlx_lm/server.py`) und
+  llama.cpp (`tools/server/server-models.cpp`) liefern alle ein `data`-Array — es gibt also keinen
+  bekannten Server, der dadurch aus der Auswahl fiele.
 - **HEIC/HEIF** (iOS-Default) werden von Vision-Modellen abgelehnt → übersprungen + Warnung.
 - **LM Studio ignoriert das `model`-Feld** → tatsächliches Modell aus `response.model` lesen.
 - **Vision-Endpoint-Default `:8080`** (MLX) ≠ LM Studio `:1234`.

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { VisionClient, setHttp, setStreamFetch, parseErrorEnvelope, type HttpResponse } from "../src/vision_client";
+import { resolveActiveEndpointConfig } from "../src/vendor/kit/endpoint_config";
 
 // Mock-Transport für nicht-streamende Calls (ping/listModels/transcribe/visionConfidence/testVision).
 function mockHttp(impl: (url: string, init?: { method?: string; body?: string }) => HttpResponse): { url: string; body?: string; headers?: Record<string, string> }[] {
@@ -260,8 +261,10 @@ describe("VisionClient.testVision", () => {
 });
 
 describe("VisionClient.ping / listModels", () => {
-  it("ping() ruft /v1/models und liefert ok", async () => {
-    const calls = mockHttp(() => ({ ok: true, status: 200, text: "" }));
+  it("ping() ruft /v1/models und liefert true bei einer Modell-Liste", async () => {
+    // Der Body ist seit 0.22.0 Teil der Zusage: ein leerer 200er (den dieser Test bis dahin
+    // schickte) gilt nicht mehr als erreichbar — siehe den ping-Block weiter unten.
+    const calls = mockHttp(() => ok({ object: "list", data: [{ id: "vm" }] }));
     expect(await new VisionClient("http://x:8080", "vm").ping()).toBe(true);
     expect(calls[0].url).toBe("http://x:8080/v1/models");
   });
@@ -381,6 +384,47 @@ describe("VisionClient — API-Schlüssel je Endpunkt", () => {
 // EndpointStatus, nicht ein boolean — er zeigt den Grund im Tooltip. Die Klassifikation
 // selbst liegt im Kit (classifyEndpointStatus); geprüft wird hier die Verdrahtung:
 // dass jede Antwortform als das richtige Rohsignal hineingeht.
+// ── ping(): derselbe Erreichbarkeits-Begriff wie probeStatus ──────────────────
+// Bis 0.21.0 hatte das Repo ZWEI Begriffe: `ping()` fragte nur `res.ok`, `probeStatus()`
+// verlangte zusätzlich die Modell-Listen-Form. Sichtbare Folge: die Endpunkt-Zeile in den
+// Einstellungen warnte "antwortet, ist aber kein OpenAI-kompatibler Endpunkt", und der
+// Resolver nahm genau diesen Endpunkt trotzdem — die Anzeige warnte vor einem Fehler, den
+// das Plugin gleich darauf beging.
+describe("VisionClient.ping — Erreichbarkeit heißt: antwortet wie eine Modell-Liste", () => {
+  it("200 mit Fehler-Body zählt NICHT als erreichbar (der LM-Studio-Footgun)", async () => {
+    mockHttp(() => ok({ error: { message: "Unexpected endpoint or method" } }));
+    expect(await new VisionClient("http://x:1234", "vm").ping()).toBe(false);
+  });
+
+  it("200 mit leerem data-Array zählt als erreichbar (frisches MLX ohne Modelle)", async () => {
+    // Belegt an mlx_lm/server.py: der Handler antwortet immer {"object":"list","data":[...]},
+    // bei leerem Cache eben mit []. Ein leeres Array ist eine gültige Antwort, kein Defekt.
+    mockHttp(() => ok({ object: "list", data: [] }));
+    expect(await new VisionClient("http://x:8080", "vm").ping()).toBe(true);
+  });
+
+  it("401 zählt nicht als erreichbar (Schlüssel fehlt)", async () => {
+    mockHttp(() => ({ ok: false, status: 401, text: "" }));
+    expect(await new VisionClient("http://x:1", "vm", "falsch").ping()).toBe(false);
+  });
+});
+
+describe("resolveActiveEndpointConfig mit VisionClient.ping", () => {
+  it("überspringt einen Endpunkt, der 200 mit Fehler-Body liefert, und nimmt den nächsten", async () => {
+    // Die eigentliche Wirkung der Umstellung: nicht das Prädikat, sondern WELCHER Endpunkt
+    // benutzt wird. Vorher gewann der erste — und die Transkription lief danach in ein
+    // still leeres Ergebnis.
+    mockHttp((url) => url.startsWith("http://kaputt")
+      ? ok({ error: { message: "Unexpected endpoint or method" } })
+      : ok({ object: "list", data: [{ id: "qwen-vl" }] }));
+    const aktiv = await resolveActiveEndpointConfig(
+      [{ url: "http://kaputt:1234" }, { url: "http://gut:8080" }],
+      cfg => new VisionClient(cfg.url, "", cfg.apiKey).ping(),
+    );
+    expect(aktiv?.url).toBe("http://gut:8080");
+  });
+});
+
 describe("VisionClient.probeStatus", () => {
   it("200 + Modell-Listen-Form → ok/erreichbar", async () => {
     mockHttp(() => ok({ data: [{ id: "m" }] }));

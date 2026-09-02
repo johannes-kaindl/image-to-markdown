@@ -6,6 +6,25 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### Geändert
+
+- **Ein Endpunkt, der auf `/v1/models` mit HTTP 200 antwortet, aber keine Modell-Liste
+  liefert, gilt jetzt als nicht erreichbar und wird übersprungen.** Bisher warnte die
+  Endpunkt-Zeile in den Einstellungen korrekt („antwortet, ist aber kein OpenAI-kompatibler
+  Endpunkt") — und das Plugin nahm genau diesen Endpunkt trotzdem, weil die Auflösung einen
+  schwächeren Begriff von „erreichbar" benutzte (nur der HTTP-Status). Die Anzeige warnte
+  also vor einem Fehler, den das Plugin gleich darauf beging: die Transkription lief in ein
+  still leeres Ergebnis. Das ist der dokumentierte LM-Studio-Fall (falscher Pfad → HTTP 200
+  mit Fehler-Body).
+
+  **Was das für bestehende Konfigurationen heißt:** betroffen ist allein „HTTP 200 ohne
+  `data`-Array". Ein Server ohne `/v1/models` (404) galt schon vorher als nicht erreichbar,
+  und eine **leere** Modell-Liste bleibt gültig — ein frisch aufgesetztes MLX ohne Modelle im
+  Cache fällt also nicht aus der Auswahl. Vor der Umstellung nachgemessen: LM Studio, Ollama,
+  MLX und llama.cpp liefern alle ein `data`-Array.
+
 ## [0.21.0] — 2026-09-02
 
 ### Geändert

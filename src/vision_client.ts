@@ -60,15 +60,15 @@ export class VisionClient {
   /** Diagnostische Probe gegen GET /v1/models — benannter Status statt true/false.
    *
    *  Braucht der Kit-Endpunkt-Editor (`vendor/kit-obsidian/endpoint-list.ts`), der im Tooltip
-   *  den GRUND zeigt. Bewusst strenger als `ping()`: eine HTTP-200-Antwort gilt nur dann als
-   *  erreichbar, wenn sie die Modell-Listen-Form (`data`-Array) hat. Genau das trennt den
-   *  dokumentierten LM-Studio-Footgun (falscher Pfad → 200 + Fehler-Body → still leeres
-   *  Transkript) von einem echten Endpunkt.
+   *  den GRUND zeigt: eine HTTP-200-Antwort gilt nur dann als erreichbar, wenn sie die
+   *  Modell-Listen-Form (`data`-Array) hat. Genau das trennt den dokumentierten
+   *  LM-Studio-Footgun (falscher Pfad → 200 + Fehler-Body → still leeres Transkript) von
+   *  einem echten Endpunkt.
    *
-   *  ⚠️ `ping()` und damit die Endpunkt-AUFLOESUNG bleiben absichtlich auf `res.ok`. Die
-   *  strengere Regel hier warnt sichtbar, verschiebt aber keinen Endpunkt aus der Liste —
-   *  das waere eine Verhaltensaenderung an der Aufloesung und gehoert in einen eigenen
-   *  Gate-Lauf (Task im Board). */
+   *  Seit 0.22.0 ist das der EINZIGE Erreichbarkeits-Begriff im Repo: `ping()` delegiert
+   *  hierher, damit die Anzeige nicht vor einem Fehler warnt, den die Auflösung gleich darauf
+   *  begeht. Vorher standen hier zwei Begriffe nebeneinander (hier streng, dort `res.ok`) —
+   *  bewusst, aber nur bis zu dem Gate-Lauf, der die Auflösung mit ändern durfte. */
   async probeStatus(): Promise<EndpointStatus> {
     try {
       const r = await http()(`${this.endpoint}/v1/models`, { headers: this.headers() });
@@ -80,9 +80,21 @@ export class VisionClient {
     }
   }
 
-  /** Verbindungs-Check gegen den OpenAI-kompatiblen Endpoint (GET /v1/models). */
+  /** Verbindungs-Check gegen den OpenAI-kompatiblen Endpoint (GET /v1/models).
+   *
+   *  Delegiert bewusst an `probeStatus()`: bis 0.21.0 fragte diese Methode nur `res.ok` und
+   *  hatte damit einen ANDEREN Erreichbarkeits-Begriff als die Anzeige. Sichtbare Folge war
+   *  der in AGENTS.md dokumentierte LM-Studio-Footgun — falscher Pfad, HTTP 200 mit
+   *  Fehler-Body: die Endpunkt-Zeile warnte „antwortet, ist aber kein OpenAI-kompatibler
+   *  Endpunkt", und `resolveActiveEndpointConfig` nahm genau diesen Endpunkt trotzdem. Die
+   *  Transkription lief danach in ein still leeres Ergebnis.
+   *
+   *  Die Verhaltensänderung ist eng: betroffen ist allein „HTTP 200, aber kein `data`-Array".
+   *  Ein fehlendes `/v1/models` (404) galt schon vorher als nicht erreichbar, und ein LEERES
+   *  `data`-Array zählt weiterhin als gültig — sonst fiele ein frisch aufgesetztes MLX ohne
+   *  Modelle im Cache aus der Auswahl. */
   async ping(): Promise<boolean> {
-    try { return (await http()(`${this.endpoint}/v1/models`, { headers: this.headers() })).ok; } catch { return false; }
+    return (await this.probeStatus()).reachable;
   }
 
   /** Verfügbare Modelle vom Endpoint (GET /v1/models). [] bei Fehler/Offline. */
