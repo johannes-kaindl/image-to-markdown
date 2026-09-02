@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-09-02
+
 ### Geändert
 
 - **Ein Endpunkt, der auf `/v1/models` mit HTTP 200 antwortet, aber keine Modell-Liste
