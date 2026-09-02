@@ -6,8 +6,6 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Geändert
 
 - **Ein Endpunkt, der auf `/v1/models` mit HTTP 200 antwortet, aber keine Modell-Liste
