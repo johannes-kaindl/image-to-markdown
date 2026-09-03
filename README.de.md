@@ -101,7 +101,16 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
   der Seitentrenner der zusammengeführten Notiz (`pdfPageSeparator`) ist konfigurierbar. Kein CDN —
   pdf.js ist vollständig offline gebündelt.
 - **Eigenständige Datei als Quelle.** Ist die aktive Datei selbst eine PDF oder ein Bild — direkt in Obsidian geöffnet, nicht in eine Notiz eingebettet — zeigt die Sidebar sie als einzelnen Eintrag mit dem Label **„diese Datei"** an und behandelt sie als Transkriptions-Quelle. Der Seitenbereich ist bei PDFs wie gewohnt wählbar; Bilder zeigen eine einzelne Karte. Die Transkript-Notiz wird am **„Standard-Speicherort für neue Notizen"** (`app.fileManager.getNewFileParent`) angelegt, da es keine Quellnotiz gibt. Das Frontmatter enthält kein `source_note`-Feld; `source_pdf`/`source_image`, `created`, `transcribed_by` (bei PDFs auch `pages`) werden wie üblich geschrieben. Die Quelldatei wird nicht verändert. Idempotenz und Override gelten wie gewohnt.
-- **Backlink-basierte Idempotenz.** Bereits transkribierte Quellen werden automatisch erkannt:
+- **Abgeschnittene Transkripte stehen in der Notiz, nicht nur auf dem Bildschirm.** Hört das
+  Modell am Token-Limit auf (`finish_reason: "length"`), sagt das nicht mehr nur die
+  Sidebar-Karte, sondern auch die geschriebene Notiz — über ein Frontmatter-Feld
+  `truncated: true`. Der Schlüssel wird **nur bei `true`** geschrieben: seine Abwesenheit heißt
+  „vollständig **oder** unbekannt", denn vor dieser Version geschriebene Notizen wissen nichts
+  über ihre Vollständigkeit. Wird eine abgeschnittene Notiz erneut transkribiert und ist dann
+  vollständig, verschwindet der Schlüssel wieder. Wie alle anderen Schlüssel ist er unter
+  „Frontmatter-Mapping" umbenennbar.
+
+ Bereits transkribierte Quellen werden automatisch erkannt:
   Hat eine Notiz ein `source_pdf`- oder `source_image`-Frontmatter-Feld, das auf die Quelldatei
   auflöst, zeigt die Sidebar **„✓ Transkript vorhanden"** mit einem **„öffnen"**-Link statt erneut
   zu transkribieren. Solche Einträge sind zunächst abgewählt; die Zeilen-Checkbox erneut anhaken und
