@@ -267,7 +267,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       writeTranscripts: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
         const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
-        const { results } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed, knownBody: e.knownBody })), { selfSource: self, destDir, map: this.fmMap() });
+        const { results } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed, knownBody: e.knownBody, truncated: e.truncated })), { selfSource: self, destDir, map: this.fmMap() });
         return results;
       },
       writePdf: async (sourcePath, raw, link, pages, overwritePath, embed, range, knownBody) => {

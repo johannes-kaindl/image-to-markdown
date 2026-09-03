@@ -82,6 +82,19 @@ describe("buildTranscriptNote", () => {
     expect(note).toContain('source_note: "[[No\\"tiz]]"');
     expect(note).toContain('transcribed_by: "v\\"m"');
   });
+  it("abgeschnittenes Transkript bekommt truncated: true", () => {
+    // Ohne diese Zeile sieht eine am Token-Limit abgebrochene Notiz später aus wie eine
+    // vollstaendige. Die Sidebar-Karte sagt es zwar, aber die lebt nur in der Sitzung.
+    const note = buildTranscriptNote({ imageLink: "foto.jpg", date: "2026-09-03", model: "vm", transcript: "halb", truncated: true }, DEFAULT_FM_MAP);
+    expect(note).toContain("truncated: true");
+  });
+  it("vollstaendiges Transkript bekommt KEINEN truncated-Key", () => {
+    // Absichtlich asymmetrisch: der Key wird nur bei true geschrieben. `false` waere eine
+    // Zusage, die fuer Alt-Notizen niemand einloesen kann — Abwesenheit heisst „vollstaendig
+    // oder unbekannt", nicht „vollstaendig".
+    const note = buildTranscriptNote({ imageLink: "foto.jpg", date: "2026-09-03", model: "vm", transcript: "ganz" }, DEFAULT_FM_MAP);
+    expect(note).not.toContain("truncated");
+  });
   it("ohne sourceName → keine source_note-Zeile", () => {
     const note = buildTranscriptNote({ imageLink: "scan.png", date: "2026-06-25", model: "vm", transcript: "x" }, DEFAULT_FM_MAP);
     expect(note).toContain('source_image: "[[scan.png]]"');
@@ -210,6 +223,34 @@ function fakeIO(over: any = {}) {
   return { io, created, notices, notes };
 }
 
+describe("rewriteTranscript — truncated beim Ueberschreiben", () => {
+  const alt = ['---', 'source_image: "[[foto.jpg]]"', 'kind: transcript', 'truncated: true',
+               'created: 2026-09-01', 'transcribed_by: "alt"', '---', '![[foto.jpg]]', '', 'halb', ''].join("\n");
+  const ohne = alt.replace("truncated: true\n", "");
+
+  it("setzt den Key, wenn die neue Fassung abgeschnitten ist", () => {
+    const neu = rewriteTranscript(ohne, { model: "vm", sourceLink: "foto.jpg", body: "halb", truncated: true }, DEFAULT_FM_MAP);
+    expect(neu).toContain("truncated: true");
+  });
+
+  it("ENTFERNT den Key, wenn die neue Fassung vollstaendig ist", () => {
+    // Der eigentliche Punkt: eine erneut transkribierte, jetzt vollstaendige Notiz darf nicht
+    // weiter behaupten, sie sei abgeschnitten. Ein stehengebliebenes true ist schlimmer als
+    // ein fehlender Key, weil es eine AUSSAGE ist und keine Luecke.
+    const neu = rewriteTranscript(alt, { model: "vm", sourceLink: "foto.jpg", body: "ganz", truncated: false }, DEFAULT_FM_MAP);
+    expect(neu).not.toContain("truncated");
+    expect(neu).toContain('source_image: "[[foto.jpg]]"');   // der Rest des Frontmatters bleibt
+    expect(neu).toContain("created: 2026-09-01");
+  });
+
+  it("ohne Angabe bleibt das Frontmatter unveraendert", () => {
+    // Direktaufrufer, die nichts ueber Truncation wissen (pdf_to_md via rewriteTranscript),
+    // duerfen eine vorhandene korrekte Aussage nicht loeschen.
+    const neu = rewriteTranscript(alt, { model: "vm", sourceLink: "foto.jpg", body: "halb" }, DEFAULT_FM_MAP);
+    expect(neu).toContain("truncated: true");
+  });
+});
+
 describe("writeTranscripts", () => {
   it("batched: legt Notizen an, ersetzt Embeds, schreibt Quelle einmal", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "a ![[foto.jpg]] b ![[bild.png]]"]] });
@@ -221,6 +262,30 @@ describe("writeTranscripts", () => {
     expect(created["foto (transcript).md"]).toContain("# A");
     expect(created["foto (transcript).md"]).toContain('transcribed_by: "vm"');
     expect(notes.get("q.md")).toBe("a ![[foto (transcript)]] b ![[bild (transcript)]]");
+  });
+  it("reicht truncated an die geschriebene Notiz durch", async () => {
+    const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]] ![[bild.png]]"]] });
+    await writeTranscripts(io, "q.md", [
+      { raw: "![[foto.jpg]]", link: "foto.jpg", content: "halb", model: "vm", truncated: true },
+      { raw: "![[bild.png]]", link: "bild.png", content: "ganz", model: "vm" },
+    ]);
+    expect(created["foto (transcript).md"]).toContain("truncated: true");
+    expect(created["bild (transcript).md"]).not.toContain("truncated");
+  });
+  it("Override raeumt einen alten truncated-Key weg, wenn die neue Fassung vollstaendig ist", async () => {
+    // `card.truncated` ist im State `true` ODER `undefined` — nie `false`. Der Override muss
+    // daraus ein explizites `false` machen, sonst liesse er den alten Key stehen und die Notiz
+    // behauptete weiter, sie sei abgeschnitten.
+    const alteNotiz = ['---', 'source_image: "[[foto.jpg]]"', 'kind: transcript', 'truncated: true',
+                       'created: 2026-09-01', 'transcribed_by: "alt"', '---', '![[foto.jpg]]', '', 'halb', ''].join("\n");
+    const { io, notes } = fakeIO({ notes: [["q.md", "![[foto (transcript)]]"], ["foto (transcript).md", alteNotiz]] });
+    await writeTranscripts(io, "q.md", [
+      { raw: "![[foto (transcript)]]", link: "foto.jpg", content: "jetzt ganz", model: "vm", overwritePath: "foto (transcript).md", knownBody: "halb" },
+    ]);
+    const neu = notes.get("foto (transcript).md") ?? "";
+    expect(neu).not.toContain("truncated");
+    expect(neu).toContain("jetzt ganz");
+    expect(neu).toContain("created: 2026-09-01");
   });
   it("leeres Transkript → diese Notiz wird übersprungen", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"]] });

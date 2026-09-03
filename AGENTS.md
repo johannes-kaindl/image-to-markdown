@@ -101,7 +101,12 @@ reasoning_toggle.ts thinkToggleView: mappt (Modell, Suppress-Flag) auf den Anzei
 card_cache.ts       CardCache: In-Session-Cache der Sidebar-Ergebnis-Karten pro Quelldatei
                     (Plugin-Ebene, überlebt View-Close; kein Disk-Persist). Reiner Kern.
 frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskriminator-Werte aller
-                    i2m-Notizen (Setup-Zeit-Entscheidung). Reiner Kern.
+                    i2m-Notizen (Setup-Zeit-Entscheidung). Reiner Kern. Seit 0.23.0 auch
+                    `truncated` (Default `truncated`) — geschrieben NUR bei `true`: Abwesenheit
+                    heisst „vollstaendig ODER unbekannt", weil Alt-Notizen den Key nicht kennen.
+                    `rewriteTranscript` kennt dafuer drei Zustaende (true setzt, false entfernt,
+                    undefined laesst in Ruhe); writeTranscripts normalisiert beim Override auf
+                    `=== true`, weil `card.truncated` nie `false` ist, sondern `undefined`.
 fm_migration.ts     Frontmatter-Mapping-Migration: diffMappings + Migrationsplan
                     (MigrationPlan/NotePlan) über bestehende i2m-Notizen. Reiner Kern.
 migration_modal.ts  MigrationModal (Modal): Vorschau der Frontmatter-Migration (read-only

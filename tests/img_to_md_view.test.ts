@@ -395,6 +395,26 @@ describe("ImgToMdView — Notiz anlegen", () => {
     expect(calls.written[0]).toEqual([{ item: { ...ITEMS[0], existingTranscriptPath: "foto.md" }, content: "Hallo", model: "vm", knownBody: undefined }]);
     expect(all(view.contentEl, "img2md-written")[0].textContent).toContain("foto.md");
   });
+  it("gibt truncated an writeTranscripts weiter, wenn das Modell am Token-Limit endete", async () => {
+    // Die Karte zeigt den Abschneide-Hinweis seit 0.20.0 — die geschriebene Notiz wusste bis
+    // 0.23.0 nichts davon. Ohne diese Weitergabe endet die Information mit der Sitzung.
+    const { view, calls } = mkView({
+      transcribeStream: async (_sp: string, _it: ImgItem, onContent: any) => { onContent("halb"); return { content: "halb", reasoning: "", model: "vm", finishReason: "length" }; },
+    });
+    await view.onOpen(); await view.run();
+    all(view.contentEl, "img2md-write")[0].click();
+    await Promise.resolve(); await Promise.resolve();
+    expect(calls.written[0][0].truncated).toBe(true);
+  });
+
+  it("gibt kein truncated weiter, wenn die Antwort normal endete", async () => {
+    const { view, calls } = mkView();
+    await view.onOpen(); await view.run();
+    all(view.contentEl, "img2md-write")[0].click();
+    await Promise.resolve(); await Promise.resolve();
+    expect(calls.written[0][0].truncated).toBeUndefined();
+  });
+
   it("'angelegt'-Zeile öffnet die Notiz per Klick", async () => {
     const { view, calls } = mkView({ writeTranscripts: async () => [{ path: "foto.md", body: null }] });
     await view.onOpen(); await view.run();

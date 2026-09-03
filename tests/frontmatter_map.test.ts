@@ -13,6 +13,7 @@ describe("DEFAULT_FM_MAP", () => {
       authorDescribed: "described_by",
       created: "created",
       pages: "pages",
+      truncated: "truncated",
       kindKey: "kind",
       kindTranscript: "transcript",
       kindDescription: "description",

@@ -81,13 +81,17 @@ export function findImageEmbeds(content: string): ImageEmbed[] {
  *  `map` defaultet auf DEFAULT_FM_MAP — bestehende Direktaufrufer (z. B. pdf_to_md.ts via rewriteTranscript)
  *  bleiben ohne Änderung kompatibel. */
 export function buildTranscriptNote(
-  o: { imageLink: string; sourceName?: string; date: string; model: string; transcript: string },
+  o: { imageLink: string; sourceName?: string; date: string; model: string; transcript: string; truncated?: boolean },
   map: FrontmatterMap = DEFAULT_FM_MAP,
 ): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');   // YAML-Doppelquote-String — schützt vor Frontmatter-Bruch
   const lines = ["---", `${map.sourceImage}: "[[${esc(o.imageLink)}]]"`];
   if (o.sourceName !== undefined) lines.push(`${map.sourceNote}: "[[${esc(o.sourceName)}]]"`);
   lines.push(`${map.kindKey}: ${map.kindTranscript}`);
+  // NUR bei true. `truncated: false` waere eine Zusage, die keine Alt-Notiz einloest: der
+  // Key existiert erst seit 0.23.0, davor geschriebene Notizen wissen nichts ueber ihre
+  // Vollstaendigkeit. Abwesenheit heisst deshalb „vollstaendig ODER unbekannt".
+  if (o.truncated === true) lines.push(`${map.truncated}: true`);
   lines.push(`${map.created}: ${o.date}`, `${map.authorTranscribed}: "${esc(o.model)}"`, "---", `![[${o.imageLink}]]`, "", o.transcript, "");
   return lines.join("\n");
 }
@@ -121,7 +125,7 @@ export function buildDescriptionNote(
  *  Quelle/Quellnotiz/created bleiben damit unverändert. `map` defaultet auf DEFAULT_FM_MAP. */
 export function rewriteTranscript(
   old: string,
-  o: { model: string; sourceLink: string; body: string; pages?: string },
+  o: { model: string; sourceLink: string; body: string; pages?: string; truncated?: boolean },
   map: FrontmatterMap = DEFAULT_FM_MAP,
 ): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
@@ -135,6 +139,18 @@ export function rewriteTranscript(
     frontmatter = pagesRe.test(frontmatter)
       ? frontmatter.replace(pagesRe, `${map.pages}: "${o.pages}"`)
       : `${frontmatter}\n${map.pages}: "${o.pages}"`;
+  }
+  // Drei Zustaende, nicht zwei: `true` setzt den Key, `false` ENTFERNT ihn, `undefined`
+  // laesst das Frontmatter in Ruhe. Das mittlere ist der eigentliche Grund — eine erneut
+  // transkribierte, jetzt vollstaendige Notiz darf nicht weiter behaupten, sie sei
+  // abgeschnitten; ein stehengebliebenes `true` ist schlimmer als ein fehlender Key, weil es
+  // eine Aussage ist und keine Luecke. Das dritte schuetzt Direktaufrufer, die nichts ueber
+  // Truncation wissen (pdf_to_md), davor, eine korrekte Aussage zu loeschen.
+  if (o.truncated !== undefined) {
+    const truncRe = new RegExp(`^${kEsc(map.truncated)}:.*$\\r?\\n?`, "m");
+    frontmatter = frontmatter.replace(truncRe, "");
+    if (o.truncated) frontmatter = `${frontmatter}\n${map.truncated}: true`;
+    frontmatter = frontmatter.replace(/\n{2,}/g, "\n").replace(/\n$/, "");
   }
   return `---\n${frontmatter}\n---\n![[${o.sourceLink}]]\n\n${o.body}\n`;
 }
@@ -229,7 +245,7 @@ export interface ImgToMdIO {
  *  kein replaceEmbed, keine source_note, Ablage unter opts.destDir. */
 export async function writeTranscripts(
   io: ImgToMdIO, sourcePath: string,
-  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; knownBody?: string }[],
+  entries: { raw: string; link: string; content: string; model: string; overwritePath?: string; embed?: boolean; knownBody?: string; truncated?: boolean }[],
   opts?: { selfSource?: boolean; destDir?: string; map?: FrontmatterMap },
 ): Promise<{ results: { path: string | null; body: string | null }[] }> {
   const self = opts?.selfSource === true;
@@ -254,13 +270,16 @@ export async function writeTranscripts(
           bodyToWrite = chosen;
         }
       }
-      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: bodyToWrite }, map));
+      // `=== true` statt Durchreichen: `card.truncated` ist im State `true` ODER `undefined`,
+      // nie `false`. Ohne die Normalisierung bliebe beim Override ein alter `truncated`-Key
+      // stehen, obwohl die neue Fassung vollstaendig ist.
+      await io.writeNote(e.overwritePath, rewriteTranscript(old, { model: e.model, sourceLink: e.link, body: bodyToWrite, truncated: e.truncated === true }, map));
       results.push({ path: e.overwritePath, body: bodyToWrite });
       continue;
     }
     const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
     const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", destDir);
-    await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript }, map));
+    await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript, truncated: e.truncated }, map));
     if (!self && e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     results.push({ path: newPath, body: transcript });
   }

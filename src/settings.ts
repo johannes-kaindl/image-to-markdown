@@ -189,6 +189,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       ["authorDescribed", "settings.fmMap.authorDescribed"],
       ["created", "settings.fmMap.created"],
       ["pages", "settings.fmMap.pages"],
+      ["truncated", "settings.fmMap.truncated"],
       ["kindKey", "settings.fmMap.kindKey"],
       ["kindTranscript", "settings.fmMap.kindTranscript"],
       ["kindDescription", "settings.fmMap.kindDescription"],

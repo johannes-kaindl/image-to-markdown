@@ -52,7 +52,7 @@ export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
   scan: (sourcePath: string) => Promise<ImgItem[]>;
   transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string; finishReason?: string }>;
-  writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; knownBody?: string }[]) => Promise<{ path: string | null; body: string | null }[]>;
+  writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; knownBody?: string; truncated?: boolean }[]) => Promise<{ path: string | null; body: string | null }[]>;
   writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }, knownBody?: string) => Promise<{ path: string | null; body: string | null }>;
   /** Modus des „Los"-Buttons (Transkribieren ⇄ Beschreiben). Rein Lauf-Typ-Steuerung — Bild-Auswahl
    *  und Karten-Rendering bleiben pro Karte an `card.mode` (aus setDone/setDescribed), nicht an diesem
@@ -859,7 +859,7 @@ export class ImgToMdView extends ItemView {
       const op = card.item.existingTranscriptPath;
       const knownBody = op ? this.sessionOwned.get(op) : undefined;
       const transcript = card.text.trim();
-      const [res] = await this.deps.writeTranscripts(path, [{ item: card.item, content: transcript, model: card.model, knownBody }]);
+      const [res] = await this.deps.writeTranscripts(path, [{ item: card.item, content: transcript, model: card.model, knownBody, truncated: card.truncated }]);
       if (res?.path) {
         this.sessionOwned.set(res.path, res.body ?? transcript);
         if (!card.item.existingTranscriptPath) card.item.existingTranscriptPath = res.path;
@@ -898,7 +898,7 @@ export class ImgToMdView extends ItemView {
       const transcripts = part.images.map(x => x.card.text.trim());
       const entries = part.images.map((x, k) => {
         const op = x.card.item.existingTranscriptPath;
-        return { item: x.card.item, content: transcripts[k], model: x.card.model, knownBody: op ? this.sessionOwned.get(op) : undefined };
+        return { item: x.card.item, content: transcripts[k], model: x.card.model, knownBody: op ? this.sessionOwned.get(op) : undefined, truncated: x.card.truncated };
       });
       const results = await this.deps.writeTranscripts(path, entries);
       part.images.forEach((x, k) => {

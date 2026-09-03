@@ -11,6 +11,7 @@ export interface FrontmatterMap {
   authorDescribed: string;
   created: string;
   pages: string;
+  truncated: string;
   kindKey: string;
   kindTranscript: string;
   kindDescription: string;
@@ -26,6 +27,7 @@ export const DEFAULT_FM_MAP: FrontmatterMap = {
   authorDescribed: "described_by",
   created: "created",
   pages: "pages",
+  truncated: "truncated",
   kindKey: "kind",
   kindTranscript: "transcript",
   kindDescription: "description",

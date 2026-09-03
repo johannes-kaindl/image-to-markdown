@@ -6,6 +6,21 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Eine am Token-Limit abgeschnittene Transkript-Notiz sagt das jetzt selbst** —
+  `truncated: true` im Frontmatter. Die Sidebar-Karte zeigt den Hinweis seit 0.20.0, aber die
+  Karte lebt nur in der Sitzung: wer die Notiz später öffnet, sah ein unvollständiges
+  Transkript, das wie ein vollständiges aussieht. Der Key ist wie die übrigen in den
+  Einstellungen umbenennbar (Frontmatter-Mapping) und wandert bei einer Mapping-Migration mit.
+
+  **Der Key wird nur bei `true` geschrieben, nie als `false`.** Seine Abwesenheit heißt
+  „vollständig **oder** unbekannt" — vor dieser Version geschriebene Notizen wissen nichts über
+  ihre Vollständigkeit, und ein `false` wäre eine Zusage, die für sie niemand einlösen kann.
+  Wird eine abgeschnittene Notiz später erneut transkribiert und ist dann vollständig,
+  verschwindet der Key wieder; ein stehengebliebenes `true` wäre schlimmer als eine Lücke, weil
+  es eine Aussage ist.
+
 ## [0.22.0] — 2026-09-02
 
 ### Geändert
