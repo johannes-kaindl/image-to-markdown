@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-09-03
+
 ### Hinzugefügt
 
 - **Eine am Token-Limit abgeschnittene Transkript-Notiz sagt das jetzt selbst** —
