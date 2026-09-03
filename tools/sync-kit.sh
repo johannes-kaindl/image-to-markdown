@@ -62,12 +62,19 @@ relayer() { # relayer <vendored-file>
   # (1) Umschreiben, und feststellen OB umgeschrieben wurde. Das Muster ankert am
   #     Anfuehrungszeichen, nicht an 'from "': das Kit schreibt src/pure/pdf/* mit einfachen
   #     Anfuehrungszeichen. `cmp` statt md5, weil macOS (md5) und CI (md5sum) verschieden heissen.
-  sed 's|\(["'"'"']\)\.\./pure/|\1../kit/|g' "$f" > "$f.tmp"
+  # ZWEI Muster, seit obsidian-kit 2ab1bb5: die gekoppelte Schicht importierte frueher
+  # `../pure/x`, seit dem code-kit-Umzug importiert sie `../vendor/code-kit/{pure,web}/x`.
+  # Wer nur das alte kennt, laesst den neuen Import stehen — er zeigt ins Leere, und der
+  # Fehler erscheint nicht hier, sondern spaeter im Typecheck/Lint einer anderen Datei
+  # (gemessen 2026-09-03 an vim-dojo: acht TS2307 auf einmal in endpoint-list.ts).
+  sed -e 's|\(["'"'"']\)\.\./pure/|\1../kit/|g' \
+      -e 's|\(["'"'"']\)\.\./vendor/code-kit/pure/|\1../kit/|g' \
+      -e 's|\(["'"'"']\)\.\./vendor/code-kit/web/|\1../kit/|g' "$f" > "$f.tmp"
   if cmp -s "$f" "$f.tmp"; then rm -f "$f.tmp"; return 0; fi   # nichts zu tun, KEINE Notiz
   mv "$f.tmp" "$f"
 
   # (2) Gegenprobe: bleibt ein ../pure/ stehen, bricht der Build spaeter und woanders.
-  if grep -q '\.\./pure/' "$f"; then
+  if grep -qE '\.\./(pure|vendor/code-kit)/' "$f"; then
     echo "sync-kit: '../pure/' in $f nicht umgeschrieben — Muster pruefen" >&2; exit 1
   fi
 
