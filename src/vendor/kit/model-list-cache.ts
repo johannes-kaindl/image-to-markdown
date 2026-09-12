@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.27.0, src/pure/model-list-cache.ts
+// vendored from code-kit@0.6.0, src/ts/pure/model-list-cache.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Modell-Listen je Endpunkt, mit Cache und Generationszähler.
  *
  * Herkunft: vault-rag/src/settings.ts (loadModelList/invalidateModelList/modelListGeneration,

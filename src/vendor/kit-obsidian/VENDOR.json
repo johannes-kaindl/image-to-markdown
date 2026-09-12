@@ -1,8 +1,7 @@
 {
   "source": "obsidian-kit",
-  "version": "0.27.0",
-  "sha": "548041b",
-  "ref": "0.27.0",
+  "version": "0.34.1",
+  "sha": "cfce2c0",
   "vendored": "clipboard.ts, endpoint-list.ts, folder-suggest.ts, model-picker.ts, settings_walker.ts",
-  "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. EINE mechanische Abweichung in clipboard.ts: die kit-internen Importe ../pure/ -> ../kit/ (Vendor-Layout; im Kit sind src/obsidian und src/pure Geschwister, hier kit-obsidian und kit). Wird bei jedem Re-Vendor reproduziert, sonst darf nichts abweichen. Praezedenz: kuro-gamification, markdown-presentation, vault-crews, vim-dojo."
+  "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. clipboard.ts, endpoint-list.ts und model-picker.ts tragen EINE mechanische Abweichung: kit-interne Importe ../vendor/code-kit/{pure,web}/ sind auf ../kit/ umgeschrieben (Vendor-Layout). Bei jedem Re-Vendoring reproduzieren; sonst darf nichts abweichen. Praezedenz: vim-dojo, markdown-presentation, vault-crews, kuro-gamification, lingotuner, vault-rag. Eigene Ablage neben src/vendor/kit/, weil diese Module \"obsidian\" importieren."
 }

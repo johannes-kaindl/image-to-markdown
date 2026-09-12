@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.27.0, src/pure/endpoint_config.ts
+// vendored from code-kit@0.6.0, src/ts/pure/endpoint_config.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Obsidian-freie Wahrheit für Endpunkt-Einträge: Struktur, Auth-Header, Modellwahl,
  *  Migration alter String-Listen und Listen-Bearbeitung.
  *
@@ -23,7 +23,22 @@ export function authHeaders(apiKey?: string): Record<string, string> {
   return k ? { Authorization: `Bearer ${k}` } : {};
 }
 
-/** Modell-Override des Endpunkts, sonst das globale Modell. */
+/** Modell-Override des Endpunkts, sonst das globale Modell.
+ *
+ *  @deprecated Migrationskrücke, terminiert. Ein Modellname existiert nur auf dem Endpunkt, der
+ *  ihn in `/v1/models` meldet — auf der Nachbarzeile ist er bedeutungslos. „Globales Modell +
+ *  Override je Zeile" ist damit dieselbe Information an zwei Orten plus Vorrangregel, und der
+ *  Leerwert wird still bedeutungstragend („leer heißt: nimm das globale"). Das Kit hat die
+ *  Struktur nicht erfunden, sondern von seinen ersten Konsumenten geerbt — und gab sie seither an
+ *  jeden neuen weiter, auch an die, die nie ein globales Feld hatten.
+ *
+ *  **Statt dessen:** das Modell gehört in die Zeile (`cfg.model`), und die Modell-Liste kommt
+ *  ohnehin je Endpunkt (`model-list-cache`). Ein Konsument ohne globales Feld lässt in
+ *  `obsidian-kit`s `EndpointListOptions` seit 0.29.0 einfach den `globalModel`-Callback weg.
+ *
+ *  Entfernt wird die Funktion erst, wenn die fünf Konsumenten mit globalem Feld migriert sind
+ *  (obsidian-transmute, markdown-presentation, image-to-markdown, kuro-gamification, vim-dojo) —
+ *  die Reihenfolge ist bindend, denn solange sie im Vertrag steht, erbt sie jeder Neue. */
 export function effectiveModel(cfg: EndpointConfig, globalModel: string): string {
   const m = cfg.model?.trim();
   return m ? m : globalModel;

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.27.0, src/pure/diff.ts
+// vendored from code-kit@0.6.0, src/ts/pure/diff.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Zeilen-Diff (LCS) + Hunk-Gruppierung + selektives Übernehmen — obsidian-frei,
  *  in Node testbar (PROF-OBS-03/04).
  *
@@ -28,22 +28,32 @@ export function diffLines(oldText: string, newText: string): DiffLine[] {
   const a = toLines(oldText);
   const b = toLines(newText);
   const n = a.length, m = b.length;
-  // lcs[i][j] = Länge der LCS von a[i..] und b[j..]
-  const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  // lcs(i,j) = Länge der LCS von a[i..] und b[j..]. Flach statt verschachtelt: der
+  // Zeilenzugriff einer number[][] ist unter --noUncheckedIndexedAccess `| undefined`
+  // und müsste an jeder der acht Stellen einzeln entschärft werden. Hier trägt der
+  // Default `?? 0` den Rand des Algorithmus — außerhalb der Matrix IST die LCS-Länge 0,
+  // genau dafür ist sie (n+1)×(m+1) mit Nullrand. Kein `!`, keine Behauptung.
+  const w = m + 1;
+  const lcs = new Array<number>((n + 1) * w).fill(0);
+  const at = (i: number, j: number): number => lcs[i * w + j] ?? 0;
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
-      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+      lcs[i * w + j] = a[i] === b[j] ? at(i + 1, j + 1) + 1 : Math.max(at(i + 1, j), at(i, j + 1));
     }
   }
   const out: DiffLine[] = [];
   let i = 0, j = 0;
   while (i < n && j < m) {
-    if (a[i] === b[j]) { out.push({ kind: "ctx", text: a[i] }); i++; j++; }
-    else if (lcs[i + 1][j] >= lcs[i][j + 1]) { out.push({ kind: "del", text: a[i] }); i++; }
-    else { out.push({ kind: "add", text: b[j] }); j++; }
+    // i < n === a.length und j < m === b.length — beide Zugriffe liegen im Feld. Einmal
+    // hier gebunden, statt in jedem der fünf Zweige erneut indiziert.
+    const ai = a[i], bj = b[j];
+    if (ai === undefined || bj === undefined) break;
+    if (ai === bj) { out.push({ kind: "ctx", text: ai }); i++; j++; }
+    else if (at(i + 1, j) >= at(i, j + 1)) { out.push({ kind: "del", text: ai }); i++; }
+    else { out.push({ kind: "add", text: bj }); j++; }
   }
-  while (i < n) { out.push({ kind: "del", text: a[i] }); i++; }
-  while (j < m) { out.push({ kind: "add", text: b[j] }); j++; }
+  for (; i < n; i++) { const ai = a[i]; if (ai !== undefined) out.push({ kind: "del", text: ai }); }
+  for (; j < m; j++) { const bj = b[j]; if (bj !== undefined) out.push({ kind: "add", text: bj }); }
   return out;
 }
 
@@ -56,12 +66,14 @@ export function groupHunks(diff: DiffLine[]): Hunk[] {
   const hunks: Hunk[] = [];
   let cur: DiffLine[] | null = null;
   let start = 0;
-  for (let i = 0; i < diff.length; i++) {
-    if (diff[i].kind === "ctx") {
+  // Iteration statt Index: `entries()` liefert das Element als `DiffLine`, während
+  // `diff[i]` unter --noUncheckedIndexedAccess `DiffLine | undefined` wäre.
+  for (const [i, line] of diff.entries()) {
+    if (line.kind === "ctx") {
       if (cur) { hunks.push({ lines: cur, startIndex: start }); cur = null; }
     } else {
       if (!cur) { cur = []; start = i; }
-      cur.push(diff[i]);
+      cur.push(line);
     }
   }
   if (cur) hunks.push({ lines: cur, startIndex: start });
@@ -77,12 +89,13 @@ export function applySelection(diff: DiffLine[], selected: boolean[]): string {
   const out: string[] = [];
   let i = 0;
   while (i < diff.length) {
-    if (diff[i].kind === "ctx") { out.push(diff[i].text); i++; continue; }
+    const line = diff[i];
+    if (line === undefined) break; // i < diff.length — unerreichbar, aber belegt statt behauptet
+    if (line.kind === "ctx") { out.push(line.text); i++; continue; }
     const take = takeAdd.has(i); // i ist ein Hunk-Start (startIndex)
-    while (i < diff.length && diff[i].kind !== "ctx") {
-      if (take && diff[i].kind === "add") out.push(diff[i].text);
-      if (!take && diff[i].kind === "del") out.push(diff[i].text);
-      i++;
+    for (let cur = diff[i]; i < diff.length && cur !== undefined && cur.kind !== "ctx"; cur = diff[++i]) {
+      if (take && cur.kind === "add") out.push(cur.text);
+      if (!take && cur.kind === "del") out.push(cur.text);
     }
   }
   return out.join("\n");

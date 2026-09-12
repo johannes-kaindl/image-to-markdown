@@ -1,9 +1,14 @@
-// vendored from obsidian-kit#0.27.0, src/pure/sse.ts
-/** Akkumuliert OpenAI-SSE-Deltas (content + reasoning_content) aus einem (Teil-)Buffer;
+// vendored from code-kit@0.6.0, src/ts/pure/sse.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+/** Akkumuliert OpenAI-SSE-Deltas (content + Reasoning) aus einem (Teil-)Buffer;
  *  unvollständige letzte Zeile → rest. `model` = erstes im Buffer gesehenes Chunk-`model`-Feld.
  *  `finishReason` = erstes non-empty `choices[0].finish_reason` (OpenAI sendet in Zwischen-Chunks
  *  `null`, im letzten Chunk den String) — erlaubt dem Aufrufer, eine Token-Limit-Truncation zu
  *  erkennen (`finishReason === "length"`). Reine Funktion — kein Zustand.
+ *
+ *  Reasoning speist sich aus drei Delta-Feld-Varianten — pro Delta zählt genau eine, in dieser
+ *  Rangfolge: `reasoning_content` (DeepSeek-Stil) → `reasoning` (MLX mlx_lm.server) → `thinking`
+ *  (manche Forks). Fehlt `delta`, wird `choices[0].message` gelesen (Server, die trotz
+ *  `stream: true` volle Message-Objekte schicken).
  *
  *  Der Transport (`streamSSE`) bleibt bewusst plugin-lokal: er divergiert je nach Runtime
  *  (fetch ReadableStream vs. XMLHttpRequest, PROF-OBS-12) und ist nicht teilbar.
@@ -25,13 +30,15 @@ export function parseSSE(buffer: string): { content: string[]; reasoning: string
     const data = t.slice(5).trim();
     if (data === "[DONE]") { done = true; continue; }
     try {
-      const j = JSON.parse(data) as { model?: string; choices?: { delta?: { content?: string; reasoning_content?: string }; finish_reason?: string | null }[] };
+      type Delta = { content?: string; reasoning_content?: string; reasoning?: string; thinking?: string };
+      const j = JSON.parse(data) as { model?: string; choices?: { delta?: Delta; message?: Delta; finish_reason?: string | null }[] };
       if (model === undefined && typeof j.model === "string") model = j.model;
       const c0 = j.choices?.[0];
       if (finishReason === undefined && typeof c0?.finish_reason === "string" && c0.finish_reason) finishReason = c0.finish_reason;
-      const d = c0?.delta;
+      const d = c0?.delta ?? c0?.message;
       if (typeof d?.content === "string") content.push(d.content);
-      if (typeof d?.reasoning_content === "string") reasoning.push(d.reasoning_content);
+      const reason = [d?.reasoning_content, d?.reasoning, d?.thinking].find((v) => typeof v === "string" && v);
+      if (reason !== undefined) reasoning.push(reason);
     } catch { /* unvollständig — sollte bei kompletten Zeilen nicht passieren */ }
   }
   return { content, reasoning, model, finishReason, rest, done };

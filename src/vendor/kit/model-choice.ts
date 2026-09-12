@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.27.0, src/pure/model-choice.ts
+// vendored from code-kit@0.6.0, src/ts/pure/model-choice.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Was das Modell-Feld zeigen soll — pure, entscheidet nur WAS, nie WIE.
  *
  * Herkunft: koda-agent/src/core/llm/model-choice.ts (2026-08-08), das seinerseits aus

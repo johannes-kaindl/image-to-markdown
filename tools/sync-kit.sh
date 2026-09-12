@@ -1,81 +1,110 @@
 #!/bin/sh
-# Re-vendor kit modules from ../obsidian-kit. Run after kit updates.
-#
-# Zielordner ist Vertrag, nicht Geschmack: obsidian-kit/src/pure/* -> src/vendor/kit/,
-# obsidian-kit/src/obsidian/* -> src/vendor/kit-obsidian/. Die pure-Schicht bleibt
-# obsidian-frei (PROF-OBS-03/04); ein obsidian-importierendes Modul unter src/vendor/kit/
-# faellt in den Nachbar-Repos durch deren check:pure.
-#
-# BEWUSST NICHT hier: tests/vendor/kit/obsidian-mock.ts. Die lokale Kopie steht auf 0.3.0
-# und ist gegenueber obsidian-kit/src/testing/obsidian-mock.ts echt gedriftet (677 <-> 804
-# Zeilen). Wer sie mitzieht, tauscht die Testbasis des GESAMTEN Repos in derselben Runde
-# aus — ein rotes Gate waere dann keinem Diff mehr zuzuordnen. Eigene Aufgabe, eigener
-# Gate-Lauf; ihr Pin steht bis dahin in ihrer Stempelzeile.
+# uebernommen aus lingotuner/tools/sync-kit.sh, 2026-09-12
+# Re-vendor kit modules from ../obsidian-kit (+ ../../code-kit). Run after kit updates.
 set -e
 
 KIT="${KIT_DIR:-../obsidian-kit}"
-[ -d "$KIT/.git" ] || { echo "Kit nicht gefunden unter $KIT (KIT_DIR setzen)" >&2; exit 1; }
+# Zweite Quelle seit obsidian-kit 2ab1bb5 ("domaenenfreie pure-Teilmenge zieht nach code-kit"):
+# ALLE hier vendorten pure-Module liegen dort, nicht mehr unter obsidian-kit/src/pure/.
+# Bis 2026-09-12 kopierte dieses Skript weiter von der alten Stelle und starb am ersten Modul
+# — mit einem Schaden, der groesser ist als der Abbruch: `set -e` beendet den Lauf, also
+# laufen die gekoppelten Module nicht mehr mit und BEIDE VENDOR.json werden nicht geschrieben.
+# Die eine Datei, in der man den Vendor-Stand nachschlaegt, behauptet danach den alten — leise.
+#
+# obsidian-kit traegt unter src/vendor/code-kit/ eigene Kopien einiger Module; die werden hier
+# bewusst NICHT genommen. Eine Zwischenkopie als Quelle zu nehmen erzeugt eine Kopier-Kette,
+# und die sieht bei der naechsten Zaehlung wie ein unabhaengiger Beleg aus.
+CODE_KIT="${CODE_KIT_DIR:-../../code-kit}"
+[ -d "$KIT/src/pure" ] || { echo "Kit nicht gefunden unter $KIT (KIT_DIR setzen)" >&2; exit 1; }
+[ -d "$CODE_KIT/src/ts" ] || { echo "code-kit nicht gefunden unter $CODE_KIT (CODE_KIT_DIR setzen)" >&2; exit 1; }
+# CORE-META-22: gelesen wird aus einer FESTEN REF, nicht aus dem Arbeitsstand des
+# Nachbar-Repos. Ein `cp` aus dessen Worktree koppelt dieses Repo an einen fremden HEAD.
+# Default ist die package.json-Version der Quelle; ein Upgrade ist eine BEWUSSTE Handlung.
+VER="${KIT_REF:-$(node -p "require('$KIT/package.json').version")}"
+CODE_VER="${CODE_KIT_REF:-$(node -p "require('$CODE_KIT/package.json').version")}"
+for paar in "$KIT|$VER" "$CODE_KIT|$CODE_VER"; do
+  repo=${paar%%|*}; ref=${paar##*|}
+  git -C "$repo" rev-parse --verify --quiet "$ref^{commit}" >/dev/null || {
+    echo "FEHLER: Ref '$ref' existiert nicht in $repo." >&2
+    echo "  Entweder ist die Version dort ungetaggt, oder KIT_REF/CODE_KIT_REF setzen." >&2
+    exit 2
+  }
+done
+SHA=$(git -C "$KIT" rev-parse --short "$VER^{commit}")
 
-# CORE-META-22: aus einer FESTEN REF lesen, nicht aus dem Arbeitsstand. Ein `cp` aus
-# ../obsidian-kit liefert, was dort gerade ausgecheckt ist — ein Stand, den kein Commit
-# traegt und den der Stempel unten trotzdem beglaubigen wuerde. Konkret gemessen am
-# 2026-08-30: das Kit stand auf 0.28.0, wo endpoint-list.ts bereits aus ../vendor/code-kit/
-# importiert; ein Arbeitsstand-Lauf haette hier Importe ins Leere vendoriert.
-# Default ist der bereits gepinnte Stand — NICHT pauschal eine Versionsnummer.
-KIT_REF="${KIT_REF:-$(node -p "require('./src/vendor/kit/VENDOR.json').version" 2>/dev/null || echo HEAD)}"
-git -C "$KIT" rev-parse --verify --quiet "$KIT_REF^{commit}" >/dev/null \
-  || { echo "sync-kit: Ref '$KIT_REF' existiert nicht in $KIT (KIT_REF setzen)" >&2; exit 1; }
-kitcat() { git -C "$KIT" show "$KIT_REF:$1"; }   # eine Datei aus der Ref lesen
-kitcat src/pure/endpoint.ts >/dev/null 2>&1 \
-  || { echo "sync-kit: $KIT_REF traegt kein src/pure/ — falsche Ref?" >&2; exit 1; }
-VER=$(kitcat package.json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
-SHA=$(git -C "$KIT" rev-parse --short "$KIT_REF^{commit}")
+# Ein pures Modul kann in drei Schichten liegen. Statt fester Zuordnung wird gesucht — die
+# naechste Umschichtung soll dieses Skript nicht wieder toeten, sondern nur einen anderen
+# Fundort ergeben. quelle_fuer <lokaler-name> <quell-basename>: der zweite Parameter ist
+# fast immer identisch zum ersten — Ausnahme think.ts (Quelle heisst think-splitter.ts).
+# Ausgabe: <repo>|<ref>|<quelle>|<quell-relativer-pfad>|<version>
+quelle_fuer() {
+  lokal="$1"; quellname="${2:-$1}"
+  for kandidat in \
+    "$KIT|$VER|obsidian-kit|src/pure/$quellname.ts|$VER" \
+    "$CODE_KIT|$CODE_VER|code-kit|src/ts/pure/$quellname.ts|$CODE_VER" \
+    "$CODE_KIT|$CODE_VER|code-kit|src/ts/web/$quellname.ts|$CODE_VER"; do
+    repo=$(printf '%s' "$kandidat" | cut -d'|' -f1)
+    ref=$(printf '%s' "$kandidat" | cut -d'|' -f2)
+    rel=$(printf '%s' "$kandidat" | cut -d'|' -f4)
+    # In der REF nachsehen, nicht im Worktree — sonst faende die Suche eine Datei, die der
+    # Lesevorgang danach nicht bekommt.
+    if git -C "$repo" cat-file -e "$ref:$rel" 2>/dev/null; then
+      printf '%s\n' "$kandidat"; return 0
+    fi
+  done
+  return 1
+}
 
-# Stempelform DIESES Repos: '#' statt '@', Kit-Pfad, kein Zusatz — so tragen es die neun
-# vorbestehenden Kopien seit 0.3.0. Bewusst nicht die koda-Form ('@' + "do not hand-edit;
-# re-vendor via ..."), damit ein Vendoring-Commit nicht nebenbei zehn Dateien umformatiert
-# und dabei die eine echte Aenderung im Diff versteckt.
-stamp() { # stamp <vendored-file> <kit-relative-path>
-  header="// vendored from obsidian-kit#$VER, $2"
+# In eine .tmp lesen und erst bei Erfolg verschieben — eine Ausgabe-Umleitung legt die
+# Zieldatei an, BEVOR der Lesebefehl laeuft, und hinterlaesst sonst einen Torso, der mit
+# Stempelzeile wie ein gueltiges Vendoring aussieht.
+hole() { # hole <repo> <ref> <quell-pfad> <ziel>
+  git -C "$1" show "$2:$3" > "$4.tmp" || { rm -f "$4.tmp"; return 1; }
+  mv "$4.tmp" "$4"
+}
+
+stamp() { # stamp <vendored-file> <quell-relativer-pfad> [<quelle> <version>]
+  quelle=${3:-obsidian-kit}
+  version=${4:-$VER}
+  header="// vendored from $quelle@$version, $2 — do not hand-edit; re-vendor via tools/sync-kit.sh"
   printf '%s\n' "$header" | cat - "$1" > "$1.tmp"
   mv "$1.tmp" "$1"
 }
 
 # Kit-interne Querimporte aufs Vendor-Layout umschreiben. Im Kit liegen die Schichten als
 # src/obsidian + src/pure nebeneinander, hier als src/vendor/kit-obsidian + src/vendor/kit —
-# "../pure/" zeigt hier also ins Leere. Das ist die EINZIGE zulaessige Abweichung von
-# verbatim; bei jedem Re-Vendor reproduzieren, sonst darf nichts abweichen.
-# Praezedenz: kuro-gamification, markdown-presentation, vault-crews, vim-dojo (seit 0.26.0).
+# `../pure/` zeigt hier also ins Leere. Das ist die EINZIGE zulaessige Abweichung von verbatim;
+# bei jedem Re-Vendor reproduzieren, sonst darf nichts abweichen.
+# Praezedenz: kuro-gamification, markdown-presentation, vault-crews, vim-dojo (bis 0.27.0),
+# lingotuner/vault-rag (ab dem code-kit-Split).
 relayer() { # relayer <vendored-file>
   f=$1
 
-  # (0) VORBEDINGUNG. Der Umschrieb setzt die Zwei-Ordner-Form der Kit-README voraus. Ohne
-  #     sie zeigt "../kit/" von src/vendor/kit/ aus auf DIE DATEI SELBST — und weil
-  #     obsidian/clipboard.ts und pure/clipboard.ts denselben Basenamen tragen, faellt das
-  #     erst im Typecheck auf (TS2305). Laut abbrechen statt still falsch vendorieren.
+  # (0) VORBEDINGUNG. Der Umschrieb setzt die Zwei-Ordner-Form der Kit-README voraus. Ohne sie
+  #     zeigt `../kit/` von src/vendor/kit/ aus auf DIE DATEI SELBST — und weil obsidian/clipboard.ts
+  #     und pure/clipboard.ts denselben Basenamen tragen, faellt das erst im Typecheck auf (TS2305).
+  #     Laut abbrechen statt still falsch vendorieren.
   case "$f" in
     src/vendor/kit-obsidian/*) ;;
     *) echo "sync-kit: $f liegt nicht in src/vendor/kit-obsidian/ — der Querimport-Umschrieb setzt die Zwei-Ordner-Form voraus (obsidian-kit/README.md)" >&2; exit 1 ;;
   esac
   [ -d src/vendor/kit ] || { echo "sync-kit: src/vendor/kit/ fehlt — pure-Schicht anlegen, bevor gekoppelte Module mit Querimport vendoriert werden" >&2; exit 1; }
 
-  # (1) Umschreiben, und feststellen OB umgeschrieben wurde. Das Muster ankert am
-  #     Anfuehrungszeichen, nicht an 'from "': das Kit schreibt src/pure/pdf/* mit einfachen
-  #     Anfuehrungszeichen. `cmp` statt md5, weil macOS (md5) und CI (md5sum) verschieden heissen.
+  # (1) Umschreiben, und feststellen OB umgeschrieben wurde. `cmp` statt md5: portabel,
+  #     macOS (md5) und GitHub-CI (md5sum) heissen verschieden.
   # ZWEI Muster, seit obsidian-kit 2ab1bb5: die gekoppelte Schicht importierte frueher
   # `../pure/x`, seit dem code-kit-Umzug importiert sie `../vendor/code-kit/{pure,web}/x`.
-  # Wer nur das alte kennt, laesst den neuen Import stehen — er zeigt ins Leere, und der
-  # Fehler erscheint nicht hier, sondern spaeter im Typecheck/Lint einer anderen Datei
-  # (gemessen 2026-09-03 an vim-dojo: acht TS2307 auf einmal in endpoint-list.ts).
+  # Beide muessen auf `../kit/` zeigen, denn hier liegt die pure Schicht flach unter
+  # src/vendor/kit/ — egal aus welcher Quelle das Modul stammt.
   sed -e 's|\(["'"'"']\)\.\./pure/|\1../kit/|g' \
       -e 's|\(["'"'"']\)\.\./vendor/code-kit/pure/|\1../kit/|g' \
       -e 's|\(["'"'"']\)\.\./vendor/code-kit/web/|\1../kit/|g' "$f" > "$f.tmp"
   if cmp -s "$f" "$f.tmp"; then rm -f "$f.tmp"; return 0; fi   # nichts zu tun, KEINE Notiz
   mv "$f.tmp" "$f"
 
-  # (2) Gegenprobe: bleibt ein ../pure/ stehen, bricht der Build spaeter und woanders.
+  # (2) Gegenprobe: bleibt eines der Muster stehen, bricht der Build spaeter und woanders.
   if grep -qE '\.\./(pure|vendor/code-kit)/' "$f"; then
-    echo "sync-kit: '../pure/' in $f nicht umgeschrieben — Muster pruefen" >&2; exit 1
+    echo "sync-kit: unaufgeloester Kit-Querimport in $f — Muster pruefen" >&2; exit 1
   fi
 
   # (3) Mitvendorier-Gegenprobe: jedes umgeschriebene Ziel muss auch wirklich da sein.
@@ -85,38 +114,87 @@ relayer() { # relayer <vendored-file>
     }
   done
 
-  note="// ONE mechanical deviation from verbatim: kit-internal imports ../pure/ → ../kit/ (vendor layout); reproduce on every re-vendor, nothing else may differ."
+  note="// ONE mechanical deviation from verbatim: kit-internal imports (../pure/ and ../vendor/code-kit/{pure,web}/) → ../kit/ (vendor layout); reproduce on every re-vendor, nothing else may differ."
   printf '%s\n' "$note" | cat - "$f" > "$f.tmp"
   mv "$f.tmp" "$f"
 }
 
 mkdir -p src/vendor/kit src/vendor/kit-obsidian
 
-# Nur die Module, die DIESES Repo wirklich konsumiert. Form "kit-modul" oder
-# "kit-modul:lokaler-name" — der Name weicht genau einmal ab: think-splitter.ts heisst hier
-# seit 0.3.0 think.ts und wird von vier Stellen so importiert (Inhalt bleibt verbatim).
-for m in capabilities clipboard diff endpoint endpoint_config endpoint_diagnostics error_body model-choice model-list-cache reasoning settings sse think-splitter:think; do
-  case "$m" in *:*) src=${m%%:*}; dst=${m#*:} ;; *) src=$m; dst=$m ;; esac
-  kitcat "src/pure/$src.ts" > "src/vendor/kit/$dst.ts"
-  stamp "src/vendor/kit/$dst.ts" "src/pure/$src.ts"
-  echo "vendored obsidian-kit#$VER/pure/$src.ts -> src/vendor/kit/$dst.ts"
+# think.ts hat einen abweichenden Quell-Basenamen (think-splitter.ts) — Praezedenz seit
+# obsidian-kit#0.27.0 (damals src/pure/think-splitter.ts), Konsumenten hier heissen weiter
+# think.ts. Deshalb ausserhalb der generischen Schleife, mit explizitem quellname-Argument.
+PURE_MODULE="capabilities clipboard diff endpoint endpoint_config endpoint_diagnostics error_body model-choice model-list-cache reasoning settings sse"
+OBSIDIAN_MODULE="clipboard endpoint-list folder-suggest model-picker settings_walker"
+
+# Die "vendored"-Zeile der VENDOR.json wird aus derselben Liste erzeugt, aus der kopiert wird.
+# Zwei Orte fuer dieselbe Wahrheit driften (CORE-META-16) — und zwar leise: die Datei, in der
+# man den Vendor-Stand nachschlaegt, waere dann die einzige, die ihn falsch nennt.
+liste() { for m in $1; do printf '%s.ts, ' "$m"; done | sed 's/, $//'; }
+
+# Erst ALLE Quellen aufloesen, dann kopieren: ein fehlendes Modul ist ein Aufbaufehler und
+# wird als solcher gemeldet, statt den Lauf auf halber Strecke abzubrechen.
+for m in $PURE_MODULE; do
+  quelle_fuer "$m" >/dev/null || {
+    echo "FEHLER: $m.ts liegt weder in $KIT/src/pure/ noch in $CODE_KIT/src/ts/{pure,web}/." >&2
+    echo "  Seit obsidian-kit 2ab1bb5 ist code-kit die Quelle der domaenenfreien Module." >&2
+    exit 2
+  }
+done
+quelle_fuer "think" "think-splitter" >/dev/null || {
+  echo "FEHLER: think-splitter.ts (Quelle von think.ts) liegt weder in $KIT/src/pure/ noch in $CODE_KIT/src/ts/pure/." >&2
+  exit 2
+}
+
+for m in $PURE_MODULE; do
+  fund=$(quelle_fuer "$m")
+  repo=$(printf '%s' "$fund" | cut -d'|' -f1)
+  ref=$(printf '%s' "$fund" | cut -d'|' -f2)
+  quelle=$(printf '%s' "$fund" | cut -d'|' -f3)
+  rel=$(printf '%s' "$fund" | cut -d'|' -f4)
+  ver=$(printf '%s' "$fund" | cut -d'|' -f5)
+  hole "$repo" "$ref" "$rel" "src/vendor/kit/$m.ts" || {
+    echo "FEHLER: $ref:$rel nicht lesbar in $repo" >&2; exit 2; }
+  stamp "src/vendor/kit/$m.ts" "$rel" "$quelle" "$ver"
+  echo "vendored $quelle@$ver/$rel"
 done
 
-for m in clipboard endpoint-list folder-suggest model-picker settings_walker; do
-  kitcat "src/obsidian/$m.ts" > "src/vendor/kit-obsidian/$m.ts"
-  relayer "src/vendor/kit-obsidian/$m.ts"
+fund=$(quelle_fuer "think" "think-splitter")
+repo=$(printf '%s' "$fund" | cut -d'|' -f1)
+ref=$(printf '%s' "$fund" | cut -d'|' -f2)
+quelle=$(printf '%s' "$fund" | cut -d'|' -f3)
+rel=$(printf '%s' "$fund" | cut -d'|' -f4)
+ver=$(printf '%s' "$fund" | cut -d'|' -f5)
+hole "$repo" "$ref" "$rel" "src/vendor/kit/think.ts" || {
+  echo "FEHLER: $ref:$rel nicht lesbar in $repo" >&2; exit 2; }
+stamp "src/vendor/kit/think.ts" "$rel" "$quelle" "$ver"
+echo "vendored $quelle@$ver/$rel (lokal: think.ts)"
+
+for m in $OBSIDIAN_MODULE; do
+  hole "$KIT" "$VER" "src/obsidian/$m.ts" "src/vendor/kit-obsidian/$m.ts" || {
+    echo "FEHLER: $VER:src/obsidian/$m.ts nicht lesbar" >&2; exit 2; }
+  # clipboard.ts, endpoint-list.ts und model-picker.ts tragen Querimporte auf
+  # ../vendor/code-kit/{pure,web}/. Ein pauschaler Aufruf waere wirkungslos, aber
+  # irrefuehrend — deshalb gezielt.
+  case "$m" in clipboard|endpoint-list|model-picker) relayer "src/vendor/kit-obsidian/$m.ts" ;; esac
   stamp "src/vendor/kit-obsidian/$m.ts" "src/obsidian/$m.ts"
-  echo "vendored obsidian-kit#$VER/obsidian/$m.ts"
+  echo "vendored obsidian-kit@$VER/obsidian/$m.ts"
 done
+
+mkdir -p tests/vendor/kit
+hole "$KIT" "$VER" "src/testing/obsidian-mock.ts" "tests/vendor/kit/obsidian-mock.ts" || {
+  echo "FEHLER: $VER:src/testing/obsidian-mock.ts nicht lesbar" >&2; exit 2; }
+stamp "tests/vendor/kit/obsidian-mock.ts" "src/testing/obsidian-mock.ts"
+echo "vendored obsidian-kit@$VER/testing/obsidian-mock.ts"
 
 cat > src/vendor/kit/VENDOR.json <<JSON
 {
   "source": "obsidian-kit",
   "version": "$VER",
   "sha": "$SHA",
-  "ref": "$KIT_REF",
-  "vendored": "capabilities.ts, clipboard.ts, diff.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, model-choice.ts, model-list-cache.ts, reasoning.ts, settings.ts, sse.ts, think.ts",
-  "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. think.ts ist obsidian-kit/src/pure/think-splitter.ts — nur der Dateiname weicht ab, der Inhalt ist verbatim. kit-obsidian/ siehe dessen VENDOR.json; tests/vendor/kit/obsidian-mock.ts steht weiter auf 0.3.0 und wird von diesem Skript bewusst nicht angefasst (Begruendung im Skript-Kopf)."
+  "code_kit_version": "$CODE_VER",
+  "vendored": "$(liste "$PURE_MODULE"), think.ts",
+  "note": "Verbatim snapshot aus ZWEI Quellen (obsidian-kit + code-kit); welche Datei woher stammt, sagt ihr eigener Kopf. think.ts stammt aus think-splitter.ts (abweichender lokaler Name seit obsidian-kit#0.27.0). Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien, die aus obsidian-kit stammen; code-kit-Herkunft steht je Datei im Kopf. kit-obsidian/ siehe dortige VENDOR.json."
 }
 JSON
 cat > src/vendor/kit-obsidian/VENDOR.json <<JSON
@@ -124,9 +202,17 @@ cat > src/vendor/kit-obsidian/VENDOR.json <<JSON
   "source": "obsidian-kit",
   "version": "$VER",
   "sha": "$SHA",
-  "ref": "$KIT_REF",
-  "vendored": "clipboard.ts, endpoint-list.ts, folder-suggest.ts, model-picker.ts, settings_walker.ts",
-  "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. EINE mechanische Abweichung in clipboard.ts: die kit-internen Importe ../pure/ -> ../kit/ (Vendor-Layout; im Kit sind src/obsidian und src/pure Geschwister, hier kit-obsidian und kit). Wird bei jedem Re-Vendor reproduziert, sonst darf nichts abweichen. Praezedenz: kuro-gamification, markdown-presentation, vault-crews, vim-dojo."
+  "vendored": "$(liste "$OBSIDIAN_MODULE")",
+  "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. clipboard.ts, endpoint-list.ts und model-picker.ts tragen EINE mechanische Abweichung: kit-interne Importe ../vendor/code-kit/{pure,web}/ sind auf ../kit/ umgeschrieben (Vendor-Layout). Bei jedem Re-Vendoring reproduzieren; sonst darf nichts abweichen. Praezedenz: vim-dojo, markdown-presentation, vault-crews, kuro-gamification, lingotuner, vault-rag. Eigene Ablage neben src/vendor/kit/, weil diese Module \"obsidian\" importieren."
 }
 JSON
-echo "VENDOR.json → $VER ($SHA, ref $KIT_REF)"
+cat > tests/vendor/kit/VENDOR.json <<JSON
+{
+  "source": "obsidian-kit",
+  "version": "$VER",
+  "sha": "$SHA",
+  "vendored": "obsidian-mock.ts",
+  "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh."
+}
+JSON
+echo "VENDOR.json → $VER ($SHA)"

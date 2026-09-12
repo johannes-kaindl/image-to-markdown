@@ -1,5 +1,5 @@
-// vendored from obsidian-kit#0.27.0, src/obsidian/endpoint-list.ts
-// ONE mechanical deviation from verbatim: kit-internal imports ../pure/ → ../kit/ (vendor layout); reproduce on every re-vendor, nothing else may differ.
+// vendored from obsidian-kit@0.34.1, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// ONE mechanical deviation from verbatim: kit-internal imports (../pure/ and ../vendor/code-kit/{pure,web}/) → ../kit/ (vendor layout); reproduce on every re-vendor, nothing else may differ.
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
  * Status-Icon, Rollenzeile, Drittanbieter-Hinweis und Preset-Knöpfe.
@@ -42,7 +42,9 @@ export interface EndpointListStrings {
    *  „globales Modell ()" in der Oberfläche. Die Vorlage hatte dafür einen Fallback
    *  (`globalModel() || "nicht gesetzt"`); der gehört jetzt dem Consumer, weil der
    *  Ersatztext ein Satz in seiner Sprache ist. */
-  emptyModelLabel(globalModel: string): string;
+  /** Nur nötig, wenn `globalModel` gesetzt ist — ohne globales Feld gibt es keine Leer-Option
+   *  zu beschriften. */
+  emptyModelLabel?(globalModel: string): string;
   modelHint(key: ModelHintKey): string;
   savedSuffix: string;
   refreshModels: string;
@@ -81,8 +83,21 @@ export interface EndpointListOptions {
    *  TypeScript löst eine Methoden-Intersection als Überladungsliste in Schreibreihenfolge auf —
    *  stünde `ModelListClient` vorn, käme am Aufruf die schmalere Signatur heraus. */
   clientFor(cfg: EndpointConfig): { probe(): Promise<EndpointStatus> } & ModelListClient;
-  /** Globales Modell, das gilt, wenn die Zeile keinen Override trägt. */
-  globalModel(): string;
+  /** Globales Modell, das gilt, wenn die Zeile keinen Override trägt.
+   *
+   *  **Optional, und das Fehlen ist eine Aussage.** Fehlt der Callback, gibt es kein globales
+   *  Modellfeld: das Zeilen-Modell ist die einzige Wahrheit, und die Leer-Option des Dropdowns
+   *  („nimm das globale") entfällt — sie hätte nichts mehr zu bedeuten. `emptyModelLabel` wird
+   *  dann nie gerufen.
+   *
+   *  Bis 0.29.0 war der Callback **Pflicht**, und das war ein Konstruktionsfehler: ein Modellname
+   *  existiert nur auf dem Endpunkt, der ihn in `/v1/models` meldet — auf der Nachbarzeile ist er
+   *  bedeutungslos. „Globales Modell + Override je Zeile" ist dieselbe Information an zwei Orten
+   *  plus Vorrangregel, und der Leerwert wird dabei still bedeutungstragend. Das Kit hat diese
+   *  Struktur nicht erfunden, sondern von seinen ersten Konsumenten geerbt und im Vertrag
+   *  festgeschrieben — womit sie jeder neue Konsument erbte, auch wer nie ein globales Feld hatte
+   *  (belegt an vault-crews, das 2026-08-14 einen Wert übergeben musste, den es nicht hat). */
+  globalModel?(): string;
   /** Nur Embedding-Listen: passt das (Override-)Modell dieser Zeile zum geladenen Index?
    *  Fehlt der Callback (Chat-Liste), gilt true — dort hängt kein Index am Modell. */
   modelFits?(cfg: EndpointConfig): boolean;
@@ -194,6 +209,18 @@ export function buildEndpointList(opts: EndpointListOptions): void {
         // „Modelle abrufen", Tab-Reload), da dieser Commit bewusst kein rerender() auslöst.
         opts.cache.invalidate(normalizeEndpoint(updated[i].url));
       }
+      // Ein URL-Commit setzt oder entfernt den Bezug zu (mindestens) einer URL — die alte UND
+      // die neue, denn beide koennen bereits eine (moeglicherweise laengst veraltete) Liste im
+      // Cache tragen: die alte, weil ihr Eintrag jetzt verwaist; die neue, weil genau diese URL
+      // schon einmal (unter einem anderen Eintrag) geladen wurde, z. B. nach Loeschen +
+      // Neuanlage derselben Adresse (gemeldet von image-to-markdown, 2026-09-12). Ohne beide
+      // Invalidierungen zeigt das Dropdown die Liste von VOR der Mutation weiter an.
+      if (field === "url") {
+        const oldUrl = before[i]?.url;
+        if (oldUrl) opts.cache.invalidate(normalizeEndpoint(oldUrl));
+        const newUrl = value.trim();
+        if (newUrl) opts.cache.invalidate(normalizeEndpoint(newUrl));
+      }
       opts.set(updated);
       const chain = opts.save().then(() => opts.reconnect());
       // Das Modell-Override entscheidet mit über die Rolle der Zeile (`skipped-model`).
@@ -237,11 +264,13 @@ export function buildEndpointList(opts: EndpointListOptions): void {
         // über die Oberfläche nicht mehr zurücknehmen (Einbahnstraße). Die Kit-Fassung von
         // resolveModelChoice kennt kein `emptyLabel`: die Option kommt sprachfrei mit leerem
         // Label, beschriftet wird sie erst hier, beim Zeichnen.
-        const choice = resolveModelChoice({ reachable, models, current: cfg.model ?? "", allowEmpty: true });
-        const labelled = {
+        // Die Leer-Option existiert nur, wo es ein globales Modell gibt, auf das sie zeigen kann.
+        const allowEmpty = opts.globalModel !== undefined;
+        const choice = resolveModelChoice({ reachable, models, current: cfg.model ?? "", allowEmpty });
+        const emptyLabel = allowEmpty ? opts.strings.emptyModelLabel?.(opts.globalModel?.() ?? "") : undefined;
+        const labelled = emptyLabel === undefined ? choice : {
           ...choice,
-          options: choice.options.map(o =>
-            o.value === "" ? { ...o, label: opts.strings.emptyModelLabel(opts.globalModel()) } : o),
+          options: choice.options.map(o => o.value === "" ? { ...o, label: emptyLabel } : o),
         };
         renderModelPicker({
           setting: s,
@@ -283,6 +312,9 @@ export function buildEndpointList(opts: EndpointListOptions): void {
         .setTooltip(opts.strings.remove)
         .onClick(() => {
           lockRows();
+          // Geht an commit() vorbei (kein blur-Feld) — die Invalidierung muss deshalb hier
+          // selbst passieren, sonst ueberlebt die Modell-Liste dieser URL ihren Eintrag.
+          opts.cache.invalidate(normalizeEndpoint(cfg.url));
           opts.set(applyEndpointEdit(opts.get(), i, "url", "", false));
           void opts.save()
             .then(() => opts.reconnect())
@@ -354,6 +386,9 @@ export function buildEndpointList(opts: EndpointListOptions): void {
         const cur = opts.get();
         if (cur.some(c => c.url === preset.url)) return;   // schon in der Liste — kein Duplikat anhängen
         lockRows();
+        // Geht an commit() vorbei — dieselbe URL kann von einem zuvor geloeschten Eintrag noch
+        // eine (veraltete) Liste im Cache tragen.
+        opts.cache.invalidate(normalizeEndpoint(preset.url));
         opts.set(applyEndpointEdit(cur, cur.length, "url", preset.url, true));
         void opts.save()
           .then(() => opts.reconnect())

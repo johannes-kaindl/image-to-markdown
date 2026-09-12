@@ -1,4 +1,4 @@
-// vendored from obsidian-kit#0.27.0, src/pure/reasoning.ts
+// vendored from code-kit@0.6.0, src/ts/pure/reasoning.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 export type ThinkingSupport = "none" | "hybrid" | "always";
 
 /** Union-Params zum Abschalten von Reasoning über viele lokale Server hinweg.
@@ -23,7 +23,8 @@ const THINK_TAG = /<think>([\s\S]*?)<\/think>/;
 export function reasoningHappened(content: string, reasoning: string | undefined): boolean {
   if (reasoning && reasoning.trim() !== "") return true;
   const m = THINK_TAG.exec(content);
-  return !!m && m[1].trim() !== "";
+  // `?? ""` statt `?.`: fehlte die Gruppe, heißt das „kein Inhalt" — also false, nicht true.
+  return !!m && (m[1] ?? "").trim() !== "";
 }
 
 const ALWAYS_ON = /\b(gpt-oss|harmony)\b/i;
