@@ -6,6 +6,21 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- **Export-Ordner in den Einstellungen** — neues Setting mit Ordner-Autocomplete für den
+  Zielordner neuer Transkript-/Beschreibungs-Notizen; leer = bisheriges Verhalten (neben der
+  Quellnotiz).
+
+### Behoben
+
+- **„Notiz anlegen" blieb nach Feedback-Runden nicht das unterste Element der Karte** — das
+  Chat-Eingabefeld für Nachbesserungs-Feedback wurde hinter den Versions-Verlauf verschoben,
+  wodurch der Schreiben-Knopf der letzten Runde darüber landete statt darunter.
+- **Ein entfernter und erneut hinzugefügter Endpunkt zeigte im Modell-Feld weiter „nicht
+  erreichbar"**, obwohl der Server lief (Status-Icon war korrekt) — der Modell-Listen-Cache
+  wurde beim Entfernen/erneuten Hinzufügen einer URL nicht invalidiert.
+
 ## [0.23.0] — 2026-09-03
 
 ### Hinzugefügt
