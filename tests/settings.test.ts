@@ -1,6 +1,29 @@
 import { describe, it, expect } from "vitest";
 import { defaultSettings, migrateEndpoints, applyListEdit, applyTaxonomyEdit, fmMapFromSettings } from "../src/settings";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
+import { createModelListCache } from "../src/vendor/kit/model-list-cache";
+
+// ⚠️ ÜBERSPRUNGEN — Fix gehört ins Kit, nicht hierher (Quicktask 2026-09-12, "LM-Endpunkt nach
+// Entfernen+Neu-Hinzufügen nicht mehr erkannt"). Root Cause: src/vendor/kit-obsidian/endpoint-list.ts
+// (vendored, "Never hand-edit") invalidiert den ModelListCache nicht beim Löschen eines Endpunkts
+// und nicht beim URL-Commit (nur apiKey-Edits invalidieren, Zeile ~195) — eine wiederverwendete URL
+// bekommt das alte gecachte Ergebnis statt einer frischen Probe. Gemeldet an obsidian-plugins-e8
+// mit Fix-Vorschlag (invalidate bei jeder URL-Mutation: trash/URL-Commit/Preset). Sobald die
+// Kit-Version den Fix trägt und hier re-vendored ist: entskippen — der Test beweist dann, dass der
+// (behobene) Cache bei erneutem `load()` derselben URL nicht mehr das alte Ergebnis liefert.
+describe.skip("ModelListCache — Regression, sobald Kit-Fix vendored ist", () => {
+  it("dieselbe URL nach 'Entfernen' liefert nicht mehr das alte gecachte Ergebnis", async () => {
+    const cache = createModelListCache();
+    const url = "http://localhost:1234";
+    const offline = { listModels: async () => [], probe: async () => ({ reachable: false }) };
+    await cache.load(url, offline);   // Server war beim Entfernen kurz down → gecacht als unreachable
+    // Hier müsste ein Fix im Kit-Modul beim Entfernen/erneuten Hinzufügen der URL
+    // `cache.invalidate(url)` rufen — das fehlt heute.
+    const online = { listModels: async () => ["qwen-vl"], probe: async () => ({ reachable: true }) };
+    const result = await cache.load(url, online);   // "erneut hinzugefügt" → sollte frisch proben
+    expect(result).toEqual({ models: ["qwen-vl"], reachable: true });
+  });
+});
 
 describe("migrateEndpoints", () => {
   it("alter Einzel-Endpoint → Config-Liste", () => {
