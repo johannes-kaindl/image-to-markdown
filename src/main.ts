@@ -4,7 +4,7 @@ import { mergeSettings } from "./vendor/kit/settings";
 import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
 import { resolveActiveEndpointConfig, type EndpointConfig } from "./vendor/kit/endpoint_config";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
-import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem } from "./img_to_md";
+import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem, resolveDestDir } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
 import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, normalizePreset } from "./prompts";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
@@ -266,13 +266,15 @@ export default class ImageToMarkdownPlugin extends Plugin {
       },
       writeTranscripts: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
-        const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const selfDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const destDir = resolveDestDir(this.settings.exportFolder, selfDir);
         const { results } = await writeTranscripts(this.makeImgIO(), sourcePath, entries.map(e => ({ raw: e.item.raw, link: e.item.link, content: e.content, model: e.model, overwritePath: e.item.existingTranscriptPath, embed: e.item.embed, knownBody: e.knownBody, truncated: e.truncated })), { selfSource: self, destDir, map: this.fmMap() });
         return results;
       },
       writePdf: async (sourcePath, raw, link, pages, overwritePath, embed, range, knownBody) => {
         const self = classifySource(extOf(sourcePath)) !== null;
-        const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const selfDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const destDir = resolveDestDir(this.settings.exportFolder, selfDir);
         const { path, body } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir, range, knownBody, map: this.fmMap() });
         return { path, body };
       },
@@ -323,7 +325,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
       getTaxonomy: () => this.settings.describeTaxonomy,
       writeDescriptions: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
-        const destDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const selfDir = self ? this.app.fileManager.getNewFileParent(sourcePath).path : undefined;
+        const destDir = resolveDestDir(this.settings.exportFolder, selfDir);
         const { results } = await writeDescriptions(
           this.makeImgIO(), sourcePath,
           entries.map(e => ({ link: e.item.link, category: e.category, tags: e.tags, prose: e.prose, model: e.model })),

@@ -11,6 +11,7 @@ import { createModelListCache, type ModelListCache } from "./vendor/kit/model-li
 import { ENDPOINT_PRESETS, type EndpointStatusKind, type EndpointWarning } from "./vendor/kit/endpoint_diagnostics";
 import type { EndpointRole } from "./vendor/kit/endpoint_config";
 import { migrateEndpointList, type EndpointConfig } from "./vendor/kit/endpoint_config";
+import { FolderSuggest } from "./vendor/kit-obsidian/folder-suggest";
 
 export type { EndpointConfig };
 
@@ -54,7 +55,9 @@ export interface ImageToMarkdownSettings {
   reasoningExpanded: boolean;
   describeTaxonomy: string[];
   frontmatterMap: FrontmatterMap;
-  describeDestDir?: string;
+  /** Zielordner für neue Transkript-/Beschreibungs-Notizen; leer = neben der Quellnotiz
+   *  (Default-Verhalten, s. `resolveDestDir` in img_to_md.ts). */
+  exportFolder: string;
   mode: "transcribe" | "describe";
 }
 
@@ -73,6 +76,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     reasoningExpanded: false,
     describeTaxonomy: ["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"],
     frontmatterMap: { ...DEFAULT_FM_MAP },
+    exportFolder: "",
     mode: "transcribe",
   };
 }
@@ -226,6 +230,8 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
             control: { type: "toggle", key: "pdfUseTextLayer" } },
           { name: t("settings.reasoningExpanded.name"), desc: t("settings.reasoningExpanded.desc"),
             control: { type: "toggle", key: "reasoningExpanded" } },
+          { name: t("settings.exportFolder.name"), desc: t("settings.exportFolder.desc"),
+            render: (s: Setting) => { this.renderExportFolder(s); } },
         ],
       },
       {
@@ -371,6 +377,16 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         setting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => { this.refresh(); }));
       }
       this.showCaps(this.plugin.settings.visionModel);
+    });
+  }
+
+  /** Export-Ordner: Textfeld mit Ordner-Autocomplete (Kit-`FolderSuggest`), leer = neben der
+   *  Quellnotiz. */
+  private renderExportFolder(setting: Setting): void {
+    setting.addText(tx => {
+      tx.setPlaceholder(t("settings.exportFolder.placeholder")).setValue(this.plugin.settings.exportFolder);
+      new FolderSuggest(this.app, tx.inputEl);   // FolderSuggest.selectSuggestion() feuert "input" selbst (s. dortiger Kopfkommentar)
+      tx.onChange(async (v: string) => { this.plugin.settings.exportFolder = v.trim(); await this.plugin.saveSettings(); });
     });
   }
 

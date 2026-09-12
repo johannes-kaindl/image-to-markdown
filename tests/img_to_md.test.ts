@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody, buildDescriptionNote, descriptionNotePath, writeDescriptions } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody, buildDescriptionNote, descriptionNotePath, writeDescriptions, resolveDestDir } from "../src/img_to_md";
 import { applySelection } from "../src/vendor/kit/diff";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
@@ -187,6 +187,19 @@ describe("transcriptNotePath", () => {
     const io = { noteExists: () => false };
     expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "Transkripte")).toBe("Transkripte/scan (PDF transcript).md");
     expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "")).toBe("scan (PDF transcript).md");
+  });
+});
+
+describe("resolveDestDir", () => {
+  it("exportFolder gesetzt hat Vorrang vor selfSourceDir", () => {
+    expect(resolveDestDir("Transkripte", "Anhänge")).toBe("Transkripte");
+  });
+  it("exportFolder leer/undefined → selfSourceDir bleibt (auch undefined)", () => {
+    expect(resolveDestDir(undefined, "Anhänge")).toBe("Anhänge");
+    expect(resolveDestDir("", undefined)).toBeUndefined();
+  });
+  it("exportFolder nur Whitespace zählt als leer", () => {
+    expect(resolveDestDir("   ", "Anhänge")).toBe("Anhänge");
   });
 });
 

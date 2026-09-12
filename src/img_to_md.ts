@@ -223,6 +223,16 @@ export function descriptionNotePath(io: { noteExists(p: string): boolean }, sour
   return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
 }
 
+/** Ziel-Ordner für Transkript-/Beschreibungs-Notizen: das Settings-Feld `exportFolder` hat
+ *  Vorrang vor dem bisherigen Default (`selfSourceDir`, gesetzt bei selfSource auf Obsidians
+ *  aktiven Zielordner, sonst `undefined` = neben der Quellnotiz). Reiner Helfer, damit main.ts
+ *  an den drei Aufrufstellen (Transkript/PDF/Beschreibung) nicht je eine eigene Fallback-Kette
+ *  pflegt. */
+export function resolveDestDir(exportFolder: string | undefined, selfSourceDir: string | undefined): string | undefined {
+  const cfg = exportFolder?.trim();
+  return cfg ? cfg : selfSourceDir;
+}
+
 export interface ImgToMdIO {
   date: () => string;
   readNote(path: string): Promise<string>;
