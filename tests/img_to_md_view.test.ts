@@ -1140,6 +1140,17 @@ describe("Refine-Zeile (#7)", () => {
       return view;
     }
 
+    it("Quicktask 2026-09-12: 'Notiz anlegen' steht ganz unten in der Karte, nicht das Feedback-Feld darunter", async () => {
+      const view = await withOneRound();
+      const root = (view as any).contentEl;
+      const card = all(root, "img2md-card")[0];
+      // Letztes Kind der Karte muss der Verlauf (mit dem letzten „Notiz anlegen") sein — das
+      // Feedback-Eingabefeld (Chat-Stil) darf nicht darunter (also NACH dem Verlauf) liegen.
+      const last = card.lastChild;
+      expect(last?.classList.contains("img2md-refine-row")).toBe(false);
+      expect(last?.classList.contains("img2md-refine-log")).toBe(true);
+    });
+
     it("nach einer Runde: Original-Block im Log + 1 Runden-Karte, je Version ein 'Notiz anlegen'", async () => {
       const view = await withOneRound();
       const root = (view as any).contentEl;

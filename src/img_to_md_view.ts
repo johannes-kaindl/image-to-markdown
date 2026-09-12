@@ -595,11 +595,13 @@ export class ImgToMdView extends ItemView {
     }
 
     if (!refs.refineLog) {
+      // Verlauf entsteht in natürlicher DOM-Reihenfolge NACH dem Feedback-Eingabefeld (das schon
+      // vorher existiert) — „Notiz anlegen" der letzten Runde bleibt damit das unterste Element der
+      // Karte. Vor 0.24.0 wurde das Eingabefeld hierher verschoben ("Chat-Stil: Eingabe immer
+      // unten") — genau das schob den Schreiben-Knopf über die Eingabe und damit von ganz unten weg
+      // (Quicktask 2026-09-12, Johannes' Beobachtung).
       const log = cardEl.createDiv({ cls: "img2md-refine-log" });
       refs.refineLog = log; refs.refineEntryEls = [];
-      // Eingabefeld unter den Verlauf schieben (Chat-Stil: Eingabe immer unten). Einmalig beim Anlegen
-      // des Logs — nicht bei jedem Render (sonst Fokusverlust beim Tippen); move via remove+append.
-      if (refs.refineRow) { cardEl.removeChild(refs.refineRow); cardEl.appendChild(refs.refineRow); }
     }
     const log = refs.refineLog;
     const entries = refs.refineEntryEls!;
