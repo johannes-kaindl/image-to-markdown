@@ -157,7 +157,17 @@ For PDFs, each page is rendered to a canvas by the bundled pdf.js (offline, no C
 
 The architecture and module layout are documented in [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
 
-## Manual
+## Supported image formats
+
+Sent to the model: **PNG, JPG, JPEG, WebP, GIF.** Recognized but **skipped** (with a notice): **BMP, HEIC, HEIF.** HEIC/HEIF is the iOS default and is rejected by vision models — set iOS to "Most Compatible" ("Maximal kompatibel") or convert the image first. When an image is skipped you'll see a notice such as: *Format .heic nicht unterstützt (HEIC? iOS auf „Maximal kompatibel")*.
+
+## Gotchas
+
+- **The `/v1` footgun:** an endpoint with a trailing `/v1` used to produce `…/v1/v1/chat/completions`. LM Studio answers wrong paths with HTTP 200 plus an error body (not a real HTTP error) → `res.ok` is true, the stream is empty → a silently empty transcript. Fixed by `normalizeEndpoint()` (strips a trailing `/v1` plus slashes).
+- **LM Studio ignores the request's `model` field** and uses whatever model is loaded — the model actually used is read from `response.model` and lands in the transcript note's `transcribed_by` frontmatter.
+- **Vision endpoint default `:8080` (MLX) ≠ LM Studio's `:1234`.**
+
+## Documentation
 
 The full documentation follows the [Diátaxis](https://diataxis.fr) framework — see [docs/manual/index.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md):
 
@@ -168,17 +178,28 @@ The full documentation follows the [Diátaxis](https://diataxis.fr) framework �
 
 See the [changelog](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md) for release notes.
 
-### Supported image formats
+## Development
 
-Sent to the model: **PNG, JPG, JPEG, WebP, GIF.** Recognized but **skipped** (with a notice): **BMP, HEIC, HEIF.** HEIC/HEIF is the iOS default and is rejected by vision models — set iOS to "Most Compatible" ("Maximal kompatibel") or convert the image first. When an image is skipped you'll see a notice such as: *Format .heic nicht unterstützt (HEIC? iOS auf „Maximal kompatibel")*.
+```bash
+git clone https://git.jkaindl.de/jkaindl/image-to-markdown
+cd image-to-markdown
+npm install
+npm run dev     # esbuild watch
+npm run build   # prod bundle → main.js
+npm test        # vitest
+```
+
+Contributions are welcome. Please read [CONTRIBUTING.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
+
+## Security
+
+Image data is sent exclusively to the **local** endpoint you configure — no telemetry, nothing to the cloud or third parties. The trust anchor is the local server you control.
+
+Please **don't** report security vulnerabilities as a public issue — email [code@jkaindl.de](mailto:code@jkaindl.de) instead (PGP welcome). See [SECURITY.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/SECURITY.md).
 
 ## Related
 
 **[vault-rag](https://git.jkaindl.de/jkaindl/vault-rag)** — the sister plugin, home of the RAG core (related notes, semantic search, chat). Image to Markdown was split out of vault-rag 0.2.0 on 2026-06-21 because image transcription is not RAG; the two only ever shared the SSE transport.
-
-## Contributing
-
-Contributions are welcome. Please read [CONTRIBUTING.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
 
 ## License
 
