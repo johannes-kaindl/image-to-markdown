@@ -266,6 +266,18 @@ Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Di
 
 Erfüllt mit 0.3.0 (2026-06-23): CORE-META-02/03 (Badge-Zeile/Hero + Feature-Screenshots) — README mit Badge 1.8.7, Aufnahme-Vertrag (Screenshots) auf aktuellen Stand (PDF-/Idempotenz-Shots, EN-UI, Slider).
 
+## UI-Abweichungen
+
+- **Streaming-Antwortbereich (UI-STANDARD §8, verbindlich seit 2026-09-07)** — Grund: `buildStreamArea`
+  aus dem Kit baut EINEN Antwortbereich für einen Anstrich; `img_to_md_view.ts` rendert dagegen
+  `N` gleichzeitig aktive Karten (eine je Bild/PDF-Seite/Refine-Runde), jede mit eigenem
+  Gedankenblock, Trunkierungs-Hinweis, Versions-Verlauf (`syncRefineLog`) und eigenem
+  "Notiz anlegen" je Version — eine Komposition, die das Kit-Modul nicht abbildet (dessen
+  Vertrag ist EIN Gedankenblock + EIN Tail + EINE Statuszeile). Ein Vendoring würde die
+  Push-Mechanik (Bauart 2 laut Kit-Dateikopf) aufnehmen, aber die Mehrkarten-/Versions-Struktur
+  daneben nachbauen müssen — kein Baustein spart dann Code, nur Vokabular.
+  — gilt-solange: `src/img_to_md_view.ts` enthaelt `cardEls: CardRefs[]`
+
 ## Dach-Kontext (obsidian-plugins)
 
 Dieses Repo liegt unter dem Koordinations-Dach `obsidian-plugins/` (Parent-Verzeichnis `../` im Maintainer-Workspace).
