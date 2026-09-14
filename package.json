@@ -21,7 +21,7 @@
     "test": "node scripts/check-no-abs-paths.mjs && node scripts/check-no-nul-bytes.mjs && vitest run",
     "lint": "node scripts/check-no-inline-disables.mjs && eslint src --max-warnings 0",
     "shots": "esbuild scripts/shots.ts --bundle --platform=node --format=esm --outfile=.shots.mjs --log-level=warning && node .shots.mjs",
-    "shots:check": "test -f ../../_docs/readme/readme_lint.py && python3 ../../_docs/readme/readme_lint.py . || echo 'readme_lint.py nicht gefunden (maintainer-lokal) — uebersprungen'",
+    "shots:check": "D=\"${DOCS_ROOT:-$HOME/Projects/jkaindl/workspace/_docs}\"; test -f \"$D/readme/readme_lint.py\" || D=../../_docs; if test -f \"$D/readme/readme_lint.py\"; then python3 \"$D/readme/readme_lint.py\" .; else echo 'shots:check uebersprungen: readme_lint.py weder unter DOCS_ROOT bzw. ~/Projects/jkaindl/workspace/_docs noch unter ../../_docs (maintainer-lokal)'; fi",
     "pretypecheck": "npm run build:worker",
     "typecheck": "tsc --noEmit",
     "version-bump": "test -f ../tools/release/version-bump.mjs || { echo \"FEHLER: ../tools/release/ fehlt. Dieses Repo muss im Dach-Verzeichnis obsidian-plugins/ neben tools/ liegen — das Release-Tooling liegt dort zentral, nicht im Plugin. Ein Clone ohne Dach ist nicht release-faehig.\" >&2; exit 1; }; node ../tools/release/version-bump.mjs",
