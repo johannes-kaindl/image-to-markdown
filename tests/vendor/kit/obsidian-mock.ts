@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.34.1, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.35.0, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // Self-contained Obsidian test double for obsidian-kit.
 // - Zero external imports (NOT from "obsidian", NOT from "vitest").
 // - Consumed via vitest `resolve.alias` as a drop-in for `import ... from "obsidian"`,
@@ -777,6 +777,20 @@ export function makeFakeApp(): any {
   // registrierten Leaves laufen kann (`workspace.__leaves`).
   const workspace: any = {};
   return {
+    // Schlüsselbund-Double (Obsidian ≥ 1.11.4): Map statt Keychain. Die ID-Regel der echten
+    // API („lowercase alphanumeric with optional dashes", setSecret wirft sonst) wird
+    // nachgebildet, damit ein Test einen falschen Präfix findet, bevor es der Nutzer tut.
+    secretStorage: (() => {
+      const secrets = new Map<string, string>();
+      return {
+        __secrets: secrets,
+        getSecret: (id: string): string | null => secrets.get(id) ?? null,
+        setSecret: (id: string, value: string): void => {
+          if (!/^[a-z0-9-]+$/.test(id)) throw new Error(`invalid secret id: ${id}`);
+          secrets.set(id, value);
+        },
+      };
+    })(),
     vault: {
       adapter: {
         read: fn().mockResolvedValue(""),

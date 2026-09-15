@@ -21,6 +21,19 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
   erreichbar"**, obwohl der Server lief (Status-Icon war korrekt) — der Modell-Listen-Cache
   wurde beim Entfernen/erneuten Hinzufügen einer URL nicht invalidiert.
 
+### Intern
+
+- **Kit-Pin `obsidian-kit` 0.34.1 → 0.35.0** (code-kit bleibt 0.6.0) per `tools/sync-kit.sh`
+  — Welle 2 der Plugin-Orchestrierung. Nur Header-Stempel/`VENDOR.json` geändert, keine
+  Verhaltensänderung an den vendorten Modulen; Gate vorher/nachher grün (521/521 Tests, 0
+  Lint-Fehler/Warnungen).
+- **Streaming-Antwortbereich (UI-STANDARD §8) bleibt bewusster Eigenbau** — die bestehende
+  Abweichungs-Deklaration in `AGENTS.md` §UI-Abweichungen wurde auf den vom
+  Dach-Check (`tools/ui_adoption_check.py`) erwarteten Schlüssel `**stream-area**` umgestellt
+  (reiner Formatfix, keine inhaltliche Änderung der Begründung: `img_to_md_view.ts` rendert
+  `N` gleichzeitig aktive Karten mit je eigenem Gedankenblock/Versions-Verlauf, eine
+  Komposition, die `buildStreamArea` — EIN Antwortbereich pro Anstrich — nicht abbildet).
+
 ## [0.23.0] — 2026-09-03
 
 ### Hinzugefügt

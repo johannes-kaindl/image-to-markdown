@@ -1,7 +1,7 @@
 {
   "source": "obsidian-kit",
-  "version": "0.34.1",
-  "sha": "cfce2c0",
+  "version": "0.35.0",
+  "sha": "e7e3e19",
   "code_kit_version": "0.6.0",
   "vendored": "capabilities.ts, clipboard.ts, diff.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, model-choice.ts, model-list-cache.ts, reasoning.ts, settings.ts, sse.ts, think.ts",
   "note": "Verbatim snapshot aus ZWEI Quellen (obsidian-kit + code-kit); welche Datei woher stammt, sagt ihr eigener Kopf. think.ts stammt aus think-splitter.ts (abweichender lokaler Name seit obsidian-kit#0.27.0). Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien, die aus obsidian-kit stammen; code-kit-Herkunft steht je Datei im Kopf. kit-obsidian/ siehe dortige VENDOR.json."
