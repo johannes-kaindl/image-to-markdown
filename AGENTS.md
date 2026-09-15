@@ -268,8 +268,8 @@ Erfüllt mit 0.3.0 (2026-06-23): CORE-META-02/03 (Badge-Zeile/Hero + Feature-Scr
 
 ## UI-Abweichungen
 
-- **Streaming-Antwortbereich (UI-STANDARD §8, verbindlich seit 2026-09-07)** — Grund: `buildStreamArea`
-  aus dem Kit baut EINEN Antwortbereich für einen Anstrich; `img_to_md_view.ts` rendert dagegen
+- **stream-area** — Grund: (Streaming-Antwortbereich, UI-STANDARD §8, verbindlich seit 2026-09-07)
+  `buildStreamArea` aus dem Kit baut EINEN Antwortbereich für einen Anstrich; `img_to_md_view.ts` rendert dagegen
   `N` gleichzeitig aktive Karten (eine je Bild/PDF-Seite/Refine-Runde), jede mit eigenem
   Gedankenblock, Trunkierungs-Hinweis, Versions-Verlauf (`syncRefineLog`) und eigenem
   "Notiz anlegen" je Version — eine Komposition, die das Kit-Modul nicht abbildet (dessen
