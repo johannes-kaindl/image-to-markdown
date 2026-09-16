@@ -241,9 +241,10 @@ export class ImgToMdView extends ItemView {
   private renderThinkToggle(): void {
     const btn = this.thinkToggleEl; if (!btn) return;
     const v = thinkToggleView(this.deps.getModel(), this.deps.getSuppress());
+    const on = v.cls !== "is-off";
     btn.empty();
     const icon = btn.createSpan({ cls: "img2md-think-icon" });
-    setIcon(icon, "brain");
+    setIcon(icon, on ? "brain" : "brain-cog");
     btn.createSpan({ cls: "img2md-think-lbl", text: t(v.labelKey) });
     btn.removeClass("is-off"); btn.removeClass("is-disabled");
     if (v.cls) btn.addClass(v.cls);
@@ -253,7 +254,8 @@ export class ImgToMdView extends ItemView {
     const label = v.hintKey ? `${t(v.labelKey)} — ${t(v.hintKey)}` : t(v.labelKey);
     btn.setAttribute("aria-label", label);
     btn.setAttribute("title", label);
-    if (v.disabled) btn.setAttribute("aria-disabled", "true"); else btn.removeAttribute("aria-disabled");
+    btn.setAttribute("aria-pressed", String(on));
+    (btn as HTMLButtonElement).disabled = v.disabled;
   }
 
   /** Label des „Los"-Buttons — folgt dem aktuellen Modus (nicht dem "Stop"-Zustand während des Laufs,

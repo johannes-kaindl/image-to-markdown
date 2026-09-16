@@ -707,16 +707,18 @@ describe("ImgToMdView — Diff-Confirm + Content-aware Gate (v1.1)", () => {
 });
 
 describe("ImgToMdView — Thinking-Toggle", () => {
-  it("normales Modell, nicht unterdrückt → Label 'Thinking: on', klickbar", async () => {
+  it("normales Modell, nicht unterdrückt → Label 'Thinking: on', klickbar, aria-pressed=true", async () => {
     setLang("en");
     const { view } = mkView({ getModel: () => "qwen3:8b", getSuppress: () => false });
     await view.onOpen();
     const [btn] = all(view.contentEl, "img2md-think-toggle");
     expect(btn.textContent).toContain("Thinking: on");
     expect(String(btn.className)).not.toContain("is-off");
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("Klick flippt Suppress und re-rendert das Label", async () => {
+  it("Klick flippt Suppress und re-rendert das Label, aria-pressed folgt", async () => {
     setLang("en");
     let sup = false;
     const setSuppress = vi.fn((v: boolean) => { sup = v; });
@@ -727,17 +729,19 @@ describe("ImgToMdView — Thinking-Toggle", () => {
     expect(setSuppress).toHaveBeenCalledWith(true);
     expect(btn.textContent).toContain("Thinking: off");
     expect(String(btn.className)).toContain("is-off");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("immer-an-Modell → 'Thinking: always on', Klick ändert nichts", async () => {
+  it("immer-an-Modell → 'Thinking: always on', nativ disabled, aria-pressed=true, Klick ändert nichts", async () => {
     setLang("en");
     const setSuppress = vi.fn();
     const { view } = mkView({ getModel: () => "gpt-oss:20b", getSuppress: () => false, setSuppress });
     await view.onOpen();
-    const [btn] = all(view.contentEl, "img2md-think-toggle");
+    const [btn] = all(view.contentEl, "img2md-think-toggle") as HTMLButtonElement[];
     expect(btn.textContent).toContain("Thinking: always on");
     expect(String(btn.className)).toContain("is-disabled");
-    expect(btn.getAttribute("aria-disabled")).toBe("true");
+    expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
     btn.click();
     expect(setSuppress).not.toHaveBeenCalled();
   });

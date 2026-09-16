@@ -14,6 +14,12 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Behoben
 
+- **Thinking-Schalter zeigt seinen Zustand jetzt auch ohne Farbe** (UI-STANDARD §8,
+  Zustands-Knopf) — `aria-pressed` fehlte bisher komplett, ein gesperrter (Always-on-Thinker)
+  Schalter trug nur `aria-disabled` statt nativem `disabled`. Nachgezogen: `aria-pressed`
+  folgt dem Zustand bei jedem Render, `disabled` ist jetzt die native Button-Eigenschaft,
+  Icon wechselt `brain` ↔ `brain-cog` (an/aus statt immer `brain`). Sichtbarer Button-Text
+  bleibt unverändert (Sidebar-Breiten-Fix aus 0.10.1).
 - **„Notiz anlegen" blieb nach Feedback-Runden nicht das unterste Element der Karte** — das
   Chat-Eingabefeld für Nachbesserungs-Feedback wurde hinter den Versions-Verlauf verschoben,
   wodurch der Schreiben-Knopf der letzten Runde darüber landete statt darunter.
