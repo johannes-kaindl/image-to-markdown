@@ -497,6 +497,39 @@ async function main(): Promise<void> {
    *  wenn unten "9/9 gruen" steht. */
   const herkunftWarnungen: string[] = [];
 
+  // Dieselbe Aufraeumarbeit wie im `finally` unten — als eigene Funktion, damit der
+  // SIGINT/SIGTERM-Handler sie aufrufen kann, ohne Code zu duplizieren. Ein Ctrl-C mitten
+  // im Lauf ueberspringt das `finally` NICHT (try/catch-Semantik), sondern beendet den
+  // Node-Prozess sofort — ohne eigenen Handler blieben zusaetzliche Leaves offen und der
+  // CDP-Socket haengt. Dieser Treiber schreibt sonst nichts Persistentes (kein
+  // `vault.create`/`modify`/`delete` — reiner Lesezugriff plus geoeffnete Notizen/Sidebar),
+  // deshalb entfaellt ein Leftover-Pruefpunkt (Regel: Handler Pflicht, Pruefpunkt entfaellt,
+  // wenn nichts im `finally` steckt, das ihn rechtfertigt).
+  const cleanupState = async (): Promise<void> => {
+    if (vorher && vorher !== "null") {
+      const gleich = await cdp.evaluate<boolean>(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        return JSON.stringify(p?.settings ?? null) === ${JSON.stringify(vorher)};
+      `).catch(() => false);
+      console.log(`  Einstellungen nach dem Lauf: ${gleich ? "byte-gleich" : "ABWEICHUNG — von Hand pruefen"}`);
+    }
+    await closeExtraLeaves(cdp).catch(() => 0);
+  };
+
+  let signalCleanupRunning = false;
+  const onAbortSignal = (signal: NodeJS.Signals) => {
+    if (signalCleanupRunning) return;
+    signalCleanupRunning = true;
+    void (async () => {
+      console.log(`\n\nAbbruch durch ${signal} — raeume Smoke-Zustand auf...`);
+      await cleanupState();
+      cdp.close();
+      process.exit(130);
+    })();
+  };
+  process.on("SIGINT", onAbortSignal);
+  process.on("SIGTERM", onAbortSignal);
+
   try {
     // Ohne Fokus drosselt Chromium den Renderer, das DOM bleibt leer und JEDER Punkt
     // waere rot — die Suche begaenne dann am Plugin statt am Fenster.
@@ -577,20 +610,16 @@ async function main(): Promise<void> {
   } finally {
     // Der Lauf oeffnet Notizen und die Sidebar, er schreibt keine. Zurueckgesetzt wird
     // trotzdem, was er anfassen KOENNTE — und das Ergebnis kommt ins Protokoll, nicht
-    // ins Vertrauen.
+    // ins Vertrauen. Dieselbe Funktion wie der SIGINT/SIGTERM-Handler oben — kein
+    // Doppelcode.
     //
     // Was NICHT zurueckgesetzt wird: der Zustand des rechten Splits und das Blatt-Layout.
     // Beides liegt in `workspace.json` des Staging-Vaults, und die entfernt `buildVault`
     // bei jedem `--setup` ohnehin — der Vault ist Wegwerfware. Im Produktivvault waere
     // dieselbe Zeile ein Eingriff; deshalb steht sie hier begruendet und nicht beilaeufig.
-    if (vorher && vorher !== "null") {
-      const gleich = await cdp.evaluate<boolean>(`
-        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-        return JSON.stringify(p?.settings ?? null) === ${JSON.stringify(vorher)};
-      `).catch(() => false);
-      console.log(`  Einstellungen nach dem Lauf: ${gleich ? "byte-gleich" : "ABWEICHUNG — von Hand pruefen"}`);
-    }
-    await closeExtraLeaves(cdp).catch(() => 0);
+    process.off("SIGINT", onAbortSignal);
+    process.off("SIGTERM", onAbortSignal);
+    await cleanupState();
     cdp.close();
   }
 
