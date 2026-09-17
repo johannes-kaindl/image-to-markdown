@@ -337,18 +337,41 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     titel: "Empty-State bei einer Notiz ohne Bilder",
     async run(cdp) {
       await zeigeNotiz(cdp, NOTIZ.leer);
-      const roh = await cdp.evaluate<string>(`
+      // `zeigeNotiz` wartet nur auf `cardsSourcePath === pfad` (der Marker "ich habe DIESE
+      // Datei angenommen"), nicht auf den fertigen Render. Zwischen dem Setzen des Markers
+      // und dem tatsaechlichen DOM-Update (Empty-State einblenden, alte Zeilen abraeumen)
+      // liegt eine eigene, unbewachte Luecke — ein einzelner `evaluate` direkt danach traf
+      // deshalb mal den alten, mal den neuen Zustand (gemessen 2026-09-17, Welle 5: B3
+      // wechselte identisch auf zwei Staenden die Farbe, also unabhaengig vom Toggle-Umbau).
+      // Mutation (zeigeNotiz) und Wartephase (dieser Poll) sind jetzt getrennt, Muster aus
+      // paperless-storage/scripts/gui-smoke.ts:201.
+      const auswertung = `
         const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
         const leer = wurzel.querySelector(".img2md-empty");
-        return JSON.stringify({
+        const info = {
           text: leer?.textContent.trim() ?? null,
           sichtbar: leer ? leer.getClientRects().length > 0 : false,
           zeilen: wurzel.querySelectorAll(".img2md-item").length,
-        });
+        };
+        return info;
+      `;
+      const roh = await pollUntil<string>(cdp, `
+        const info = (() => { ${auswertung} })();
+        return info.sichtbar && info.zeilen === 0 && info.text ? JSON.stringify(info) : null;
+      `, 8_000, 200);
+      if (roh) {
+        const d = JSON.parse(roh) as { text: string; sichtbar: boolean; zeilen: number };
+        return { ok: true, detail: `"${d.text}" (${d.zeilen} Zeilen)` };
+      }
+      // Timeout: Endzustand fuer die Meldung holen, unabhaengig davon, ob der Poll ihn als
+      // Erfolg gewertet haette — sonst nennt eine rote Meldung nur "null" statt des Befunds.
+      const abschluss = await cdp.evaluate<string>(`
+        const info = (() => { ${auswertung} })();
+        return JSON.stringify(info);
       `);
-      const d = JSON.parse(roh) as { text: string | null; sichtbar: boolean; zeilen: number };
+      const d = JSON.parse(abschluss) as { text: string | null; sichtbar: boolean; zeilen: number };
       return {
-        ok: d.sichtbar && d.zeilen === 0 && Boolean(d.text),
+        ok: false,
         detail: d.text ? `"${d.text}" (${d.zeilen} Zeilen)` : `kein Empty-State, ${d.zeilen} Zeilen`,
       };
     },
