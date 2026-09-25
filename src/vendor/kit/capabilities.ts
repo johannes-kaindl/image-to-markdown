@@ -1,5 +1,6 @@
-// vendored from code-kit@0.6.0, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.7.0, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { ThinkingSupport } from "./reasoning";
+import type { BackendId } from "./sampling-profiles";
 
 export type Confidence = "no" | "likely" | "confirmed";
 export interface ThinkingState { support: ThinkingSupport; confidence: Confidence }
@@ -167,4 +168,46 @@ export async function fetchCapabilities(
     if (r) { const c = parseLmStudioV0(r.json, model); if (c) return c; }
   } catch { /* weiter */ }
   return null;
+}
+
+/** Probes are sent to the origin of the configured endpoint URL (LM Studio `/v1`,
+ *  Open WebUI `/api` and Ollama `/v1` all live below it). */
+export function probeBaseUrl(endpointUrl: string): string {
+  try { return new URL(endpointUrl).origin; } catch { return endpointUrl.replace(/\/+$/, ""); }
+}
+
+/** Open WebUI's `GET /api/config` carries a version string and a features object. */
+export function parseOpenWebUiConfig(json: unknown): boolean {
+  const o = json as { version?: unknown; features?: unknown } | null;
+  return !!o && typeof o.version === "string" && typeof o.features === "object" && o.features !== null;
+}
+
+/** Which backend answers, plus its capabilities. Open WebUI is asked FIRST: it answers
+ *  below `/api/v1/models…` itself and would otherwise be taken for LM Studio.
+ *  One try/catch per probe, like `fetchCapabilities`. */
+export async function probeEndpoint(
+  fetchJson: CapabilityFetch,
+  baseUrl: string,
+  model: string,
+): Promise<{ backend: BackendId; capabilities: Capabilities | null }> {
+  try {
+    const r = await fetchJson({ url: `${baseUrl}/api/config` });
+    if (r && parseOpenWebUiConfig(r.json)) return { backend: "openwebui", capabilities: null };
+  } catch { /* next */ }
+  try {
+    const r = await fetchJson({
+      url: `${baseUrl}/api/show`,
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }),
+    });
+    if (r) { const c = parseOllamaShow(r.json); if (c) return { backend: "ollama", capabilities: c }; }
+  } catch { /* next */ }
+  try {
+    const r = await fetchJson({ url: `${baseUrl}/api/v1/models` });
+    if (r) { const c = parseLmStudioV1(r.json, model); if (c) return { backend: "lmstudio", capabilities: c }; }
+  } catch { /* next */ }
+  try {
+    const r = await fetchJson({ url: `${baseUrl}/api/v0/models` });
+    if (r) { const c = parseLmStudioV0(r.json, model); if (c) return { backend: "lmstudio", capabilities: c }; }
+  } catch { /* next */ }
+  return { backend: "unknown", capabilities: null };
 }

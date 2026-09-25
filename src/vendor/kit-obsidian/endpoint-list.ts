@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.35.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.41.1, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // ONE mechanical deviation from verbatim: kit-internal imports (../pure/ and ../vendor/code-kit/{pure,web}/) → ../kit/ (vendor layout); reproduce on every re-vendor, nothing else may differ.
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
@@ -59,9 +59,24 @@ export interface EndpointListStrings {
   presetLabel(preset: EndpointPreset): string;
   checkConnection: string;
   saveFailed: string;
+  /** Nur mit `secret`-Hook: Zustandstext und Knöpfe des Schlüsselfelds. */
+  secretSaved?: string;
+  secretChange?: string;
+  secretClear?: string;
+  secretUnavailable?: string;
 }
 
-export interface EndpointListOptions {
+/** Schlüssel-Hook: der Consumer hält das Token woanders (Obsidian-Schlüsselbund, Kit-Modul
+ *  `secrets`) — die Liste schreibt dann NIE in `cfg.apiKey`, sondern ruft diese vier. Fehlt der
+ *  Hook, gilt das bisherige Verhalten (Passwortfeld → `apiKey` in der Liste). */
+export interface EndpointSecretHook<T extends EndpointConfig = EndpointConfig> {
+  available: boolean;
+  has(cfg: T, index: number): boolean;
+  set(cfg: T, index: number, value: string): Promise<void>;
+  clear(cfg: T, index: number): Promise<void>;
+}
+
+export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> {
   containerEl: HTMLElement;
   label: string;
   desc: string;
@@ -70,8 +85,8 @@ export interface EndpointListOptions {
   /** Modell-Listen je Endpunkt + Generationszähler. Gehört der Lebensdauer des
    *  Settings-Tabs, nicht dieser Funktion — deshalb von außen. */
   cache: ModelListCache;
-  get(): EndpointConfig[];
-  set(eps: EndpointConfig[]): void;
+  get(): T[];
+  set(eps: T[]): void;
   active(): string | null;
   /** Client GENAU dieser Zeile (URL + Schlüssel der Zeile) — trägt sowohl die Erreichbarkeits-
    *  Probe (Status-Icon) als auch die Modell-Liste (Dropdown). EIN Client statt zwei getrennt
@@ -82,7 +97,7 @@ export interface EndpointListOptions {
    *  `{ reachable }`, diese Zeile den vollen `EndpointStatus` (Diagnose-Klartext fürs Icon).
    *  TypeScript löst eine Methoden-Intersection als Überladungsliste in Schreibreihenfolge auf —
    *  stünde `ModelListClient` vorn, käme am Aufruf die schmalere Signatur heraus. */
-  clientFor(cfg: EndpointConfig): { probe(): Promise<EndpointStatus> } & ModelListClient;
+  clientFor(cfg: T): { probe(): Promise<EndpointStatus> } & ModelListClient;
   /** Globales Modell, das gilt, wenn die Zeile keinen Override trägt.
    *
    *  **Optional, und das Fehlen ist eine Aussage.** Fehlt der Callback, gibt es kein globales
@@ -100,18 +115,23 @@ export interface EndpointListOptions {
   globalModel?(): string;
   /** Nur Embedding-Listen: passt das (Override-)Modell dieser Zeile zum geladenen Index?
    *  Fehlt der Callback (Chat-Liste), gilt true — dort hängt kein Index am Modell. */
-  modelFits?(cfg: EndpointConfig): boolean;
+  modelFits?(cfg: T): boolean;
   save(): Promise<void>;
   reconnect(): Promise<void>;
   rerender(): void;
   presets?: readonly EndpointPreset[];
+  secret?: EndpointSecretHook<T>;
+  /** Zusatz-Slot je echter Zeile (nicht am Adder): der Consumer zeichnet eigene Felder in
+   *  `host` (ein `div.okit-ep-extra` unter der Rollenzeile). Für Einträge mit mehr Feldern als
+   *  `EndpointConfig` — der Listen-Editor bleibt für URL/Schlüssel/Modell/Reihenfolge zuständig. */
+  extraRow?(host: HTMLElement, cfg: T, index: number): void;
 }
 
 /** Rendert `[...endpoints, Adder]` (leeres Add-Feld), Label/Desc als eigene Zeile davor.
  *  Mutation NUR bei blur (nicht pro Tastendruck), via applyEndpointEdit → save → reconnect →
  *  Re-Render. Pro echtem Eintrag: Status-Icon (loader → check/x, aktiver Endpunkt markiert),
  *  URL-, Schlüssel- (maskiert) und Modell-Feld + Mülleimer. */
-export function buildEndpointList(opts: EndpointListOptions): void {
+export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opts: EndpointListOptions<T>): void {
   const eps = opts.get();
   const rows: EndpointConfig[] = [...eps, { url: "" }];   // leeres Zusatzfeld am Ende
   // Jede Mutation, die die Listen-FORM ändert (URL-Edit, Mülleimer, Preset), macht die
@@ -194,7 +214,7 @@ export function buildEndpointList(opts: EndpointListOptions): void {
     // (bis 5 s), risse es dem Nutzer sonst mitten im Tippen des nächsten Feldes das DOM weg.
     const commit = (field: "url" | "apiKey" | "model", value: string): void => {
       const before = opts.get();
-      const updated = applyEndpointEdit(before, i, field, value, isAdder);
+      const updated = applyEndpointEdit(before, i, field, value, isAdder) as T[];
       if (JSON.stringify(updated) === JSON.stringify(before)) return;   // unverändert → kein Re-Render
       const rerender = field === "url";
       if (rerender) lockRows();
@@ -238,14 +258,68 @@ export function buildEndpointList(opts: EndpointListOptions): void {
     // Schlüssel + Modell nur an bestehenden Einträgen — am leeren Adder gäbe es nichts zu tragen.
     // aria-label statt bloßem Placeholder: der verschwindet beim Tippen, und drei unbeschriftete
     // Felder in einer Zeile sind für Screenreader nicht auseinanderzuhalten.
-    if (!isAdder) {
-      s.addText(tx => {
+    if (!isAdder && opts.secret) {
+      const hook = opts.secret;
+      const current = opts.get()[i] ?? cfg;
+      const st = opts.strings;
+      const afterSecret = (): void => {
+        lockRows();
+        void opts.save().then(() => opts.reconnect()).then(() => opts.rerender()).catch(failSafe);
+      };
+      const secretInput = (): void => {
+        s.addText(tx => {
+          tx.setPlaceholder(st.apiKeyPlaceholder).setValue("");
+          tx.inputEl.type = "password";
+          tx.inputEl.setAttribute("autocomplete", "off");
+          if (!hook.available) {
+            tx.inputEl.disabled = true;
+            tx.inputEl.setAttribute("aria-label", `${st.ariaApiKey(cfg.url)} — ${st.secretUnavailable ?? ""}`);
+            setTooltip(tx.inputEl, st.secretUnavailable ?? "");
+            return;
+          }
+          tx.inputEl.setAttribute("aria-label", st.ariaApiKey(cfg.url));
+          tx.inputEl.addEventListener("blur", () => {
+            const v = tx.getValue();
+            if (!v) return;
+            // Cache-Eintrag der URL invalidieren: mit Token antwortet ein gehosteter Endpunkt anders.
+            opts.cache.invalidate(normalizeEndpoint(cfg.url));
+            void hook.set(current, i, v).then(afterSecret).catch(failSafe);
+          });
+        });
+      };
+      if (hook.has(current, i)) {
+        const saved = s.controlEl.createSpan({ cls: "okit-ep-secret", text: st.secretSaved ?? "" });
+        saved.setAttribute("aria-label", st.ariaApiKey(cfg.url));
+        // Beide Knöpfe gehören zusammen: „ändern" zeichnet ein leeres Eingabefeld darunter —
+        // bleibt „entfernen" dabei stehen, wirkt er weiter auf den ALTEN, noch gespeicherten
+        // Schlüssel, während der Nutzer gerade einen neuen einträgt (gemeldet im Review).
+        let clearBtnEl: HTMLElement | null = null;
+        s.addExtraButton(b => b.setIcon("pencil").setTooltip(st.secretChange ?? "").onClick(() => {
+          saved.remove();
+          b.extraSettingsEl.remove();
+          clearBtnEl?.remove();
+          secretInput();
+        }));
+        s.addExtraButton(b => {
+          clearBtnEl = b.extraSettingsEl;
+          return b.setIcon("key-round").setTooltip(st.secretClear ?? "").onClick(() => {
+            opts.cache.invalidate(normalizeEndpoint(cfg.url));
+            void hook.clear(current, i).then(afterSecret).catch(failSafe);
+          });
+        });
+      } else {
+        secretInput();
+      }
+    } else if (!isAdder) {
+      s.addText(tx => {   // bisheriges Passwortfeld, unverändert
         tx.setPlaceholder(opts.strings.apiKeyPlaceholder).setValue(cfg.apiKey ?? "");
         tx.inputEl.type = "password";                    // maskiert gegen Schultergucken/Screenshots
         tx.inputEl.setAttribute("autocomplete", "off");
         tx.inputEl.setAttribute("aria-label", opts.strings.ariaApiKey(cfg.url));
         tx.inputEl.addEventListener("blur", () => { commit("apiKey", tx.getValue()); });
       });
+    }
+    if (!isAdder) {
       // Modell-Override: Dropdown mit den Modellen GENAU DIESES Endpunkts. Die Liste kommt
       // aus dem Cache, nicht vom aktiven Client — eine Zeile kann einen ganz anderen
       // Anbieter meinen als den gerade verbundenen.
@@ -257,7 +331,7 @@ export function buildEndpointList(opts: EndpointListOptions): void {
       const modelSlot = s.controlEl.createSpan({ cls: "okit-model-slot" });
       const listKey = normalizeEndpoint(cfg.url);
       const gen = opts.cache.generation();
-      void opts.cache.load(listKey, opts.clientFor(cfg)).then(({ models, reachable }) => {
+      void opts.cache.load(listKey, opts.clientFor(opts.get()[i] ?? cfg)).then(({ models, reachable }) => {
         if (gen !== opts.cache.generation()) return;   // Liste hat sich verschoben
         // `allowEmpty: true` wie in der Vorlage — die Leer-Option muss auch dann im Dropdown
         // stehen, wenn die Zeile bereits ein Override trägt, sonst ließe sich das Override
@@ -297,7 +371,7 @@ export function buildEndpointList(opts: EndpointListOptions): void {
         .setTooltip(opts.strings.moveToFront)
         .onClick(() => {
           lockRows();
-          opts.set(moveEndpointToFront(opts.get(), i));
+          opts.set(moveEndpointToFront(opts.get(), i) as T[]);
           void opts.save()
             .then(() => opts.reconnect())
             .then(() => opts.rerender())
@@ -315,7 +389,7 @@ export function buildEndpointList(opts: EndpointListOptions): void {
           // Geht an commit() vorbei (kein blur-Feld) — die Invalidierung muss deshalb hier
           // selbst passieren, sonst ueberlebt die Modell-Liste dieser URL ihren Eintrag.
           opts.cache.invalidate(normalizeEndpoint(cfg.url));
-          opts.set(applyEndpointEdit(opts.get(), i, "url", "", false));
+          opts.set(applyEndpointEdit(opts.get(), i, "url", "", false) as T[]);
           void opts.save()
             .then(() => opts.reconnect())
             .then(() => opts.rerender())
@@ -351,7 +425,7 @@ export function buildEndpointList(opts: EndpointListOptions): void {
         stateEl.toggleClass("is-active", role.kind === "active");
       };
       syncRoleLine = applyRole;
-      void opts.clientFor(cfg).probe().then(status => {
+      void opts.clientFor(opts.get()[i] ?? cfg).probe().then(status => {
         statusIcon.empty();
         setIcon(statusIcon, status.reachable ? "circle-check" : "circle-x");
         statusIcon.toggleClass("is-ok", status.reachable);
@@ -374,7 +448,11 @@ export function buildEndpointList(opts: EndpointListOptions): void {
       // Sachlicher Hinweis, keine Warnung vor einem Fehler — Form/Icon + Text, nie Farbe allein
       // (WCAG 1.4.1); NIE den Schlüssel selbst im Text/Tooltip. syncThirdPartyIcon() hält das
       // danach auch beim apiKey-Commit aktuell (siehe dort), ohne den Tab neu zu bauen.
-      syncThirdPartyIcon(carriesApiKey(cfg));
+      syncThirdPartyIcon(opts.secret ? opts.secret.has(opts.get()[i] ?? cfg, i) : carriesApiKey(cfg));
+    }
+    if (!isAdder && opts.extraRow) {
+      const host = s.controlEl.createDiv({ cls: "okit-ep-extra" });
+      opts.extraRow(host, opts.get()[i] ?? cfg, i);
     }
   });
   const actions = new Setting(opts.containerEl);
@@ -389,7 +467,7 @@ export function buildEndpointList(opts: EndpointListOptions): void {
         // Geht an commit() vorbei — dieselbe URL kann von einem zuvor geloeschten Eintrag noch
         // eine (veraltete) Liste im Cache tragen.
         opts.cache.invalidate(normalizeEndpoint(preset.url));
-        opts.set(applyEndpointEdit(cur, cur.length, "url", preset.url, true));
+        opts.set(applyEndpointEdit(cur, cur.length, "url", preset.url, true) as T[]);
         void opts.save()
           .then(() => opts.reconnect())
           .then(() => opts.rerender())
@@ -413,6 +491,8 @@ export const ENDPOINT_LIST_CSS = `
    gedämpfter als .okit-ep-warn, Bedeutung trägt das Dreieck + der Tooltip, nicht die Farbe. */
 .okit-ep-thirdparty { display: inline-flex; align-items: center; margin-right: 8px; vertical-align: middle; color: var(--text-muted); }
 .okit-ep-thirdparty svg { width: 14px; height: 14px; }
+.okit-ep-secret { color: var(--text-muted); font-size: var(--font-ui-small); margin-right: 8px; }
+.okit-ep-extra { flex: 0 0 100%; order: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
 /* Rolle der Zeile als Text unter den Feldern: „aktiv" / „erreichbar, aber Platz N" / … .
    Erreichbarkeit trägt das Icon (Form), die Rolle dieser Text — keins von beiden über Farbe
    allein (WCAG 1.4.1). Die frühere Auszeichnung saß auf dem Icon-Container und war wirkungslos:

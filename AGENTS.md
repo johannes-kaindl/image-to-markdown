@@ -181,6 +181,8 @@ durch deren `check:pure`. Erneuert wird über `tools/sync-kit.sh` (`sh tools/syn
 liest `../obsidian-kit` bzw. `$KIT_DIR`), nie von Hand; die beiden `VENDOR.json` tragen den Pin.
 Der Transport `streamSSE` bleibt bewusst plugin-lokal.
 
+**Die Endpunkt-QUELLE gehört dem LLM Endpoint Manager, sobald er installiert ist (Welle 8, 2026-09-25):** `plugin.resolveAndReconnect()` (`src/main.ts`) löst Endpunkt UND Modell über `resolveVisionEndpoint()` (`src/resolve_endpoint.ts`, Kit `endpoint-source`, Fähigkeit `vision`) auf — Manager zuerst, sonst `visionEndpoints` + `visionModel`; `plugin.model` ist das Modell für jeden Aufruf (`activeModel`, Rückfall `visionModel`), `settings.choice` hält die Wahl gegenüber dem Manager und gilt nur mit Manager (ein Modellname ist an seinen Endpunkt gebunden). Den Manager findet `findEndpointManager(app)` bei JEDEM Aufruf frisch. Im Settings-Tab zeigt `buildEndpointSourceSection` den Manager-Baustein, sonst den lokalen Listen-Editor; die globale Modell-Zeile blendet sich mit Manager über die Klasse `img2md-setting-managed` aus — **in `render()`, nicht beim Bau der Definitionsliste**, weil Obsidian ≥ 1.13 diese Liste über das Erscheinen des Managers hinweg zwischenspeichern kann (in slide-deck gemessen, GUI-Smoke E1b). Ein Manager ohne Endpunkt ergibt KEINEN lokalen Rückfall (Kit-Vertrag). `tools/sync-kit.sh` kennt seither `relayer_pure` für `endpoint-source` (Querimport auf `sampling-profiles`, nur als Abhängigkeit mitvendort). GUI-Smoke F1–F3 legen einen Fake-Manager in den Plugin-Slot und stellen den Slot im `finally` und im Abbruch-Handler zurück.
+
 ## Commands
 
 ```bash

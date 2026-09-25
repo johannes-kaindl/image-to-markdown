@@ -1,4 +1,4 @@
-// vendored from code-kit@0.6.0, src/ts/pure/sse.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.7.0, src/ts/pure/sse.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Akkumuliert OpenAI-SSE-Deltas (content + Reasoning) aus einem (Teil-)Buffer;
  *  unvollständige letzte Zeile → rest. `model` = erstes im Buffer gesehenes Chunk-`model`-Feld.
  *  `finishReason` = erstes non-empty `choices[0].finish_reason` (OpenAI sendet in Zwischen-Chunks

@@ -12,6 +12,9 @@ import { ENDPOINT_PRESETS, type EndpointStatusKind, type EndpointWarning } from 
 import type { EndpointRole } from "./vendor/kit/endpoint_config";
 import { migrateEndpointList, type EndpointConfig } from "./vendor/kit/endpoint_config";
 import { FolderSuggest } from "./vendor/kit-obsidian/folder-suggest";
+import type { EndpointChoice } from "./vendor/kit/endpoint-source";
+import { buildEndpointSourceSection, findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
+import { ENDPOINT_CALLER } from "./resolve_endpoint";
 
 export type { EndpointConfig };
 
@@ -44,6 +47,9 @@ export function applyListEdit(endpoints: string[], index: number, value: string,
 
 export interface ImageToMarkdownSettings {
   visionEndpoints: EndpointConfig[];
+  /** Wahl gegenüber dem LLM Endpoint Manager (Endpunkt + Modell). Leer = automatisch. Nur
+   *  relevant, solange der Manager installiert ist; sonst gilt `visionEndpoints` + `visionModel`. */
+  choice: EndpointChoice;
   visionModel: string;
   visionPrompt: string;
   promptPreset: string;
@@ -65,6 +71,7 @@ export interface ImageToMarkdownSettings {
 export function defaultSettings(): ImageToMarkdownSettings {
   return {
     visionEndpoints: [{ url: "http://localhost:8080" }],
+    choice: {},
     visionModel: "",
     visionPrompt: defaultVisionPrompt(),
     promptPreset: "default",
@@ -162,7 +169,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   /** Der Endpunkt, gegen den die Settings-UI arbeitet (Modell-Liste, Vision-Test): der aktive,
    *  sonst der erste konfigurierte. GANZE Config, weil jeder dieser Calls den Schlüssel braucht. */
   private endpointCfg(): EndpointConfig | undefined {
-    return this.plugin.activeEndpoint ?? this.plugin.settings.visionEndpoints[0];
+    return this.plugin.activeEndpoint ?? (findEndpointManager(this.app) ? undefined : this.plugin.settings.visionEndpoints[0]);
   }
 
   /** VisionClient für die Settings-UI — immer über endpointCfg(), damit der Schlüssel mitgeht. */
@@ -289,8 +296,34 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
    *  dem Fenster schrieb auf den NACHRUECKENDEN Eintrag, im schlimmsten Fall einen
    *  API-Schluessel an den falschen Host. Der Kit-Baustein sperrt die Zeilen dafuer. */
   private renderEndpoints(setting: Setting): void {
+    const host = settingBodyHost(setting);
+    buildEndpointSourceSection({
+      app: this.app, containerEl: host, capability: "vision", caller: ENDPOINT_CALLER,
+      choice: () => this.plugin.settings.choice,
+      setChoice: async c => { this.plugin.settings.choice = c; await this.plugin.saveSettings(); await this.plugin.resolveAndReconnect(); },
+      local: () => this.plugin.settings.visionEndpoints,
+      strings: {
+        managed: t("settings.source.managed"), managedDesc: t("settings.source.managedDesc"),
+        openManager: t("settings.source.openManager"), pickEndpoint: t("settings.source.pickEndpoint"),
+        automatic: t("settings.source.automatic"), model: t("settings.model.name"),
+        importLocal: t("settings.source.importLocal"),
+        imported: r => t("settings.source.imported", String(r.added.length), String(r.merged.length)),
+        importFailed: t("settings.source.importFailed"),
+        modelHint: key => key === "unreachable" ? t("settings.endpoints.hint.unreachable")
+          : key === "no-list" ? t("settings.endpoints.hint.noList")
+          : "",
+        savedSuffix: t("settings.endpoints.saved"), refreshModels: t("settings.refreshModels"),
+        saveFailed: t("settings.endpoints.saveFailed"),
+      },
+      renderLocalList: () => { this.renderLocalEndpointList(host); },
+      rerender: () => { this.refresh(); },
+    });
+  }
+
+  /** Der lokale Listen-Editor — nur ohne installierten LLM Endpoint Manager sichtbar. */
+  private renderLocalEndpointList(host: HTMLElement): void {
     buildEndpointList({
-      containerEl: settingBodyHost(setting),
+      containerEl: host,
       label: t("settings.endpoints.name"),
       desc: t("settings.endpoints.desc"),
       placeholder: "http://localhost:1234",
@@ -356,6 +389,10 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   /** Modell: Dropdown wird asynchron aus dem Endpunkt befüllt; offline stattdessen ein
    *  Textfeld + „Modelle laden". */
   private renderModel(setting: Setting): void {
+    // Mit Manager waehlt der Endpunkt-Baustein das Modell (choice.model). Hier entschieden, nicht
+    // beim Bau der Definitionsliste: Obsidian >= 1.13 kann diese Liste ueber das Erscheinen des
+    // Managers hinweg zwischenspeichern, render() laeuft bei jedem Oeffnen des Tabs.
+    if (findEndpointManager(this.app)) { setting.settingEl.addClass("img2md-setting-managed"); return; }
     setting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => { this.refresh(); }));
     void this.client("").listModels().then((models: string[]) => {
       const cur = this.plugin.settings.visionModel;
@@ -407,7 +444,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       void this.client("").visionConfidence(model).then(renderCap);
     };
     setting.addButton(b => b.setButtonText(t("settings.testVision")).onClick(async () => {
-      const model = this.plugin.settings.visionModel;
+      const model = this.plugin.model;
       b.setDisabled(true);
       try {
         const ok = await this.client(model).testVision(makeVisionTestImage());
@@ -418,7 +455,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         b.setDisabled(false);
       }
     }));
-    this.showCaps(this.plugin.settings.visionModel);
+    this.showCaps(this.plugin.model);
   }
 
   /** Prompt-Textarea — Hatch statt `textarea`-Control, weil sie zusätzlich die

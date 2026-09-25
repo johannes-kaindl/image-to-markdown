@@ -472,7 +472,125 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       }
     },
   },
+  {
+    key: "F1",
+    titel: "Endpunkt-Quelle: Manager an — Settings zeigen den Baustein statt der lokalen Liste, Modell-Zeile ausgeblendet",
+    async run(cdp) {
+      await installiereManager(cdp);
+      try {
+        const m = await messeEinstellungen(cdp);
+        if (!m) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+        return {
+          ok: m.baustein && m.zeilen === 0 && m.ausgeblendet === 1 && m.ausgeblendetSichtbar === 0,
+          detail: `Baustein ${m.baustein ? "da" : "FEHLT"} · ${m.zeilen} lokale Zeile(n) sichtbar · globale Modell-Zeile ausgeblendet: ${m.ausgeblendet} im DOM, ${m.ausgeblendetSichtbar} sichtbar (Modell-Zeilen gesamt sichtbar: ${m.modellSichtbar}, davon eine im Baustein)`,
+        };
+      } finally {
+        await entferneManager(cdp);
+      }
+    },
+  },
+  {
+    key: "F2",
+    titel: "Endpunkt-Quelle: Manager an — Aufloesung nimmt Manager-Endpunkt und Default-Modell",
+    async run(cdp) {
+      const lokal = await aufloesung(cdp);
+      await installiereManager(cdp);
+      try {
+        const r = await aufloesung(cdp);
+        return {
+          ok: r.url === MGR_URL && r.model === MGR_MODEL && lokal.url !== MGR_URL,
+          detail: `${r.url} · Modell ${r.model} (ohne Manager: ${lokal.url} · ${lokal.model || "—"})`,
+        };
+      } finally {
+        await entferneManager(cdp);
+        await aufloesung(cdp);
+      }
+    },
+  },
+  {
+    key: "F3",
+    titel: "Endpunkt-Quelle: Manager aus — lokale Liste und Modell-Zeile zurueck (Gegenprobe zu F1/F2)",
+    async run(cdp) {
+      const m = await messeEinstellungen(cdp);
+      if (!m) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      const r = await aufloesung(cdp);
+      return {
+        ok: m.zeilen > 0 && m.ausgeblendet === 0 && m.modellSichtbar === 1 && r.url !== MGR_URL,
+        detail: `${m.zeilen} lokale Zeile(n) · ausgeblendet: ${m.ausgeblendet} · Modell-Zeile sichtbar: ${m.modellSichtbar} · Aufloesung ${r.url}`,
+      };
+    },
+  },
 ];
+
+// --- Endpunkt-Quelle (Welle 8): Fake-Manager im Plugin-Slot ------------------------------------
+// Der Manager wird als FAKE-API in den Slot `llm-endpoint-manager` gelegt (Form-Pruefung
+// `isLlmEndpointManagerApi`), mit einer URL, die die lokale Liste nicht traegt — zwei verschiedene
+// Werte im Protokoll sind der Beleg, dass gemessen wurde. Zurueckgesetzt wird in `finally` UND im
+// Abbruch-Handler (cleanupState): ein liegen gebliebener Fake wuerde die echte Registrierung
+// eines installierten Managers ueberschreiben.
+const MGR_SLOT = "llm-endpoint-manager";
+const MGR_URL = "http://127.0.0.1:9312";
+const MGR_MODEL = "i2m-fake-vl";
+
+const installiereManager = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
+  const plugins = app.plugins.plugins;
+  if (!("__i2mVorherMgr" in globalThis)) globalThis.__i2mVorherMgr = plugins[${JSON.stringify(MGR_SLOT)}];
+  const eintrag = { id: "fake1", label: "Fake-Endpunkt", defaultModel: ${JSON.stringify(MGR_MODEL)} };
+  const aufgeloest = { id: "fake1", label: "Fake-Endpunkt", config: { url: ${JSON.stringify(MGR_URL)} }, defaultModel: ${JSON.stringify(MGR_MODEL)} };
+  plugins[${JSON.stringify(MGR_SLOT)}] = { api: {
+    version: 1, list: () => [eintrag], get: () => eintrag,
+    resolve: async () => aufgeloest, materialize: async () => aufgeloest,
+    models: async () => [${JSON.stringify(MGR_MODEL)}],
+    importEndpoints: async () => ({ added: [], merged: [], skipped: [] }), on: () => () => {},
+  } };
+  return true;
+`);
+const entferneManager = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
+  if ("__i2mVorherMgr" in globalThis) {
+    const vorher = globalThis.__i2mVorherMgr;
+    if (vorher === undefined) delete app.plugins.plugins[${JSON.stringify(MGR_SLOT)}];
+    else app.plugins.plugins[${JSON.stringify(MGR_SLOT)}] = vorher;
+    delete globalThis.__i2mVorherMgr;
+  }
+  return true;
+`);
+const aufloesung = (cdp: Cdp): Promise<{ url: string | null; model: string }> => cdp.evaluate(`
+  const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+  await p.resolveAndReconnect();
+  return { url: p.activeEndpoint ? p.activeEndpoint.url : null, model: p.model };
+`);
+
+/** Misst den Endpunkt-Abschnitt im Einstellungen-Fenster (eigenes CDP-Target ab 1.13). */
+async function messeEinstellungen(cdp: Cdp): Promise<{ baustein: boolean; zeilen: number; modellZeilen: number; modellSichtbar: number; ausgeblendet: number; ausgeblendetSichtbar: number } | null> {
+  await cdp.evaluate(`
+    app.setting.open();
+    app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+    await new Promise((r) => setTimeout(r, 1200));
+    return true;
+  `);
+  const sicht = await attachTo("settings", verbindung.port, verbindung.vault).catch(() => null);
+  if (!sicht) { await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined); return null; }
+  try {
+    return await sicht.evaluate(`
+      const wurzel = document.querySelector(".modal.mod-settings") ?? document.body;
+      const modell = [...wurzel.querySelectorAll(".setting-item, .img2md-setting-managed")]
+        .filter((z) => /^(Vision model|Vision-Modell)/.test(z.querySelector(".setting-item-name")?.textContent?.trim() ?? ""));
+      return {
+        baustein: wurzel.textContent.includes("LLM Endpoint Manager"),
+        zeilen: wurzel.querySelectorAll(".okit-ep-row").length,
+        modellZeilen: modell.length,
+        modellSichtbar: modell.filter((z) => z.offsetParent !== null).length,
+        // Die Zeile, die der Manager-Modus ausblendet, traegt die Klasse — sonst waere "Vision
+        // model" doppeldeutig: mit Manager steht die GLEICHNAMIGE Zeile des Bausteins sichtbar da.
+        ausgeblendet: wurzel.querySelectorAll(".img2md-setting-managed").length,
+        ausgeblendetSichtbar: [...wurzel.querySelectorAll(".img2md-setting-managed")].filter((z) => z.offsetParent !== null).length,
+      };
+    `);
+  } finally {
+    sicht.close?.();
+    await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+  }
+}
 
 async function main(): Promise<void> {
   const args = argv.slice(2);
@@ -513,6 +631,7 @@ async function main(): Promise<void> {
       `).catch(() => false);
       console.log(`  Einstellungen nach dem Lauf: ${gleich ? "byte-gleich" : "ABWEICHUNG — von Hand pruefen"}`);
     }
+    await entferneManager(cdp).catch(() => undefined);
     await closeExtraLeaves(cdp).catch(() => 0);
   };
 

@@ -2,7 +2,9 @@ import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
 import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
-import { resolveActiveEndpointConfig, type EndpointConfig } from "./vendor/kit/endpoint_config";
+import type { EndpointConfig } from "./vendor/kit/endpoint_config";
+import { resolveVisionEndpoint, sanitizeChoice } from "./resolve_endpoint";
+import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
 import { obsidianHttp, obsidianStreamFetch } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem, resolveDestDir } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
@@ -28,6 +30,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
   /** Zuletzt aufgelöster Endpunkt — die GANZE Config, nicht nur die URL: der Schlüssel muss
    *  an jeden Folge-Call. `url` ist bereits normalisiert (resolveActiveEndpointConfig). */
   activeEndpoint: EndpointConfig | null = null;
+  /** Modell, das der letzte resolveAndReconnect() gewählt hat (choice.model → Manager-Default →
+   *  Modell der Zeile → visionModel). Leer, solange nichts aufgelöst ist. */
+  activeModel = "";
+  /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet, `visionModel` ist der Rückfall. */
+  get model(): string { return this.activeModel || this.settings.visionModel; }
   private pendingCards = new CardCache();
 
   private openPath = (p: string): void => {
@@ -43,6 +50,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.settings = mergeSettings(defaultSettings(), saved);
     const migratedEps = migrateEndpoints(saved);
     this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
+    this.settings.choice = sanitizeChoice(this.settings.choice);
     this.settings.promptPreset = normalizePreset(this.settings.promptPreset);
     const first = this.settings.visionEndpoints[0];
     this.visionClient = new VisionClient(first?.url ?? "", this.settings.visionModel, first?.apiKey);
@@ -75,16 +83,21 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshImgViews()));
   }
 
+  /** Löst Endpunkt UND Modell auf: Manager zuerst (bei JEDEM Aufruf frisch gefunden, nie
+   *  gecacht — das Plugin kann jederzeit deaktiviert werden), sonst die lokale Liste. */
   async resolveAndReconnect(): Promise<void> {
     // Der Schlüssel geht auch an die PROBE mit: ohne ihn antwortet ein gehosteter Endpunkt mit 401,
     // gilt damit als nicht erreichbar und wird still übersprungen — das Feature wirkt tot, ohne Fehler.
-    const active = await resolveActiveEndpointConfig(
-      this.settings.visionEndpoints,
+    const r = await resolveVisionEndpoint(
+      this.settings, findEndpointManager(this.app),
       cfg => new VisionClient(cfg.url, "", cfg.apiKey).ping(),
     );
-    this.activeEndpoint = active;
-    const ep = active ?? this.settings.visionEndpoints[0];
-    this.visionClient = new VisionClient(ep?.url ?? "", this.settings.visionModel, ep?.apiKey);
+    this.activeEndpoint = r.config;
+    this.activeModel = r.model;
+    // Mit Manager und ohne Endpunkt gibt es keinen lokalen Rückfall (Kit-Vertrag): der Client
+    // zeigt dann ins Leere, connectionStatus meldet "nicht erreichbar".
+    const ep = r.config ?? (r.kind === "local" ? this.settings.visionEndpoints[0] : undefined);
+    this.visionClient = new VisionClient(ep?.url ?? "", this.model, ep?.apiKey);
   }
 
   private mimeOf(ext: string): string { const e = ext.toLowerCase(); return e === "jpg" ? "jpeg" : e; }
@@ -154,7 +167,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
-      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) }),
+      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) }),
       notify: (m) => { new Notice(m); },
       confirmOverwrite: (ctx) => new Promise<string | null>((resolve) => new DiffModal(this.app, ctx.path, ctx.diff, resolve).open()),
     };
@@ -243,10 +256,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
             if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
               const fmt = t("pdf.textLayerPrompt");
               try {
-                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
+                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
               } catch (err) {
                 await this.resolveAndReconnect();
-                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
+                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
                 throw err;
               }
             }
@@ -257,10 +270,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
         }
         const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
         try {
-          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
+          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
         } catch (err) {
           await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) });
+          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
           throw err;
         }
       },
@@ -298,7 +311,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
           dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
         }
         const prompt = buildDescribePrompt(this.settings.describeTaxonomy, getLang());
-        const opts = { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) };
+        const opts = { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) };
         try {
           const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
           return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
@@ -313,7 +326,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       },
       refine: async (base, steps, feedback, onContent, onReasoning, signal) => {
         const messages = buildRefineMessages(base, steps, feedback, t("refine.systemPrompt"));
-        const opts = { suppressThinking: effectiveSuppress(this.settings.visionModel, this.settings.suppressThinking) };
+        const opts = { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) };
         try {
           return await this.visionClient.refineStream(messages, onContent, onReasoning, signal, opts);
         } catch (err) {
@@ -338,11 +351,17 @@ export default class ImageToMarkdownPlugin extends Plugin {
       setMode: (m) => { this.settings.mode = m; void this.saveSettings(); },
       connectionStatus: async () => { await this.resolveAndReconnect(); return { ok: this.activeEndpoint !== null, endpoint: this.activeEndpoint?.url ?? null }; },
       listModels: () => {
-        const ep = this.activeEndpoint ?? this.settings.visionEndpoints[0];
+        // Mit Manager gibt es keinen lokalen Rückfall — ohne aufgelösten Endpunkt bleibt die Liste leer.
+        const ep = this.activeEndpoint ?? (findEndpointManager(this.app) ? undefined : this.settings.visionEndpoints[0]);
         return new VisionClient(ep?.url ?? "", "", ep?.apiKey).listModels();
       },
-      getModel: () => this.settings.visionModel,
-      setModel: (m: string) => { this.settings.visionModel = m; void this.saveSettings(); void this.resolveAndReconnect(); },
+      getModel: () => this.model,
+      // Mit Manager gehört das Modell zur Wahl (choice.model), sonst ist es das globale visionModel.
+      setModel: (m: string) => {
+        if (findEndpointManager(this.app)) this.settings.choice = { ...this.settings.choice, model: m || undefined };
+        else this.settings.visionModel = m;
+        void this.saveSettings(); void this.resolveAndReconnect();
+      },
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
       getPreset: () => this.settings.promptPreset,
       setPreset: (id: string) => { this.settings.promptPreset = isPromptPreset(id) ? id : "default"; void this.saveSettings(); },

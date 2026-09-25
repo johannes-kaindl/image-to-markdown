@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.35.0, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.41.1, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // Self-contained Obsidian test double for obsidian-kit.
 // - Zero external imports (NOT from "obsidian", NOT from "vitest").
 // - Consumed via vitest `resolve.alias` as a drop-in for `import ... from "obsidian"`,
@@ -106,6 +106,15 @@ export function makeFakeEl(tagName = "DIV"): any {
      *  über die Reihenfolge der Kinder ist nur dort belastbar, wo kein Knoten umgehängt
      *  wurde (der Modell-Picker hängt seine Komponenten aus `controlEl` in den Slot um). */
     appendChild: (c: any) => { if (c && typeof c === "object") c.parentElement = el; children.push(c); return c; },
+    /** `ref === null` haengt ans Ende an, wie im echten DOM. Fehlt `ref` im eigenen
+     *  Kinder-Array, wird ebenfalls ans Ende angehaengt statt zu werfen (Fake-Element
+     *  ist tolerant, kein Spezifikations-Double). */
+    insertBefore: (c: any, ref: any) => {
+      if (c && typeof c === "object") c.parentElement = el;
+      const i = ref === null || ref === undefined ? -1 : children.indexOf(ref);
+      if (i < 0) children.push(c); else children.splice(i, 0, c);
+      return c;
+    },
     removeChild: (c: any) => {
       const i = children.indexOf(c);
       if (i >= 0) children.splice(i, 1);
@@ -217,13 +226,15 @@ export class TextComponent {
   inputEl: any = makeFakeEl("INPUT");
   protected _value = "";
   onChangeCB: ((v: string) => any) | null = null;
+  placeholder = "";
+  disabled = false;
   constructor() {
     this.inputEl.__component = this;
   }
   getValue(): string { return this._value; }
   setValue(v: string): this { this._value = String(v ?? ""); return this; }
-  setPlaceholder(_p: string): this { return this; }
-  setDisabled(_d: boolean): this { return this; }
+  setPlaceholder(p: string): this { this.placeholder = String(p ?? ""); return this; }
+  setDisabled(d: boolean): this { this.disabled = Boolean(d); return this; }
   onChange(cb: (v: string) => any): this { this.onChangeCB = cb; return this; }
 }
 export class TextAreaComponent extends TextComponent {
@@ -250,8 +261,9 @@ export class DropdownComponent {
   options: Record<string, string> = {};
   protected _value = "";
   onChangeCB: ((v: string) => any) | null = null;
-  constructor() {
+  constructor(containerEl?: any) {
     this.selectEl.__component = this;
+    if (containerEl?.appendChild) containerEl.appendChild(this.selectEl);
   }
   addOption(value: string, display: string): this { this.options[value] = display; return this; }
   addOptions(options: Record<string, string>): this { Object.assign(this.options, options); return this; }
@@ -482,18 +494,18 @@ export function makeFakeEditor(initial = ""): any {
     const ls = lines();
     const line = Math.max(0, Math.min(pos?.line ?? 0, ls.length - 1));
     let off = 0;
-    for (let i = 0; i < line; i++) off += ls[i].length + 1;
-    return off + Math.max(0, Math.min(pos?.ch ?? 0, ls[line].length));
+    for (let i = 0; i < line; i++) off += (ls[i] ?? "").length + 1;
+    return off + Math.max(0, Math.min(pos?.ch ?? 0, (ls[line] ?? "").length));
   };
   const offsetToPos = (offset: number) => {
     const ls = lines();
     let rest = Math.max(0, Math.min(offset, value.length));
     for (let i = 0; i < ls.length; i++) {
-      const len = ls[i].length;
+      const len = (ls[i] ?? "").length;
       if (rest <= len) return { line: i, ch: rest };
       rest -= len + 1;
     }
-    return { line: ls.length - 1, ch: ls[ls.length - 1].length };
+    return { line: ls.length - 1, ch: (ls[ls.length - 1] ?? "").length };
   };
   const sortiert = () => (posToOffset(anchor) <= posToOffset(head) ? [anchor, head] : [head, anchor]);
   return {

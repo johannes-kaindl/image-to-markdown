@@ -1,4 +1,4 @@
-// vendored from code-kit@0.6.0, src/ts/web/clipboard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.7.0, src/ts/web/clipboard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Text in die Zwischenablage schreiben — obsidian-frei, in Node testbar (PROF-OBS-03/04).
  *  Das Kit formuliert **keine** Meldung und kennt weder `Notice` noch `t()`: Erfolg und
  *  Fehlschlag kommen als Callbacks zurück, die Quittung baut der Consumer. Das ist keine

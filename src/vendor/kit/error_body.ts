@@ -1,4 +1,4 @@
-// vendored from code-kit@0.6.0, src/ts/pure/error_body.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.7.0, src/ts/pure/error_body.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Lesbare Fehlermeldung aus einem JSON-Fehlerkörper eines OpenAI-kompatiblen bzw.
  *  FastAPI-/DRF-artigen Servers. Eine Kaskade über vier Quellen, mehr nicht — kein
  *  Transport, kein Status-Wissen, keine Übersetzung. Wer nichts findet, bekommt `null`
