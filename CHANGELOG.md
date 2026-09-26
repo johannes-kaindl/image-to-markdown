@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-09-26
+
 ### Geändert
 
 - **Endpunkte kommen vom LLM Endpoint Manager, wenn er installiert ist** (Kit `endpoint-source`, `obsidian-kit` 0.41.1, `code-kit` 0.7.0 neu vendort, Fähigkeit `vision`). Der Manager hat Vorrang, die lokale Endpunkt-Liste bleibt als Rückfall und ist unverändert, solange der Manager fehlt oder aus ist. Sichtbare Folgen: (1) Mit Manager zeigt der Einstellungen-Tab statt der lokalen Endpunkt-Liste den Baustein „Endpunkte kommen vom LLM Endpoint Manager“ (Endpunkt-Wahl, Modell-Wahl, Import der lokalen Endpunkte in den Manager); die globale Vision-Modell-Zeile ist dann ausgeblendet, die lokale Liste und `visionModel` bleiben gespeichert. (2) Neues Setting `choice` (`endpointId`, `model`) hält die Wahl gegenüber dem Manager; alte `data.json` ohne `choice` laden unverändert. Die Sidebar-Modellauswahl schreibt mit Manager nach `choice.model`, sonst weiter nach `visionModel`. (3) Meldet der Manager keinen Endpunkt, gibt es keinen lokalen Rückfall — die Sidebar zeigt „nicht verbunden“. (4) **Auch ohne Manager wirkt jetzt das Modell einer Endpunkt-Zeile**: es schlägt das globale `visionModel` (Kit-Regel `choice.model → Modell der Zeile → visionModel`); bisher stand die Zeilen-Auswahl in der Oberfläche, wurde beim Aufruf aber nicht gelesen.
