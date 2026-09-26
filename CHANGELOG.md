@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-09-26
+
 ### Geändert
 
 - **Der Chat-Weg läuft über den Kit-Chat-Client** (`createChatClient` aus `obsidian-kit` 0.43.0, Transport XHR mit `requestUrl` als Fallback) statt über den eigenen `fetch`-Client. Sichtbare Folgen: (1) **Ein schweigender Server bricht ab**: nach 2 Minuten ohne Daten, vor dem ersten Byte nach 10 Minuten (Modell lädt, großes Bild) — bisher hing die Anfrage ohne Frist. (2) **Fehlermeldungen tragen den Grund**: statt „Vision HTTP 400“ steht „The endpoint answered with HTTP 400: Invalid url.“ (Servermeldung aus dem Körper), dazu eigene Sätze für „nicht erreichbar“, „antwortet nicht mehr“ und „Eingabe zu lang für das Kontextfenster“ (Englisch/Deutsch). (3) **Eine HTTP-200-Antwort, die weder Stream noch Completion ist** (etwa die Fehlerseite eines Proxys), ist jetzt ein Fehler mit dem Text der Antwort statt eines still leeren Transkripts. (4) **Origin-Weigerung**: lehnt ein lokaler Server den Stream-Aufruf wegen des Obsidian-Origins ab, wiederholt das Plugin die Anfrage einmal ohne Stream (`requestUrl`) und bleibt für diesen Endpunkt dabei — die Karte füllt sich dann auf einmal statt live. (5) Die nicht streamenden Aufrufe (Vision testen, Transkription ohne Karte) laufen ebenfalls über den Kit-Client. Unverändert: Nachrichtenform mit Bildteil, `suppressThinking`-Parameter, Abbruch (Stop), `finish_reason: length` mit oder ohne Text.
