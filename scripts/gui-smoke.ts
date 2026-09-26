@@ -554,6 +554,96 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       };
     },
   },
+  // ── G: Streaming gegen einen ECHTEN Endpunkt (Welle 11, Chat-Client-Tausch) ──────────────────
+  // Der Kernlauf ist absichtlich modellfrei; diese drei Punkte sind der Beleg, dass der Chat-Weg
+  // (Transport, SSE, Abbruch, Fehlerkoerper) gegen einen echten Server traegt. Sie bauen einen
+  // FRISCHEN Client aus dem Konstruktor des laufenden Plugins — Einstellungen bleiben unberuehrt.
+  // Endpunkt/Modell per Umgebung ueberschreibbar (I2M_SMOKE_ENDPOINT / I2M_SMOKE_MODEL).
+  {
+    key: "G1",
+    titel: "Streaming: ein Vision-Aufruf gegen den echten Endpunkt liefert Text in mehreren Stuecken",
+    modell: true,
+    async run(cdp) {
+      await cdp.evaluate(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        const C = p.visionClient.constructor;
+        const c = new C(${JSON.stringify(G_ENDPOINT)}, ${JSON.stringify(G_MODEL)});
+        const cv = document.createElement("canvas"); cv.width = 320; cv.height = 96;
+        const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, 320, 96);
+        g.fillStyle = "#000"; g.font = "bold 48px sans-serif"; g.fillText("HELLO 42", 20, 64);
+        const st = { chunks: 0, text: "", fertig: false, fehler: null, model: "", t0: Date.now() };
+        globalThis.__i2mG1 = st;
+        c.transcribeStream(cv.toDataURL("image/png"), "Transcribe the text in the image. Reply with the text only.",
+          (t) => { st.chunks++; st.text += t; }, () => {}, new AbortController().signal, { suppressThinking: true })
+          .then((r) => { st.model = r.model; st.fertig = true; }, (e) => { st.fehler = String(e && e.message || e); st.fertig = true; });
+        return true;
+      `);
+      const r = await pollUntil<string>(cdp, `
+        const st = globalThis.__i2mG1;
+        return st && st.fertig ? JSON.stringify(st) : null;
+      `, 180_000, 2000);
+      if (!r) return { ok: false, detail: "Aufruf nach 180 s nicht beendet" };
+      const st = JSON.parse(r) as { chunks: number; text: string; fehler: string | null; model: string; t0: number };
+      return {
+        ok: st.fehler === null && st.chunks > 1 && /42/.test(st.text),
+        detail: `${st.chunks} Stueck(e) · Modell "${st.model}" · Text "${st.text.trim().slice(0, 60)}"${st.fehler ? ` · FEHLER ${st.fehler}` : ""}`,
+      };
+    },
+  },
+  {
+    key: "G2",
+    titel: "Streaming: Abbruch per Signal beendet den Aufruf zuegig, mit Fehler statt Ergebnis",
+    modell: true,
+    async run(cdp) {
+      await cdp.evaluate(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        const C = p.visionClient.constructor;
+        const c = new C(${JSON.stringify(G_ENDPOINT)}, ${JSON.stringify(G_MODEL)});
+        const ctrl = new AbortController();
+        const st = { fertig: false, fehler: null, ergebnis: false, dauer: 0, abgebrochenNach: 0, t0: Date.now() };
+        globalThis.__i2mG2 = st;
+        c.transcribeTextStream("Write the numbers from 1 to 400, one per line.", "Follow the instruction.",
+          () => { if (!st.abgebrochenNach) { st.abgebrochenNach = Date.now() - st.t0; ctrl.abort(); } }, () => {}, ctrl.signal, { suppressThinking: true })
+          .then(() => { st.ergebnis = true; st.fertig = true; st.dauer = Date.now() - st.t0; },
+                (e) => { st.fehler = String(e && (e.name + ": " + e.message) || e); st.fertig = true; st.dauer = Date.now() - st.t0; });
+        return true;
+      `);
+      const r = await pollUntil<string>(cdp, `
+        const st = globalThis.__i2mG2;
+        return st && st.fertig ? JSON.stringify(st) : null;
+      `, 120_000, 1000);
+      if (!r) return { ok: false, detail: "Aufruf nach 120 s nicht beendet" };
+      const st = JSON.parse(r) as { fehler: string | null; ergebnis: boolean; dauer: number; abgebrochenNach: number };
+      return {
+        ok: st.fehler !== null && !st.ergebnis && st.abgebrochenNach > 0 && st.dauer - st.abgebrochenNach < 3000,
+        detail: `erstes Stueck nach ${st.abgebrochenNach} ms, Abbruch, Ende nach ${st.dauer} ms · ${st.fehler ?? "KEIN Fehler, Ergebnis geliefert"}`,
+      };
+    },
+  },
+  {
+    key: "G3",
+    titel: "Streaming: HTTP-Fehler (ungueltige Bild-URL → 400) → Fehler mit nicht leerer Meldung (Text wird nur berichtet)",
+    modell: true,
+    async run(cdp) {
+      await cdp.evaluate(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        const C = p.visionClient.constructor;
+        const c = new C(${JSON.stringify(G_ENDPOINT)}, ${JSON.stringify(G_MODEL)});
+        const st = { fertig: false, fehler: null, ergebnis: false };
+        globalThis.__i2mG3 = st;
+        c.transcribeStream("nonsense", "y", () => {}, () => {}, new AbortController().signal, { suppressThinking: true })
+          .then(() => { st.ergebnis = true; st.fertig = true; }, (e) => { st.fehler = String(e && e.message || e); st.fertig = true; });
+        return true;
+      `);
+      const r = await pollUntil<string>(cdp, `
+        const st = globalThis.__i2mG3;
+        return st && st.fertig ? JSON.stringify(st) : null;
+      `, 60_000, 1000);
+      if (!r) return { ok: false, detail: "Aufruf nach 60 s nicht beendet" };
+      const st = JSON.parse(r) as { fehler: string | null; ergebnis: boolean };
+      return { ok: st.fehler !== null && st.fehler.trim() !== "", detail: st.fehler !== null ? `Meldung: "${st.fehler}"` : "KEIN Fehler" };
+    },
+  },
 ];
 
 // --- Endpunkt-Quelle (Welle 8): Fake-Manager im Plugin-Slot ------------------------------------
@@ -565,6 +655,8 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
 const MGR_SLOT = "llm-endpoint-manager";
 const MGR_URL = "http://127.0.0.1:9312";
 const MGR_MODEL = "i2m-fake-vl";
+const G_ENDPOINT = process.env.I2M_SMOKE_ENDPOINT ?? "http://127.0.0.1:1234";
+const G_MODEL = process.env.I2M_SMOKE_MODEL ?? "google/gemma-4-e4b";
 
 const installiereManager = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
   const plugins = app.plugins.plugins;
