@@ -23,7 +23,7 @@ Registered under Obsidian's command palette (`Cmd/Ctrl-P`). The displayed comman
 | View title | "IMG → MD" | Display text of the sidebar view. |
 | View type | `image-to-markdown-view` | Internal Obsidian view-type identifier. |
 
-The sidebar view lists every embedded image and PDF of the active note as a checkbox list. Supported images with no existing transcript are pre-selected; unsupported formats are disabled, and rows that already have a transcript are left **unchecked by default** (see [Re-transcribing & override](#re-transcribing--override)). A "Deselect all" / "Select all" ("Alle abwählen" / "Alle auswählen") toggle flips the whole supported set. The "Transcribe" ("Transkribieren") button streams the vision response live into one card per unit — with a collapsible thinking block for reasoning models and a copy button. While a run is in progress the button becomes "Stop" (unlocalized). Each card has a "Create note" ("Notiz anlegen") button; there is also a "Create all" ("Alle anlegen") button. Cards are read-only and render the raw Markdown as pre-wrapped text. After a transcript note is written, the handled image drops out of the list on the next re-scan.
+The sidebar view lists every embedded image and PDF of the active note as a checkbox list. Supported images with no existing transcript are pre-selected; unsupported formats are disabled, and rows that already have a transcript are left **unchecked by default** (see [Re-transcribing & override](#re-transcribing--override)). A "Deselect all" / "Select all" ("Alle abwählen" / "Alle auswählen") toggle flips the whole supported set. The "Transcribe" ("Transkribieren") button streams the vision response live into one card per unit — with a collapsible thinking block for reasoning models and a copy button. While a run is in progress the button becomes "Stop" (unlocalized). Each card has a "Create note" ("Notiz anlegen") button; the "Apply" ("Anwenden") button at the bottom of the sidebar writes all finished cards at once. Cards are read-only and render the raw Markdown as pre-wrapped text. After a transcript note is written, the handled image drops out of the list on the next re-scan.
 
 A row that already has a transcript shows a "✓ transcript exists" ("✓ Transkript vorhanden") marker with an "open" ("öffnen") link to that note, and a row tooltip "re-transcribing overwrites it" ("erneut transkribieren überschreibt").
 
@@ -149,7 +149,7 @@ The plugin's interface is bilingual. **English is the canonical language; German
 ### What is localized
 
 - **Settings** — the tab body labels and descriptions ("Vision endpoint", "Vision model", "Vision prompt", "Test connection", "Vision capability", "Test vision", "Load models") and the capability states.
-- **Buttons** — the sidebar controls "Transcribe", "Create note", "Create all".
+- **Buttons** — the sidebar controls "Transcribe", "Create note", "Apply".
 - **Notices** — status and error messages, including the unsupported-format notice and "No active note." ("Keine aktive Notiz.").
 - **View** — the in-view prompts and helper text of the sidebar.
 - **Commands** — the displayed command names (see [Commands](#commands)).

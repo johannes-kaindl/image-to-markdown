@@ -1,15 +1,15 @@
 # Image to Markdown
 
-> 🇬🇧 English · [🇩🇪 Deutsch](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.de.md)
+> 🇬🇧 English · [🇩🇪 Deutsch](https://github.com/johannes-kaindl/image-to-markdown/blob/main/README.de.md)
 
 **Transcribe images and PDFs in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming live into the sidebar.**
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE)
-[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS)
-[![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fgit.jkaindl.de&label=release)](https://git.jkaindl.de/jkaindl/image-to-markdown/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE)
+[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE-DOCS)
+[![Release](https://img.shields.io/github/v/release/johannes-kaindl/image-to-markdown?label=release)](https://github.com/johannes-kaindl/image-to-markdown/releases)
 ![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
-<p align="center"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png" width="820" alt="A note embedding a three-page PDF on the left, the “IMG → MD” sidebar on the right mid-transcription: one card per page, the first streaming Markdown live"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/hero.png" width="820" alt="A note embedding a three-page PDF on the left, the “IMG → MD” sidebar on the right mid-transcription: one card per page, the first streaming Markdown live"></p>
 
 ## Features
 
@@ -34,34 +34,34 @@
 
 **Streaming into the sidebar** — one card per image with the model's thinking block and a copy button:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/sidebar-streaming.png" width="820" alt="A sidebar card showing a finished transcription with headings, a bullet list and a GFM table, plus a collapsed “Thoughts” block and a copy button">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/sidebar-streaming.png" width="820" alt="A sidebar card showing a finished transcription with headings, a bullet list and a GFM table, plus a collapsed “Thoughts” block and a copy button">
 
 **PDFs** — pick a page range, then watch one card per page fill up:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-sidebar.png" width="820" alt="Sidebar row for an embedded PDF with a “Page 1 to 3” range picker">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/pdf-sidebar.png" width="820" alt="Sidebar row for an embedded PDF with a “Page 1 to 3” range picker">
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-streaming.png" width="820" alt="Three page cards for a PDF, the first one streaming Markdown live">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/pdf-streaming.png" width="820" alt="Three page cards for a PDF, the first one streaming Markdown live">
 
 **Describe mode** — for images that carry no text worth transcribing:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/describe-mode.png" width="820" alt="Describe mode active: a card showing the generated description of a diagram with an editable category and tags">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/describe-mode.png" width="820" alt="Describe mode active: a card showing the generated description of a diagram with an editable category and tags">
 
 **Refine with feedback** — talk the transcript into shape without starting over:
 
-<a href="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/refine.png"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thumbs/refine.png" width="380" alt="A transcript card with a scrollable history: the original transcription, a feedback round headed “You: …”, and the refine input below"></a>
+<a href="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/refine.png"><img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thumbs/refine.png" width="380" alt="A transcript card with a scrollable history: the original transcription, a feedback round headed “You: …”, and the refine input below"></a>
 <sub>Click the preview for the full-resolution screenshot.</sub>
 
 **Idempotent** — an already-transcribed source is marked instead of silently duplicated:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png" width="500" alt="Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/exists-open.png" width="500" alt="Sidebar row reading “✓ transcript exists” with an “open” link and an unticked checkbox">
 
 **Diff before overwriting** — the one destructive operation asks first, hunk by hunk:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png" width="522" alt="The “Overwrite field-notes (transcript).md?” dialog: a line-by-line diff with a checkbox per changed hunk (one unticked), unchanged context lines without one, and Cancel / Apply buttons">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/diff-modal.png" width="522" alt="The “Overwrite field-notes (transcript).md?” dialog: a line-by-line diff with a checkbox per changed hunk (one unticked), unchanged context lines without one, and Cancel / Apply buttons">
 
 **Thinking toggle** — skip a big reasoning model's wait when you don't need it:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png" width="450" alt="The sidebar preset row with the thinking toggle reading “Thinking: on”">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="The sidebar preset row with the thinking toggle reading “Thinking: on”">
 
 ### In detail
 
@@ -102,7 +102,7 @@ Search for **Image to Markdown** in **Settings → Community plugins → Browse*
 
 ### Manual
 
-Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://git.jkaindl.de/jkaindl/image-to-markdown/releases) and place them in `<vault>/.obsidian/plugins/image-to-markdown/`, then enable the plugin under **Settings → Community plugins**.
+Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/johannes-kaindl/image-to-markdown/releases) and place them in `<vault>/.obsidian/plugins/image-to-markdown/`, then enable the plugin under **Settings → Community plugins**.
 
 ### From source
 
@@ -129,7 +129,7 @@ Prefer to skip the sidebar? Run the command **"Transcribe images in the active n
 
 Open **Settings → Community plugins → Image to Markdown**. The settings live under the heading **"Vision (Image → Markdown)"**.
 
-<a href="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/settings.png"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thumbs/settings.png" width="380" alt="The plugin's settings tab: the endpoint list with per-entry reachability icons and an API key field, the model picker and vision test, the prompt area, the PDF settings with the render-scale slider, and the description categories"></a>
+<a href="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/settings.png"><img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thumbs/settings.png" width="380" alt="The plugin's settings tab: the endpoint list with per-entry reachability icons and an API key field, the model picker and vision test, the prompt area, the PDF settings with the render-scale slider, and the description categories"></a>
 <sub>Click the preview for the full-resolution screenshot.</sub>
 
 | Setting | What it does | Default |
@@ -145,11 +145,11 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 | **Description categories** | The fixed set of categories offered to the model in Describe mode (one per field, add/remove like the endpoint list). | A built-in list, editable |
 | **Frontmatter mapping** | Remap every frontmatter key written into generated notes — and the `type` value — to your own vault schema (e.g. `kind` → `type`), consistently across transcript, PDF and description notes. Changing a key later offers a **vault-wide migration** of existing notes (per-note diff preview + double confirmation). | The plugin's default keys |
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/frontmatter-mapping.png" width="820" alt="The “Frontmatter mapping” section of the settings tab with one text field per frontmatter key and the two kind values">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/frontmatter-mapping.png" width="820" alt="The “Frontmatter mapping” section of the settings tab with one text field per frontmatter key and the two kind values">
 
 **Endpoint tip:** enter the base URL **without** a trailing `/v1` — the client appends `/v1` itself. (`normalizeEndpoint` strips a trailing `/v1` and slashes, so both forms are accepted; a doubled `…/v1/v1/…` path would otherwise silently return an empty transcript.)
 
-Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/reference.md#vision-capability-detection).
+Next to the input fields the settings tab shows a **connection status** indicator with a **"Test connection"** button, and a **"Vision capability"** row with a **"Test vision"** button that confirms whether the selected model can actually read images — see the [manual reference](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/manual/reference.md#vision-capability-detection).
 
 ## How it works
 
@@ -157,7 +157,7 @@ For each selected image, the plugin builds a multimodal chat-completions request
 
 For PDFs, each page is rendered to a canvas by the bundled pdf.js (offline, no CDN; worker embedded as a Blob URL), converted to a PNG data URL, and sent to the same vision endpoint as a regular image. Pages stream as individual cards in the sidebar, and one transcript note is produced for the whole PDF.
 
-The architecture and module layout are documented in [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
+The architecture and module layout are documented in [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md).
 
 ## Supported image formats
 
@@ -171,14 +171,15 @@ Sent to the model: **PNG, JPG, JPEG, WebP, GIF.** Recognized but **skipped** (wi
 
 ## Documentation
 
-The full documentation follows the [Diátaxis](https://diataxis.fr) framework — see [docs/manual/index.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md):
+The full documentation follows the [Diátaxis](https://diataxis.fr) framework — start at the [documentation index](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/README.md):
 
-- **Tutorial** — get from zero to your first transcript.
+- **[Getting started](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/manual/tutorial.md)** — from a local vision server to your first transcript note.
+- **[Troubleshooting](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/troubleshooting.md)** — the exact message you see, what it means, what to do.
 - **How-to guides** — task-focused recipes (configuring LM Studio, handling HEIC, batch transcription).
 - **Reference** — settings, commands, supported formats.
 - **Explanation** — the non-destructive/idempotent design and the streaming mechanism.
 
-See the [changelog](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md) for release notes.
+See the [changelog](https://github.com/johannes-kaindl/image-to-markdown/blob/main/CHANGELOG.md) for release notes.
 
 ## Development
 
@@ -191,13 +192,13 @@ npm run build   # prod bundle → main.js
 npm test        # vitest
 ```
 
-Contributions are welcome. Please read [CONTRIBUTING.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
+Contributions are welcome. Please read [CONTRIBUTING.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
 
 ## Security
 
 Image data is sent exclusively to the **local** endpoint you configure — no telemetry, nothing to the cloud or third parties. The trust anchor is the local server you control.
 
-Please **don't** report security vulnerabilities as a public issue — email [code@jkaindl.de](mailto:code@jkaindl.de) instead (PGP welcome). See [SECURITY.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/SECURITY.md).
+Please **don't** report security vulnerabilities as a public issue — email [code@jkaindl.de](mailto:code@jkaindl.de) instead (PGP welcome). See [SECURITY.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/SECURITY.md).
 
 ## Related
 
@@ -205,7 +206,7 @@ Please **don't** report security vulnerabilities as a public issue — email [co
 
 ## License
 
-- **Code:** [AGPL-3.0-or-later](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE). A commercial dual-license is available on request if the AGPL copyleft does not fit your use case.
-- **Documentation and text:** [CC BY-SA 4.0](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS).
+- **Code:** [AGPL-3.0-or-later](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE). A commercial dual-license is available on request if the AGPL copyleft does not fit your use case.
+- **Documentation and text:** [CC BY-SA 4.0](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE-DOCS).
 
 Copyright © 2026 Johannes Kaindl.

@@ -1,15 +1,15 @@
 # Image to Markdown
 
-> [🇬🇧 English](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/README.md) · 🇩🇪 Deutsch
+> [🇬🇧 English](https://github.com/johannes-kaindl/image-to-markdown/blob/main/README.md) · 🇩🇪 Deutsch
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE)
-[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS)
-[![Release](https://img.shields.io/gitea/v/release/jkaindl/image-to-markdown?gitea_url=https%3A%2F%2Fgit.jkaindl.de&label=release)](https://git.jkaindl.de/jkaindl/image-to-markdown/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE)
+[![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE-DOCS)
+[![Release](https://img.shields.io/github/v/release/johannes-kaindl/image-to-markdown?label=release)](https://github.com/johannes-kaindl/image-to-markdown/releases)
 ![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
 **Transkribiert Bilder und PDFs einer Notiz per lokalem Vision-LLM nach Markdown — komplett offline, nicht-destruktiv, live in die Sidebar gestreamt.**
 
-<p align="center"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/hero.png" width="820" alt="Links eine Notiz mit eingebettetem dreiseitigem PDF, rechts die Sidebar „IMG → MD“ mitten in der Transkription: eine Karte pro Seite, die erste streamt Markdown live"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/hero.png" width="820" alt="Links eine Notiz mit eingebettetem dreiseitigem PDF, rechts die Sidebar „IMG → MD“ mitten in der Transkription: eine Karte pro Seite, die erste streamt Markdown live"></p>
 
 ## Funktionen
 
@@ -34,34 +34,34 @@
 
 **Live in die Sidebar** — eine Karte pro Bild, mit Denk-Block und Kopier-Knopf:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/sidebar-streaming.png" width="820" alt="Eine Sidebar-Karte mit fertiger Transkription: Überschriften, Aufzählung und GFM-Tabelle, dazu ein eingeklappter „Thoughts“-Block und ein Kopier-Knopf">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/sidebar-streaming.png" width="820" alt="Eine Sidebar-Karte mit fertiger Transkription: Überschriften, Aufzählung und GFM-Tabelle, dazu ein eingeklappter „Thoughts“-Block und ein Kopier-Knopf">
 
 **PDFs** — erst den Seitenbereich wählen, dann füllt sich eine Karte pro Seite:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-sidebar.png" width="820" alt="Sidebar-Zeile eines eingebetteten PDFs mit der Seitenbereichs-Auswahl „Page 1 to 3“">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/pdf-sidebar.png" width="820" alt="Sidebar-Zeile eines eingebetteten PDFs mit der Seitenbereichs-Auswahl „Page 1 to 3“">
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/pdf-streaming.png" width="820" alt="Drei Seitenkarten eines PDFs, die erste streamt Markdown live">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/pdf-streaming.png" width="820" alt="Drei Seitenkarten eines PDFs, die erste streamt Markdown live">
 
 **Beschreiben-Modus** — für Bilder ohne transkribierbaren Text:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/describe-mode.png" width="820" alt="Aktiver Beschreiben-Modus: eine Karte mit der erzeugten Beschreibung eines Diagramms samt editierbarer Kategorie und Tags">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/describe-mode.png" width="820" alt="Aktiver Beschreiben-Modus: eine Karte mit der erzeugten Beschreibung eines Diagramms samt editierbarer Kategorie und Tags">
 
 **Nachbessern per Feedback** — das Transkript zurechtreden, ohne neu zu starten:
 
-<a href="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/refine.png"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thumbs/refine.png" width="380" alt="Eine Transkript-Karte mit scrollbarem Verlauf: die Originaltranskription, eine Feedback-Runde mit der Überschrift „You: …“ und darunter das Nachbesserungs-Feld"></a>
+<a href="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/refine.png"><img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thumbs/refine.png" width="380" alt="Eine Transkript-Karte mit scrollbarem Verlauf: die Originaltranskription, eine Feedback-Runde mit der Überschrift „You: …“ und darunter das Nachbesserungs-Feld"></a>
 <sub>Vorschau anklicken für den Screenshot in voller Auflösung.</sub>
 
 **Idempotent** — eine bereits transkribierte Quelle wird markiert statt still verdoppelt:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/exists-open.png" width="500" alt="Sidebar-Zeile mit „✓ transcript exists“, einem „open“-Link und nicht gesetztem Häkchen">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/exists-open.png" width="500" alt="Sidebar-Zeile mit „✓ transcript exists“, einem „open“-Link und nicht gesetztem Häkchen">
 
 **Diff vor dem Überschreiben** — der einzige zerstörende Schritt fragt vorher, Hunk für Hunk:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/diff-modal.png" width="522" alt="Der Dialog „Overwrite field-notes (transcript).md?“: ein Zeilen-Diff mit einer Checkbox je geändertem Hunk (eine abgewählt), unveränderte Kontextzeilen ohne Checkbox, dazu die Knöpfe Cancel und Apply">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/diff-modal.png" width="522" alt="Der Dialog „Overwrite field-notes (transcript).md?“: ein Zeilen-Diff mit einer Checkbox je geändertem Hunk (eine abgewählt), unveränderte Kontextzeilen ohne Checkbox, dazu die Knöpfe Cancel und Apply">
 
 **Thinking-Schalter** — die Wartezeit großer Reasoning-Modelle überspringen:
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thinking-toggle.png" width="450" alt="Die Preset-Zeile der Sidebar mit dem Thinking-Schalter auf „Thinking: on“">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="Die Preset-Zeile der Sidebar mit dem Thinking-Schalter auf „Thinking: on“">
 
 ### Im Detail
 
@@ -178,7 +178,7 @@ Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 ### Manuell
 
 `main.js`, `manifest.json` und `styles.css` aus dem
-[letzten Release](https://git.jkaindl.de/jkaindl/image-to-markdown/releases) nach
+[letzten Release](https://github.com/johannes-kaindl/image-to-markdown/releases) nach
 `<vault>/.obsidian/plugins/image-to-markdown/` legen, dann unter **Settings → Community
 plugins** aktivieren.
 
@@ -217,7 +217,7 @@ aktive Notiz im Batch zu transkribieren. Oder im Editor mit Rechtsklick auf ein 
 
 Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 
-<a href="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/settings.png"><img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/thumbs/settings.png" width="380" alt="Der Einstellungen-Tab des Plugins: die Endpunkt-Liste mit Erreichbarkeits-Icons und Schlüsselfeld, Modell-Auswahl und Vision-Test, das Prompt-Feld, die PDF-Einstellungen mit dem Render-Scale-Regler sowie die Beschreibungs-Kategorien"></a>
+<a href="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/settings.png"><img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thumbs/settings.png" width="380" alt="Der Einstellungen-Tab des Plugins: die Endpunkt-Liste mit Erreichbarkeits-Icons und Schlüsselfeld, Modell-Auswahl und Vision-Test, das Prompt-Feld, die PDF-Einstellungen mit dem Render-Scale-Regler sowie die Beschreibungs-Kategorien"></a>
 <sub>Vorschau anklicken für den Screenshot in voller Auflösung.</sub>
 
 | Einstellung | Default | Hinweis |
@@ -233,7 +233,7 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 | **Beschreibungs-Kategorien** | Eine eingebaute Liste, editierbar | Die feste Menge an Kategorien, die dem Modell im Beschreiben-Modus angeboten wird (ein Feld pro Kategorie, hinzufügen/entfernen wie bei der Endpoint-Liste). |
 | **Frontmatter-Mapping** | Die Standard-Keys des Plugins | Jeden Frontmatter-Schlüssel der erzeugten Notizen — und den `type`-Wert — an dein eigenes Vault-Schema anpassen (z. B. `kind` → `type`), einheitlich für Transkript-, PDF- und Beschreibungs-Notizen. Beim späteren Ändern eines Keys wird eine **vaultweite Migration** der bestehenden Notizen angeboten (Diff-Vorschau pro Notiz + doppelte Bestätigung). |
 
-<img src="https://git.jkaindl.de/jkaindl/image-to-markdown/raw/branch/main/docs/images/frontmatter-mapping.png" width="820" alt="Der Abschnitt „Frontmatter mapping“ im Einstellungen-Tab mit je einem Textfeld pro Frontmatter-Schlüssel und den beiden kind-Werten">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/frontmatter-mapping.png" width="820" alt="Der Abschnitt „Frontmatter mapping“ im Einstellungen-Tab mit je einem Textfeld pro Frontmatter-Schlüssel und den beiden kind-Werten">
 
 Default-Prompt:
 
@@ -247,7 +247,7 @@ akzeptiert).
 
 Der Settings-Tab zeigt außerdem einen **Verbindungs-Status** mit „**Verbindung testen**" sowie
 eine **„Vision-Fähigkeit"**-Zeile mit „**Vision testen**"-Button, der aktiv prüft, ob das gewählte
-Modell wirklich Bilder lesen kann — Details im [Handbuch](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/reference.md#vision-capability-detection).
+Modell wirklich Bilder lesen kann — Details im [Handbuch](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/manual/reference.md#vision-capability-detection).
 
 ## Funktionsweise
 
@@ -258,7 +258,7 @@ Modell wirklich Bilder lesen kann — Details im [Handbuch](https://git.jkaindl.
   `transcribed_by`-Frontmatter (Modell aus `response.model`) und ersetzt den Bild-Embed in der
   Quellnotiz durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
 
-Architektur- und Modul-Layout stehen in [AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
+Architektur- und Modul-Layout stehen in [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md).
 
 ## Unterstützte Formate
 
@@ -281,8 +281,12 @@ Architektur- und Modul-Layout stehen in [AGENTS.md](https://git.jkaindl.de/jkain
 
 ## Dokumentation
 
-- Handbuch: [docs/manual/index.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/docs/manual/index.md)
-- Changelog: [CHANGELOG.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/CHANGELOG.md)
+Die Dokumentation ist englisch und nach [Diátaxis](https://diataxis.fr) gegliedert — Einstieg ist der [Doku-Index](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/README.md):
+
+- **[Getting started](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/manual/tutorial.md)** — vom lokalen Vision-Server bis zur ersten Transkript-Notiz.
+- **[Troubleshooting](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/troubleshooting.md)** — die genaue Meldung, ihre Ursache und die Abhilfe.
+- Handbuch: [Übersicht](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/manual/index.md)
+- Changelog: [CHANGELOG.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/CHANGELOG.md)
 
 ## Entwicklung
 
@@ -294,7 +298,7 @@ npm test        # vitest
 ```
 
 Konventionen (Branch-Modell, Conventional Commits, Qualitäts-Gates vor Commit) stehen in
-[AGENTS.md](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/AGENTS.md).
+[AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md).
 
 ## Sicherheit
 
@@ -311,8 +315,8 @@ Sicherheitslücken bitte **nicht** öffentlich als Issue melden, sondern per E-M
 
 ## Lizenz
 
-- Code: [AGPL-3.0-or-later](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE). Eine kommerzielle Dual-License ist auf Anfrage verfügbar,
+- Code: [AGPL-3.0-or-later](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE). Eine kommerzielle Dual-License ist auf Anfrage verfügbar,
   falls die AGPL-Copyleft nicht passt.
-- Dokumentation/Text: [CC BY-SA 4.0](https://git.jkaindl.de/jkaindl/image-to-markdown/src/branch/main/LICENSE-DOCS).
+- Dokumentation/Text: [CC BY-SA 4.0](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE-DOCS).
 
 Copyright © 2026 Johannes Kaindl.

@@ -97,7 +97,7 @@ Reasoning ("thinking") models emit their chain of thought separately from the
 final answer. Image to Markdown surfaces that as a collapsible thinking block so
 you can see how the model arrived at a transcription.
 
-1. Configure a reasoning-capable vision model as your **Vision-Modell** (see
+1. Configure a reasoning-capable vision model as your **Vision model** (see
    [Pick or pin a specific model](#pick-or-pin-a-specific-model)).
 2. Open the sidebar (ribbon **"Image → Markdown"**, view title **"IMG → MD"**)
    and click **"Transkribieren"** (Transcribe).
@@ -120,7 +120,7 @@ a specific language, or to change the formatting style.
 
 1. Open **Settings → Community plugins**, then open the Image to Markdown
    settings (heading **"Vision (Image → Markdown)"**).
-2. Edit the **"Vision-Prompt"** text area.
+2. Edit the **"Vision prompt"** text area.
 
 The shipped default prompt is localized — you start from the variant matching
 Obsidian's language. The English default is:
@@ -179,7 +179,7 @@ is the most common misconfiguration.
 
 1. Start the LM Studio local server with a vision model loaded.
 2. Open the Image to Markdown settings (heading **"Vision (Image → Markdown)"**).
-3. Set **"Vision-Endpunkt"** to `http://localhost:1234`.
+3. Under **"Vision endpoints"**, set the first address to `http://localhost:1234`.
 
 Notes:
 
@@ -222,7 +222,7 @@ To get iPhone photos transcribed, do one of the following:
 Choose exactly which vision model runs, or pin one when you have several loaded.
 
 1. Open the Image to Markdown settings (heading **"Vision (Image → Markdown)"**).
-2. Use the **"Vision-Modell"** setting:
+2. Use the **"Vision model"** setting:
    - When the endpoint is reachable, this is a **dropdown** populated from the
      endpoint's `/v1/models`. Pick the model you want (examples: Qwen2-VL,
      Llama-3.2-Vision).
@@ -297,8 +297,7 @@ page by page, as a single transcript note.
    The default covers all pages. On mobile, keep the range short to stay within memory limits.
 4. Make sure the PDF checkbox is selected and click **"Transcribe"** ("Transkribieren"). The
    sidebar streams one card per page as the vision model works through them.
-5. Click **"Create note"** ("Notiz anlegen") on the finished card, or **"Create all"** ("Alle
-   anlegen") if you transcribed both images and a PDF in the same run. One transcript note is
+5. Click **"Create note"** ("Notiz anlegen") on the finished card, or **"Apply"** ("Anwenden") if you transcribed both images and a PDF in the same run. One transcript note is
    written for the whole PDF, and the PDF embed in the source note is replaced by an embed of
    the new note.
 
