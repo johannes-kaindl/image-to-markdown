@@ -2,6 +2,6 @@
   "source": "obsidian-kit",
   "version": "0.41.1",
   "sha": "f9439c8",
-  "vendored": "clipboard.ts, endpoint-list.ts, folder-suggest.ts, model-picker.ts, settings_walker.ts, endpoint-source.ts",
+  "vendored": "clipboard.ts, endpoint-list.ts, folder-suggest.ts, model-picker.ts, settings_walker.ts, endpoint-source.ts, help-setting.ts (Kit 0.43.0, bcd1805)",
   "note": "Verbatim snapshot. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. clipboard.ts, endpoint-list.ts und model-picker.ts tragen EINE mechanische Abweichung: kit-interne Importe ../vendor/code-kit/{pure,web}/ sind auf ../kit/ umgeschrieben (Vendor-Layout). Bei jedem Re-Vendoring reproduzieren; sonst darf nichts abweichen. Praezedenz: vim-dojo, markdown-presentation, vault-crews, kuro-gamification, lingotuner, vault-rag. Eigene Ablage neben src/vendor/kit/, weil diese Module \"obsidian\" importieren."
 }

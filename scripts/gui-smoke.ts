@@ -473,6 +473,40 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     },
   },
   {
+    key: "E2",
+    titel: "Einstellungen: Hilfe-Zeile steht als erste Zeile des Tabs (UI-STANDARD §8), mit Doku-Knopf und Bug-Icon",
+    async run(cdp) {
+      await cdp.evaluate(`
+        app.setting.open();
+        app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+        await new Promise((r) => setTimeout(r, 900));
+        return true;
+      `);
+      const sicht = await attachTo("settings", verbindung.port, verbindung.vault).catch(() => null);
+      if (!sicht) {
+        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+        return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      }
+      try {
+        const roh = await sicht.evaluate<string>(`
+          const wurzel = document.querySelector(".modal.mod-settings") ?? document.body;
+          const erste = wurzel.querySelector(".vertical-tab-content .setting-item");
+          return JSON.stringify({
+            name: erste?.querySelector(".setting-item-name")?.textContent?.trim() ?? null,
+            knoepfe: erste ? [...erste.querySelectorAll("button")].map((b) => b.textContent.trim()) : [],
+            bug: erste ? erste.querySelectorAll(".clickable-icon svg.lucide-bug, .clickable-icon svg.bug").length : 0,
+          });
+        `);
+        const d = JSON.parse(roh) as { name: string | null; knoepfe: string[]; bug: number };
+        const ok = (d.name === "Help" || d.name === "Hilfe") && d.knoepfe.length === 1 && d.bug === 1;
+        return { ok, detail: `erste Zeile "${d.name ?? "—"}", Knoepfe ${JSON.stringify(d.knoepfe)}, Bug-Icon: ${d.bug}` };
+      } finally {
+        sicht.close?.();
+        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+      }
+    },
+  },
+  {
     key: "F1",
     titel: "Endpunkt-Quelle: Manager an — Settings zeigen den Baustein statt der lokalen Liste, Modell-Zeile ausgeblendet",
     async run(cdp) {

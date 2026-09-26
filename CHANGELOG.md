@@ -12,6 +12,7 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
+- **Hilfe-Zeile oben in den Einstellungen** mit Links auf die Dokumentation und den Issue-Tracker (Kit `help-setting`, `obsidian-kit` 0.43.0, nur diese Datei vendort).
 - **Export-Ordner in den Einstellungen** — neues Setting mit Ordner-Autocomplete für den
   Zielordner neuer Transkript-/Beschreibungs-Notizen; leer = bisheriges Verhalten (neben der
   Quellnotiz).

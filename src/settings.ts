@@ -5,6 +5,7 @@ import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilitie
 import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
+import { helpSettingDefinition, githubHelpUrls } from "./vendor/kit-obsidian/help-setting";
 import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab } from "./vendor/kit-obsidian/settings_walker";
 import { buildEndpointList, type EndpointListStrings } from "./vendor/kit-obsidian/endpoint-list";
 import { createModelListCache, type ModelListCache } from "./vendor/kit/model-list-cache";
@@ -206,6 +207,15 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       ["kindDescription", "settings.fmMap.kindDescription"],
     ];
     return [
+      // §8 Hilfe-Zeile: erstes Element, vor jeder Überschrift. Der Walker-Fallback zeichnet sie
+      // für ältere Obsidian-Versionen von selbst, kein zweiter Aufruf in display().
+      helpSettingDefinition({
+        ...githubHelpUrls("image-to-markdown"),
+        texts: {
+          name: t("settings.help.name"), desc: t("settings.help.desc"),
+          openDocs: t("settings.help.openDocs"), reportIssue: t("settings.help.reportIssue"),
+        },
+      }),
       {
         type: "group",
         heading: t("settings.heading"),
