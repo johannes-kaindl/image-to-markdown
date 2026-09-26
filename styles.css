@@ -93,7 +93,7 @@
 /* Settings-QoL */
 .img2md-prompt-textarea { width: 100%; min-height: 8rem; resize: vertical; }
 /* Endpunkt-Zeilen-Editor — sichtbare Haelfte des Kit-Bausteins.
-   uebernommen aus obsidian-kit#0.27.0, src/obsidian/endpoint-list.ts (ENDPOINT_LIST_CSS), 2026-08-30
+   uebernommen aus obsidian-kit#0.43.0, src/obsidian/endpoint-list.ts (ENDPOINT_LIST_CSS), 2026-09-26
    Das ist der Kit-VERTRAG, kein Notbehelf: der Modulkopf sagt „Consumer haengen sie in ihre
    styles.css (kein CSS-Import im Plugin-Bundle)". Die Konstante zur Laufzeit zu injizieren waere
    der Sonderweg. Nicht von Hand aendern — bei einem Re-Vendor mit der Konstante abgleichen
@@ -111,6 +111,8 @@
    gedämpfter als .okit-ep-warn, Bedeutung trägt das Dreieck + der Tooltip, nicht die Farbe. */
 .okit-ep-thirdparty { display: inline-flex; align-items: center; margin-right: 8px; vertical-align: middle; color: var(--text-muted); }
 .okit-ep-thirdparty svg { width: 14px; height: 14px; }
+.okit-ep-secret { color: var(--text-muted); font-size: var(--font-ui-small); margin-right: 8px; }
+.okit-ep-extra { flex: 0 0 100%; order: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
 /* Rolle der Zeile als Text unter den Feldern: „aktiv" / „erreichbar, aber Platz N" / … .
    Erreichbarkeit trägt das Icon (Form), die Rolle dieser Text — keins von beiden über Farbe
    allein (WCAG 1.4.1). Die frühere Auszeichnung saß auf dem Icon-Container und war wirkungslos:
@@ -120,14 +122,14 @@
    buildEndpointList) — ohne order würden die beiden Icons hinter die volle-Breite-Zeile
    rutschen statt in der Feldreihe zu bleiben. order:1 hält die Rolle visuell zuletzt,
    unabhängig davon, was später noch an controlEl angehängt wird. */
-.okit-ep-row .setting-item-control .okit-ep-state {
+.okit-ep-row > .setting-item-control .okit-ep-state {
   flex: 0 0 100%;
   order: 1;
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   margin-top: 2px;
 }
-.okit-ep-row .setting-item-control .okit-ep-state.is-active {
+.okit-ep-row > .setting-item-control .okit-ep-state.is-active {
   color: var(--text-normal);
   font-weight: var(--font-bold);
 }
@@ -136,33 +138,35 @@
 .okit-ep-busy { pointer-events: none; opacity: 0.6; }
 /* Endpunkt-Zeile: drei Felder (Adresse · Schlüssel · Modell) brauchen die volle Breite.
    Die Beschriftung steht als eigene Zeile darüber, deshalb ist der Info-Block hier leer und
-   darf keinen Platz beanspruchen — sonst quetscht er die Felder (gemeldet 2026-08-04). */
-.okit-ep-row .setting-item-info {
+   darf keinen Platz beanspruchen — sonst quetscht er die Felder (gemeldet 2026-08-04).
+   Kindselektor (>), kein Nachkomme: der extraRow-Host sitzt in controlEl, und ein Setting
+   darin verlor sonst seine Beschriftung (gemessen 2026-09-25, llm-endpoint-manager). */
+.okit-ep-row > .setting-item-info {
   display: none;
 }
-.okit-ep-row .setting-item-control {
+.okit-ep-row > .setting-item-control {
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: var(--size-4-2);
   width: 100%;
 }
-.okit-ep-row .setting-item-control input[type="text"],
-.okit-ep-row .setting-item-control input[type="password"] {
+.okit-ep-row > .setting-item-control input[type="text"],
+.okit-ep-row > .setting-item-control input[type="password"] {
   flex: 1 1 12em;
   min-width: 8em;
 }
 /* Reservierter Platz für das Modell-Dropdown (Auffüllen der Zeile erst nach dem geladenen
    Promise, siehe buildEndpointList). Selbst ein Flex-Container, damit Dropdown/Freitext + der
    „Modelle abrufen"-Knopf innerhalb genauso mitwachsen wie URL/Schlüssel daneben. */
-.okit-ep-row .setting-item-control .okit-model-slot {
+.okit-ep-row > .setting-item-control .okit-model-slot {
   display: flex;
   align-items: center;
   gap: var(--size-4-1);
   flex: 1 1 12em;
   min-width: 10em;
 }
-.okit-ep-row .setting-item-control .okit-model-slot select,
-.okit-ep-row .setting-item-control .okit-model-slot input[type="text"] {
+.okit-ep-row > .setting-item-control .okit-model-slot select,
+.okit-ep-row > .setting-item-control .okit-model-slot input[type="text"] {
   flex: 1 1 auto;
   min-width: 0;
 }
