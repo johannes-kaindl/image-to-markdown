@@ -1,11 +1,12 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
-import { VisionClient, setHttp, setStreamFetch } from "./vision_client";
+import { VisionClient, setHttp, setChatTransports } from "./vision_client";
 import type { EndpointConfig } from "./vendor/kit/endpoint_config";
 import { resolveVisionEndpoint, sanitizeChoice } from "./resolve_endpoint";
 import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
-import { obsidianHttp, obsidianStreamFetch } from "./http";
+import { obsidianHttp } from "./http";
+import { xhrSseTransport, requestUrlTransport } from "./vendor/kit-obsidian/chat-transport";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem, resolveDestDir } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
 import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, normalizePreset } from "./prompts";
@@ -44,7 +45,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   async onload() {
     setHttp(obsidianHttp);
-    setStreamFetch(obsidianStreamFetch);
+    setChatTransports({ transport: xhrSseTransport, fallbackTransport: requestUrlTransport });
     setLang(pickLang(getLanguage()));
     const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
     this.settings = mergeSettings(defaultSettings(), saved);

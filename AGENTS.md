@@ -29,7 +29,7 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`capabilities.ts`, `i18n.ts`, `sse.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
+`capabilities.ts`, `i18n.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
 `describe.ts`, `prompts.ts`, `reasoning_toggle.ts`, `card_cache.ts`, `frontmatter_map.ts`,
 `fm_migration.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
 `settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und die
@@ -61,7 +61,7 @@ backlinks.ts        Reiner Kern: Backlink-Idempotenz-Lookup — `findExistingTra
                     Interface `BacklinkLookup` (von der Obsidian-Schicht injiziert, obsidian-frei
                     testbar). Verwendet von `img_to_md_state.ts` via Scan.
 vision_client.ts    VisionClient(endpoint, model, apiKey?) → OpenAI-kompatibler /v1/chat/completions (transcribe +
-                    transcribeStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint ·
+                    transcribeStream/transcribeTextStream/refineStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint ·
                     resolveActiveEndpoint (pingt Endpoint-Liste der Reihe nach, gibt den ersten
                     erreichbaren zurück oder null wenn alle offline).
                     ⚠️ EIN Erreichbarkeits-Begriff, seit 0.22.0: `ping()` delegiert an
@@ -69,8 +69,9 @@ vision_client.ts    VisionClient(endpoint, model, apiKey?) → OpenAI-kompatible
                     MIT Modell-Listen-Form. Bis 0.21.0 fragte `ping()` nur `res.ok` — dann warnte
                     die Endpunkt-Zeile vor einem Endpunkt, den die Auflösung gleich darauf nahm.
                     Ein leeres `data`-Array bleibt gültig (frisches MLX ohne Modelle im Cache).
-                    Transport injiziert (HttpFetch/setHttp): non-streaming via requestUrl-Adapter,
-                    Streaming via fetch (requestUrl streamt nicht). Der optionale API-Schlüssel wird per
+                    Transport injiziert: ping/listModels/Capability-Probe über HttpFetch/setHttp (requestUrl-Adapter),
+                    der CHAT-Weg (transcribe + Streams) über den Kit-`createChatClient` mit `setChatTransports`
+                    (XHR-Stream, `requestUrl` als Fallback ohne Stream). Der optionale API-Schlüssel wird per
                     authHeaders auf ALLE Wege gelegt (inkl. ping/listModels/Capability-Probe — ohne ihn
                     gälte ein gehosteter Endpunkt als offline und würde still übersprungen).
                     `parseErrorEnvelope` ist seit 0.27.0 ein Adapter über das vendored Kit-Modul
@@ -78,13 +79,12 @@ vision_client.ts    VisionClient(endpoint, model, apiKey?) → OpenAI-kompatible
                     dieses Repo ist laut Kit-Dateikopf die kanonische Quelle der Kaskade. Die Option
                     ist Pflicht: alle drei Aufrufstellen reichen einen Body herein, von dem noch nicht
                     feststeht, ob er ein Fehler ist. Reiner Kern, obsidian-frei.
-http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert.
+http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert (nur für die
+                    NICHT-Chat-Wege: ping/listModels/Capability-Probe; der Chat-Weg nutzt die Kit-Transporte, s. u.).
 capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projiziert): asJsonFetch
                     (übersetzt HttpFetch → CapabilityFetch) · fetchVisionCapability · resolveVision ·
                     visionDisplay · aktiver Vision-Test (VISION_TEST_TOKEN/VISION_TEST_PROMPT/
                     isVisionConfirmed). Reiner Kern, DOM-frei.
-sse.ts              streamSSE (Transport): liest den SSE-Stream aus einer Response, delegiert
-                    Parsing an vendor/kit/sse.ts (parseSSE) + vendor/kit/think.ts (ThinkSplitter).
 diff_modal.ts       DiffModal (Modal): Zeilen-Diff alt↔neu mit Checkbox pro Hunk (Default: alle an),
                     liefert den gemergten Body zurück. Obsidian-abhängig.
 refine.ts           Reiner Kern: buildRefineMessages — Multi-Turn-Chat-Messages für die iterative
@@ -141,7 +141,7 @@ vendor/kit/         Aus obsidian-kit vendored — obsidian-freie Schicht (`obsid
   reasoning.ts      Reasoning-Unterdrückung (suppressParams) + isAlwaysOnThinker.
   settings.ts       mergeSettings (Defaults-Merge mit Referenz-Schutz).
   sse.ts            parseSSE (OpenAI-SSE-Delta-Parser, content + reasoning_content).
-  think.ts          ThinkSplitter (inline <think>-Tags; früher src/think_splitter.ts).
+  think-splitter.ts ThinkSplitter (inline <think>-Tags; früher src/think_splitter.ts, bis Welle 11 lokal als think.ts — chat-client importiert den Kit-Namen).
   endpoint_config.ts EndpointConfig (url + optionaler apiKey/model) · authHeaders · migrateEndpointList ·
                     applyEndpointEdit (Feld-Diskriminator) · resolveActiveEndpointConfig.
   capabilities.ts   guessFromName (Namens-Heuristik Vision+Thinking) · parse* (Ollama/LM Studio
@@ -158,8 +158,11 @@ vendor/kit/         Aus obsidian-kit vendored — obsidian-freie Schicht (`obsid
   clipboard.ts      writeClipboard (obsidian-frei) — Abhängigkeit von kit-obsidian/clipboard.ts.
 vendor/kit-obsidian/ Aus obsidian-kit vendored — obsidian-abhängige Schicht
                     (`obsidian-kit/src/obsidian/*`), eigener Pin in `VENDOR.json`:
+  chat-client.ts    createChatClient (Kit 0.42.0): Streaming, Idle-/Erst-Chunk-Frist, Abbruch, Fehlerkörper, Fallback ohne Stream. Obsidian-frei (Transport injiziert) — deshalb vom Kern `vision_client.ts` importierbar. Querimporte auf code-kit sind wie bei clipboard.ts auf `../kit/` umgeschrieben.
+  chat-transport.ts xhrSseTransport (Stream) + requestUrlTransport (Fallback ohne Stream). Importiert `obsidian`; `main.ts` injiziert beide per `setChatTransports`.
+  clock.ts          Uhr-Port für chat-client (Tests injizieren eine Fake-Uhr).
   clipboard.ts      copyToClipboard: Zwischenablage mit Notice-Quittung. Genutzt von main.ts
-                    (copyText in ImgToMdViewDeps). ⚠️ Einzige nicht-verbatime Kopie im Repo: die
+                    (copyText in ImgToMdViewDeps). ⚠️ Nicht-verbatim (wie chat-client.ts, endpoint-list.ts, model-picker.ts, endpoint-source.ts): die
                     kit-internen Importe `../pure/` heißen hier `../kit/` (Vendor-Layout). Der
                     Umschrieb ist mechanisch, wird von sync-kit.sh reproduziert und ist in Zeile 2
                     der Datei sowie im note-Feld der VENDOR.json deklariert.
@@ -179,7 +182,7 @@ aus `obsidian-kit/src/pure/`) und `src/vendor/kit-obsidian/` (obsidian-abhängig
 Geschmack: ein obsidian-importierendes Modul unter `vendor/kit/` fällt in den Nachbar-Repos
 durch deren `check:pure`. Erneuert wird über `tools/sync-kit.sh` (`sh tools/sync-kit.sh`,
 liest `../obsidian-kit` bzw. `$KIT_DIR`), nie von Hand; die beiden `VENDOR.json` tragen den Pin.
-Der Transport `streamSSE` bleibt bewusst plugin-lokal.
+Der Chat-Weg läuft seit 0.25.0 über den Kit-`createChatClient` (Welle 11) — `sse.ts`/`streamSSE` und der fetch-Stream sind entfallen. `VisionClient` baut den Client lazy, einen je Instanz; `main.ts::resolveAndReconnect` erzeugt bei jedem Endpunktwechsel einen neuen `VisionClient`, damit die Fallback-Entscheidung (ohne Stream weitermachen) nicht am neuen Endpunkt kleben bleibt. Die Fehlertexte baut `vision_client.ts::chatError` aus `kind` über `t("chat.err.*")`, die Servermeldung steht hinter dem eigenen Satz. Fristen: Idle 120 s, erster Chunk 600 s (JIT-ladendes Modell, großes Bild). Sampling: `params` ist übergangsweise `suppressParams(...)`; die Anfrage-Profile (Sampling-Plan Teil E Task 14) sind noch nicht umgesetzt.
 
 **Die Endpunkt-QUELLE gehört dem LLM Endpoint Manager, sobald er installiert ist (Welle 8, 2026-09-25):** `plugin.resolveAndReconnect()` (`src/main.ts`) löst Endpunkt UND Modell über `resolveVisionEndpoint()` (`src/resolve_endpoint.ts`, Kit `endpoint-source`, Fähigkeit `vision`) auf — Manager zuerst, sonst `visionEndpoints` + `visionModel`; `plugin.model` ist das Modell für jeden Aufruf (`activeModel`, Rückfall `visionModel`), `settings.choice` hält die Wahl gegenüber dem Manager und gilt nur mit Manager (ein Modellname ist an seinen Endpunkt gebunden). Den Manager findet `findEndpointManager(app)` bei JEDEM Aufruf frisch. Im Settings-Tab zeigt `buildEndpointSourceSection` den Manager-Baustein, sonst den lokalen Listen-Editor; die globale Modell-Zeile blendet sich mit Manager über die Klasse `img2md-setting-managed` aus — **in `render()`, nicht beim Bau der Definitionsliste**, weil Obsidian ≥ 1.13 diese Liste über das Erscheinen des Managers hinweg zwischenspeichern kann (in slide-deck gemessen, GUI-Smoke E1b). Ein Manager ohne Endpunkt ergibt KEINEN lokalen Rückfall (Kit-Vertrag). `tools/sync-kit.sh` kennt seither `relayer_pure` für `endpoint-source` (Querimport auf `sampling-profiles`, nur als Abhängigkeit mitvendort). GUI-Smoke F1–F3 legen einen Fake-Manager in den Plugin-Slot und stellen den Slot im `finally` und im Abbruch-Handler zurück.
 

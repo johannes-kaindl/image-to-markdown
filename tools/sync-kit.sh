@@ -20,9 +20,9 @@ CODE_KIT="${CODE_KIT_DIR:-../../libs/code-kit}"
 # CORE-META-22: gelesen wird aus einer FESTEN REF, nicht aus dem Arbeitsstand des
 # Nachbar-Repos. Ein `cp` aus dessen Worktree koppelt dieses Repo an einen fremden HEAD.
 # Default ist die package.json-Version der Quelle; ein Upgrade ist eine BEWUSSTE Handlung.
-# Feste Pins statt Quell-Version (Absicht): das Kit steht laengst weiter (0.43.0), dieses Repo bleibt fuer
-# die uebrigen Module auf 0.41.1 — Heben ist eine inhaltliche Aenderung (KIT_REF setzen, danach npm run gate).
-VER="${KIT_REF:-0.41.1}"
+# Fester Pin statt Quell-Version (Absicht) — Heben ist eine inhaltliche Aenderung (KIT_REF setzen, danach npm run gate).
+# Seit Welle 11 (2026-09-26) 0.43.0: chat-client/chat-transport/clock (0.42.0) und die endpoint-list-CSS (0.43.0).
+VER="${KIT_REF:-0.43.0}"
 # Zweiter Pin, ebenfalls Absicht: help-setting.ts (Hilfe-Zeile, UI-STANDARD 8) kam mit Kit 0.43.0 und haengt
 # an keinem anderen Modul. Vorlage: epub-exporter/tools/sync-kit.sh (877eb2c).
 KIT_HELP_REF="${KIT_HELP_REF:-0.43.0}"
@@ -43,7 +43,7 @@ git -C "$KIT" cat-file -e "$KIT_HELP_REF:src/obsidian/help-setting.ts" 2>/dev/nu
 # Ein pures Modul kann in drei Schichten liegen. Statt fester Zuordnung wird gesucht — die
 # naechste Umschichtung soll dieses Skript nicht wieder toeten, sondern nur einen anderen
 # Fundort ergeben. quelle_fuer <lokaler-name> <quell-basename>: der zweite Parameter ist
-# fast immer identisch zum ersten — Ausnahme think.ts (Quelle heisst think-splitter.ts).
+# fast immer identisch zum ersten (think-splitter.ts seit Welle 11 ohne Umbenennung).
 # Ausgabe: <repo>|<ref>|<quelle>|<quell-relativer-pfad>|<version>
 quelle_fuer() {
   lokal="$1"; quellname="${2:-$1}"
@@ -163,11 +163,9 @@ relayer_pure() { # relayer_pure <vendored-file>
 
 mkdir -p src/vendor/kit src/vendor/kit-obsidian
 
-# think.ts hat einen abweichenden Quell-Basenamen (think-splitter.ts) — Praezedenz seit
-# obsidian-kit#0.27.0 (damals src/pure/think-splitter.ts), Konsumenten hier heissen weiter
-# think.ts. Deshalb ausserhalb der generischen Schleife, mit explizitem quellname-Argument.
-PURE_MODULE="capabilities clipboard diff endpoint endpoint_config endpoint_diagnostics error_body model-choice model-list-cache reasoning settings sse sampling-profiles endpoint-source"
-OBSIDIAN_MODULE="clipboard endpoint-list folder-suggest model-picker settings_walker endpoint-source"
+# think-splitter.ts heisst hier wie im Kit (bis Welle 11 lokal think.ts — chat-client importiert ../kit/think-splitter).
+PURE_MODULE="capabilities clipboard diff endpoint endpoint_config endpoint_diagnostics error_body model-choice model-list-cache reasoning settings sse sampling-profiles endpoint-source think-splitter"
+OBSIDIAN_MODULE="chat-client chat-transport clipboard clock endpoint-list folder-suggest model-picker settings_walker endpoint-source"
 
 # Die "vendored"-Zeile der VENDOR.json wird aus derselben Liste erzeugt, aus der kopiert wird.
 # Zwei Orte fuer dieselbe Wahrheit driften (CORE-META-16) — und zwar leise: die Datei, in der
@@ -183,11 +181,6 @@ for m in $PURE_MODULE; do
     exit 2
   }
 done
-quelle_fuer "think" "think-splitter" >/dev/null || {
-  echo "FEHLER: think-splitter.ts (Quelle von think.ts) liegt weder in $KIT/src/pure/ noch in $CODE_KIT/src/ts/pure/." >&2
-  exit 2
-}
-
 for m in $PURE_MODULE; do
   fund=$(quelle_fuer "$m")
   repo=$(printf '%s' "$fund" | cut -d'|' -f1)
@@ -204,24 +197,13 @@ for m in $PURE_MODULE; do
   echo "vendored $quelle@$ver/$rel"
 done
 
-fund=$(quelle_fuer "think" "think-splitter")
-repo=$(printf '%s' "$fund" | cut -d'|' -f1)
-ref=$(printf '%s' "$fund" | cut -d'|' -f2)
-quelle=$(printf '%s' "$fund" | cut -d'|' -f3)
-rel=$(printf '%s' "$fund" | cut -d'|' -f4)
-ver=$(printf '%s' "$fund" | cut -d'|' -f5)
-hole "$repo" "$ref" "$rel" "src/vendor/kit/think.ts" || {
-  echo "FEHLER: $ref:$rel nicht lesbar in $repo" >&2; exit 2; }
-stamp "src/vendor/kit/think.ts" "$rel" "$quelle" "$ver"
-echo "vendored $quelle@$ver/$rel (lokal: think.ts)"
-
 for m in $OBSIDIAN_MODULE; do
   hole "$KIT" "$VER" "src/obsidian/$m.ts" "src/vendor/kit-obsidian/$m.ts" || {
     echo "FEHLER: $VER:src/obsidian/$m.ts nicht lesbar" >&2; exit 2; }
   # clipboard.ts, endpoint-list.ts und model-picker.ts tragen Querimporte auf
   # ../vendor/code-kit/{pure,web}/. Ein pauschaler Aufruf waere wirkungslos, aber
   # irrefuehrend — deshalb gezielt.
-  case "$m" in clipboard|endpoint-list|model-picker|endpoint-source) relayer "src/vendor/kit-obsidian/$m.ts" ;; esac
+  case "$m" in chat-client|clipboard|endpoint-list|model-picker|endpoint-source) relayer "src/vendor/kit-obsidian/$m.ts" ;; esac
   stamp "src/vendor/kit-obsidian/$m.ts" "src/obsidian/$m.ts"
   echo "vendored obsidian-kit@$VER/obsidian/$m.ts"
 done
@@ -243,8 +225,8 @@ cat > src/vendor/kit/VENDOR.json <<JSON
   "version": "$VER",
   "sha": "$SHA",
   "code_kit_version": "$CODE_VER",
-  "vendored": "$(liste "$PURE_MODULE"), think.ts",
-  "note": "Verbatim snapshot aus ZWEI Quellen (obsidian-kit + code-kit); welche Datei woher stammt, sagt ihr eigener Kopf. think.ts stammt aus think-splitter.ts (abweichender lokaler Name seit obsidian-kit#0.27.0). Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien, die aus obsidian-kit stammen; code-kit-Herkunft steht je Datei im Kopf. kit-obsidian/ siehe dortige VENDOR.json."
+  "vendored": "$(liste "$PURE_MODULE")",
+  "note": "Verbatim snapshot aus ZWEI Quellen (obsidian-kit + code-kit); welche Datei woher stammt, sagt ihr eigener Kopf. Never hand-edit. Re-vendor via tools/sync-kit.sh. version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien, die aus obsidian-kit stammen; code-kit-Herkunft steht je Datei im Kopf. kit-obsidian/ siehe dortige VENDOR.json."
 }
 JSON
 cat > src/vendor/kit-obsidian/VENDOR.json <<JSON

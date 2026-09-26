@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { VisionClient, setHttp, setStreamFetch, parseErrorEnvelope, type HttpResponse } from "../src/vision_client";
+import { VisionClient, setHttp, setChatTransports, parseErrorEnvelope, type HttpResponse } from "../src/vision_client";
+import type { SseTransport } from "../src/vendor/kit-obsidian/chat-client";
 import { resolveActiveEndpointConfig } from "../src/vendor/kit/endpoint_config";
 
 // Mock-Transport für nicht-streamende Calls (ping/listModels/transcribe/visionConfidence/testVision).
@@ -10,15 +11,25 @@ function mockHttp(impl: (url: string, init?: { method?: string; body?: string })
 }
 const ok = (obj: unknown): HttpResponse => ({ ok: true, status: 200, text: JSON.stringify(obj) });
 
-// Streaming nutzt weiterhin fetch (requestUrl streamt nicht) → wird hier gestubbt.
-function streamRes(chunks: string[], okFlag = true, status = 200): any {
-  let i = 0;
-  return { ok: okFlag, status, body: { getReader: () => ({
-    read: async () => i < chunks.length
-      ? { done: false, value: new TextEncoder().encode(chunks[i++]) }
-      : { done: true, value: undefined },
-  }) } };
+// Chat-Weg (Streaming UND transcribe ohne Stream) läuft über den Kit-Chat-Client; hier ein Fake-Transport
+// statt XHR: er ruft `onChunk` mit den Rohtext-Stücken und löst mit dem HTTP-Status auf.
+interface ChatCall { url: string; body: string; headers: Record<string, string> }
+function fakeChat(chunks: string[], status = 200, fallback?: SseTransport): ChatCall[] {
+  const calls: ChatCall[] = [];
+  setChatTransports({
+    transport: {
+      postStream: async (url, body, headers, onChunk) => {
+        calls.push({ url, body: JSON.stringify(body), headers });
+        for (const c of chunks) onChunk(c);
+        return status;
+      },
+    },
+    ...(fallback ? { fallbackTransport: fallback } : {}),
+  });
+  return calls;
 }
+/** Eine volle Completion (ohne Stream) als einziger Körper. */
+const fakeCompletion = (obj: unknown, status = 200): ChatCall[] => fakeChat([JSON.stringify(obj)], status);
 
 describe("parseErrorEnvelope", () => {
   it("{error:{message}} → message", () => {
@@ -52,86 +63,87 @@ describe("parseErrorEnvelope", () => {
   });
 });
 
-describe("VisionClient (non-streaming, injizierter http)", () => {
+describe("VisionClient.transcribe (ohne Stream, Kit-Chat-Client mit Fake-Transport)", () => {
   it("transcribe meldet finish_reason 'length' — der Fall mit leerem content", async () => {
-    mockHttp(() => ok({ model: "m", choices: [{ message: { content: "" }, finish_reason: "length" }] }));
+    fakeCompletion({ model: "m", choices: [{ message: { content: "" }, finish_reason: "length" }] });
     const r = await new VisionClient("http://x", "vm").transcribe("d", "p");
     expect(r.content).toBe("");
     expect(r.finishReason).toBe("length");
   });
 
   it("transcribe schickt text+image_url, non-streaming, und parst content", async () => {
-    const calls = mockHttp(() => ok({ choices: [{ message: { content: "# Titel" } }] }));
+    const calls = fakeCompletion({ choices: [{ message: { content: "# Titel" } }] });
     const out = await new VisionClient("http://x", "vm").transcribe("data:image/jpeg;base64,AAAA", "Transkribiere");
     expect(out).toEqual({ content: "# Titel", model: "vm" });
-    const body = JSON.parse(calls[0].body!) as { model: string; stream: boolean; messages: { content: unknown }[] };
+    expect(calls[0].url).toBe("http://x/v1/chat/completions");
+    const body = JSON.parse(calls[0].body) as { model: string; stream: boolean; messages: { content: unknown }[] };
     expect(body.model).toBe("vm");
     expect(body.stream).toBe(false);
+    // Die Nachrichtenform mit Bildteil geht UNVERÄNDERT durch den Kit-Client (ChatWireMessage.content: unknown).
     expect(body.messages[0].content).toEqual([
       { type: "text", text: "Transkribiere" },
       { type: "image_url", image_url: { url: "data:image/jpeg;base64,AAAA" } },
     ]);
   });
-  it("transcribe wirft bei HTTP-Fehler", async () => {
-    mockHttp(() => ({ ok: false, status: 500, text: "" }));
-    await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow("500");
+  it("transcribe wirft bei HTTP-Fehler ohne Körper — mit dem Status", async () => {
+    fakeChat([], 500);
+    await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow("HTTP 500");
   });
-  it("transcribe liefert '' bei fehlendem content", async () => {
-    mockHttp(() => ok({ choices: [] }));
+  it("transcribe liefert '' bei einer Completion ohne content", async () => {
+    fakeCompletion({ choices: [{ message: {} }] });
     expect(await new VisionClient("http://x", "vm").transcribe("d", "p")).toEqual({ content: "", model: "vm" });
   });
   it("transcribe nimmt das Modell aus der Response (autoritativ)", async () => {
-    mockHttp(() => ok({ model: "qwen2-vl:7b", choices: [{ message: { content: "x" } }] }));
+    fakeCompletion({ model: "qwen2-vl:7b", choices: [{ message: { content: "x" } }] });
     expect(await new VisionClient("http://x", "").transcribe("d", "p")).toEqual({ content: "x", model: "qwen2-vl:7b" });
   });
   it("wirft die Servermeldung bei HTTP 200 + Error-Body (LM-Studio-Footgun)", async () => {
-    mockHttp(() => ok({ error: { message: "model X is not loaded" } }));
+    fakeCompletion({ error: { message: "model X is not loaded" } });
     await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow("model X is not loaded");
   });
   it("hängt die Servermeldung an den HTTP-Fehler (!ok mit Error-Body)", async () => {
-    mockHttp(() => ({ ok: false, status: 400, text: JSON.stringify({ error: { message: "bad image" } }) }));
-    await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow("bad image");
+    fakeCompletion({ error: { message: "bad image" } }, 400);
+    await expect(new VisionClient("http://x", "vm").transcribe("d", "p")).rejects.toThrow(/HTTP 400.*bad image/);
   });
 });
 
 describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
   it("meldet finishReason 'length' an den Aufrufer (Token-Limit erreicht)", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([
+    fakeChat([
       'data: {"model":"m","choices":[{"delta":{"content":"Kapitel"},"finish_reason":null}]}\n\n',
       'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n',
-    ])));
+    ]);
     const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
     expect(r.content).toBe("Kapitel");
     expect(r.finishReason).toBe("length");
   });
   it("meldet finishReason 'stop' bei regulaerem Ende", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([
+    fakeChat([
       'data: {"model":"m","choices":[{"delta":{"content":"fertig"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-    ])));
+    ]);
     const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
     expect(r.finishReason).toBe("stop");
   });
 
   it("streamt content-Deltas und liefert {content,reasoning,model}", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([
+    fakeChat([
       'data: {"model":"qwen2-vl","choices":[{"delta":{"content":"# Ti"}}]}\n\n',
       'data: {"choices":[{"delta":{"content":"tel"}}]}\n\ndata: [DONE]\n\n',
-    ])));
+    ]);
     const got: string[] = [];
     const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", t => got.push(t), () => {});
     expect(got).toEqual(["# Ti", "tel"]);
     expect(r).toEqual({ content: "# Titel", reasoning: "", model: "qwen2-vl" });
   });
   it("Fallback auf Konstruktor-Modell ohne model im Stream", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([
+    fakeChat([
       'data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n',
-    ])));
+    ]);
     const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
     expect(r.model).toBe("vm");
   });
   it("schickt multimodalen Body mit stream:true", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_url, init) => { calls.push({ body: init?.body as string | undefined }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: [DONE]\n\n']);
     await new VisionClient("http://x", "vm").transcribeStream("data:image/png;base64,AA", "Transkribiere", () => {}, () => {});
     const body = JSON.parse(calls[0].body!) as { model: string; stream: boolean; messages: { content: unknown }[] };
     expect(body.stream).toBe(true);
@@ -142,15 +154,15 @@ describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
     ]);
   });
   it("wirft bei HTTP-Fehler", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
+    fakeChat([], 500);
     await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow("500");
   });
   it("wirft die Servermeldung bei 200-Stream mit Error-Body (kein SSE)", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes(['{"error":{"message":"boom"}}'])));
+    fakeChat(['{"error":{"message":"boom"}}']);
     await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow("boom");
   });
   it("leerer SSE-Stream ([DONE]) wirft NICHT, liefert leeren content", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes(['data: [DONE]\n\n'])));
+    fakeChat(['data: [DONE]\n\n']);
     const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
     expect(r.content).toBe("");
   });
@@ -158,16 +170,15 @@ describe("VisionClient.transcribeStream (injizierter Stream-Transport)", () => {
 
 describe("VisionClient.transcribeTextStream (text-only)", () => {
   it("meldet finishReason 'length' (text-only-Pfad)", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([
+    fakeChat([
       'data: {"model":"m","choices":[{"delta":{"content":"# A"},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n',
-    ])));
+    ]);
     const r = await new VisionClient("http://x", "vm").transcribeTextStream("txt", "p", () => {}, () => {});
     expect(r.finishReason).toBe("length");
   });
 
   it("streamt content, Body ist text-only (String-content, kein image_url)", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_url, init) => { calls.push({ body: init?.body as string | undefined }); return Promise.resolve(streamRes(['data: {"model":"m","choices":[{"delta":{"content":"# A"}}]}\n\ndata: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: {"model":"m","choices":[{"delta":{"content":"# A"}}]}\n\ndata: [DONE]\n\n']);
     const got: string[] = [];
     const r = await new VisionClient("http://x", "vm").transcribeTextStream("ROHTEXT", "Formatiere", t => got.push(t), () => {});
     expect(got).toEqual(["# A"]);
@@ -177,20 +188,20 @@ describe("VisionClient.transcribeTextStream (text-only)", () => {
     expect(body.messages[0].content).toBe("Formatiere\n\nROHTEXT");
   });
   it("wirft Servermeldung bei 200-Error-Body", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes(['{"error":{"message":"boom"}}'])));
+    fakeChat(['{"error":{"message":"boom"}}']);
     await expect(new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {})).rejects.toThrow("boom");
   });
   it("wirft bei HTTP-Fehler", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
+    fakeChat([], 500);
     await expect(new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {})).rejects.toThrow("500");
   });
   it("Fallback auf Konstruktor-Modell ohne model im Stream", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes(['data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n'])));
+    fakeChat(['data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n']);
     const r = await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {});
     expect(r.model).toBe("vm");
   });
   it("leerer [DONE]-Stream wirft NICHT, liefert leeren content", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes(['data: [DONE]\n\n'])));
+    fakeChat(['data: [DONE]\n\n']);
     const r = await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {});
     expect(r.content).toBe("");
   });
@@ -198,8 +209,7 @@ describe("VisionClient.transcribeTextStream (text-only)", () => {
 
 describe("VisionClient.refineStream (text-only Multi-Turn)", () => {
   it("schickt das übergebene Messages-Array unverändert, stream:true, kein image_url", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: {"model":"m","choices":[{"delta":{"content":"# A"}}]}\n\ndata: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: {"model":"m","choices":[{"delta":{"content":"# A"}}]}\n\ndata: [DONE]\n\n']);
     const msgs = [
       { role: "system", content: "SYS" },
       { role: "user", content: "f1\n\n---\n\nBASIS" },
@@ -213,21 +223,20 @@ describe("VisionClient.refineStream (text-only Multi-Turn)", () => {
     expect(body.messages).toEqual(msgs);
   });
   it("wirft Servermeldung bei 200-Error-Body", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes(['{"error":{"message":"boom"}}'])));
+    fakeChat(['{"error":{"message":"boom"}}']);
     await expect(new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {})).rejects.toThrow("boom");
   });
   it("wirft bei HTTP-Fehler", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes([], false, 500)));
+    fakeChat([], 500);
     await expect(new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {})).rejects.toThrow("500");
   });
   it("Fallback auf Konstruktor-Modell ohne model im Stream", async () => {
-    setStreamFetch(() => Promise.resolve(streamRes(['data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n'])));
+    fakeChat(['data: {"choices":[{"delta":{"content":"x"}}]}\n\ndata: [DONE]\n\n']);
     const r = await new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {});
     expect(r.model).toBe("vm");
   });
   it("suppressThinking=true → Suppress-Params im Body", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: [DONE]\n\n']);
     await new VisionClient("http://x", "vm").refineStream([{ role: "user", content: "x" }], () => {}, () => {}, undefined, { suppressThinking: true });
     expect(JSON.parse(calls[0].body!)).toMatchObject({ reasoning_effort: "none", chat_template_kwargs: { enable_thinking: false }, reasoning_budget: 0 });
   });
@@ -247,15 +256,15 @@ describe("VisionClient.visionConfidence", () => {
 
 describe("VisionClient.testVision", () => {
   it("true wenn die Antwort das Token enthält", async () => {
-    mockHttp(() => ok({ choices: [{ message: { content: "VX7" } }] }));
+    fakeCompletion({ choices: [{ message: { content: "VX7" } }] });
     expect(await new VisionClient("http://h", "m").testVision("data:image/png;base64,AA")).toBe(true);
   });
   it("false wenn das Token fehlt", async () => {
-    mockHttp(() => ok({ choices: [{ message: { content: "eine Katze" } }] }));
+    fakeCompletion({ choices: [{ message: { content: "eine Katze" } }] });
     expect(await new VisionClient("http://h", "m").testVision("data:image/png;base64,AA")).toBe(false);
   });
   it("wirft bei HTTP-/Netzfehler", async () => {
-    mockHttp(() => ({ ok: false, status: 500, text: "" }));
+    fakeChat([], 500);
     await expect(new VisionClient("http://h", "m").testVision("d")).rejects.toThrow("500");
   });
 });
@@ -295,44 +304,40 @@ describe("VisionClient — suppressThinking Body-Merge", () => {
   const SUPPRESS = { reasoning_effort: "none", chat_template_kwargs: { enable_thinking: false }, reasoning_budget: 0 };
 
   it("transcribe: suppressThinking=true spleißt die Suppress-Params ein", async () => {
-    const calls = mockHttp(() => ok({ choices: [{ message: { content: "x" } }] }));
+    const calls = fakeCompletion({ choices: [{ message: { content: "x" } }] });
     await new VisionClient("http://x", "vm").transcribe("d", "p", { suppressThinking: true });
-    const body = JSON.parse(calls[0].body!) as Record<string, unknown>;
+    const body = JSON.parse(calls[0].body) as Record<string, unknown>;
     expect(body.reasoning_effort).toBe("none");
     expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
     expect(body.reasoning_budget).toBe(0);
   });
   it("transcribe: Default (kein opts) lässt den Body frei von Suppress-Params", async () => {
-    const calls = mockHttp(() => ok({ choices: [{ message: { content: "x" } }] }));
+    const calls = fakeCompletion({ choices: [{ message: { content: "x" } }] });
     await new VisionClient("http://x", "vm").transcribe("d", "p");
-    const body = JSON.parse(calls[0].body!) as Record<string, unknown>;
+    const body = JSON.parse(calls[0].body) as Record<string, unknown>;
     expect("reasoning_effort" in body).toBe(false);
     expect("chat_template_kwargs" in body).toBe(false);
     expect("reasoning_budget" in body).toBe(false);
   });
 
   it("transcribeStream: suppressThinking=true → Suppress-Params im Body", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: [DONE]\n\n']);
     await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {}, undefined, { suppressThinking: true });
     expect(JSON.parse(calls[0].body!)).toMatchObject(SUPPRESS);
   });
   it("transcribeStream: Default → keine Suppress-Params", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: [DONE]\n\n']);
     await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
     expect("reasoning_effort" in JSON.parse(calls[0].body!)).toBe(false);
   });
 
   it("transcribeTextStream: suppressThinking=true → Suppress-Params im Body", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: [DONE]\n\n']);
     await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {}, undefined, { suppressThinking: true });
     expect(JSON.parse(calls[0].body!)).toMatchObject(SUPPRESS);
   });
   it("transcribeTextStream: Default → keine Suppress-Params", async () => {
-    const calls: { body?: string }[] = [];
-    setStreamFetch((_u, init) => { calls.push({ body: init?.body as string }); return Promise.resolve(streamRes(['data: [DONE]\n\n'])); });
+    const calls = fakeChat(['data: [DONE]\n\n']);
     await new VisionClient("http://x", "vm").transcribeTextStream("t", "p", () => {}, () => {});
     expect("reasoning_effort" in JSON.parse(calls[0].body!)).toBe(false);
   });
@@ -340,33 +345,34 @@ describe("VisionClient — suppressThinking Body-Merge", () => {
 
 describe("VisionClient — API-Schlüssel je Endpunkt", () => {
   it("legt auf allen nicht-streamenden Wegen einen Bearer-Header an", async () => {
-    const calls = mockHttp(() => ok({ data: [{ id: "m" }], choices: [{ message: { content: "x" } }] }));
+    const calls = mockHttp(() => ok({ data: [{ id: "m" }] }));
+    const chat = fakeCompletion({ choices: [{ message: { content: "x" } }] });
     const c = new VisionClient("https://openrouter.ai/api", "vm", "sk-geheim");
     await c.ping();
     await c.listModels();
     await c.transcribe("d", "p");
-    expect(calls.length).toBe(3);
-    for (const call of calls) expect(call.headers?.Authorization).toBe("Bearer sk-geheim");
+    expect(calls.length).toBe(2);
+    expect(chat.length).toBe(1);
+    for (const call of [...calls, ...chat]) expect(call.headers?.Authorization).toBe("Bearer sk-geheim");
   });
 
   it("ohne Schlüssel bleibt der Header weg (lokale Server mögen keinen leeren Bearer)", async () => {
-    const calls = mockHttp(() => ok({ data: [], choices: [{ message: { content: "x" } }] }));
+    const calls = mockHttp(() => ok({ data: [] }));
+    const chat = fakeCompletion({ choices: [{ message: { content: "x" } }] });
     const c = new VisionClient("http://localhost:1234", "vm");
     await c.ping();
     await c.transcribe("d", "p");
-    for (const call of calls) expect(call.headers?.Authorization).toBeUndefined();
+    expect(calls.length + chat.length).toBe(2);
+    for (const call of [...calls, ...chat]) expect(call.headers?.Authorization).toBeUndefined();
   });
 
   it("trägt den Schlüssel auch in den Streaming-Pfad — sonst schlägt genau der Nutzweg fehl", async () => {
-    const seen: (Record<string, string> | undefined)[] = [];
-    setStreamFetch((_u, init) => {
-      seen.push(init?.headers as Record<string, string> | undefined);
-      return Promise.resolve(streamRes(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n', "data: [DONE]\n\n"]));
-    });
+    const calls = fakeChat(['data: {"choices":[{"delta":{"content":"x"}}]}\n\n', "data: [DONE]\n\n"]);
     const c = new VisionClient("https://openrouter.ai/api", "vm", "sk-geheim");
     await c.transcribeStream("d", "p", () => {}, () => {});
     await c.transcribeTextStream("t", "p", () => {}, () => {});
     await c.refineStream([{ role: "user", content: "x" }], () => {}, () => {});
+    const seen = calls.map((k) => k.headers);
     expect(seen.length).toBe(3);
     for (const h of seen) expect(h?.Authorization).toBe("Bearer sk-geheim");
   });
@@ -464,5 +470,70 @@ describe("VisionClient.probeStatus", () => {
     const calls = mockHttp(() => ok({ data: [] }));
     await new VisionClient("http://x:1", "", "sk-key").probeStatus();
     expect(calls[0]?.headers?.["Authorization"]).toBe("Bearer sk-key");
+  });
+});
+
+// ── Chat-Client-Tausch (Welle 11): Verhaltenswechsel gegenüber dem alten fetch-Client ──────────────
+describe("VisionClient — Kit-Chat-Client: Fehlerübersetzung und Abbruch", () => {
+  it("HTTP-Fehler trägt den GRUND aus dem Körper statt „Vision HTTP n“ (stream)", async () => {
+    fakeChat(['{"error":"Invalid url."}'], 400);
+    await expect(new VisionClient("http://x", "vm").transcribeStream("nonsense", "p", () => {}, () => {})).rejects.toThrow(/HTTP 400.*Invalid url\./);
+  });
+  it("Netzfehler → eigener Satz, kein rohes „network error“", async () => {
+    setChatTransports({ transport: { postStream: async () => { throw new Error("connect ECONNREFUSED"); } } });
+    await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow(/not reachable.*ECONNREFUSED/);
+  });
+  it("Abbruch per Signal bleibt ein AbortError (Aufrufer prüfen signal.aborted, Nutzer den Namen)", async () => {
+    const ctrl = new AbortController();
+    setChatTransports({
+      transport: {
+        postStream: (_u, _b, _h, onChunk, signal) => new Promise<number>((_res, rej) => {
+          onChunk('data: {"choices":[{"delta":{"content":"a"}}]}\n\n');
+          signal.addEventListener("abort", () => { const e = new Error("aborted"); e.name = "AbortError"; rej(e); });
+          ctrl.abort();
+        }),
+      },
+    });
+    await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {}, ctrl.signal)).rejects.toMatchObject({ name: "AbortError" });
+  });
+  it("Abgeschnitten OHNE Text ist ein Ergebnis mit finishReason 'length', keine Ausnahme (wie bisher)", async () => {
+    fakeChat(['data: {"choices":[{"delta":{"reasoning_content":"denke"},"finish_reason":null}]}\n\n', 'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\ndata: [DONE]\n\n']);
+    const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {});
+    expect(r).toMatchObject({ content: "", reasoning: "denke", finishReason: "length", model: "vm" });
+  });
+  it("200 mit weder SSE noch Completion ist ein Fehler (vorher: still leeres Transkript)", async () => {
+    fakeChat(["<html>proxy error</html>"]);
+    await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow(/proxy error/);
+  });
+  it("Fallback ohne Stream, wenn der Stream-Transport den Origin-Fehler wirft (StreamNetworkError)", async () => {
+    const fallbackCalls: string[] = [];
+    setChatTransports({
+      transport: { postStream: async () => { const e = new Error("net"); e.name = "StreamNetworkError"; throw e; } },
+      fallbackTransport: { postStream: async (_u, body, _h, onChunk) => { fallbackCalls.push(JSON.stringify(body)); onChunk(JSON.stringify({ model: "m", choices: [{ message: { content: "ok" } }] })); return 200; } },
+    });
+    const got: string[] = [];
+    const r = await new VisionClient("http://x", "vm").transcribeStream("d", "p", (t) => got.push(t), () => {});
+    expect(r.content).toBe("ok");
+    expect(got).toEqual(["ok"]);
+    expect(JSON.parse(fallbackCalls[0]).stream).toBe(false);
+  });
+  it("ein Chat-Client je VisionClient: die Fallback-Entscheidung hängt an der Instanz", async () => {
+    let fallbackUsed = 0;
+    let streamTries = 0;
+    setChatTransports({
+      transport: { postStream: async () => { streamTries++; const e = new Error("net"); e.name = "StreamNetworkError"; throw e; } },
+      fallbackTransport: { postStream: async (_u, _b, _h, onChunk) => { fallbackUsed++; onChunk(JSON.stringify({ choices: [{ message: { content: "ok" } }] })); return 200; } },
+    });
+    const c = new VisionClient("http://x", "vm");
+    await c.transcribeStream("d", "p", () => {}, () => {});
+    await c.transcribeStream("d", "p", () => {}, () => {});
+    expect(streamTries).toBe(1);   // der zweite Aufruf versucht den Stream gar nicht erst
+    expect(fallbackUsed).toBe(2);
+    await new VisionClient("http://y", "vm").transcribeStream("d", "p", () => {}, () => {});
+    expect(streamTries).toBe(2);   // ein NEUER VisionClient (Endpunktwechsel) versucht ihn wieder
+  });
+  it("ohne konfigurierte Transporte: klare Meldung statt TypeError", async () => {
+    setChatTransports(undefined as never);
+    await expect(new VisionClient("http://x", "vm").transcribeStream("d", "p", () => {}, () => {})).rejects.toThrow(/setChatTransports/);
   });
 });

@@ -80,9 +80,11 @@ or, when you transcribed from the command palette: `Empty transcript: <image>`
 
 ## Transcription failed
 
-> Transcription failed (photo.png): Vision HTTP 404
+> Transcription failed (photo.png): The endpoint answered with HTTP 404: model not found
 
-**Cause:** the server answered with an error. A wrong model name or a wrong address usually shows up here. The message after the colon is the server's own.
+**Cause:** the server answered with an error. A wrong model name or a wrong address usually shows up here. The text after the status code is the server's own message.
+
+Other messages you can meet here: “The endpoint is not reachable” (nothing listens at the address), “The endpoint stopped responding” (no data for two minutes while a response was running, or ten minutes before the first byte) and “The input is too long for the model's context window”.
 
 **Fix:** press **Test connection**, check the model under **Vision model**, and use the retry button on the card.
 

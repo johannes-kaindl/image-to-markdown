@@ -142,8 +142,8 @@ transcribe images does not have to reason about retrieval, and a user who wants 
 search does not carry transcription code they never run.
 
 There is one design decision here that can look like a mistake until you see the reasoning:
-the shared transport (`sse.ts` and the inline-`<think>` splitter) is **copied, not shared**.
-Both plugins carry their own identical copy. Factoring roughly five kilobytes of stable code
+the shared transport (the SSE parser, the inline-`<think>` splitter and the chat client) is **copied, not shared**.
+Each plugin carries its own vendored copy of the obsidian-kit modules. Factoring roughly five kilobytes of stable code
 into a shared npm package would buy versioning overhead, a release coordination burden, and a
 new failure mode — for code that essentially never changes. That is overengineering
 ([YAGNI](https://en.wikipedia.org/wiki/You_aren%27t_gonna_need_it)): the cost of the

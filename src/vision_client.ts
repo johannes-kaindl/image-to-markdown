@@ -1,10 +1,11 @@
-import { streamSSE } from "./sse";
 import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
 import { normalizeEndpoint, resolveActiveEndpoint } from "./vendor/kit/endpoint";
 import { suppressParams } from "./vendor/kit/reasoning";
 import { authHeaders } from "./vendor/kit/endpoint_config";
 import { classifyEndpointStatus, type EndpointStatus } from "./vendor/kit/endpoint_diagnostics";
 import { errorMessageFromText } from "./vendor/kit/error_body";
+import { createChatClient, type ChatClient, type ChatResult, type ChatWireMessage, type SseTransport } from "./vendor/kit-obsidian/chat-client";
+import { t } from "./i18n";
 
 // normalizeEndpoint + resolveActiveEndpoint sind aus obsidian-kit#0.3.0 vendored — hier
 // re-exportiert, damit main.ts/settings.ts/Tests sie weiterhin aus ./vision_client beziehen.
@@ -15,9 +16,16 @@ export { normalizeEndpoint, resolveActiveEndpoint };
  *  Nicht-streamende Calls laufen über http(); nur das Live-Streaming nutzt fetch (requestUrl streamt nicht). */
 export interface HttpResponse { ok: boolean; status: number; text: string }
 export type HttpFetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<HttpResponse>;
-/** Streamender Transport — liefert eine fetch-Response (für streamSSE). Wird aus der Obsidian-
- *  Schicht über activeWindow.fetch injiziert; der Kern referenziert nie das globale fetch. */
-export type StreamFetch = (url: string, init?: RequestInit) => Promise<Response>;
+/** Die Transporte für den Chat-Weg (Stream + Fallback ohne Stream). Der reine Kern importiert
+ *  weder XHR noch `requestUrl`; `main.ts` injiziert `xhrSseTransport`/`requestUrlTransport` aus
+ *  `vendor/kit-obsidian/chat-transport.ts`, Tests einen Fake. */
+export interface ChatTransports { transport: SseTransport; fallbackTransport?: SseTransport }
+
+/** Fristen des Chat-Clients. Idle (Stille seit dem letzten Chunk) gilt seit 0.25.0 überhaupt;
+ *  die Frist bis zum ERSTEN Chunk ist großzügiger, weil ein JIT ladendes Modell (LM Studio) und ein
+ *  großes Bild vor dem ersten Token Minuten brauchen können. */
+export const IDLE_TIMEOUT_MS = 120_000;
+export const FIRST_CHUNK_TIMEOUT_MS = 600_000;
 
 /** Erkennt einen OpenAI-kompatiblen Fehler-Envelope in einem Antwort-Body. Lokale Server (LM Studio)
  *  antworten auf Fehler oft mit **HTTP 200 + `{error:{message}}`** → der Aufrufer kann die echte
@@ -35,16 +43,34 @@ export const parseErrorEnvelope = (text: string): string | null =>
   errorMessageFromText(text, { bodyMayBeSuccess: true });
 
 let httpFn: HttpFetch | null = null;
-let streamFn: StreamFetch | null = null;
+let chatTransports: ChatTransports | null = null;
 export function setHttp(fn: HttpFetch): void { httpFn = fn; }
-export function setStreamFetch(fn: StreamFetch): void { streamFn = fn; }
+export function setChatTransports(tr: ChatTransports): void { chatTransports = tr; }
 function http(): HttpFetch {
   if (!httpFn) throw new Error("VisionClient: HTTP nicht konfiguriert (setHttp aufrufen)");
   return httpFn;
 }
 
+/** Übersetzt ein gescheitertes Chat-Ergebnis in den Fehler, den die Aufrufer anzeigen. Der Kit-Client
+ *  liefert nur `kind` + Servermeldung; den Satz baut das Plugin (UI-STANDARD §10). Abbruch bleibt
+ *  ein `AbortError` — die View unterscheidet ihn über `signal.aborted`, aber ein Nutzer von
+ *  `transcribeStream` darf sich weiter auf den Namen verlassen. */
+function chatError(r: Extract<ChatResult, { ok: false }>): Error {
+  if (r.kind === "aborted") { const e = new Error(r.detail); e.name = "AbortError"; return e; }
+  if (r.kind === "timeout") return new Error(t("chat.err.timeout", r.detail));
+  if (r.kind === "network") return new Error(t("chat.err.network", r.detail));
+  if (r.kind === "overflow") return new Error(t("chat.err.overflow", r.detail));
+  return new Error(r.status !== undefined ? t("chat.err.http", r.status, r.detail) : t("chat.err.response", r.detail));
+}
+
+interface ChatOut { content: string; reasoning: string; model: string; finishReason?: string }
+
 export class VisionClient {
   private endpoint: string;
+  /** Der Kit-Chat-Client — EINER je VisionClient, und der wird bei jedem Endpunktwechsel neu gebaut
+   *  (`main.ts::resolveAndReconnect`): die Weigerung, ohne Stream weiterzumachen, hängt an der Instanz
+   *  und dürfte sonst den nächsten Endpunkt treffen. */
+  private chat: ChatClient | null = null;
   /** `apiKey` gilt genau für DIESEN Endpunkt (eine Fallback-Liste darf lokale und gehostete
    *  Anbieter mischen). Fehlt er, geht kein Authorization-Header raus — lokale Server lehnen
    *  einen leeren Bearer teils ab. */
@@ -107,8 +133,45 @@ export class VisionClient {
     } catch { return []; }
   }
 
-  /** Multimodale Nachricht (Text-Prompt + Bild als image_url-Data-URL). */
-  private buildMessages(dataUrl: string, prompt: string) {
+  private chatClient(): ChatClient {
+    if (!chatTransports) throw new Error("VisionClient: Chat-Transport nicht konfiguriert (setChatTransports aufrufen)");
+    this.chat ??= createChatClient({
+      transport: chatTransports.transport,
+      ...(chatTransports.fallbackTransport ? { fallbackTransport: chatTransports.fallbackTransport } : {}),
+      idleTimeoutMs: IDLE_TIMEOUT_MS,
+      firstChunkTimeoutMs: FIRST_CHUNK_TIMEOUT_MS,
+    });
+    return this.chat;
+  }
+
+  /** Ein Chat-Aufruf über den Kit-Client. `params` bleibt übergangsweise `suppressParams` (Rezept
+   *  0.42.0 Schritt 3); eigene feste Sampling-Werte gab es hier nie. */
+  private async run(
+    messages: readonly ChatWireMessage[], stream: boolean,
+    onContent?: (t: string) => void, onReasoning?: (t: string) => void,
+    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
+  ): Promise<ChatOut> {
+    const r = await this.chatClient().complete({
+      endpoint: { url: this.endpoint, ...(this.apiKey ? { apiKey: this.apiKey } : {}) },
+      model: this.model,
+      messages,
+      params: suppressParams(opts?.suppressThinking ?? false),
+      stream,
+      ...(signal ? { signal } : {}),
+      ...(onContent ? { onToken: onContent } : {}),
+      ...(onReasoning ? { onReasoning } : {}),
+    });
+    if (r.ok) return { content: r.content, reasoning: r.reasoning, model: r.model ?? this.model, ...(r.finishReason !== undefined ? { finishReason: r.finishReason } : {}) };
+    // „Abgeschnitten ohne Text“ ist im Kit ein Fehler, hier der Fall, den der Aufrufer über
+    // finishReason "length" kennt und mit eigener Meldung zeigt (Reasoning-Modelle: das Denken
+    // frisst das Budget) — also wie bisher als Ergebnis liefern, nicht als Ausnahme.
+    if (r.kind === "truncated") return { content: "", reasoning: r.reasoning, model: this.model, finishReason: "length" };
+    throw chatError(r);
+  }
+
+  /** Multimodale Nachricht (Text-Prompt + Bild als image_url-Data-URL). `content` geht als
+   *  Array durch den Kit-Client (`ChatWireMessage.content: unknown`). */
+  private buildMessages(dataUrl: string, prompt: string): ChatWireMessage[] {
     return [{
       role: "user",
       content: [
@@ -120,23 +183,11 @@ export class VisionClient {
 
   /** Non-streaming /v1/chat/completions-Call. Modell autoritativ aus der Response. */
   async transcribe(dataUrl: string, prompt: string, opts?: { suppressThinking?: boolean }): Promise<{ content: string; model: string; finishReason?: string }> {
-    const res = await http()(`${this.endpoint}/v1/chat/completions`, {
-      method: "POST",
-      headers: this.headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: false, ...suppressParams(opts?.suppressThinking ?? false) }),
-    });
-    // LM Studio & Co. liefern Fehler teils als HTTP 200 mit {error:{message}} → echte Meldung heben
-    // statt sie als „leeres Transkript" zu verschlucken (siehe AGENTS.md-Gotcha).
-    const envelope = parseErrorEnvelope(res.text);
-    if (!res.ok) throw new Error(envelope ?? `Vision HTTP ${res.status}`);
-    const j = JSON.parse(res.text) as { model?: string; choices?: { message?: { content?: string }; finish_reason?: string | null }[] };
-    const c0 = j.choices?.[0];
-    const content = c0?.message?.content ?? "";
-    if (!content.trim() && envelope) throw new Error(envelope);
+    const { content, model, finishReason } = await this.run(this.buildMessages(dataUrl, prompt), false, undefined, undefined, undefined, opts);
     // finish_reason === "length" heisst: am Token-Limit abgeschnitten. Kein Fehler (der Teiltext ist
     // gueltig), aber der Aufrufer muss es sagen koennen — sonst sieht ein leeres Transkript wie
     // "nichts erkannt" aus.
-    return { content, model: j.model ?? this.model, finishReason: c0?.finish_reason ?? undefined };
+    return { content, model, ...(finishReason !== undefined ? { finishReason } : {}) };
   }
 
   /** Passive Vision-Erkennung: native Metadaten-Probe + Namens-Heuristik.
@@ -153,53 +204,14 @@ export class VisionClient {
   }
 
   /** Streamende Variante für die Sidebar: liefert content+reasoning live, plus das Modell
-   *  aus dem ersten SSE-Chunk (Fallback: Konstruktor-Modell). Nutzt bewusst fetch — requestUrl
-   *  liefert nur die vollständige Antwort, kann also nicht token-weise streamen. */
+   *  aus dem ersten SSE-Chunk (Fallback: Konstruktor-Modell). Transport ist XHR (Kit `chat-transport`),
+   *  weil `requestUrl` nicht streamt und `fetch` in der Desktop-Runtime keinen verlässlichen Teil-Stream liefert. */
   async transcribeStream(
     dataUrl: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
-    if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
-    const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
-      method: "POST",
-      headers: this.headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ model: this.model, messages: this.buildMessages(dataUrl, prompt), stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
-      signal,
-    });
-    if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
-    const r = await streamSSE(res, onContent, onReasoning);
-    // 200 mit Error-Body statt SSE (keine data:-Zeile, kein Inhalt) → echte Servermeldung heben.
-    // /^\s*data:/m deckt sich mit parseSSE (das eingerückte data:-Zeilen toleriert).
-    if (!r.content.trim() && !/^\s*data:/m.test(r.raw)) {
-      const envelope = parseErrorEnvelope(r.raw);
-      if (envelope) throw new Error(envelope);
-    }
-    return { content: r.content, reasoning: r.reasoning, model: r.model || this.model, finishReason: r.finishReason };
-  }
-
-  /** Gemeinsamer Streaming-Kern für die text-basierten Calls (transcribeTextStream + refineStream):
-   *  serialisiert ein beliebiges Messages-Array, streamt via SSE, hebt einen 200-Error-Body als echte
-   *  Servermeldung. Der multimodale transcribeStream bleibt eigenständig (image_url-Content). */
-  private async streamChat(
-    messages: unknown[],
-    onContent: (t: string) => void, onReasoning: (t: string) => void,
-    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
-    if (!streamFn) throw new Error("VisionClient: Stream-Transport nicht konfiguriert (setStreamFetch aufrufen)");
-    const res = await streamFn(`${this.endpoint}/v1/chat/completions`, {
-      method: "POST",
-      headers: this.headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ model: this.model, messages, stream: true, ...suppressParams(opts?.suppressThinking ?? false) }),
-      signal,
-    });
-    if (!res.ok) throw new Error(`Vision HTTP ${res.status}`);
-    const r = await streamSSE(res, onContent, onReasoning);
-    if (!r.content.trim() && !/^\s*data:/m.test(r.raw)) {
-      const envelope = parseErrorEnvelope(r.raw);
-      if (envelope) throw new Error(envelope);
-    }
-    return { content: r.content, reasoning: r.reasoning, model: r.model || this.model, finishReason: r.finishReason };
+  ): Promise<ChatOut> {
+    return this.run(this.buildMessages(dataUrl, prompt), true, onContent, onReasoning, signal, opts);
   }
 
   /** Wie transcribeStream, aber sendet reinen TEXT (kein Bild) — für born-digital PDF-Seiten, deren
@@ -208,8 +220,8 @@ export class VisionClient {
     text: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
-    return this.streamChat([{ role: "user", content: `${prompt}\n\n${text}` }], onContent, onReasoning, signal, opts);
+  ): Promise<ChatOut> {
+    return this.run([{ role: "user", content: `${prompt}\n\n${text}` }], true, onContent, onReasoning, signal, opts);
   }
 
   /** Iterative Nachbesserung (#7): streamt ein fertig gebautes Multi-Turn-Messages-Array (System +
@@ -218,7 +230,7 @@ export class VisionClient {
     messages: unknown[],
     onContent: (t: string) => void, onReasoning: (t: string) => void,
     signal?: AbortSignal, opts?: { suppressThinking?: boolean },
-  ): Promise<{ content: string; reasoning: string; model: string; finishReason?: string }> {
-    return this.streamChat(messages, onContent, onReasoning, signal, opts);
+  ): Promise<ChatOut> {
+    return this.run(messages as ChatWireMessage[], true, onContent, onReasoning, signal, opts);
   }
 }
