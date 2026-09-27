@@ -51,6 +51,9 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading wor
 | "PDF render scale" ("PDF-Render-Auflösung") | Controls the render resolution for PDF pages before they are sent to the vision model. Shown as a slider from `1.0` to `4.0` in steps of `0.5`. `2.0` ≈ 144 dpi; higher values produce sharper images but use more memory. On mobile the scale is automatically capped at `1.5` regardless of this setting. | `2.0` |
 | "PDF page separator" ("PDF-Seitentrenner") | How pages are separated in the merged PDF transcript note. Dropdown with five options: "Obsidian comment %% Page N %% (hidden in reading view)" (`comment`), "Heading ## Page N" (`heading`), "Horizontal rule ---" (`rule`), "Page break (HTML, for export)" (`pagebreak`), "None (seamless text)" (`none`). | `comment` (the Obsidian comment `%% Page N %%`) |
 | "Use embedded PDF text" ("Eingebetteten PDF-Text nutzen") | Toggle. When a PDF page has a real text layer (≥ 200 non-whitespace characters), its exact text is sent to the model as plain text (not a rendered image) to be formatted as Markdown — faster and without OCR errors. Pages below the threshold (scans, figures) fall back to rendering + the vision model per page. Stored as `pdfUseTextLayer`. | `true` (on) |
+| "Text extraction path" ("Text-Erkennungsweg") | Dropdown: "Vision model" (the endpoint above) or "Apple Shortcut (on-device OCR)" — a Kurzbefehl run via `shortcuts://`, no LLM endpoint, no streaming, images only (no PDF in v1). Stored as `ocrMethod`. See [Use the Apple Shortcut OCR path](how-to.md#use-the-apple-shortcut-ocr-path-on-device-mobile-capable). | `vision` |
+| "Shortcut name" ("Kurzbefehl-Name") | Exact name of the Shortcut that extracts text from an image. Stored as `ocrShortcutName`. | `Extract Text (Obsidian)` |
+| "Shortcut timeout (ms)" ("Kurzbefehl-Timeout (ms)") | A deleted or hanging Shortcut never answers — this is the only defense. Stored as `ocrTimeoutMs`. | `30000` |
 
 Notes:
 

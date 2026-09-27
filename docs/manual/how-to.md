@@ -27,6 +27,7 @@ the setup notes in the [README](../../README.md).
 12. [Transcribe a linked image or PDF (without an embed)](#transcribe-a-linked-image-or-pdf-without-an-embed)
 13. [Transcribe a standalone PDF or image file](#transcribe-a-standalone-pdf-or-image-file)
 14. [Configure multiple endpoints (home + on the road)](#configure-multiple-endpoints-home--on-the-road)
+15. [Use the Apple Shortcut OCR path (on-device, mobile-capable)](#use-the-apple-shortcut-ocr-path-on-device-mobile-capable)
 
 ---
 
@@ -429,6 +430,45 @@ Notes:
   the list with one entry behaves exactly like the old single-field mode.
 - **Migration:** if you are upgrading from a version with a single endpoint field, your existing
   value is automatically converted to a one-item list — no action needed.
+
+---
+
+## Use the Apple Shortcut OCR path (on-device, mobile-capable)
+
+Use this on iOS/macOS 26+ to read text out of images without a vision model or
+network endpoint at all — an on-device Apple Shortcut does the OCR. This is
+the only way to use the plugin's text-extraction feature on an iPhone without a
+reachable LM Studio/MLX/Ollama server.
+
+**Setup (once):**
+
+1. Import or build the Shortcut named exactly **"Extract Text (Obsidian)"** — see
+   the central [Apple shortcuts for Obsidian plugins](https://uplink.jkaindl.de/apple-shortcuts)
+   guide for the iCloud link, a copy-paste generator prompt, and a by-hand recipe.
+2. Open the Image to Markdown settings (heading **"Vision (Image → Markdown)"**).
+3. Set **"Text extraction path"** ("Text-Erkennungsweg") to **"Apple Shortcut
+   (on-device OCR)"**.
+4. If you renamed the Shortcut, update **"Shortcut name"** ("Kurzbefehl-Name")
+   to match exactly.
+
+**Using it:** transcribe as usual (sidebar, context menu, or command) — for an
+image source, the app switches to Shortcuts, runs the OCR, and switches back.
+The result card fills in **one shot** instead of streaming live, since the
+Shortcut has no partial output.
+
+Good to know:
+
+- **v1 covers images only, not PDF** — a PDF source ignores this setting and
+  keeps using the vision-model path above.
+- **No LLM endpoint needed**: nothing is sent to any server, on-device or
+  remote — this is Apple's Vision framework via Shortcuts.
+- **A deleted or hanging Shortcut never answers.** The **"Shortcut timeout
+  (ms)"** ("Kurzbefehl-Timeout (ms)") setting is the only defense; raise it on
+  slower devices if runs time out.
+- **One run at a time**: starting a second transcription while one is still
+  waiting on the Shortcut reports "busy" — wait for the first to finish.
+- Reduce the visible app-switch by turning on **Reduce Motion** (iOS Settings
+  → Accessibility → Motion) — see the central guide for details.
 
 ---
 

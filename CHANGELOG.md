@@ -18,7 +18,7 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ### Hinzugefügt
 
-- **Neuer Text-Erkennungsweg neben dem Vision-Modell: Apple Shortcuts (on-device OCR)** — Einstellungen: Weg-Wahl, Kurzbefehl-Name (Default „Extract Text (Obsidian)"), Timeout (Default 30 s, Pflicht: ein gelöschter Kurzbefehl antwortet nie). v1 ohne PDF, kein Streaming, ohne LLM-Endpunkt. In der Sidebar-View angeschlossen: die Ergebniskarte füllt sich bei diesem Weg auf einmal statt live; Fehler (Timeout, „beschäftigt", Kurzbefehl-Fehler) erscheinen im bestehenden Karten-Fehlerzustand.
+- **Neuer Text-Erkennungsweg neben dem Vision-Modell: Apple Shortcuts (on-device OCR)** — Einstellungen: Weg-Wahl, Kurzbefehl-Name (Default „Extract Text (Obsidian)"), Timeout (Default 30 s, Pflicht: ein gelöschter Kurzbefehl antwortet nie). v1 ohne PDF, kein Streaming, ohne LLM-Endpunkt. In der Sidebar-View angeschlossen: die Ergebniskarte füllt sich bei diesem Weg auf einmal statt live; Fehler (Timeout, „beschäftigt", Kurzbefehl-Fehler) erscheinen im bestehenden Karten-Fehlerzustand. Neues How-to „Use the Apple Shortcut OCR path" (docs/manual/how-to.md) + Settings-Referenz, mit Link auf den zentralen Guide `uplink.jkaindl.de/apple-shortcuts`.
 
 ## [0.25.0] — 2026-09-26
 
