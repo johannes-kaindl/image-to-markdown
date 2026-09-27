@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.43.0, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.44.0, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ein Chat-Aufruf gegen `/v1/chat/completions` (OpenAI-kompatibel) — Streaming, Tool-Calls,
  *  Abbruch, Idle-Timeout, Fehlerbody, Fallback ohne Stream. Kein `obsidian`-Import: der Transport
  *  wird injiziert (`chat-transport.ts` liefert XHR und `requestUrl`), die Uhr ebenso. Damit ist
@@ -30,7 +30,7 @@
  *  den Client neu; sonst trägt der neue Endpunkt die Weigerung des alten. Ein Netzfehler im
  *  Fallback selbst ist `network`, es gibt keine zweite Runde. Schon gestreamter Text sperrt den
  *  Fallback (er lieferte dieselben Token noch einmal). */
-import { parseSSE } from "../kit/sse";
+import { parseSSE, type ToolCallDelta } from "../kit/sse";
 import { ThinkSplitter } from "../kit/think-splitter";
 import { normalizeEndpoint } from "../kit/endpoint";
 import { authHeaders, type EndpointConfig } from "../kit/endpoint_config";
@@ -153,8 +153,6 @@ const DETAIL_CAP = 200;
 const OVERFLOW_RE = /context (length|window)|too many tokens|maximum context length/i;
 const RESERVED = new Set(["model", "messages", "stream", "tools"]);
 
-interface ToolCallDelta { index: number; id?: string; name?: string; argsDelta?: string }
-
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -166,35 +164,6 @@ function oneLine(s: string): string {
 
 function namedErrorName(e: unknown): string {
   return e instanceof Error ? e.name : "";
-}
-
-/** tool_calls-Deltas aus KOMPLETTEN SSE-Zeilen. `parseSSE` (code-kit) kennt sie nicht; statt
- *  seine Zeilenlogik nachzubauen, bekommt diese Funktion genau den Teil, den `parseSSE` schon
- *  verbraucht hat. Der `includes`-Vorfilter hält den zweiten `JSON.parse` auf die seltenen
- *  Tool-Zeilen beschränkt. Nachfolger: `parseSSE` um `toolCalls` erweitern (code-kit). */
-function toolCallDeltas(completeLines: string): ToolCallDelta[] {
-  const out: ToolCallDelta[] = [];
-  for (const rawLine of completeLines.split(/\r\n|\n|\r/)) {
-    const t = rawLine.trim();
-    if (!t.startsWith("data:") || !t.includes("tool_calls")) continue;
-    let parsed: unknown;
-    try { parsed = JSON.parse(t.slice(5).trim()); } catch { continue; }
-    const choices = isRecord(parsed) ? parsed.choices : undefined;
-    const c0: unknown = Array.isArray(choices) ? choices[0] : undefined;
-    const d = isRecord(c0) && isRecord(c0.delta) ? c0.delta : undefined;
-    if (!d || !Array.isArray(d.tool_calls)) continue;
-    d.tool_calls.forEach((tc: unknown, i: number) => {
-      if (!isRecord(tc)) return;
-      const fn = isRecord(tc.function) ? tc.function : {};
-      out.push({
-        index: typeof tc.index === "number" ? tc.index : i,
-        ...(typeof tc.id === "string" ? { id: tc.id } : {}),
-        ...(typeof fn.name === "string" ? { name: fn.name } : {}),
-        ...(typeof fn.arguments === "string" ? { argsDelta: fn.arguments } : {}),
-      });
-    });
-  }
-  return out;
 }
 
 class ToolCallAssembler {
@@ -316,7 +285,7 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
       if (finishReason === undefined && p.finishReason) finishReason = p.finishReason;
       for (const r of p.reasoning) emit("", r);
       for (const c of p.content) { const s = splitter.push(c); emit(s.content, s.reasoning); }
-      for (const d of toolCallDeltas(complete)) {
+      for (const d of p.toolCalls) {
         assembler.push(d);
         sawToolCall = true;
         if (d.name !== undefined && !heads.has(d.index)) {

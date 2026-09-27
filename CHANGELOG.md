@@ -10,6 +10,10 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 - The GitHub release now also carries a ready-to-unpack `image-to-markdown.zip` (the plugin folder with `main.js`, `manifest.json` and `styles.css`) and a `checksums.sha256` file. For a manual install, download the zip and unpack it into `.obsidian/plugins/` instead of creating the folder and saving three files by hand.
 
+### Changed
+
+- Kit chat client 0.44.0 (no user-visible change).
+
 ## [0.25.0] — 2026-09-26
 
 ### Geändert
