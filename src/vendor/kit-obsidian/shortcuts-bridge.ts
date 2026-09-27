@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.45.0, src/obsidian/shortcuts-bridge.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.45.1, src/obsidian/shortcuts-bridge.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die einzige Brücke von einem Obsidian-Plugin zu Apples on-device-Fähigkeiten (LLM, STT, OCR,
  *  TTS, Bildgenerierung) über Kurzbefehle — auf iOS gibt es keinen anderen Weg (JS-only,
  *  Codesigning, Nachbar-App-Server werden suspendiert). One-shot, kein Streaming, sichtbarer
@@ -20,6 +20,7 @@
  *  ein hängender Callback ist community-belegt (Advanced-URI-Issue #30). Ohne Timeout bliebe ein
  *  gelöschter Kurzbefehl für immer `pending`. */
 import type { Plugin } from "obsidian";
+import { realClock, type ClockPort } from "./clock";
 
 export interface ShortcutRun {
   /** Exakter Kurzbefehl-Name (Settings des Konsumenten). */
@@ -47,6 +48,9 @@ export interface ShortcutsBridgeOptions {
   protocolAction: string;
   /** Default `window.open`. Injizierbar für Tests. */
   openUrl?: (url: string) => void;
+  /** Default `realClock` (window-Timer — der Store-Scanner verlangt `window.setTimeout`,
+   *  `obsidianmd/prefer-window-timers`). Injizierbar für Node-Tests (`clock.ts`-Muster). */
+  clock?: ClockPort;
 }
 
 export interface ShortcutsBridge {
@@ -64,7 +68,7 @@ interface PendingRun {
   startedAt: number;
   expectFile?: ShortcutRun["expectFile"];
   resolve: (r: ShortcutResult) => void;
-  timer: ReturnType<typeof setTimeout>;
+  timer: number;
 }
 
 let correlationSeq = 0;
@@ -87,12 +91,15 @@ function buildShortcutUrl(opts: { shortcut: string; input: string; protocolActio
   );
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(clock: ClockPort, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    clock.setTimeout(() => { resolve(); }, ms);
+  });
 }
 
 async function pollForFile(
   plugin: Plugin,
+  clock: ClockPort,
   expect: NonNullable<ShortcutRun["expectFile"]>,
 ): Promise<string | null> {
   const tries = expect.pollTries ?? DEFAULT_POLL_TRIES;
@@ -102,7 +109,7 @@ async function pollForFile(
       const candidate = `${expect.vaultPathPrefix}.${ext}`;
       if (await plugin.app.vault.adapter.exists(candidate)) return candidate;
     }
-    if (i < tries - 1) await sleep(delayMs);
+    if (i < tries - 1) await sleep(clock, delayMs);
   }
   return null;
 }
@@ -112,11 +119,12 @@ async function pollForFile(
  *  x-callback-Rückkehr trägt keinen Payload-Bezug, parallele Läufe sind nicht unterscheidbar). */
 export function createShortcutsBridge(plugin: Plugin, opts: ShortcutsBridgeOptions): ShortcutsBridge {
   const openUrl = opts.openUrl ?? ((url: string): void => { window.open(url); });
+  const clock = opts.clock ?? realClock;
   let pending: PendingRun | null = null;
 
   const settle = (r: ShortcutResult): void => {
     if (!pending) return;
-    clearTimeout(pending.timer);
+    clock.clearTimeout(pending.timer);
     const resolve = pending.resolve;
     pending = null;
     resolve(r);
@@ -152,7 +160,7 @@ export function createShortcutsBridge(plugin: Plugin, opts: ShortcutsBridgeOptio
     // status === "ok"
     const result = params.result ?? "";
     if (run.expectFile) {
-      const file = await pollForFile(plugin, run.expectFile);
+      const file = await pollForFile(plugin, clock, run.expectFile);
       const finalDurationMs = Date.now() - run.startedAt;
       if (file === null) {
         const tried = KNOWN_RESULT_EXTENSIONS.map((e) => `${run.expectFile?.vaultPathPrefix}.${e}`).join(", ");
@@ -172,7 +180,7 @@ export function createShortcutsBridge(plugin: Plugin, opts: ShortcutsBridgeOptio
     const cid = nextCorrelationId();
     const startedAt = Date.now();
     return new Promise<ShortcutResult>((resolve) => {
-      const timer = setTimeout(() => {
+      const timer = clock.setTimeout(() => {
         settle({ ok: false, reason: "timeout", message: `keine Antwort innerhalb von ${req.timeoutMs} ms`, durationMs: Date.now() - startedAt });
       }, req.timeoutMs);
       pending = { cid, startedAt, expectFile: req.expectFile, resolve, timer };

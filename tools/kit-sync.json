@@ -27,7 +27,7 @@
       "dir": "src/vendor/kit-obsidian",
       "source": "obsidian-kit",
       "from": "src/obsidian",
-      "modules": ["chat-transport", "clock", "folder-suggest", "settings_walker", "help-setting", "shortcuts-bridge"]
+      "modules": ["chat-transport", "clock", "folder-suggest", "settings_walker", "help-setting", { "name": "shortcuts-bridge", "ref": "0.45.1" }]
     },
     {
       "dir": "src/vendor/kit-obsidian",
