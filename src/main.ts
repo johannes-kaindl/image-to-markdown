@@ -280,6 +280,16 @@ export default class ImageToMarkdownPlugin extends Plugin {
           if (!resolved) throw new Error(t("core.imageNotFound", item.link));
           filePath = resolved.path; ext = resolved.extension;
         }
+        // Apple-Kurzbefehl-Weg (Spec Baustein 4): nur fuer Bilder, v1 ohne PDF — eine PDF-Quelle
+        // laeuft unveraendert ueber den Vision-Weg unten. Kein Streaming: einmalige Lieferung
+        // ueber denselben onContent-Callback, den auch der Vision-Weg nutzt (Karten-UI bleibt
+        // unveraendert). Ein Fehler wirft, der bestehende Karten-Fehlerzustand faengt ihn auf.
+        if (this.settings.ocrMethod === "shortcut" && item.kind !== "pdf") {
+          const r = await this.extractTextViaOcr(filePath);
+          if (typeof r !== "string") throw new Error(r.message);
+          onContent(r);
+          return { content: r, reasoning: "", model: "apple-shortcut" };
+        }
         let dataUrl: string;
         if (item.kind === "pdf") {
           if ((item.range?.to ?? 1) - (item.range?.from ?? 1) + 1 > this.settings.pdfMaxPages) {
