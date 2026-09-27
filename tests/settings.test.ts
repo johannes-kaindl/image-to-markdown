@@ -2,6 +2,15 @@ import { describe, it, expect } from "vitest";
 import { defaultSettings, migrateEndpoints, applyListEdit, applyTaxonomyEdit, fmMapFromSettings } from "../src/settings";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
+describe("defaultSettings — OCR-Weg (Baustein B)", () => {
+  it("Default ist der bestehende Vision-Weg, mit sinnvollen OCR-Defaults daneben", () => {
+    const s = defaultSettings();
+    expect(s.ocrMethod).toBe("vision");
+    expect(s.ocrShortcutName).toBe("Extract Text (Obsidian)");
+    expect(s.ocrTimeoutMs).toBe(30000);
+  });
+});
+
 describe("migrateEndpoints", () => {
   it("alter Einzel-Endpoint → Config-Liste", () => {
     expect(migrateEndpoints({ visionEndpoint: "http://localhost:8080" })).toEqual([{ url: "http://localhost:8080" }]);

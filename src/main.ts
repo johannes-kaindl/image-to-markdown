@@ -24,6 +24,9 @@ import { diffMappings, planMigration } from "./fm_migration";
 import { MigrationModal } from "./migration_modal";
 import type { FrontmatterMap } from "./frontmatter_map";
 import { copyToClipboard } from "./vendor/kit-obsidian/clipboard";
+import { createShortcutsBridge, type ShortcutsBridge } from "./vendor/kit-obsidian/shortcuts-bridge";
+import type { OcrProviderApi, OcrProviderError } from "./vendor/kit/ocr-provider";
+import { createOcrProviderApi, shortcutResultToOcr } from "./ocr_provider";
 
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
@@ -37,6 +40,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
   /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet, `visionModel` ist der Rückfall. */
   get model(): string { return this.activeModel || this.settings.visionModel; }
   private pendingCards = new CardCache();
+  /** Anbieter-API v1 (Spec Baustein 4/D, Kit-Vertrag `ocr-provider`) — Konsumenten fragen
+   *  `app.plugins.plugins["image-to-markdown"].api`, nie die Brücke direkt. Sofort in onload
+   *  gesetzt (Muster lingotuner): sobald das Plugin-Objekt sichtbar ist, soll `api` da sein. */
+  api!: OcrProviderApi;
+  private shortcutsBridge!: ShortcutsBridge;
 
   private openPath = (p: string): void => {
     const f = this.app.vault.getAbstractFileByPath(p);
@@ -56,6 +64,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
     const first = this.settings.visionEndpoints[0];
     this.visionClient = new VisionClient(first?.url ?? "", this.settings.visionModel, first?.apiKey);
     void this.resolveAndReconnect();
+
+    this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });
+    this.api = createOcrProviderApi({ extractText: (p) => this.extractTextViaOcr(p) });
 
     this.addSettingTab(new ImageToMarkdownSettingTab(this.app, this));
     this.registerView(VIEW_TYPE_IMGMD, (leaf: WorkspaceLeaf) => new ImgToMdView(leaf, this.makeImgViewDeps()));
@@ -102,6 +113,33 @@ export default class ImageToMarkdownPlugin extends Plugin {
   }
 
   private mimeOf(ext: string): string { const e = ext.toLowerCase(); return e === "jpg" ? "jpeg" : e; }
+
+  /** Backend-Auswahl der Anbieter-API (Spec Baustein 4/D): abstrahiert über die WEGE
+   *  (Kurzbefehl mobil, Vision-LLM desktop), nie über die Brücke — ein Konsument des `api`
+   *  merkt den Unterschied nie. v1 ohne PDF (Spec § Nicht-Ziele): eine PDF-Quelle ist "unsupported". */
+  private async extractTextViaOcr(vaultPath: string): Promise<string | OcrProviderError> {
+    if (this.settings.ocrMethod === "shortcut") {
+      const r = await this.shortcutsBridge.run({
+        shortcut: this.settings.ocrShortcutName,
+        input: vaultPath,
+        timeoutMs: this.settings.ocrTimeoutMs,
+      });
+      return shortcutResultToOcr(r);
+    }
+    const f = this.app.vault.getAbstractFileByPath(vaultPath);
+    if (!(f instanceof TFile)) return { error: "not-found", message: `Datei nicht gefunden: ${vaultPath}` };
+    const ext = f.extension.toLowerCase();
+    if (!SUPPORTED_EXTS.includes(ext)) return { error: "unsupported", message: `Dateityp nicht unterstützt: .${ext}` };
+    if (!this.activeEndpoint) return { error: "backend-unavailable", message: "kein Vision-Endpunkt erreichbar" };
+    try {
+      const dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(vaultPath))}`;
+      const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
+      const { content } = await this.visionClient.transcribe(dataUrl, prompt, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
+      return content;
+    } catch (e) {
+      return { error: "failed", message: e instanceof Error ? e.message : String(e) };
+    }
+  }
 
   // Kein Caching: die Settings-UI mutiert this.settings live, jeder Aufruf muss den aktuellen Stand lesen.
   private fmMap() { return fmMapFromSettings(this.settings); }

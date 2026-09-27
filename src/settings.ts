@@ -66,6 +66,12 @@ export interface ImageToMarkdownSettings {
    *  (Default-Verhalten, s. `resolveDestDir` in img_to_md.ts). */
   exportFolder: string;
   mode: "transcribe" | "describe";
+  /** OCR-Weg für Bilder (Spec Baustein 4): "vision" ist der bestehende Vision-LLM-Weg,
+   *  "shortcut" die Apple-Kurzbefehl-Brücke (kein Streaming, reines OCR, ohne LLM-Endpunkt,
+   *  v1 ohne PDF). */
+  ocrMethod: "vision" | "shortcut";
+  ocrShortcutName: string;
+  ocrTimeoutMs: number;
 }
 
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
@@ -86,6 +92,9 @@ export function defaultSettings(): ImageToMarkdownSettings {
     frontmatterMap: { ...DEFAULT_FM_MAP },
     exportFolder: "",
     mode: "transcribe",
+    ocrMethod: "vision",
+    ocrShortcutName: "Extract Text (Obsidian)",
+    ocrTimeoutMs: 30000,
   };
 }
 
@@ -249,6 +258,15 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
             control: { type: "toggle", key: "reasoningExpanded" } },
           { name: t("settings.exportFolder.name"), desc: t("settings.exportFolder.desc"),
             render: (s: Setting) => { this.renderExportFolder(s); } },
+          { name: t("settings.ocrMethod.name"), desc: t("settings.ocrMethod.desc"),
+            control: { type: "dropdown", key: "ocrMethod", options: {
+              vision: t("settings.ocrMethod.vision"),
+              shortcut: t("settings.ocrMethod.shortcut"),
+            } } },
+          { name: t("settings.ocrShortcutName.name"), desc: t("settings.ocrShortcutName.desc"),
+            control: { type: "text", key: "ocrShortcutName" } },
+          { name: t("settings.ocrTimeoutMs.name"), desc: t("settings.ocrTimeoutMs.desc"),
+            control: { type: "number", key: "ocrTimeoutMs", min: 1000, max: 300000 } },
         ],
       },
       {
@@ -289,6 +307,10 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       const n = Number(value);
       if (!Number.isFinite(n) || n <= 0) return;
       settings[key] = Math.min(Math.floor(n), 500);
+    } else if (key === "ocrTimeoutMs") {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return;
+      settings[key] = Math.min(Math.floor(n), 300000);
     } else {
       settings[key] = value;
     }

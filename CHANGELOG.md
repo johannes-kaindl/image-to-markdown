@@ -14,7 +14,11 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 - Kit chat client 0.44.0 (no user-visible change).
 - Kit vendoring bumped to `obsidian-kit` 0.45.0 (`shortcuts-bridge` pinned to 0.45.1): pulls in `pure/ocr-provider` and `obsidian/shortcuts-bridge` for the upcoming Apple-shortcut OCR path (no user-visible change yet — not wired in). The 0.45.1 pin fixes an upstream lint violation (`obsidianmd/prefer-window-timers`) in `shortcuts-bridge` via an injectable clock port.
-- Anbieter-API v1 (`extractText(vaultPath) → Text`, Kit-Vertrag `ocr-provider`) als dünner Adapter angelegt (`src/ocr_provider.ts`) — noch nicht an `main.ts`/`app.plugins.plugins` angeschlossen, kein Nutzer-Effekt.
+- Anbieter-API v1 (`extractText(vaultPath) → Text`, Kit-Vertrag `ocr-provider`) als dünner Adapter angelegt (`src/ocr_provider.ts`), jetzt an `main.ts`/`app.plugins.plugins["image-to-markdown"].api` angeschlossen.
+
+### Hinzugefügt
+
+- **Neuer Text-Erkennungsweg neben dem Vision-Modell: Apple Shortcuts (on-device OCR)** — Einstellungen: Weg-Wahl, Kurzbefehl-Name (Default „Extract Text (Obsidian)"), Timeout (Default 30 s, Pflicht: ein gelöschter Kurzbefehl antwortet nie). v1 ohne PDF, kein Streaming, ohne LLM-Endpunkt. Noch nicht an die Sidebar-View angeschlossen (Baustein C folgt) — bisher nur über die Anbieter-API nutzbar.
 
 ## [0.25.0] — 2026-09-26
 
