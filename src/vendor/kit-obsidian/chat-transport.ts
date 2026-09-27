@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.43.0, src/obsidian/chat-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.45.0, src/obsidian/chat-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die zwei Transporte für `chat-client`: XHR für den Stream, `requestUrl` für die Anfrage ohne
  *  Stream (Fallback). Beide erfüllen `SseTransport`.
  *
@@ -15,7 +15,8 @@
  *  Abbruch noch Frist: bei Abbruch lehnt der Transport sofort ab, die Anfrage läuft im
  *  Hintergrund zu Ende und ihr Ergebnis verfällt. */
 import { requestUrl } from "obsidian";
-import type { SseTransport } from "./chat-client";
+import type { SseTransport, ChatWireMessage } from "./chat-client";
+import type { ShortcutsBridge } from "./shortcuts-bridge";
 
 function namedError(message: string, name: string): Error {
   const e = new Error(message);
@@ -92,3 +93,115 @@ export const requestUrlTransport: SseTransport = {
     });
   },
 };
+
+function contentToText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part !== null && typeof part === "object" && (part as { type?: unknown }).type === "text") {
+          const t = (part as { text?: unknown }).text;
+          return typeof t === "string" ? t : "";
+        }
+        return "";
+      })
+      .filter((t) => t !== "")
+      .join("\n");
+  }
+  return "";
+}
+
+/** Faltet System + Gesprächsverlauf zu EINEM Prompt-Text — die Brücke ist one-shot und kennt kein
+ *  Nachrichten-Array. Vorbild: `apps/yijing/scripts/ios-app/Sources/FoundationModelsEngine.swift`
+ *  (nur gelesen, nicht verändert) — System zuerst, dann der Rest mit Leerzeile getrennt. */
+export function foldMessagesToPrompt(messages: readonly ChatWireMessage[]): string {
+  const system = messages.find((m) => m.role === "system");
+  const rest = messages.filter((m) => m.role !== "system");
+  const systemText = system ? contentToText(system.content) : "";
+  const historyText = rest.map((m) => contentToText(m.content)).filter((t) => t !== "").join("\n\n");
+  if (systemText === "") return historyText;
+  return historyText === "" ? systemText : `${systemText}\n\n${historyText}`;
+}
+
+export interface ShortcutsChatTransportOptions {
+  bridge: Pick<ShortcutsBridge, "run">;
+  /** Kurzbefehl-Name und Timeout kommen aus dem `ResolvedEndpoint` des Konsumenten. */
+  shortcut: { name: string; timeoutMs: number };
+}
+
+/** Dritter Transport neben XHR/`requestUrl`: erfüllt dieselbe `SseTransport`-Signatur, fährt aber
+ *  über die Kurzbefehl-Brücke (`shortcuts-bridge.ts`) statt HTTP — one-shot, kein Streaming.
+ *  `url`/`headers` werden ignoriert (die Brücke kennt nur den Kurzbefehl-Namen aus
+ *  `opts.shortcut`). Die Antwort geht als komplettes, OpenAI-kompatibles JSON-Envelope
+ *  (`choices[0].message.content`) an `onChunk` — der `chat-client` erkennt es an der fehlenden
+ *  SSE-Form und parst es über seinen bestehenden No-Stream-Pfad, null Änderung dort nötig.
+ *
+ *  **Fähigkeitsgrenze statt stillem Schlucken:** Werkzeuge (`body.tools`) kennt die Aktion
+ *  „Modell verwenden" nicht — ein Aufruf mit Tool-Definitionen schlägt sichtbar fehl (Status 501,
+ *  Fehlerkörper), statt sie zu ignorieren.
+ *  **`signal` verwirft nur das Ergebnis:** x-callback kann einen laufenden Kurzbefehl nicht
+ *  abbrechen — der Bridge-Lauf läuft im Hintergrund weiter, nur diese Promise lehnt vorzeitig ab. */
+export function createShortcutsChatTransport(opts: ShortcutsChatTransportOptions): SseTransport {
+  return {
+    postStream(_url, body, _headers, onChunk, signal) {
+      return new Promise<number>((resolve, reject) => {
+        if (signal.aborted) { reject(namedError("aborted", "AbortError")); return; }
+        const b = body as { messages?: unknown; tools?: unknown };
+        const messages: ChatWireMessage[] = Array.isArray(b.messages) ? (b.messages as ChatWireMessage[]) : [];
+        if (Array.isArray(b.tools) && b.tools.length > 0) {
+          onChunk(JSON.stringify({ error: { message: "apple-shortcuts transport: tool calls are not supported (capability boundary)" } }));
+          resolve(501);
+          return;
+        }
+        const prompt = foldMessagesToPrompt(messages);
+        let settled = false;
+        const onAbort = (): void => {
+          if (settled) return;
+          settled = true;
+          reject(namedError("aborted", "AbortError"));
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        opts.bridge
+          .run({ shortcut: opts.shortcut.name, input: prompt, timeoutMs: opts.shortcut.timeoutMs })
+          .then((res) => {
+            signal.removeEventListener("abort", onAbort);
+            if (settled) return;
+            settled = true;
+            if (res.ok) {
+              onChunk(JSON.stringify({ choices: [{ message: { role: "assistant", content: res.result }, finish_reason: "stop" }] }));
+              resolve(200);
+              return;
+            }
+            const status = res.reason === "timeout" ? 408 : res.reason === "cancel" ? 499 : res.reason === "busy" ? 429 : 502;
+            onChunk(JSON.stringify({ error: { message: res.message, reason: res.reason } }));
+            resolve(status);
+          })
+          .catch((e: unknown) => {
+            signal.removeEventListener("abort", onAbort);
+            if (settled) return;
+            settled = true;
+            reject(e instanceof Error ? e : namedError(String(e), "Error"));
+          });
+      });
+    },
+  };
+}
+
+export interface TransportChoice { primary: SseTransport; fallback?: SseTransport }
+
+/** Wählt den Transport (samt HTTP-Fallback) für einen aufgelösten Endpunkt — kein Konsument baut
+ *  die `if (resolved.transport === "shortcuts")`-Kette selbst. Ein `"shortcuts"`-Endpunkt ohne
+ *  bereitgestellten Shortcuts-Transport ist ein Konfigurationsfehler des Konsumenten (Bridge nicht
+ *  verbaut) und wirft — das ist ehrlicher als still auf HTTP zurückzufallen und gegen die falsche
+ *  URL zu feuern (Spec § Baustein 2, Vertragsentscheidung). */
+export function transportFor(
+  resolved: { transport?: "http" | "shortcuts" },
+  opts: { http: SseTransport; httpFallback?: SseTransport; shortcuts?: SseTransport },
+): TransportChoice {
+  if (resolved.transport === "shortcuts") {
+    if (!opts.shortcuts) throw new Error("resolved endpoint requires transport \"shortcuts\", but none was provided");
+    return { primary: opts.shortcuts };
+  }
+  return opts.httpFallback ? { primary: opts.http, fallback: opts.httpFallback } : { primary: opts.http };
+}

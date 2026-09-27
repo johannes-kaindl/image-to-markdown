@@ -1,6 +1,6 @@
 {
   "sources": {
-    "obsidian-kit": { "ref": "0.43.0" },
+    "obsidian-kit": { "ref": "0.45.0" },
     "code-kit": { "ref": "0.7.0" }
   },
   "targets": [
@@ -8,7 +8,7 @@
       "dir": "src/vendor/kit",
       "source": "obsidian-kit",
       "from": "src/pure",
-      "modules": ["endpoint-source"],
+      "modules": ["endpoint-source", "ocr-provider"],
       "rewrite": [["../vendor/code-kit/pure/", "./"], ["../vendor/code-kit/web/", "./"]]
     },
     {
@@ -27,7 +27,7 @@
       "dir": "src/vendor/kit-obsidian",
       "source": "obsidian-kit",
       "from": "src/obsidian",
-      "modules": ["chat-transport", "clock", "folder-suggest", "settings_walker", "help-setting"]
+      "modules": ["chat-transport", "clock", "folder-suggest", "settings_walker", "help-setting", "shortcuts-bridge"]
     },
     {
       "dir": "src/vendor/kit-obsidian",

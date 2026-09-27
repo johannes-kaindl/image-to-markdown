@@ -13,6 +13,7 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 ### Changed
 
 - Kit chat client 0.44.0 (no user-visible change).
+- Kit vendoring bumped to `obsidian-kit` 0.45.0: pulls in `pure/ocr-provider` and `obsidian/shortcuts-bridge` for the upcoming Apple-shortcut OCR path (no user-visible change yet — not wired in).
 
 ## [0.25.0] — 2026-09-26
 
