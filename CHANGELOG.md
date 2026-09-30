@@ -6,6 +6,8 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-09-30
+
 ### Changed
 
 - **Sampling profiles for the `transform` mode.** Every request now sends the temperature and family-specific sampling values (top_p, top_k, …) from the shared profile tables instead of only the thinking switch. The model family comes from the LLM Endpoint Manager or is guessed from the model name; the backend (LM Studio, Open WebUI, …) is detected once per endpoint and cached for 30 s. The new section **Settings → Request** shows what is sent and what actually takes effect, lets you override single values per model family, and lists the last request and any deviations seen this session (e.g. "the model thought although thinking is off"). A hint notes that with the verdigado setup only `verdigado-think` accepts images.
