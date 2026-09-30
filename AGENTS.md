@@ -285,6 +285,11 @@ Erfüllt mit 0.3.0 (2026-06-23): CORE-META-02/03 (Badge-Zeile/Hero + Feature-Scr
   daneben nachbauen müssen — kein Baustein spart dann Code, nur Vokabular.
   — gilt-solange: `src/img_to_md_view.ts` enthaelt `cardEls: CardRefs[]`
 
+- **strings-location** — Grund: (UI-STANDARD §10 nennt `src/i18n/strings.ts` als Ablageort)
+  Die Texte dieses Plugins liegen in `src/i18n.ts` (EN kanonisch, EN/DE); ein Umzug würde nur Dateipfade
+  ändern, keinen Text und keine Auflösung von Fachbegriffen. Entscheidung Master Welle 14, 2026-09-30.
+  — gilt-solange: `src/i18n.ts` die einzige Textquelle des Plugins ist
+
 ## Dach-Kontext (obsidian-plugins)
 
 Dieses Repo liegt unter dem Koordinations-Dach `obsidian-plugins/` (Parent-Verzeichnis `../` im Maintainer-Workspace).
