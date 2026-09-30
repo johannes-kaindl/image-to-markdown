@@ -2,7 +2,8 @@ import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
-import { thinkToggleView } from "./reasoning_toggle";
+import { buildThinkingControl } from "./vendor/kit-obsidian/thinking-control";
+import type { FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { CardCache } from "./card_cache";
 import { parseDescription } from "./describe";
 
@@ -64,7 +65,7 @@ export interface ImgToMdViewDeps {
    *  (Beschreiben zielt auf Einzelbilder, nicht auf mehrseitige PDF-Läufe). */
   describeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ raw: string; reasoning: string; model: string; finishReason?: string }>;
   /** Iterative Nachbesserung einer Transkript-Karte (#7): baut (in main.ts) aus base + steps +
-   *  feedback das Multi-Turn-Messages-Array und streamt es text-only. Modell/Endpoint/Suppress
+   *  feedback das Multi-Turn-Messages-Array und streamt es text-only. Modell/Endpoint/Sampling
    *  kommen aus den Settings — die View gibt nur Verlauf + neues Feedback + Stream-Callbacks. */
   refine: (base: string, steps: { feedback: string; text: string }[], feedback: string, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ content: string; reasoning: string; model: string }>;
   getTaxonomy: () => string[];
@@ -76,10 +77,11 @@ export interface ImgToMdViewDeps {
   listPresets: () => { id: string; label: string }[];
   getPreset: () => string;
   setPreset: (id: string) => void;
-  getSuppress: () => boolean;
+  /** Stand der Denk-Steuerung: Familie der aufgeloesten Quelle, aktuelle und Ein-Stufe, Stufenwahl an/aus. */
+  thinkingState: () => { family: FamilyId | null; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean };
   /** Ob Denkprozess-Blöcke im Nachbesserungs-Verlauf standardmäßig aufgeklappt starten. */
   getReasoningExpanded: () => boolean;
-  setSuppress: (v: boolean) => void;
+  setThinkingLevel: (l: ThinkingLevel) => Promise<void>;
   openPath: (p: string) => void;
   copyText: (t: string) => void;
   cardCache: CardCache;
@@ -94,7 +96,7 @@ export class ImgToMdView extends ItemView {
   private presetSel: HTMLSelectElement | null = null;
   private modelStatusEl: HTMLElement | null = null;
   private refreshBtn: HTMLElement | null = null;
-  private thinkToggleEl: HTMLElement | null = null;
+  private thinkCtl: { refresh(): void } | null = null;
   private listEl: HTMLElement | null = null;
   private cardsEl: HTMLElement | null = null;
   private cardEls: CardRefs[] = [];
@@ -133,7 +135,7 @@ export class ImgToMdView extends ItemView {
     // Zeile 1: Modell (volle Breite für lange Namen) + Status + Refresh.
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
-    this.modelSel.addEventListener("change", () => { this.deps.setModel(this.modelSel?.value ?? ""); this.renderThinkToggle(); });
+    this.modelSel.addEventListener("change", () => { this.deps.setModel(this.modelSel?.value ?? ""); this.refreshThinking(); });
     this.modelStatusEl = modelRow.createSpan({ cls: "img2md-model-status" });
     this.refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
     setIcon(this.refreshBtn, "refresh-cw");
@@ -144,11 +146,23 @@ export class ImgToMdView extends ItemView {
     for (const p of this.deps.listPresets()) { const o = this.presetSel.createEl("option", { text: p.label }); o.value = p.id; }
     this.presetSel.value = this.deps.getPreset();
     this.presetSel.addEventListener("change", () => this.deps.setPreset(this.presetSel?.value ?? "default"));
-    this.thinkToggleEl = presetRow.createEl("button", { cls: "img2md-think-toggle clickable-icon" });
-    this.thinkToggleEl.addEventListener("click", () => {
-      if (thinkToggleView(this.deps.getModel(), this.deps.getSuppress()).disabled) return;
-      this.deps.setSuppress(!this.deps.getSuppress());
-      this.renderThinkToggle();
+    // Denk-Steuerung: Kit-Baustein (Zustands-Knopf nach UI-STANDARD §8, optional Stufenwahl).
+    // Die Familie kommt aus der Endpunkt-Aufloesung, nicht aus dem Modellnamen.
+    const thinkHost = presetRow.createDiv({ cls: "img2md-think" });
+    this.thinkCtl = buildThinkingControl({
+      containerEl: thinkHost,
+      family: () => this.deps.thinkingState().family,
+      current: () => this.deps.thinkingState().level,
+      onLevel: () => this.deps.thinkingState().onLevel,
+      setLevel: (l) => this.deps.setThinkingLevel(l),
+      levelPicker: () => this.deps.thinkingState().levelPicker,
+      strings: {
+        button: (level, offNotPossible) => level === "off"
+          ? t(offNotPossible ? "think.button.offNotPossible" : "think.button.off")
+          : t("think.button.on", t(`request.level.${level}`)),
+        level: (l) => t(`think.level.${l}`),
+        pickerLabel: t("think.pickerLabel"),
+      },
     });
     // Modus-Umschalter (Segmented-Control): steuert nur den Lauf-Typ des „Los"-Buttons — Bild-Auswahl/
     // Karten bleiben unverändert, ein Wechsel mitten im Lauf ist gesperrt (this.running-Guard in setMode).
@@ -223,7 +237,7 @@ export class ImgToMdView extends ItemView {
     this.refreshBtn?.removeClass("is-loading");
     // Bei manuellem Refresh ohne Modellwechsel ein kurzes „N Modelle geladen" — sonst bliebe der Klick unsichtbar.
     if (userTriggered && !realigned) this.statusLabelEl?.setText(t("view.modelsLoaded", models.length));
-    this.renderThinkToggle();
+    this.refreshThinking();
   }
 
   /** Status-Icon neben dem Dropdown. Die Form (circle-check vs. circle-slash) trägt die
@@ -236,27 +250,9 @@ export class ImgToMdView extends ItemView {
     else { el.removeClass("is-loaded"); setIcon(el, "circle-slash"); el.setAttribute("title", t("view.modelNotLoaded")); }
   }
 
-  /** Rendert den Thinking-Toggle aus (Modell, Suppress-Flag). brain-Icon + Zustands-Label;
-   *  Bedeutung über Text + Zustand, nicht Farbe allein (WCAG 1.4.1). */
-  private renderThinkToggle(): void {
-    const btn = this.thinkToggleEl; if (!btn) return;
-    const v = thinkToggleView(this.deps.getModel(), this.deps.getSuppress());
-    const on = v.cls !== "is-off";
-    btn.empty();
-    const icon = btn.createSpan({ cls: "img2md-think-icon" });
-    setIcon(icon, on ? "brain" : "brain-cog");
-    btn.createSpan({ cls: "img2md-think-lbl", text: t(v.labelKey) });
-    btn.removeClass("is-off"); btn.removeClass("is-disabled");
-    if (v.cls) btn.addClass(v.cls);
-    // Der Hinweis steht nur in title + aria-label: der sichtbare Button-Text bleibt unverändert,
-    // damit der Sidebar-Breiten-Fix aus 0.10.1 heil bleibt. Bewusst keine CSS-Markierung —
-    // eine gedimmte Variante wäre Bedeutung-über-Farbe (WCAG 1.4.1).
-    const label = v.hintKey ? `${t(v.labelKey)} — ${t(v.hintKey)}` : t(v.labelKey);
-    btn.setAttribute("aria-label", label);
-    btn.setAttribute("title", label);
-    btn.setAttribute("aria-pressed", String(on));
-    (btn as HTMLButtonElement).disabled = v.disabled;
-  }
+  /** Zeichnet die Denk-Steuerung neu (Modell oder Familie hat gewechselt, Stufe wurde in den
+   *  Einstellungen geaendert). Leichter als `refresh()`: kein neuer Scan der Notiz. */
+  refreshThinking(): void { this.thinkCtl?.refresh(); }
 
   /** Label des „Los"-Buttons — folgt dem aktuellen Modus (nicht dem "Stop"-Zustand während des Laufs,
    *  der wird separat in runIndices() gesetzt). */

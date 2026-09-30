@@ -6,7 +6,11 @@ import { t, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 import { helpSettingDefinition, githubHelpUrls } from "./vendor/kit-obsidian/help-setting";
-import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab } from "./vendor/kit-obsidian/settings_walker";
+import { buildRequestSection } from "./vendor/kit-obsidian/request-section";
+import { BACKENDS, DEFAULT_REQUEST_SETTINGS, FAMILIES, type BackendId, type FamilyId, type FieldExplain, type RequestSettings } from "./vendor/kit/sampling-profiles";
+import { MODE } from "./request_params";
+import { deviationDetail } from "./request_text";
+import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab, installTabRefreshOnOpen } from "./vendor/kit-obsidian/settings_walker";
 import { buildEndpointList, type EndpointListStrings } from "./vendor/kit-obsidian/endpoint-list";
 import { createModelListCache, type ModelListCache } from "./vendor/kit/model-list-cache";
 import { ENDPOINT_PRESETS, type EndpointStatusKind, type EndpointWarning } from "./vendor/kit/endpoint_diagnostics";
@@ -58,7 +62,9 @@ export interface ImageToMarkdownSettings {
   pdfRenderScale: number;
   pdfPageSeparator: PdfPageSeparator;
   pdfUseTextLayer: boolean;
-  suppressThinking: boolean;
+  /** Anfrage-Einstellungen (Sampling-Profil, Modus `transform`): Denkstufe und Ueberschreibungen je
+   *  Familie. Ersetzt das Altfeld `suppressThinking` (migriert in `request_params.ts`). */
+  request: RequestSettings;
   reasoningExpanded: boolean;
   describeTaxonomy: string[];
   frontmatterMap: FrontmatterMap;
@@ -86,7 +92,7 @@ export function defaultSettings(): ImageToMarkdownSettings {
     pdfRenderScale: 2.0,
     pdfPageSeparator: "comment",
     pdfUseTextLayer: true,
-    suppressThinking: false,
+    request: structuredClone(DEFAULT_REQUEST_SETTINGS),
     reasoningExpanded: false,
     describeTaxonomy: ["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"],
     frontmatterMap: { ...DEFAULT_FM_MAP },
@@ -164,7 +170,16 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   /** Von der Capability-Hatch gesetzt; das Modell-Dropdown ruft sie nach einem Wechsel. */
   private showCaps: (model: string) => void = () => { /* bis die Capability-Zeile gerendert ist */ };
 
-  constructor(app: App, private plugin: ImageToMarkdownPlugin) { super(app, plugin); }
+  private uninstallRefresh: () => void = () => { /* bis der Konstruktor es setzt */ };
+
+  constructor(app: App, private plugin: ImageToMarkdownPlugin) {
+    super(app, plugin);
+    // „Letzte Anfrage“ und Abweichungen sollen beim Oeffnen des Tabs aktuell sein (Rezept 6).
+    // Der volle Rebuild ist `renderFallback()`, NICHT `refresh()`: `refresh()` ruft in Obsidian >= 1.13 das
+    // native `update()`, das `renderTab()` aufruft — und das ist hier der Hook selbst (Rekursionsschutz),
+    // der Tab bliebe beim ersten Oeffnen leer (Smoke E1, Kaltstart).
+    this.uninstallRefresh = installTabRefreshOnOpen(this, () => { this.renderFallback(); });
+  }
 
   /** Vertragspflicht des Kit-Modell-Cache, und sein Fehlen waere UNSICHTBAR: der Cache haelt
    *  Promises absichtlich ueber jeden Tab-Neuaufbau hinweg. Ohne dieses clear() bliebe ein
@@ -173,6 +188,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
    *  alten Zustand, und kein Test schluege an. */
   hide(): void {
     this.modelLists.clear();
+    this.uninstallRefresh();
     super.hide();
   }
 
@@ -235,6 +251,8 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
             render: (s: Setting) => { this.renderModel(s); } },
           { name: t("settings.capability.name"),
             render: (s: Setting) => { this.renderCapability(s); } },
+          { name: "", desc: t("settings.request.hint"), render: () => { /* nur Text */ } },
+          { name: "", render: (s: Setting) => { this.renderRequestSection(s); } },
           { name: t("settings.prompt.name"), desc: t("settings.prompt.desc"),
             render: (s: Setting) => { this.renderPrompt(s); } },
           // min/max sind die UI-Seite derselben Grenze, die setControlValue erzwingt: das
@@ -488,6 +506,73 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       }
     }));
     this.showCaps(this.plugin.model);
+  }
+
+  /** Abschnitt „Anfrage“ — Sampling-Profil des Modus `transform` (Kit `request-section`): zeigt,
+   *  was gesendet wird und was davon wirkt, nimmt Ueberschreibungen je Familie an. Die Texte
+   *  stehen in `i18n.ts`; Familie und Backend uebersetzt das Plugin selbst, auch `unknown`. */
+  private renderRequestSection(setting: Setting): void {
+    const host = settingBodyHost(setting);
+    buildRequestSection({
+      containerEl: host,
+      modes: [MODE],
+      state: () => this.plugin.requestSectionState(),
+      settings: () => this.plugin.settings.request,
+      save: (s) => this.plugin.saveRequestSettings(s),
+      maxTokens: () => undefined,
+      session: this.plugin.requestSession,
+      rerender: () => { this.refresh(); },
+      strings: {
+        title: t("request.title"),
+        head: (family, familySource, backend, backendSource) => {
+          const famLabel = family === "—" ? "—" : (FAMILIES[family as FamilyId]?.label ?? family);
+          const backLabel = backend === "unknown" ? t("request.backendSource.none") : (BACKENDS[backend as BackendId]?.label ?? backend);
+          return t("request.head", famLabel, t(`request.familySource.${familySource}`), backLabel, t(`request.backendSource.${backendSource}`));
+        },
+        unknownFamily: t("request.unknownFamily"),
+        jitWarning: (model, defaultModel) => t("request.jitWarning", model, defaultModel),
+        sentAs: (model) => t("request.sentAs", model),
+        modeHeading: (mode) => t(`request.mode.${mode}`),
+        fieldName: (field) => t(`request.field.${field}`),
+        fieldDesc: (e) => this.fieldStateText(e),
+        reset: t("request.reset"),
+        thinkingLevel: t("request.thinkingLevel"),
+        level: (l) => t(`request.level.${l}`),
+        levelPicker: t("request.levelPicker"),
+        levelPickerDesc: t("request.levelPickerDesc"),
+        dormant: (fam) => t("request.dormant", fam === "unknown" ? t("request.familySource.none") : (FAMILIES[fam]?.label ?? fam)),
+        deleteDormant: t("request.deleteDormant"),
+        lastRequest: t("request.lastRequest"),
+        lastRequestNone: t("request.lastRequestNone"),
+        copy: t("request.copy"),
+        copied: t("request.copied"),
+        deviationsOk: t("request.deviationsOk"),
+        deviationsWarn: (n) => t("request.deviationsWarn", String(n)),
+        deviation: (kind, count, detail) => `${deviationDetail(kind, detail)} (${count}×)`,
+      },
+    });
+  }
+
+  /** Erklaertext je Feld: Zustand (gesendet/nicht gesendet und warum) plus Anmerkung. */
+  private fieldStateText(e: FieldExplain): string {
+    const key = {
+      "sent-effective": "request.state.sentEffective",
+      "sent-unproven": "request.state.sentUnproven",
+      "not-sent-ignored": "request.state.notSentIgnored",
+      "not-sent-unsupported": "request.state.notSentUnsupported",
+      "not-sent-unknown-family": "request.state.notSentUnknownFamily",
+      "not-sent-no-value": "request.state.notSentNoValue",
+    }[e.state];
+    let s = t(key);
+    const noteKey = e.note ? {
+      "raised-to-reserve": "request.note.raisedToReserve",
+      "raised-to-thinking-floor": "request.note.raisedToThinkingFloor",
+      "below-thinking-floor": "request.note.belowThinkingFloor",
+      "off-not-possible": "request.note.offNotPossible",
+    }[e.note] : undefined;
+    if (noteKey) s += ` ${t(noteKey)}`;
+    if (e.field === "top_p") s += t("request.top_p.hint");
+    return s;
   }
 
   /** Prompt-Textarea — Hatch statt `textarea`-Control, weil sie zusätzlich die

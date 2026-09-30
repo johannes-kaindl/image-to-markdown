@@ -77,10 +77,11 @@
 .img2md-preset-row .img2md-preset { flex: 1; min-width: 0; }
 .img2md-model-status { display: inline-flex; align-items: center; color: var(--text-faint); flex: 0 0 auto; }
 .img2md-model-status.is-loaded { color: var(--text-success); }
-.img2md-think-toggle.clickable-icon { display: inline-flex; align-items: center; gap: 0.25em; padding: 2px 6px; height: auto; width: auto; flex: 0 0 auto; font-size: 12px; color: var(--text-muted); }
-.img2md-think-toggle.clickable-icon svg { width: 14px; height: 14px; }
-.img2md-think-toggle.is-off { color: var(--text-faint); }
-.img2md-think-toggle.is-disabled { color: var(--text-faint); opacity: 0.7; cursor: default; }
+.img2md-think { flex: 0 0 auto; }
+.img2md-think .okit-thinking-toggle.clickable-icon { display: inline-flex; align-items: center; gap: 0.25em; padding: 2px 6px; height: auto; width: auto; font-size: 12px; color: var(--text-muted); }
+.img2md-think .okit-thinking-toggle.clickable-icon svg { width: 14px; height: 14px; }
+.img2md-think .okit-thinking-toggle.is-off { color: var(--text-faint); }
+.img2md-think select { font-size: 12px; }
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }
@@ -222,3 +223,31 @@
 
 /* Globale Modell-Zeile: mit LLM Endpoint Manager waehlt der Endpunkt-Baustein das Modell. */
 .img2md-setting-managed { display: none; }
+
+/* Abschnitt „Anfrage“ in den Settings — verbatim aus obsidian-kit uebernommen (Sampling-Plan Rezept 6):
+   collapsibleSection() traegt ihn (.okit-collapsible-*), buildRequestSection() den Inhalt
+   (.okit-request-*). Das Kit injiziert bewusst kein CSS selbst; der Consumer uebernimmt es. */
+.okit-collapsible-header {
+  display: flex; align-items: center; gap: var(--size-4-2);
+  cursor: pointer; padding: var(--size-4-2) 0;
+  font-weight: var(--font-semibold); color: var(--text-normal);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.okit-collapsible-header:hover { color: var(--text-accent); }
+.okit-collapsible-header:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-s);
+}
+.okit-collapsible-chevron { display: inline-flex; color: var(--text-muted); }
+.okit-collapsible-body { padding-top: var(--size-4-2); }
+.okit-collapsible-body.is-collapsed { display: none; }
+
+.okit-request-warning { color: var(--text-warning); margin: var(--size-4-2) 0; }
+.okit-request-note { color: var(--text-muted); font-size: var(--font-ui-small); }
+.okit-request-own { border-color: var(--interactive-accent); }
+.okit-request-last { font-size: var(--font-ui-smaller); background: var(--background-secondary); padding: var(--size-4-2); border-radius: var(--radius-s); white-space: pre-wrap; }
+.okit-request-status { display: flex; gap: var(--size-4-2); align-items: center; margin-top: var(--size-4-2); }
+.okit-request-status.is-ok { color: var(--text-success); }
+.okit-request-status.is-warning { color: var(--text-warning); }
+.okit-request-deviation { color: var(--text-muted); font-size: var(--font-ui-small); padding-left: var(--size-4-6); }

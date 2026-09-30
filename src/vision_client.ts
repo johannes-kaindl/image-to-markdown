@@ -1,6 +1,6 @@
 import { fetchVisionCapability, resolveVision, isVisionConfirmed, VISION_TEST_PROMPT, type Confidence } from "./capabilities";
 import { normalizeEndpoint, resolveActiveEndpoint } from "./vendor/kit/endpoint";
-import { suppressParams } from "./vendor/kit/reasoning";
+import type { ResponseFacts } from "./vendor/kit/sampling-profiles";
 import { authHeaders } from "./vendor/kit/endpoint_config";
 import { classifyEndpointStatus, type EndpointStatus } from "./vendor/kit/endpoint_diagnostics";
 import { errorMessageFromText } from "./vendor/kit/error_body";
@@ -65,6 +65,12 @@ function chatError(r: Extract<ChatResult, { ok: false }>): Error {
 
 interface ChatOut { content: string; reasoning: string; model: string; finishReason?: string }
 
+/** Sampling-Parameter eines Aufrufs — fertig aus `request_params.ts::buildVisionParams`. */
+export type RequestParams = Record<string, number | string>;
+/** Sieht jede Server-Antwort (auch eine abgelehnte) für `checkResponse`; Netzfehler, Timeout und
+ *  Abbruch haben keine Antwort und rufen ihn nicht. */
+export type ResponseListener = (facts: ResponseFacts) => void;
+
 export class VisionClient {
   private endpoint: string;
   /** Der Kit-Chat-Client — EINER je VisionClient, und der wird bei jedem Endpunktwechsel neu gebaut
@@ -74,7 +80,7 @@ export class VisionClient {
   /** `apiKey` gilt genau für DIESEN Endpunkt (eine Fallback-Liste darf lokale und gehostete
    *  Anbieter mischen). Fehlt er, geht kein Authorization-Header raus — lokale Server lehnen
    *  einen leeren Bearer teils ab. */
-  constructor(endpoint: string, private model: string, private apiKey?: string) {
+  constructor(endpoint: string, private model: string, private apiKey?: string, private onResponse?: ResponseListener) {
     this.endpoint = normalizeEndpoint(endpoint);
   }
 
@@ -144,28 +150,38 @@ export class VisionClient {
     return this.chat;
   }
 
-  /** Ein Chat-Aufruf über den Kit-Client. `params` bleibt übergangsweise `suppressParams` (Rezept
-   *  0.42.0 Schritt 3); eigene feste Sampling-Werte gab es hier nie. */
+  /** Ein Chat-Aufruf über den Kit-Client. `params` kommen fertig vom Aufrufer (Sampling-Profil
+   *  Modus transform, `request_params.ts`); ohne sie geht nichts außer Modell und Nachrichten
+   *  raus — so der Vision-Test, der ein Modell prüft und keine Transkription erzeugt. */
   private async run(
     messages: readonly ChatWireMessage[], stream: boolean,
     onContent?: (t: string) => void, onReasoning?: (t: string) => void,
-    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
+    signal?: AbortSignal, params: RequestParams = {},
   ): Promise<ChatOut> {
     const r = await this.chatClient().complete({
       endpoint: { url: this.endpoint, ...(this.apiKey ? { apiKey: this.apiKey } : {}) },
       model: this.model,
       messages,
-      params: suppressParams(opts?.suppressThinking ?? false),
+      params,
       stream,
       ...(signal ? { signal } : {}),
       ...(onContent ? { onToken: onContent } : {}),
       ...(onReasoning ? { onReasoning } : {}),
     });
-    if (r.ok) return { content: r.content, reasoning: r.reasoning, model: r.model ?? this.model, ...(r.finishReason !== undefined ? { finishReason: r.finishReason } : {}) };
+    if (r.ok) {
+      this.onResponse?.({ status: 200, finishReason: r.finishReason ?? null, content: r.content, reasoning: r.reasoning, ...(r.model !== undefined ? { responseModel: r.model } : {}) });
+      return { content: r.content, reasoning: r.reasoning, model: r.model ?? this.model, ...(r.finishReason !== undefined ? { finishReason: r.finishReason } : {}) };
+    }
     // „Abgeschnitten ohne Text“ ist im Kit ein Fehler, hier der Fall, den der Aufrufer über
     // finishReason "length" kennt und mit eigener Meldung zeigt (Reasoning-Modelle: das Denken
     // frisst das Budget) — also wie bisher als Ergebnis liefern, nicht als Ausnahme.
-    if (r.kind === "truncated") return { content: "", reasoning: r.reasoning, model: this.model, finishReason: "length" };
+    if (r.kind === "truncated") {
+      this.onResponse?.({ status: 200, finishReason: "length", content: "", reasoning: r.reasoning });
+      return { content: "", reasoning: r.reasoning, model: this.model, finishReason: "length" };
+    }
+    if (r.kind === "http" && r.status !== undefined) {
+      this.onResponse?.({ status: r.status, errorText: r.body ?? r.detail, finishReason: null, content: "", reasoning: r.reasoning });
+    }
     throw chatError(r);
   }
 
@@ -182,8 +198,8 @@ export class VisionClient {
   }
 
   /** Non-streaming /v1/chat/completions-Call. Modell autoritativ aus der Response. */
-  async transcribe(dataUrl: string, prompt: string, opts?: { suppressThinking?: boolean }): Promise<{ content: string; model: string; finishReason?: string }> {
-    const { content, model, finishReason } = await this.run(this.buildMessages(dataUrl, prompt), false, undefined, undefined, undefined, opts);
+  async transcribe(dataUrl: string, prompt: string, params?: RequestParams): Promise<{ content: string; model: string; finishReason?: string }> {
+    const { content, model, finishReason } = await this.run(this.buildMessages(dataUrl, prompt), false, undefined, undefined, undefined, params);
     // finish_reason === "length" heisst: am Token-Limit abgeschnitten. Kein Fehler (der Teiltext ist
     // gueltig), aber der Aufrufer muss es sagen koennen — sonst sieht ein leeres Transkript wie
     // "nichts erkannt" aus.
@@ -209,9 +225,9 @@ export class VisionClient {
   async transcribeStream(
     dataUrl: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
-    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
+    signal?: AbortSignal, params?: RequestParams,
   ): Promise<ChatOut> {
-    return this.run(this.buildMessages(dataUrl, prompt), true, onContent, onReasoning, signal, opts);
+    return this.run(this.buildMessages(dataUrl, prompt), true, onContent, onReasoning, signal, params);
   }
 
   /** Wie transcribeStream, aber sendet reinen TEXT (kein Bild) — für born-digital PDF-Seiten, deren
@@ -219,9 +235,9 @@ export class VisionClient {
   async transcribeTextStream(
     text: string, prompt: string,
     onContent: (t: string) => void, onReasoning: (t: string) => void,
-    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
+    signal?: AbortSignal, params?: RequestParams,
   ): Promise<ChatOut> {
-    return this.run([{ role: "user", content: `${prompt}\n\n${text}` }], true, onContent, onReasoning, signal, opts);
+    return this.run([{ role: "user", content: `${prompt}\n\n${text}` }], true, onContent, onReasoning, signal, params);
   }
 
   /** Iterative Nachbesserung (#7): streamt ein fertig gebautes Multi-Turn-Messages-Array (System +
@@ -229,8 +245,8 @@ export class VisionClient {
   async refineStream(
     messages: unknown[],
     onContent: (t: string) => void, onReasoning: (t: string) => void,
-    signal?: AbortSignal, opts?: { suppressThinking?: boolean },
+    signal?: AbortSignal, params?: RequestParams,
   ): Promise<ChatOut> {
-    return this.run(messages as ChatWireMessage[], true, onContent, onReasoning, signal, opts);
+    return this.run(messages as ChatWireMessage[], true, onContent, onReasoning, signal, params);
   }
 }

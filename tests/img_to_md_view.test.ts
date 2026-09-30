@@ -43,9 +43,9 @@ function mkView(over: any = {}) {
     listPresets: over.listPresets ?? (() => [{ id: "default", label: "Default" }, { id: "math", label: "Math → LaTeX" }]),
     getPreset: over.getPreset ?? (() => "default"),
     setPreset: over.setPreset ?? vi.fn(),
-    getSuppress: over.getSuppress ?? (() => false),
+    thinkingState: over.thinkingState ?? (() => ({ family: null, level: "off", onLevel: "low", levelPicker: false })),
     getReasoningExpanded: over.getReasoningExpanded ?? (() => false),
-    setSuppress: over.setSuppress ?? vi.fn(),
+    setThinkingLevel: over.setThinkingLevel ?? vi.fn(async () => {}),
     openPath: (p: string) => calls.opened.push(p),
     copyText: over.copyText ?? ((t: string) => calls.copied.push(t)),
     cardCache: over.cardCache ?? new CardCache(),
@@ -706,70 +706,76 @@ describe("ImgToMdView — Diff-Confirm + Content-aware Gate (v1.1)", () => {
   });
 });
 
-describe("ImgToMdView — Thinking-Toggle", () => {
-  it("normales Modell, nicht unterdrückt → Label 'Thinking: on', klickbar, aria-pressed=true", async () => {
-    setLang("en");
-    const { view } = mkView({ getModel: () => "qwen3:8b", getSuppress: () => false });
-    await view.onOpen();
-    const [btn] = all(view.contentEl, "img2md-think-toggle");
-    expect(btn.textContent).toContain("Thinking: on");
-    expect(String(btn.className)).not.toContain("is-off");
-    expect(btn.getAttribute("aria-pressed")).toBe("true");
-    expect((btn as HTMLButtonElement).disabled).toBe(false);
-  });
+describe("ImgToMdView — Denk-Steuerung (Kit thinking-control)", () => {
+  const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
-  it("Klick flippt Suppress und re-rendert das Label, aria-pressed folgt", async () => {
+  it("Profil-Vorgabe 'off' → Label 'Thinking: off', is-off, aria-pressed=false", async () => {
     setLang("en");
-    let sup = false;
-    const setSuppress = vi.fn((v: boolean) => { sup = v; });
-    const { view } = mkView({ getModel: () => "qwen3:8b", getSuppress: () => sup, setSuppress });
+    const { view } = mkView();
     await view.onOpen();
-    const [btn] = all(view.contentEl, "img2md-think-toggle");
-    btn.click();
-    expect(setSuppress).toHaveBeenCalledWith(true);
+    const [btn] = all(view.contentEl, "okit-thinking-toggle");
     expect(btn.textContent).toContain("Thinking: off");
     expect(String(btn.className)).toContain("is-off");
     expect(btn.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("immer-an-Modell → 'Thinking: always on', nativ disabled, aria-pressed=true, Klick ändert nichts", async () => {
+  it("Klick schaltet auf die Ein-Stufe, das Label folgt dem Zustand, aria-pressed=true", async () => {
     setLang("en");
-    const setSuppress = vi.fn();
-    const { view } = mkView({ getModel: () => "gpt-oss:20b", getSuppress: () => false, setSuppress });
+    let level: any = "off";
+    const setThinkingLevel = vi.fn(async (l: any) => { level = l; });
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level, onLevel: "medium", levelPicker: false }), setThinkingLevel });
     await view.onOpen();
-    const [btn] = all(view.contentEl, "img2md-think-toggle") as HTMLButtonElement[];
+    const [btn] = all(view.contentEl, "okit-thinking-toggle");
+    btn.click(); await tick();
+    expect(setThinkingLevel).toHaveBeenCalledWith("medium");
+    const [after] = all(view.contentEl, "okit-thinking-toggle");
+    expect(after.textContent).toContain("Thinking: medium");
+    expect(after.getAttribute("aria-pressed")).toBe("true");
+    expect(String(after.className)).not.toContain("is-off");
+  });
+
+  it("Familie ohne Aus-Stellung (gpt-oss) auf 'off' → 'Thinking: always on'", async () => {
+    setLang("en");
+    const { view } = mkView({ thinkingState: () => ({ family: "gpt-oss", level: "off", onLevel: "low", levelPicker: false }) });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "okit-thinking-toggle");
     expect(btn.textContent).toContain("Thinking: always on");
-    expect(String(btn.className)).toContain("is-disabled");
-    expect(btn.disabled).toBe(true);
-    expect(btn.getAttribute("aria-pressed")).toBe("true");
-    btn.click();
-    expect(setSuppress).not.toHaveBeenCalled();
   });
 
-  it("Modell mit 'always'-Hinweis → aria-label/title enthalten Label UND Hinweis, sichtbarer Text nur das Label", async () => {
-    setLang("en");
-    const { view } = mkView({ getModel: () => "deepseek-r1:8b", getSuppress: () => false });
+  it("Deutsch: Label folgt der Oberflächensprache", async () => {
+    setLang("de");
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "high", onLevel: "high", levelPicker: false }) });
     await view.onOpen();
-    const [btn] = all(view.contentEl, "img2md-think-toggle");
-    const label = t("view.thinkingOn");
-    const hint = t("view.thinkingHintAlways");
-    expect(btn.getAttribute("aria-label")).toContain(label);
-    expect(btn.getAttribute("aria-label")).toContain(hint);
-    expect(btn.getAttribute("title")).toContain(label);
-    expect(btn.getAttribute("title")).toContain(hint);
-    // 0.10.1-Sidebar-Breiten-Garantie: der Hinweis darf NIE im sichtbaren Button-Text landen.
-    const [lbl] = all(btn, "img2md-think-lbl");
-    expect(lbl.textContent).toBe(label);
-    expect(lbl.textContent).not.toContain(hint);
-    expect(btn.textContent).not.toContain(hint);
+    const [btn] = all(view.contentEl, "okit-thinking-toggle");
+    expect(btn.textContent).toContain("Thinking: hoch");
+    setLang("en");
   });
 
-  it("Modell ohne Hinweis → aria-label ist genau das Label, kein trailing Separator", async () => {
+  it("Stufenwahl an → Dropdown mit vier Stufen, jede mit sichtbarem Kontext 'Thinking: …'", async () => {
     setLang("en");
-    const { view } = mkView({ getModel: () => "qwen3:8b", getSuppress: () => false });
+    const setThinkingLevel = vi.fn(async () => {});
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "low", onLevel: "low", levelPicker: true }), setThinkingLevel });
     await view.onOpen();
-    const [btn] = all(view.contentEl, "img2md-think-toggle");
-    expect(btn.getAttribute("aria-label")).toBe(t("view.thinkingOn"));
+    expect(all(view.contentEl, "okit-thinking-toggle")).toHaveLength(0);
+    const host = all(view.contentEl, "okit-thinking-control")[0];
+    const select = host.children.find((c: any) => c.tagName === "SELECT");
+    const dd = select.__component;
+    expect(dd.options).toEqual({ off: "Thinking: off", low: "Thinking: low", medium: "Thinking: medium", high: "Thinking: high" });
+    dd.onChangeCB("high"); await tick();
+    expect(setThinkingLevel).toHaveBeenCalledWith("high");
+  });
+
+  it("refreshThinking() zeichnet nach einem Familienwechsel neu, ohne die Notiz neu zu scannen", async () => {
+    setLang("en");
+    let family: any = "qwen3.8";
+    const scan = vi.fn(async () => ITEMS.map(i => ({ ...i })));
+    const { view } = mkView({ scan, thinkingState: () => ({ family, level: "off", onLevel: "low", levelPicker: false }) });
+    await view.onOpen();
+    const scans = scan.mock.calls.length;
+    expect(all(view.contentEl, "okit-thinking-toggle")[0].textContent).toContain("Thinking: off");
+    family = "gpt-oss"; view.refreshThinking();
+    expect(all(view.contentEl, "okit-thinking-toggle")[0].textContent).toContain("Thinking: always on");
+    expect(scan.mock.calls.length).toBe(scans);
   });
 });
 

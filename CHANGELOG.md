@@ -6,6 +6,21 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Sampling profiles for the `transform` mode.** Every request now sends the temperature and family-specific sampling values (top_p, top_k, …) from the shared profile tables instead of only the thinking switch. The model family comes from the LLM Endpoint Manager or is guessed from the model name; the backend (LM Studio, Open WebUI, …) is detected once per endpoint and cached for 30 s. The new section **Settings → Request** shows what is sent and what actually takes effect, lets you override single values per model family, and lists the last request and any deviations seen this session (e.g. "the model thought although thinking is off"). A hint notes that with the verdigado setup only `verdigado-think` accepts images.
+- **The thinking switch is now a four-level setting.** The sidebar button is the shared Kit control (label "Thinking: off / low / …", `aria-pressed`); "Level picker in chat" turns it into a dropdown. The always-on hint and the name-based tooltip are gone — the family now decides whether thinking can be turned off. Models that cannot turn it off show "Thinking: always on".
+- **Migration.** The old `suppressThinking` flag becomes the thinking level: `true` → off, `false` (the old default, thinking ran) → "low", so nothing changes for existing installs; new installs start with the profile default "off". The field is removed from `data.json` on the next save. Deviation from recipe 3 of the sampling plan: there is no legacy temperature to migrate, because this plugin never sent one.
+- The request is sent under the model's resolved name (alias applied); results still show the name the server reports.
+
+### Removed
+
+- `reasoning_toggle.ts` (`thinkToggleView`, `effectiveSuppress`) and the `.img2md-think-toggle` styles, replaced by the Kit control. Kit modules added: `request-section`, `request-session`, `thinking-control`, `collapsible` (Kit pin unchanged at 0.45.0).
+
+### Fixed
+
+- Settings tab: opening it never renders empty on first open (the refresh-on-open hook rebuilds directly instead of going through the native `update()`).
+
 ## [0.26.0] — 2026-09-30
 
 ### Added

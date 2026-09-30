@@ -76,8 +76,14 @@ describe("defaultSettings", () => {
   it("pdfUseTextLayer ist default true", () => {
     expect(defaultSettings().pdfUseTextLayer).toBe(true);
   });
-  it("Default ist false (Thinking an)", () => {
-    expect(defaultSettings().suppressThinking).toBe(false);
+  it("Anfrage-Einstellungen: Profil-Vorgabe, kein Altfeld suppressThinking mehr", () => {
+    const s = defaultSettings() as unknown as Record<string, unknown>;
+    expect(s.request).toEqual({ overrides: {}, thinking: {}, lastOnLevel: {}, levelPickerInChat: false });
+    expect("suppressThinking" in s).toBe(false);
+  });
+  it("die Default-Anfrage-Einstellungen teilen keine Referenz mit der Kit-Konstante", () => {
+    const a = defaultSettings(); a.request.thinking.transform = "high";
+    expect(defaultSettings().request.thinking.transform).toBeUndefined();
   });
   it("liefert eine sinnvolle Taxonomie und das Standard-Frontmatter-Mapping", () => {
     const s = defaultSettings();

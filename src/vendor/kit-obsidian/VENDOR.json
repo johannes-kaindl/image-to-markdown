@@ -2,6 +2,6 @@
   "source": "obsidian-kit",
   "version": "0.45.0",
   "sha": "93c2dea",
-  "vendored": "chat-transport.ts, clock.ts, folder-suggest.ts, settings_walker.ts, help-setting.ts, shortcuts-bridge.ts (obsidian-kit@0.45.1, 325d3ff), chat-client.ts (obsidian-kit@0.44.0, 127c3a8), clipboard.ts, endpoint-list.ts, endpoint-source.ts, model-picker.ts",
+  "vendored": "chat-transport.ts, clock.ts, folder-suggest.ts, settings_walker.ts, help-setting.ts, shortcuts-bridge.ts (obsidian-kit@0.45.1, 325d3ff), chat-client.ts (obsidian-kit@0.44.0, 127c3a8), clipboard.ts, collapsible.ts, endpoint-list.ts, endpoint-source.ts, model-picker.ts, request-section.ts, request-session.ts, thinking-control.ts",
   "note": "Verbatim snapshot. Never hand-edit. Pins in tools/kit-sync.json, re-vendor via tools/sync-kit.sh (zentrales kit-sync im Dach). version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. clipboard.ts, endpoint-list.ts und model-picker.ts tragen EINE mechanische Abweichung: kit-interne Importe ../vendor/code-kit/{pure,web}/ sind auf ../kit/ umgeschrieben (Vendor-Layout). Bei jedem Re-Vendoring reproduzieren; sonst darf nichts abweichen. Praezedenz: vim-dojo, markdown-presentation, vault-crews, kuro-gamification, lingotuner, vault-rag. Eigene Ablage neben src/vendor/kit/, weil diese Module \"obsidian\" importieren."
 }

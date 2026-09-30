@@ -63,17 +63,17 @@ describe("i18n", () => {
     expect(de).toEqual(en);
   });
 
-  it("thinking-toggle Keys EN/DE", () => {
+  it("Denk-Steuerung Keys EN/DE", () => {
     setLang("en");
-    expect(t("view.thinkingOn")).toBe("Thinking: on");
-    expect(t("view.thinkingOff")).toBe("Thinking: off");
-    expect(t("view.thinkingAlways")).toBe("Thinking: always on");
-    expect(t("view.thinkingHintAlways")).toBe("This model probably always thinks — turning it off likely has no effect");
+    expect(t("think.button.off")).toBe("Thinking: off");
+    expect(t("think.button.on", "low")).toBe("Thinking: low");
+    expect(t("think.button.offNotPossible")).toBe("Thinking: always on");
+    expect(t("think.level.high")).toBe("Thinking: high");
     setLang("de");
-    expect(t("view.thinkingOn")).toBe("Thinking: an");
-    expect(t("view.thinkingOff")).toBe("Thinking: aus");
-    expect(t("view.thinkingAlways")).toBe("Thinking: immer an");
-    expect(t("view.thinkingHintAlways")).toBe("Dieses Modell denkt vermutlich immer — Abschalten wirkt wahrscheinlich nicht");
+    expect(t("think.button.off")).toBe("Thinking: aus");
+    expect(t("think.button.offNotPossible")).toBe("Thinking: immer an");
+    expect(t("think.level.medium")).toBe("Thinking: mittel");
+    expect(t("think.pickerLabel")).toBe("Denkstufe");
     setLang("en");
   });
 

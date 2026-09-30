@@ -5,7 +5,13 @@ import { VisionClient, setHttp, setChatTransports } from "./vision_client";
 import type { EndpointConfig } from "./vendor/kit/endpoint_config";
 import { resolveVisionEndpoint, sanitizeChoice } from "./resolve_endpoint";
 import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
-import { obsidianHttp } from "./http";
+import type { EndpointSourceResult } from "./vendor/kit/endpoint-source";
+import { createRequestSession, type RequestSession } from "./vendor/kit-obsidian/request-session";
+import type { RequestSectionState } from "./vendor/kit-obsidian/request-section";
+import { checkResponse, onLevelFor, thinkingFor, type FamilyId, type RequestSettings, type ResponseFacts, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
+import { MODE, buildVisionParams, loadRequestSettings } from "./request_params";
+import { deviationNotice } from "./request_text";
+import { obsidianHttp, cachedProbe } from "./http";
 import { xhrSseTransport, requestUrlTransport } from "./vendor/kit-obsidian/chat-transport";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem, resolveDestDir } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
@@ -18,7 +24,6 @@ import { setLang, pickLang, t, getLang } from "./i18n";
 import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
 import { DiffModal } from "./diff_modal";
-import { effectiveSuppress } from "./reasoning_toggle";
 import { CardCache } from "./card_cache";
 import { diffMappings, planMigration } from "./fm_migration";
 import { MigrationModal } from "./migration_modal";
@@ -39,6 +44,14 @@ export default class ImageToMarkdownPlugin extends Plugin {
   activeModel = "";
   /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet, `visionModel` ist der Rückfall. */
   get model(): string { return this.activeModel || this.settings.visionModel; }
+  /** Volles Ergebnis der letzten Aufloesung — traegt Familie/Backend/sentModel fuer den Abschnitt
+   *  „Anfrage" und den Denk-Knopf in der Sidebar (Sampling-Plan § 3.1). */
+  private activeSource: EndpointSourceResult | null = null;
+  /** Sitzungszustand fuer „Letzte Anfrage" und Abweichungen; wird nicht gespeichert. */
+  requestSession: RequestSession = createRequestSession({ message: (d) => deviationNotice(d) });
+  /** Familie und Denkstufe der zuletzt gebauten Anfrage — `checkResponse` prueft die Antwort
+   *  gegen genau das, was gesendet wurde, nicht gegen den Stand beim Eintreffen der Antwort. */
+  private lastRequestCtx: { family: FamilyId | null; thinking: ThinkingLevel } = { family: null, thinking: "off" };
   private pendingCards = new CardCache();
   /** Anbieter-API v1 (Spec Baustein 4/D, Kit-Vertrag `ocr-provider`) — Konsumenten fragen
    *  `app.plugins.plugins["image-to-markdown"].api`, nie die Brücke direkt. Sofort in onload
@@ -57,12 +70,20 @@ export default class ImageToMarkdownPlugin extends Plugin {
     setLang(pickLang(getLanguage()));
     const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
     this.settings = mergeSettings(defaultSettings(), saved);
+    // Anfrage-Einstellungen: laden, Altfeld `suppressThinking` nachziehen und danach entfernen.
+    const { request, dropped } = loadRequestSettings(saved);
+    this.settings.request = request;
+    delete (this.settings as { suppressThinking?: unknown }).suppressThinking;
+    if (dropped.length > 0) {
+      new Notice(t("request.dropped", String(dropped.length)));
+      console.warn("image-to-markdown: request settings dropped", dropped);
+    }
     const migratedEps = migrateEndpoints(saved);
     this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
     this.settings.choice = sanitizeChoice(this.settings.choice);
     this.settings.promptPreset = normalizePreset(this.settings.promptPreset);
     const first = this.settings.visionEndpoints[0];
-    this.visionClient = new VisionClient(first?.url ?? "", this.settings.visionModel, first?.apiKey);
+    this.visionClient = this.makeVisionClient(first?.url ?? "", this.settings.visionModel, first?.apiKey);
     void this.resolveAndReconnect();
 
     this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });
@@ -103,13 +124,81 @@ export default class ImageToMarkdownPlugin extends Plugin {
     const r = await resolveVisionEndpoint(
       this.settings, findEndpointManager(this.app),
       cfg => new VisionClient(cfg.url, "", cfg.apiKey).ping(),
+      cfg => cachedProbe(cfg.url, cfg.model || this.settings.visionModel),
     );
     this.activeEndpoint = r.config;
     this.activeModel = r.model;
+    this.activeSource = r;
     // Mit Manager und ohne Endpunkt gibt es keinen lokalen Rückfall (Kit-Vertrag): der Client
     // zeigt dann ins Leere, connectionStatus meldet "nicht erreichbar".
     const ep = r.config ?? (r.kind === "local" ? this.settings.visionEndpoints[0] : undefined);
-    this.visionClient = new VisionClient(ep?.url ?? "", this.model, ep?.apiKey);
+    // `sentModel` ist das Modell, wie es tatsaechlich gesendet wird (nach `aliasOf`-Aufloesung);
+    // `this.model` bleibt die Anzeige-/Wahl-Schreibweise.
+    this.visionClient = this.makeVisionClient(ep?.url ?? "", r.sentModel || this.model, ep?.apiKey);
+    this.refreshThinkingControls();
+  }
+
+  /** EIN Weg, einen VisionClient zu bauen: jede Server-Antwort geht an `checkResponse`
+   *  (Sampling-Plan Rezept 5), damit Abweichungen im Abschnitt „Anfrage" sichtbar werden. */
+  private makeVisionClient(url: string, model: string, apiKey?: string): VisionClient {
+    return new VisionClient(url, model, apiKey, (facts) => { this.reportResponse(facts); });
+  }
+
+  private reportResponse(facts: ResponseFacts): void {
+    this.requestSession.report(checkResponse(this.lastRequestCtx, facts));
+  }
+
+  /** Die Sampling-Parameter fuer den NAECHSTEN Aufruf — einzige Stelle (statt acht): baut ueber
+   *  `buildVisionParams`, merkt Familie/Stufe fuer `checkResponse` und schreibt „Letzte Anfrage". */
+  requestParams(): Record<string, number | string> {
+    const src = this.activeSource;
+    const family = src?.family ?? null;
+    const level = thinkingFor(this.settings.request, MODE);
+    const overrides = this.settings.request.overrides[MODE]?.[family ?? "unknown"] ?? {};
+    const { params } = buildVisionParams({ family, backend: src?.backend ?? "unknown", thinking: level, overrides });
+    this.lastRequestCtx = { family, thinking: level };
+    this.requestSession.recordRequest(params);
+    return params;
+  }
+
+  /** Fuer `buildRequestSection` im Settings-Tab (Sampling-Plan § 5.1). */
+  requestSectionState(): RequestSectionState {
+    const s = this.activeSource;
+    return {
+      family: s?.family ?? null, familySource: s?.familySource ?? "none",
+      backend: s?.backend ?? "unknown", backendSource: s?.backendSource ?? "none",
+      model: s?.model ?? "", sentModel: s?.sentModel ?? "",
+      ...(s?.defaultModel !== undefined ? { defaultModel: s.defaultModel } : {}),
+    };
+  }
+
+  async saveRequestSettings(next: RequestSettings): Promise<void> {
+    this.settings.request = next;
+    await this.saveSettings();
+    this.refreshThinkingControls();
+  }
+
+  /** Stellt die Denkstufe aus der Sidebar. Bei `≠ off` merkt sich `lastOnLevel`, auf welche Stufe
+   *  der Zwei-Zustands-Knopf beim Wiedereinschalten springt. */
+  async setThinkingLevel(level: ThinkingLevel): Promise<void> {
+    const r = this.settings.request;
+    const next: RequestSettings = {
+      ...r,
+      thinking: { ...r.thinking, [MODE]: level },
+      lastOnLevel: level === "off" ? r.lastOnLevel : { ...r.lastOnLevel, [MODE]: level },
+    };
+    await this.saveRequestSettings(next);
+  }
+
+  thinkingState(): { family: FamilyId | null; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean } {
+    const r = this.settings.request;
+    return { family: this.activeSource?.family ?? null, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE), levelPicker: r.levelPickerInChat };
+  }
+
+  private refreshThinkingControls(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_IMGMD)) {
+      if (leaf.view instanceof ImgToMdView) leaf.view.refreshThinking();
+    }
   }
 
   private mimeOf(ext: string): string { const e = ext.toLowerCase(); return e === "jpg" ? "jpeg" : e; }
@@ -134,7 +223,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     try {
       const dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(vaultPath))}`;
       const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
-      const { content } = await this.visionClient.transcribe(dataUrl, prompt, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
+      const { content } = await this.visionClient.transcribe(dataUrl, prompt, this.requestParams());
       return content;
     } catch (e) {
       return { error: "failed", message: e instanceof Error ? e.message : String(e) };
@@ -206,7 +295,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
-      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) }),
+      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), this.requestParams()),
       notify: (m) => { new Notice(m); },
       confirmOverwrite: (ctx) => new Promise<string | null>((resolve) => new DiffModal(this.app, ctx.path, ctx.diff, resolve).open()),
     };
@@ -305,10 +394,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
             if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
               const fmt = t("pdf.textLayerPrompt");
               try {
-                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
+                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, this.requestParams());
               } catch (err) {
                 await this.resolveAndReconnect();
-                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
+                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, this.requestParams());
                 throw err;
               }
             }
@@ -319,10 +408,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
         }
         const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
         try {
-          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
+          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
         } catch (err) {
           await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) });
+          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
           throw err;
         }
       },
@@ -360,14 +449,13 @@ export default class ImageToMarkdownPlugin extends Plugin {
           dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
         }
         const prompt = buildDescribePrompt(this.settings.describeTaxonomy, getLang());
-        const opts = { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) };
         try {
-          const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
+          const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
           return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
         } catch (err) {
           await this.resolveAndReconnect();
           if (this.activeEndpoint) {
-            const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, opts);
+            const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
             return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
           }
           throw err;
@@ -375,12 +463,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
       },
       refine: async (base, steps, feedback, onContent, onReasoning, signal) => {
         const messages = buildRefineMessages(base, steps, feedback, t("refine.systemPrompt"));
-        const opts = { suppressThinking: effectiveSuppress(this.model, this.settings.suppressThinking) };
         try {
-          return await this.visionClient.refineStream(messages, onContent, onReasoning, signal, opts);
+          return await this.visionClient.refineStream(messages, onContent, onReasoning, signal, this.requestParams());
         } catch (err) {
           await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.refineStream(messages, onContent, onReasoning, signal, opts);
+          if (this.activeEndpoint) return this.visionClient.refineStream(messages, onContent, onReasoning, signal, this.requestParams());
           throw err;
         }
       },
@@ -414,9 +501,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
       getPreset: () => this.settings.promptPreset,
       setPreset: (id: string) => { this.settings.promptPreset = isPromptPreset(id) ? id : "default"; void this.saveSettings(); },
-      getSuppress: () => this.settings.suppressThinking,
+      thinkingState: () => this.thinkingState(),
       getReasoningExpanded: () => this.settings.reasoningExpanded,
-      setSuppress: (v: boolean) => { this.settings.suppressThinking = v; void this.saveSettings(); },
+      setThinkingLevel: (l: ThinkingLevel) => this.setThinkingLevel(l),
       openPath: this.openPath,
       copyText: (text: string) => { void copyToClipboard(text, { copiedMessage: t("notice.copied"), failedMessage: t("notice.copyFailed") }); },
       cardCache: this.pendingCards,

@@ -33,7 +33,7 @@
       "dir": "src/vendor/kit-obsidian",
       "source": "obsidian-kit",
       "from": "src/obsidian",
-      "modules": [{ "name": "chat-client", "ref": "0.44.0" }, "clipboard", "endpoint-list", "endpoint-source", "model-picker"],
+      "modules": [{ "name": "chat-client", "ref": "0.44.0" }, "clipboard", "collapsible", "endpoint-list", "endpoint-source", "model-picker", "request-section", "request-session", "thinking-control"],
       "rewrite": [["../vendor/code-kit/pure/", "../kit/"], ["../vendor/code-kit/web/", "../kit/"], ["../pure/", "../kit/"]]
     },
     {

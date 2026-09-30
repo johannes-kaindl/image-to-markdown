@@ -30,7 +30,7 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
 `capabilities.ts`, `i18n.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
-`describe.ts`, `prompts.ts`, `reasoning_toggle.ts`, `card_cache.ts`, `frontmatter_map.ts`,
+`describe.ts`, `prompts.ts`, `request_params.ts`, `request_text.ts`, `card_cache.ts`, `frontmatter_map.ts`,
 `fm_migration.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
 `settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und die
 vendorte Schicht `vendor/kit-obsidian/*` importieren `obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten
@@ -93,11 +93,12 @@ describe.ts         Beschreiben-Modus: buildDescribePrompt (festes CATEGORY/TAGS
                     Taxonomie-Auswahl) + Parsing nach ParsedDescription. Reiner Kern.
 prompts.ts          Prompt-Presets (default/tables/handwriting/math/code): PROMPT_PRESETS ·
                     isPromptPreset · normalizePreset · Preset-Auflösung. Reiner Kern.
-reasoning_toggle.ts thinkToggleView: mappt (Modell, Suppress-Flag) auf den Anzeige-Zustand des
-                    Thinking-Toggles (Always-on-Thinker → disabled + „immer an"). Speist zusätzlich
-                    einen Tooltip-Hinweis (hintKey) aus der reicheren Kit-Namens-Heuristik
-                    (guessFromName) für support:"always"-Modelle — ändert dabei NIE effectiveSuppress,
-                    das bewusst nur an isAlwaysOnThinker gebunden bleibt. Reiner Kern.
+request_params.ts   Sampling-Profil (Modus `transform`): `buildVisionParams` (Request-Bau-Funktion DES PLUGINS, eine
+                    Stelle für alle Aufrufe — goldene Requests testen sie, nicht das Kit) · `loadRequestSettings`
+                    (lädt `request`, zieht das Altfeld `suppressThinking` nach: true → Stufe „aus“, false → Ein-Stufe).
+                    Kein `max_tokens`: i2m hat kein Budget. `main.ts::requestParams()` baut je Aufruf neu, merkt Familie
+                    und Stufe für `checkResponse` und schreibt „Letzte Anfrage“. Reiner Kern.
+request_text.ts     Texte der Abweichungen (Notice + Statuszeile des Abschnitts „Anfrage“). Reiner Kern.
 card_cache.ts       CardCache: In-Session-Cache der Sidebar-Ergebnis-Karten pro Quelldatei
                     (Plugin-Ebene, überlebt View-Close; kein Disk-Persist). Reiner Kern.
 frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskriminator-Werte aller
@@ -161,6 +162,7 @@ vendor/kit-obsidian/ Aus obsidian-kit vendored — obsidian-abhängige Schicht
   chat-client.ts    createChatClient (Kit 0.42.0): Streaming, Idle-/Erst-Chunk-Frist, Abbruch, Fehlerkörper, Fallback ohne Stream. Obsidian-frei (Transport injiziert) — deshalb vom Kern `vision_client.ts` importierbar. Querimporte auf code-kit sind wie bei clipboard.ts auf `../kit/` umgeschrieben.
   chat-transport.ts xhrSseTransport (Stream) + requestUrlTransport (Fallback ohne Stream). Importiert `obsidian`; `main.ts` injiziert beide per `setChatTransports`.
   clock.ts          Uhr-Port für chat-client (Tests injizieren eine Fake-Uhr).
+  request-section.ts / request-session.ts / thinking-control.ts / collapsible.ts  Sampling-Plan-Bausteine (Abschnitt „Anfrage“, Sitzung, Denk-Knopf der Sidebar); CSS verbatim in `styles.css`.
   clipboard.ts      copyToClipboard: Zwischenablage mit Notice-Quittung. Genutzt von main.ts
                     (copyText in ImgToMdViewDeps). ⚠️ Nicht-verbatim (wie chat-client.ts, endpoint-list.ts, model-picker.ts, endpoint-source.ts): die
                     kit-internen Importe `../pure/` heißen hier `../kit/` (Vendor-Layout). Der

@@ -71,6 +71,8 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { argv, cwd, exit, platform } from "node:process";
 
@@ -83,6 +85,7 @@ import {
   pollUntil,
 } from "../../tools/obsidian-cdp/cdp.js";
 import { requireEigenerBuild } from "../../tools/obsidian-cdp/vault.js";
+import { MODES, familyFromName } from "../src/vendor/kit/sampling-profiles";
 
 const PLUGIN_ID = "image-to-markdown";
 const VIEW_TYPE = "image-to-markdown-view";
@@ -554,6 +557,184 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       };
     },
   },
+  // ── N: Sampling-Profil (Modus transform) — Abschnitt „Anfrage“, Denk-Steuerung, gesendeter Body ──
+  // Kein Modell noetig: alles hier ist DOM-Zustand bzw. ein Fake-Server im Node-Prozess. N2 faehrt
+  // ZWEI Edits hintereinander (setzen, zuruecksetzen) — der Einklapp-Fehler des Piloten war im
+  // gruenen Smoke unsichtbar, weil kein Punkt zwei Edits nacheinander fuhr (Plan-Nachtrag 6).
+  {
+    key: "N1",
+    titel: "Anfrage: Abschnitt „Anfrage“/„Request“ in den Einstellungen klappt auf und wieder zu",
+    async run(cdp) {
+      const sicht = await oeffneEinstellungen(cdp);
+      if (!sicht) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      try {
+        // Der Auf/Zu-Zustand lebt im Prozess (Kit-Fallback ohne `collapsedStorage`) und ueberlebt
+        // das Schliessen der Einstellungen — der Ausgangszustand ist also nicht vorhersagbar.
+        // Gemessen wird deshalb der WECHSEL in beide Richtungen, nicht ein fester Zielzustand.
+        const r = await sicht.evaluate<string>(`
+          const warte = (ms) => new Promise((x) => setTimeout(x, ms));
+          const wurzel = document.querySelector(".modal.mod-settings") ?? document.body;
+          const kopf = [...wurzel.querySelectorAll(".okit-collapsible-header")].find((h) => /Anfrage|Request/.test(h.textContent || ""));
+          if (!kopf) return JSON.stringify({ da: false });
+          const body = kopf.closest(".okit-collapsible").querySelector(".okit-collapsible-body");
+          const offen = () => !body.classList.contains("is-collapsed");
+          const s0 = offen(); kopf.click(); await warte(150);
+          const s1 = offen(); kopf.click(); await warte(150);
+          const s2 = offen();
+          return JSON.stringify({ da: true, s0, s1, s2 });
+        `);
+        const d = JSON.parse(r) as { da: boolean; s0: boolean; s1: boolean; s2: boolean };
+        return { ok: d.da && d.s1 === !d.s0 && d.s2 === d.s0, detail: d.da ? `offen: ${d.s0} → ${d.s1} → ${d.s2}` : "kein .okit-collapsible-header mit „Anfrage“/„Request“ gefunden" };
+      } finally { await schliesseEinstellungen(cdp, sicht); }
+    },
+  },
+  {
+    key: "N2",
+    titel: "Anfrage: Wert ueberschreiben, dann zuruecksetzen — der Abschnitt bleibt dabei aufgeklappt (zwei Edits hintereinander)",
+    async run(cdp) {
+      const vorher = await cdp.evaluate<string>(`return JSON.stringify(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.request);`);
+      const sicht = await oeffneEinstellungen(cdp);
+      if (!sicht) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      try {
+        const r = await sicht.evaluate<string>(`
+          const warte = (ms) => new Promise((x) => setTimeout(x, ms));
+          const wurzel = () => document.querySelector(".modal.mod-settings") ?? document.body;
+          const kopf = [...wurzel().querySelectorAll(".okit-collapsible-header")].find((h) => /Anfrage|Request/.test(h.textContent || ""));
+          if (!kopf) return JSON.stringify({ da: false });
+          if (kopf.closest(".okit-collapsible").querySelector(".okit-collapsible-body").classList.contains("is-collapsed")) kopf.click();
+          await warte(200);
+          const offen = () => {
+            const k = [...wurzel().querySelectorAll(".okit-collapsible-header")].find((h) => /Anfrage|Request/.test(h.textContent || ""));
+            return !!k && !k.closest(".okit-collapsible").querySelector(".okit-collapsible-body").classList.contains("is-collapsed");
+          };
+          const feld = () => wurzel().querySelector('input[data-field="temperature"]');
+          const f1 = feld();
+          if (!f1) return JSON.stringify({ da: true, feld: false });
+          f1.value = "0.9"; f1.dispatchEvent(new Event("blur"));
+          await warte(400);
+          const nachSetzen = { eigen: !!feld() && feld().classList.contains("okit-request-own"), offen: offen(), wert: feld() ? feld().value : null };
+          const reset = feld() ? feld().closest(".setting-item").querySelector(".clickable-icon") : null;
+          if (reset) reset.click();
+          await warte(400);
+          const nachReset = { eigen: !!feld() && feld().classList.contains("okit-request-own"), offen: offen(), wert: feld() ? feld().value : null };
+          return JSON.stringify({ da: true, feld: true, nachSetzen, nachReset, reset: !!reset });
+        `);
+        const d = JSON.parse(r) as { da: boolean; feld?: boolean; reset?: boolean; nachSetzen?: { eigen: boolean; offen: boolean; wert: string | null }; nachReset?: { eigen: boolean; offen: boolean; wert: string | null } };
+        if (!d.da || !d.feld || !d.nachSetzen || !d.nachReset) return { ok: false, detail: `Abschnitt/Feld nicht gefunden: ${r}` };
+        const ok = d.nachSetzen.eigen && d.nachSetzen.offen && d.nachSetzen.wert === "0.9" && d.reset === true && !d.nachReset.eigen && d.nachReset.offen;
+        return { ok, detail: `nach Setzen: eigener Wert=${d.nachSetzen.eigen}, Wert=${d.nachSetzen.wert}, offen=${d.nachSetzen.offen} · nach Zuruecksetzen: eigener Wert=${d.nachReset.eigen}, offen=${d.nachReset.offen}` };
+      } finally {
+        await schliesseEinstellungen(cdp, sicht);
+        await cdp.evaluate(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.request = JSON.parse(${JSON.stringify(vorher)});
+          await p.saveSettings();
+          return true;
+        `).catch(() => undefined);
+      }
+    },
+  },
+  {
+    key: "N3",
+    titel: "Anfrage: der Denk-Knopf in der Sidebar schaltet um (Label und aria-pressed folgen)",
+    async run(cdp) {
+      const vorher = await cdp.evaluate<string>(`return JSON.stringify(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.request);`);
+      try {
+        await zeigeNotiz(cdp, NOTIZ.bilder);
+        const lies = `(() => { const b = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-thinking-toggle")}); return b ? JSON.stringify({ text: b.textContent.trim(), pressed: b.getAttribute("aria-pressed") }) : null; })()`;
+        const davor = await cdp.evaluate<string | null>(`return ${lies};`);
+        if (!davor) return { ok: false, detail: "kein .okit-thinking-toggle in der Sidebar" };
+        await clickReal(cdp, `document.querySelector(${JSON.stringify(SIDEBAR + " .okit-thinking-toggle")})`);
+        const danach = await pollUntil<string>(cdp, `const r = ${lies}; return r && r !== ${JSON.stringify(davor)} ? r : null;`, 5000, 200);
+        const a = JSON.parse(davor) as { text: string; pressed: string };
+        const b = danach ? (JSON.parse(danach) as { text: string; pressed: string }) : null;
+        return { ok: b !== null && b.pressed !== a.pressed && b.text !== a.text,
+          detail: `vorher "${a.text}" (aria-pressed=${a.pressed}) → nachher ${b ? `"${b.text}" (aria-pressed=${b.pressed})` : "unveraendert"}` };
+      } finally {
+        await cdp.evaluate(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.request = JSON.parse(${JSON.stringify(vorher)});
+          await p.saveSettings();
+          for (const l of app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})) if (l.view.refreshThinking) l.view.refreshThinking();
+          return true;
+        `).catch(() => undefined);
+      }
+    },
+  },
+  {
+    key: "N4",
+    titel: "Anfrage: „Stufenwahl im Chat“ an → die Sidebar zeigt ein Dropdown mit vier Stufen statt des Knopfs",
+    async run(cdp) {
+      const vorher = await cdp.evaluate<string>(`return JSON.stringify(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.request);`);
+      try {
+        await zeigeNotiz(cdp, NOTIZ.bilder);
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+          const vorherDd = !!wurzel.querySelector(".okit-thinking-control select");
+          const vorherKnopf = !!wurzel.querySelector(".okit-thinking-toggle");
+          await p.saveRequestSettings({ ...p.settings.request, levelPickerInChat: true });
+          await new Promise((x) => setTimeout(x, 300));
+          const sel = wurzel.querySelector(".okit-thinking-control select");
+          return JSON.stringify({ vorherDd, vorherKnopf, nachherDd: !!sel, optionen: sel ? [...sel.options].map((o) => o.textContent) : [], knopfWeg: !wurzel.querySelector(".okit-thinking-toggle") });
+        `);
+        const d = JSON.parse(r) as { vorherDd: boolean; vorherKnopf: boolean; nachherDd: boolean; optionen: string[]; knopfWeg: boolean };
+        return { ok: !d.vorherDd && d.vorherKnopf && d.nachherDd && d.knopfWeg && d.optionen.length === 4,
+          detail: `Dropdown vorher=${d.vorherDd}, nachher=${d.nachherDd} (${JSON.stringify(d.optionen)}), Knopf ersetzt=${d.knopfWeg}` };
+      } finally {
+        await cdp.evaluate(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.request = JSON.parse(${JSON.stringify(vorher)});
+          await p.saveSettings();
+          for (const l of app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})) if (l.view.refreshThinking) l.view.refreshThinking();
+          return true;
+        `).catch(() => undefined);
+      }
+    },
+  },
+  {
+    key: "N5",
+    titel: "Anfrage: der GESENDETE Body traegt das Profil des Modus transform (Temperatur aus den Kit-Tabellen, kein max_tokens)",
+    async run(cdp) {
+      const erwartet = MODES.transform.temperature.value;
+      const sicht = await startFakeChat();
+      const vor = await cdp.evaluate<string>(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        return JSON.stringify({ eps: p.settings.visionEndpoints, model: p.settings.visionModel, request: p.settings.request, choice: p.settings.choice });
+      `);
+      try {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(sicht.url)} }];
+          p.settings.visionModel = "google/gemma-4-e4b";
+          p.settings.request = { overrides: {}, thinking: {}, lastOnLevel: {}, levelPickerInChat: false };
+          await p.resolveAndReconnect();
+          const deps = p.makeImgViewDeps();
+          const items = await deps.scan(${JSON.stringify(NOTIZ.bilder)});
+          const item = items.find((i) => i.supported && i.kind === "image");
+          if (!item) return JSON.stringify({ fehler: "kein unterstuetztes Bild in der Fixture-Notiz" });
+          try { await deps.transcribeStream(${JSON.stringify(NOTIZ.bilder)}, item, () => {}, () => {}, new AbortController().signal); }
+          catch (e) { return JSON.stringify({ fehler: String(e && e.message || e) }); }
+          return JSON.stringify({ ok: true });
+        `);
+        const d = JSON.parse(r) as { ok?: boolean; fehler?: string };
+        const body = sicht.bodies.at(-1) as Record<string, unknown> | undefined;
+        if (!body) return { ok: false, detail: `der Fake-Server sah keinen POST (${d.fehler ?? "kein Fehler gemeldet"})` };
+        const ok = body.temperature === erwartet && !("max_tokens" in body) && !("chat_template_kwargs" in body) && !("reasoning_budget" in body);
+        return { ok, detail: `Server sah temperature=${String(body.temperature)} (Erwartung aus MODES.transform: ${erwartet}), Schluessel ${JSON.stringify(Object.keys(body).filter((k) => k !== "messages"))}, Modell ${String(body.model)}, Familie aus dem Namen: ${String(familyFromName("google/gemma-4-e4b"))}` };
+      } finally {
+        await sicht.close();
+        await cdp.evaluate(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          const v = JSON.parse(${JSON.stringify(vor)});
+          p.settings.visionEndpoints = v.eps; p.settings.visionModel = v.model; p.settings.request = v.request; p.settings.choice = v.choice;
+          await p.saveSettings();
+          await p.resolveAndReconnect();
+          return true;
+        `).catch(() => undefined);
+      }
+    },
+  },
   // ── G: Streaming gegen einen ECHTEN Endpunkt (Welle 11, Chat-Client-Tausch) ──────────────────
   // Der Kernlauf ist absichtlich modellfrei; diese drei Punkte sind der Beleg, dass der Chat-Weg
   // (Transport, SSE, Abbruch, Fehlerkoerper) gegen einen echten Server traegt. Sie bauen einen
@@ -574,7 +755,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const st = { chunks: 0, text: "", fertig: false, fehler: null, model: "", t0: Date.now() };
         globalThis.__i2mG1 = st;
         c.transcribeStream(cv.toDataURL("image/png"), "Transcribe the text in the image. Reply with the text only.",
-          (t) => { st.chunks++; st.text += t; }, () => {}, new AbortController().signal, { suppressThinking: true })
+          (t) => { st.chunks++; st.text += t; }, () => {}, new AbortController().signal, { reasoning_effort: "none" })
           .then((r) => { st.model = r.model; st.fertig = true; }, (e) => { st.fehler = String(e && e.message || e); st.fertig = true; });
         return true;
       `);
@@ -603,7 +784,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const st = { fertig: false, fehler: null, ergebnis: false, dauer: 0, abgebrochenNach: 0, t0: Date.now() };
         globalThis.__i2mG2 = st;
         c.transcribeTextStream("Write the numbers from 1 to 400, one per line.", "Follow the instruction.",
-          () => { if (!st.abgebrochenNach) { st.abgebrochenNach = Date.now() - st.t0; ctrl.abort(); } }, () => {}, ctrl.signal, { suppressThinking: true })
+          () => { if (!st.abgebrochenNach) { st.abgebrochenNach = Date.now() - st.t0; ctrl.abort(); } }, () => {}, ctrl.signal, { reasoning_effort: "none" })
           .then(() => { st.ergebnis = true; st.fertig = true; st.dauer = Date.now() - st.t0; },
                 (e) => { st.fehler = String(e && (e.name + ": " + e.message) || e); st.fertig = true; st.dauer = Date.now() - st.t0; });
         return true;
@@ -631,7 +812,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const c = new C(${JSON.stringify(G_ENDPOINT)}, ${JSON.stringify(G_MODEL)});
         const st = { fertig: false, fehler: null, ergebnis: false };
         globalThis.__i2mG3 = st;
-        c.transcribeStream("nonsense", "y", () => {}, () => {}, new AbortController().signal, { suppressThinking: true })
+        c.transcribeStream("nonsense", "y", () => {}, () => {}, new AbortController().signal, { reasoning_effort: "none" })
           .then(() => { st.ergebnis = true; st.fertig = true; }, (e) => { st.fehler = String(e && e.message || e); st.fertig = true; });
         return true;
       `);
@@ -652,6 +833,55 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
 // Werte im Protokoll sind der Beleg, dass gemessen wurde. Zurueckgesetzt wird in `finally` UND im
 // Abbruch-Handler (cleanupState): ein liegen gebliebener Fake wuerde die echte Registrierung
 // eines installierten Managers ueberschreiben.
+/** Oeffnet die Einstellungen des Plugins und dockt ans eigene Fenster an (ab Obsidian 1.13 ein
+ *  eigenes CDP-Target). `null`, wenn kein Fenster erscheint. */
+async function oeffneEinstellungen(cdp: Cdp): Promise<Cdp | null> {
+  await cdp.evaluate(`
+    app.setting.open();
+    app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+    await new Promise((r) => setTimeout(r, 900));
+    return true;
+  `);
+  const sicht = await attachTo("settings", verbindung.port, verbindung.vault).catch(() => null);
+  if (!sicht) await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+  return sicht;
+}
+async function schliesseEinstellungen(cdp: Cdp, sicht: Cdp): Promise<void> {
+  sicht.close?.();
+  await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+}
+
+/** Fake-Chat-Endpunkt im Node-Prozess: beantwortet /v1/models und /v1/chat/completions und merkt
+ *  sich jeden POST-Body. Mit CORS-Freigabe, damit der Stream-Weg (XHR) durchkommt und der Body
+ *  vom echten Transport stammt, nicht vom Fallback. */
+async function startFakeChat(): Promise<{ url: string; bodies: unknown[]; close(): Promise<void> }> {
+  const bodies: unknown[] = [];
+  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
+  const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
+    if (req.url?.includes("/v1/models")) { res.writeHead(200, { ...cors, "Content-Type": "application/json" }); res.end(JSON.stringify({ data: [{ id: "google/gemma-4-e4b", object: "model" }] })); return; }
+    if (req.method === "POST" && req.url?.includes("/v1/chat/completions")) {
+      let raw = "";
+      req.on("data", (c: Buffer) => { raw += c.toString("utf8"); });
+      req.on("end", () => {
+        try { bodies.push(JSON.parse(raw)); } catch { bodies.push({ kein_json: raw.slice(0, 80) }); }
+        res.writeHead(200, { ...cors, "Content-Type": "text/event-stream" });
+        res.write(`data: ${JSON.stringify({ model: "google/gemma-4-e4b", choices: [{ delta: { content: "Fake-Transkript" } }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`);
+        res.end("data: [DONE]\n\n");
+      });
+      return;
+    }
+    res.writeHead(404, cors); res.end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    bodies,
+    close: () => new Promise<void>((resolve) => { server.close(() => { resolve(); }); }),
+  };
+}
+
 const MGR_SLOT = "llm-endpoint-manager";
 const MGR_URL = "http://127.0.0.1:9312";
 const MGR_MODEL = "i2m-fake-vl";
