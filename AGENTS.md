@@ -257,7 +257,7 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
   Gate: `scripts/check-no-abs-paths.mjs` (Teil von `npm test`).
 - **Projekt-Memory:** verwandtes Wissen im vault-rag-Memory
   (`~/.claude/projects/-Users-Shared-code-vault-rag/memory/`), insbesondere die Ausgliederungs-Spec/-Plan
-  unter vault-rag `docs/superpowers/`.
+  im vault-rag-Cockpit `25_Coding/vault-rag/_SDD/<datei>`.
 
 ## Abweichungen von der Leitkonvention
 

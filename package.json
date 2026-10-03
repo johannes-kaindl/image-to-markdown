@@ -2,6 +2,7 @@
   "name": "image-to-markdown",
   "version": "0.27.0",
   "description": "Transcribe images and PDFs in a note to Markdown with a local vision LLM — fully offline, non-destructive, streaming into the sidebar.",
+  "author": "Johannes Kaindl",
   "license": "AGPL-3.0-or-later",
   "keywords": [
     "obsidian",
