@@ -44,7 +44,7 @@ All user-facing strings (UI labels, commands, notices) go through the i18n modul
 ## Where to work
 
 - File issues and open pull requests on **Forgejo**: <https://git.jkaindl.de/jkaindl/image-to-markdown>. (GitHub is a mirror, not the place for contributions.)
-- For larger features, work through **brainstorm → spec → plan → TDD**, and keep the resulting artefacts under `docs/superpowers/`. Smaller fixes can go straight to a `feat/<name>` branch with tests.
+- For larger features, work through **brainstorm → spec → plan → TDD**, and keep the resulting artefacts outside the repository (the maintainer keeps them in a private vault). Smaller fixes can go straight to a `feat/<name>` branch with tests.
 - The detailed conventions, architecture, and module layout live in [`AGENTS.md`](AGENTS.md).
 
 ## License of contributions

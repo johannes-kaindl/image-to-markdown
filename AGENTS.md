@@ -251,7 +251,7 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
   Coding-Cockpit des Maintainers (`$VAULT/25_Coding/image-to-markdown/_SDD/`, CORE-META-14, maintainer-lokal).
   Sie tragen Arbeitskontext (Vault-Pfade, Schwester-Repo-Interna), der in einem public Repo niemandem nützt.
   Das Repo behält die Design-Essenz in dieser Datei + `CHANGELOG.md`.
-- **Alt-Bestand:** `docs/superpowers/{specs,plans}/` ist eingefroren — nichts Neues dort ablegen.
+- **Specs und Pläne liegen im Vault-Cockpit unter `_SDD/` (CORE-META-14);** der frühere Ordner `docs/superpowers/` ist dorthin umgezogen (2026-10-03) und existiert im Repo nicht mehr.
 - **Nie im Repo:** absolute Pfade außerhalb des Repos (`/Users/…`, Vault-Pfade) — Platzhalter nutzen
   (`$VAULT/…`, `~/…`, repo-relativ). Herkunftsnachweise als Repo-Name + `Datei:Zeile` sind dagegen erwünscht.
   Gate: `scripts/check-no-abs-paths.mjs` (Teil von `npm test`).
