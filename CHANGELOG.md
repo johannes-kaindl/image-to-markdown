@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.1] — 2026-10-03
+
 ### Changed
 
 - The changelog is now written entirely in English.
