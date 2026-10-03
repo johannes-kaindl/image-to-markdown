@@ -1,8 +1,8 @@
 # Changelog
 
-Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
-Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
-Versionierung nach [SemVer](https://semver.org/lang/de/).
+All notable changes to this project are documented here.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
@@ -33,697 +33,697 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 - Kit chat client 0.44.0 (no user-visible change).
 - Kit vendoring bumped to `obsidian-kit` 0.45.0 (`shortcuts-bridge` pinned to 0.45.1): pulls in `pure/ocr-provider` and `obsidian/shortcuts-bridge` for the upcoming Apple-shortcut OCR path (no user-visible change yet — not wired in). The 0.45.1 pin fixes an upstream lint violation (`obsidianmd/prefer-window-timers`) in `shortcuts-bridge` via an injectable clock port.
-- Anbieter-API v1 (`extractText(vaultPath) → Text`, Kit-Vertrag `ocr-provider`) als dünner Adapter angelegt (`src/ocr_provider.ts`), jetzt an `main.ts`/`app.plugins.plugins["image-to-markdown"].api` angeschlossen.
+- Provider API v1 (`extractText(vaultPath) → Text`, Kit contract `ocr-provider`) added as a thin adapter (`src/ocr_provider.ts`), now wired to `main.ts`/`app.plugins.plugins["image-to-markdown"].api`.
 
-### Hinzugefügt
+### Added
 
-- **Neuer Text-Erkennungsweg neben dem Vision-Modell: Apple Shortcuts (on-device OCR)** — Einstellungen: Weg-Wahl, Kurzbefehl-Name (Default „Extract Text (Obsidian)"), Timeout (Default 30 s, Pflicht: ein gelöschter Kurzbefehl antwortet nie). v1 ohne PDF, kein Streaming, ohne LLM-Endpunkt. In der Sidebar-View angeschlossen: die Ergebniskarte füllt sich bei diesem Weg auf einmal statt live; Fehler (Timeout, „beschäftigt", Kurzbefehl-Fehler) erscheinen im bestehenden Karten-Fehlerzustand. Neues How-to „Use the Apple Shortcut OCR path" (docs/manual/how-to.md) + Settings-Referenz, mit Link auf den zentralen Guide `uplink.jkaindl.de/apple-shortcuts`.
+- **New text recognition path alongside the vision model: Apple Shortcuts (on-device OCR)** — settings: path choice, shortcut name (default "Extract Text (Obsidian)"), timeout (default 30 s, mandatory: a deleted shortcut never answers). v1 without PDF, no streaming, no LLM endpoint. Wired into the sidebar view: with this path the result card fills at once instead of live; errors (timeout, "busy", shortcut error) appear in the existing card error state. New how-to "Use the Apple Shortcut OCR path" (docs/manual/how-to.md) + settings reference, linking to the central guide `uplink.jkaindl.de/apple-shortcuts`.
 
 ## [0.25.0] — 2026-09-26
 
-### Geändert
+### Changed
 
-- **Der Chat-Weg läuft über den Kit-Chat-Client** (`createChatClient` aus `obsidian-kit` 0.43.0, Transport XHR mit `requestUrl` als Fallback) statt über den eigenen `fetch`-Client. Sichtbare Folgen: (1) **Ein schweigender Server bricht ab**: nach 2 Minuten ohne Daten, vor dem ersten Byte nach 10 Minuten (Modell lädt, großes Bild) — bisher hing die Anfrage ohne Frist. (2) **Fehlermeldungen tragen den Grund**: statt „Vision HTTP 400“ steht „The endpoint answered with HTTP 400: Invalid url.“ (Servermeldung aus dem Körper), dazu eigene Sätze für „nicht erreichbar“, „antwortet nicht mehr“ und „Eingabe zu lang für das Kontextfenster“ (Englisch/Deutsch). (3) **Eine HTTP-200-Antwort, die weder Stream noch Completion ist** (etwa die Fehlerseite eines Proxys), ist jetzt ein Fehler mit dem Text der Antwort statt eines still leeren Transkripts. (4) **Origin-Weigerung**: lehnt ein lokaler Server den Stream-Aufruf wegen des Obsidian-Origins ab, wiederholt das Plugin die Anfrage einmal ohne Stream (`requestUrl`) und bleibt für diesen Endpunkt dabei — die Karte füllt sich dann auf einmal statt live. (5) Die nicht streamenden Aufrufe (Vision testen, Transkription ohne Karte) laufen ebenfalls über den Kit-Client. Unverändert: Nachrichtenform mit Bildteil, `suppressThinking`-Parameter, Abbruch (Stop), `finish_reason: length` mit oder ohne Text.
-- **Kit-Pin `obsidian-kit` 0.43.0** (vorher 0.41.1): `endpoint-list`-CSS in `styles.css` auf den Stand 0.43.0 (Kindselektoren für den Zeilen-Rahmen, neue Klassen für Schlüssel-Hinweis und Zusatzzeile). `chat-client`, `chat-transport` und `clock` neu vendort; die eigene `sse.ts` (`streamSSE`) entfällt, `think.ts` heißt wie im Kit `think-splitter.ts`.
+- **The chat path now runs through the Kit chat client** (`createChatClient` from `obsidian-kit` 0.43.0, XHR transport with `requestUrl` as fallback) instead of the plugin's own `fetch` client. Visible consequences: (1) **A silent server is cut off**: after 2 minutes without data, and 10 minutes before the first byte (model loading, large image) — previously the request hung without any deadline. (2) **Error messages carry the reason**: instead of "Vision HTTP 400" it now reads "The endpoint answered with HTTP 400: Invalid url." (server message from the body), plus dedicated sentences for "not reachable", "stopped answering" and "input too long for the context window" (English/German). (3) **An HTTP 200 response that is neither a stream nor a completion** (such as a proxy's error page) is now an error carrying the response text instead of a silently empty transcript. (4) **Origin refusal**: if a local server rejects the stream call because of the Obsidian origin, the plugin repeats the request once without a stream (`requestUrl`) and sticks with that for this endpoint — the card then fills at once instead of live. (5) The non-streaming calls (vision test, transcription without a card) also run through the Kit client. Unchanged: message shape with image part, `suppressThinking` parameter, abort (Stop), `finish_reason: length` with or without text.
+- **Kit pin `obsidian-kit` 0.43.0** (previously 0.41.1): `endpoint-list` CSS in `styles.css` brought to the 0.43.0 state (child selectors for the row frame, new classes for the key hint and extra line). `chat-client`, `chat-transport` and `clock` newly vendored; the plugin's own `sse.ts` (`streamSSE`) is gone, `think.ts` is now called `think-splitter.ts` as in the Kit.
 
-### Hinzugefügt
+### Added
 
-- GUI-Smoke G1–G3 (mit `--with-model`): Streaming gegen einen echten Endpunkt (mehrere Stücke, Abbruch per Signal, HTTP-Fehler mit Meldung); Endpunkt und Modell per `I2M_SMOKE_ENDPOINT` / `I2M_SMOKE_MODEL`.
+- GUI smoke G1–G3 (with `--with-model`): streaming against a real endpoint (multiple chunks, abort via signal, HTTP error with message); endpoint and model via `I2M_SMOKE_ENDPOINT` / `I2M_SMOKE_MODEL`.
 
 ## [0.24.0] — 2026-09-26
 
-### Geändert
+### Changed
 
-- **Endpunkte kommen vom LLM Endpoint Manager, wenn er installiert ist** (Kit `endpoint-source`, `obsidian-kit` 0.41.1, `code-kit` 0.7.0 neu vendort, Fähigkeit `vision`). Der Manager hat Vorrang, die lokale Endpunkt-Liste bleibt als Rückfall und ist unverändert, solange der Manager fehlt oder aus ist. Sichtbare Folgen: (1) Mit Manager zeigt der Einstellungen-Tab statt der lokalen Endpunkt-Liste den Baustein „Endpunkte kommen vom LLM Endpoint Manager“ (Endpunkt-Wahl, Modell-Wahl, Import der lokalen Endpunkte in den Manager); die globale Vision-Modell-Zeile ist dann ausgeblendet, die lokale Liste und `visionModel` bleiben gespeichert. (2) Neues Setting `choice` (`endpointId`, `model`) hält die Wahl gegenüber dem Manager; alte `data.json` ohne `choice` laden unverändert. Die Sidebar-Modellauswahl schreibt mit Manager nach `choice.model`, sonst weiter nach `visionModel`. (3) Meldet der Manager keinen Endpunkt, gibt es keinen lokalen Rückfall — die Sidebar zeigt „nicht verbunden“. (4) **Auch ohne Manager wirkt jetzt das Modell einer Endpunkt-Zeile**: es schlägt das globale `visionModel` (Kit-Regel `choice.model → Modell der Zeile → visionModel`); bisher stand die Zeilen-Auswahl in der Oberfläche, wurde beim Aufruf aber nicht gelesen.
+- **Endpoints come from the LLM Endpoint Manager when it is installed** (Kit `endpoint-source`, `obsidian-kit` 0.41.1, `code-kit` 0.7.0 newly vendored, capability `vision`). The Manager takes precedence; the local endpoint list stays as a fallback and is unchanged while the Manager is missing or off. Visible consequences: (1) With the Manager, the settings tab shows the block "Endpoints come from the LLM Endpoint Manager" (endpoint choice, model choice, import of the local endpoints into the Manager) instead of the local endpoint list; the global vision model row is then hidden, while the local list and `visionModel` stay stored. (2) New setting `choice` (`endpointId`, `model`) holds the choice against the Manager; old `data.json` files without `choice` load unchanged. With the Manager, the sidebar model picker writes to `choice.model`, otherwise still to `visionModel`. (3) If the Manager reports no endpoint, there is no local fallback — the sidebar shows "not connected". (4) **Even without the Manager, the model of an endpoint row now takes effect**: it beats the global `visionModel` (Kit rule `choice.model → row model → visionModel`); previously the row selection appeared in the UI but was not read at call time.
 
-### Hinzugefügt
+### Added
 
-- **Hilfe-Zeile oben in den Einstellungen** mit Links auf die Dokumentation und den Issue-Tracker (Kit `help-setting`, `obsidian-kit` 0.43.0, nur diese Datei vendort).
-- **Export-Ordner in den Einstellungen** — neues Setting mit Ordner-Autocomplete für den
-  Zielordner neuer Transkript-/Beschreibungs-Notizen; leer = bisheriges Verhalten (neben der
-  Quellnotiz).
+- **Help row at the top of the settings** with links to the documentation and the issue tracker (Kit `help-setting`, `obsidian-kit` 0.43.0, only this file vendored).
+- **Export folder in the settings** — new setting with folder autocomplete for the target folder of new transcript/description notes; empty = previous
+  behavior (next to the
+  source note).
 
-### Behoben
+### Fixed
 
-- **Thinking-Schalter zeigt seinen Zustand jetzt auch ohne Farbe** (UI-STANDARD §8,
-  Zustands-Knopf) — `aria-pressed` fehlte bisher komplett, ein gesperrter (Always-on-Thinker)
-  Schalter trug nur `aria-disabled` statt nativem `disabled`. Nachgezogen: `aria-pressed`
-  folgt dem Zustand bei jedem Render, `disabled` ist jetzt die native Button-Eigenschaft,
-  Icon wechselt `brain` ↔ `brain-cog` (an/aus statt immer `brain`). Sichtbarer Button-Text
-  bleibt unverändert (Sidebar-Breiten-Fix aus 0.10.1).
-- **„Notiz anlegen" blieb nach Feedback-Runden nicht das unterste Element der Karte** — das
-  Chat-Eingabefeld für Nachbesserungs-Feedback wurde hinter den Versions-Verlauf verschoben,
-  wodurch der Schreiben-Knopf der letzten Runde darüber landete statt darunter.
-- **Ein entfernter und erneut hinzugefügter Endpunkt zeigte im Modell-Feld weiter „nicht
-  erreichbar"**, obwohl der Server lief (Status-Icon war korrekt) — der Modell-Listen-Cache
-  wurde beim Entfernen/erneuten Hinzufügen einer URL nicht invalidiert.
+- **The thinking switch now shows its state even without color** (UI-STANDARD §8,
+  state button) — `aria-pressed` was missing entirely, a locked (always-on thinker)
+  switch carried only `aria-disabled` instead of a native `disabled`. Now brought up to standard: `aria-pressed`
+  follows the state on every render, `disabled` is now the native button property,
+  the icon switches `brain` ↔ `brain-cog` (on/off instead of always `brain`). Visible button text
+  is unchanged (sidebar width fix from 0.10.1).
+- **"Create note" did not stay the bottommost element of the card after feedback rounds** — the
+  chat input for refinement feedback was moved behind the version history,
+  so the write button of the last round ended up above it instead of below.
+- **A removed and re-added endpoint kept showing "not reachable" in the model field**,
+  although the server was running (the status icon was correct) — the model list cache
+  was not invalidated when a URL was removed/re-added.
 
-### Intern
+### Internal
 
-- **Kit-Pin `obsidian-kit` 0.34.1 → 0.35.0** (code-kit bleibt 0.6.0) per `tools/sync-kit.sh`
-  — Welle 2 der Plugin-Orchestrierung. Nur Header-Stempel/`VENDOR.json` geändert, keine
-  Verhaltensänderung an den vendorten Modulen; Gate vorher/nachher grün (521/521 Tests, 0
-  Lint-Fehler/Warnungen).
-- **Streaming-Antwortbereich (UI-STANDARD §8) bleibt bewusster Eigenbau** — die bestehende
-  Abweichungs-Deklaration in `AGENTS.md` §UI-Abweichungen wurde auf den vom
-  Dach-Check (`tools/ui_adoption_check.py`) erwarteten Schlüssel `**stream-area**` umgestellt
-  (reiner Formatfix, keine inhaltliche Änderung der Begründung: `img_to_md_view.ts` rendert
-  `N` gleichzeitig aktive Karten mit je eigenem Gedankenblock/Versions-Verlauf, eine
-  Komposition, die `buildStreamArea` — EIN Antwortbereich pro Anstrich — nicht abbildet).
+- **Kit pin `obsidian-kit` 0.34.1 → 0.35.0** (code-kit stays 0.6.0) via `tools/sync-kit.sh`
+  — wave 2 of the plugin orchestration. Only header stamps/`VENDOR.json` changed, no
+  behavior change in the vendored modules; gate before/after green (521/521 tests, 0
+  lint errors/warnings).
+- **Streaming answer area (UI-STANDARD §8) remains a deliberate in-house build** — the existing
+  deviation declaration in `AGENTS.md` §UI-Abweichungen was switched to the key `**stream-area**`
+  expected by the root check (`tools/ui_adoption_check.py`)
+  (pure format fix, no change to the substance of the rationale: `img_to_md_view.ts` renders
+  `N` simultaneously active cards, each with its own thought block/version history, a
+  composition that `buildStreamArea` — ONE answer area per prompt — does not map).
 
 ## [0.23.0] — 2026-09-03
 
-### Hinzugefügt
+### Added
 
-- **Eine am Token-Limit abgeschnittene Transkript-Notiz sagt das jetzt selbst** —
-  `truncated: true` im Frontmatter. Die Sidebar-Karte zeigt den Hinweis seit 0.20.0, aber die
-  Karte lebt nur in der Sitzung: wer die Notiz später öffnet, sah ein unvollständiges
-  Transkript, das wie ein vollständiges aussieht. Der Key ist wie die übrigen in den
-  Einstellungen umbenennbar (Frontmatter-Mapping) und wandert bei einer Mapping-Migration mit.
+- **A transcript note cut off at the token limit now says so itself** —
+  `truncated: true` in the frontmatter. The sidebar card has shown the hint since 0.20.0, but the
+  card lives only for the session: whoever opens the note later saw an incomplete
+  transcript that looks like a complete one. Like the other keys, the key can be renamed in the
+  settings (frontmatter mapping) and moves along with a mapping migration.
 
-  **Der Key wird nur bei `true` geschrieben, nie als `false`.** Seine Abwesenheit heißt
-  „vollständig **oder** unbekannt" — vor dieser Version geschriebene Notizen wissen nichts über
-  ihre Vollständigkeit, und ein `false` wäre eine Zusage, die für sie niemand einlösen kann.
-  Wird eine abgeschnittene Notiz später erneut transkribiert und ist dann vollständig,
-  verschwindet der Key wieder; ein stehengebliebenes `true` wäre schlimmer als eine Lücke, weil
-  es eine Aussage ist.
+  **The key is written only for `true`, never as `false`.** Its absence means
+  "complete **or** unknown" — notes written before this version know nothing about
+  their completeness, and a `false` would be a promise nobody can redeem for them.
+  If a truncated note is transcribed again later and is then complete,
+  the key disappears again; a leftover `true` would be worse than a gap, because
+  it is a statement.
 
 ## [0.22.0] — 2026-09-02
 
-### Geändert
+### Changed
 
-- **Ein Endpunkt, der auf `/v1/models` mit HTTP 200 antwortet, aber keine Modell-Liste
-  liefert, gilt jetzt als nicht erreichbar und wird übersprungen.** Bisher warnte die
-  Endpunkt-Zeile in den Einstellungen korrekt („antwortet, ist aber kein OpenAI-kompatibler
-  Endpunkt") — und das Plugin nahm genau diesen Endpunkt trotzdem, weil die Auflösung einen
-  schwächeren Begriff von „erreichbar" benutzte (nur der HTTP-Status). Die Anzeige warnte
-  also vor einem Fehler, den das Plugin gleich darauf beging: die Transkription lief in ein
-  still leeres Ergebnis. Das ist der dokumentierte LM-Studio-Fall (falscher Pfad → HTTP 200
-  mit Fehler-Body).
+- **An endpoint that answers `/v1/models` with HTTP 200 but returns no model list
+  is now treated as unreachable and skipped.** Previously the
+  endpoint row in the settings correctly warned ("answers, but is not an OpenAI-compatible
+  endpoint") — and the plugin took exactly that endpoint anyway, because the resolution used
+  a weaker notion of "reachable" (only the HTTP status). The display
+  thus warned about an error the plugin then committed itself: the transcription ran into a
+  silently empty result. That is the documented LM Studio case (wrong path → HTTP 200
+  with an error body).
 
-  **Was das für bestehende Konfigurationen heißt:** betroffen ist allein „HTTP 200 ohne
-  `data`-Array". Ein Server ohne `/v1/models` (404) galt schon vorher als nicht erreichbar,
-  und eine **leere** Modell-Liste bleibt gültig — ein frisch aufgesetztes MLX ohne Modelle im
-  Cache fällt also nicht aus der Auswahl. Vor der Umstellung nachgemessen: LM Studio, Ollama,
-  MLX und llama.cpp liefern alle ein `data`-Array.
+  **What this means for existing configurations:** only "HTTP 200 without a
+  `data` array" is affected. A server without `/v1/models` (404) already counted as unreachable before,
+  and an **empty** model list stays valid — a freshly set up MLX with no models in the
+  cache therefore does not drop out of the selection. Measured before the change: LM Studio, Ollama,
+  MLX and llama.cpp all return a `data` array.
 
 ## [0.21.0] — 2026-09-02
 
-### Geändert
+### Changed
 
-- **Die Endpunkt-Liste in den Einstellungen ist jetzt der gemeinsame Baustein aus
-  `obsidian-kit`** statt einer plugin-eigenen Zeilen-UI. Sichtbar bringt das pro Endpunkt ein
-  **Modell-Feld** (Override; leer = globales Modell), **Ein-Klick-Presets** für LM Studio und
-  Ollama, einen **„zuerst versuchen"**-Knopf, eine Zeile mit der **Rolle** des Endpunkts
-  („aktiv" / „erreichbar — Reserve 2" / „nicht erreichbar — wird übersprungen") und
-  nicht-blockierende Hinweise bei verdächtigen Adressen (fehlender Port, fehlendes Schema).
+- **The endpoint list in the settings is now the shared building block from
+  `obsidian-kit`** instead of a plugin-specific row UI. Visibly, this brings per endpoint a
+  **model field** (override; empty = global model), **one-click presets** for LM Studio and
+  Ollama, a **"try first"** button, a line with the endpoint's **role**
+  ("active" / "reachable — fallback 2" / "not reachable — skipped") and
+  non-blocking hints for suspicious addresses (missing port, missing scheme).
 
-### Behoben
+### Fixed
 
-- **Ein API-Schlüssel konnte am falschen Endpunkt landen.** Wurde ein Eintrag gelöscht und
-  direkt danach — bevor die Liste neu gezeichnet war — ein Feld einer anderen Zeile verlassen,
-  buchte die Eingabe auf den **nachgerückten** Eintrag. Das Fenster dafür war real, weil das
-  Neuzeichnen erst nach dem Anpingen aller Endpunkte kommt (bei einem toten Endpunkt Sekunden).
-  Der Kit-Baustein sperrt die Zeilen währenddessen.
-- **Das Erreichbarkeits-Icon sagt jetzt, was los ist**, statt nur rot oder grün zu sein:
-  „Verbindung abgelehnt", „Hostname unbekannt", „Zugriff verweigert — Schlüssel fehlt oder ist
-  ungültig" oder „Antwortet, ist aber kein OpenAI-kompatibler Endpunkt". Letzteres ist der
-  dokumentierte LM-Studio-Fall (falscher Pfad → HTTP 200 mit Fehler-Body), der bisher wie ein
-  erreichbarer Endpunkt aussah und in ein still leeres Transkript lief.
-- **Ein einmal als offline gemessener Endpunkt bleibt das nicht mehr für die ganze Sitzung.**
-  Die Modell-Listen werden beim Schließen der Einstellungen verworfen; wer seinen LLM-Server
-  startet und die Einstellungen erneut öffnet, sieht den neuen Zustand.
+- **An API key could end up at the wrong endpoint.** If an entry was deleted and
+  right afterwards — before the list was redrawn — a field of another row was left,
+  the input was booked onto the entry that had **moved up**. The window for this was real, because
+  the redraw only comes after pinging all endpoints (seconds with a dead endpoint).
+  The Kit building block locks the rows in the meantime.
+- **The reachability icon now says what is going on** instead of just being red or green:
+  "Connection refused", "Hostname unknown", "Access denied — key missing or
+  invalid" or "Answers, but is not an OpenAI-compatible endpoint". The latter is the
+  documented LM Studio case (wrong path → HTTP 200 with an error body), which previously looked like a
+  reachable endpoint and ran into a silently empty transcript.
+- **An endpoint once measured as offline no longer stays that way for the whole session.**
+  The model lists are discarded when the settings are closed; whoever starts their LLM server
+  and opens the settings again sees the new state.
 
-### Hinweis zum Verhalten
+### Behavior note
 
-- **Beim Öffnen der Einstellungen fragt das Plugin jetzt die Modell-Liste jedes eingetragenen
-  Endpunkts ab**, nicht erst auf Klick — nötig für das Modell-Feld je Zeile. Trägt ein Eintrag
-  einen API-Schlüssel eines gehosteten Anbieters, geht damit ohne weiteres Zutun eine
-  `/v1/models`-Anfrage dorthin. Es werden **keine Bilder und keine Notizinhalte** übertragen.
-  Wer das nicht möchte, entfernt den betreffenden Eintrag aus der Liste.
+- **When opening the settings, the plugin now queries the model list of every entered
+  endpoint**, not only on click — needed for the per-row model field. If an entry
+  carries an API key of a hosted provider, a
+  `/v1/models` request is thereby sent there without further action. **No images and no note contents** are transmitted.
+  Whoever does not want that removes the entry in question from the list.
 
 ## [0.20.0] — 2026-08-30
 
-### Behoben
+### Fixed
 
-- **Der erste Klick aufs Ribbon-Icon öffnet die Sidebar jetzt wirklich.** War der rechte
-  Bereich zugeklappt — der Normalzustand eines frisch eingerichteten Vaults —, entstand die
-  Ansicht mit 0×0 Pixeln: das Kommando meldete Erfolg, sichtbar passierte nichts, und erst
-  ein zweiter Klick öffnete sie. Ursache war ein fehlendes `revealLeaf` im Erstöffnungs-Pfad
-  (der Zweig für eine bereits vorhandene Ansicht hatte es). Gefunden hat das kein Unit-Test,
-  sondern der erste Lauf des neuen GUI-Smokes gegen ein echtes Obsidian — es ist keine
-  Aussage über Zustand, sondern über Sichtbarkeit.
+- **The first click on the ribbon icon now really opens the sidebar.** If the right
+  pane was collapsed — the normal state of a freshly set-up vault — the view was created
+  at 0×0 pixels: the command reported success, nothing visibly happened, and only
+  a second click opened it. The cause was a missing `revealLeaf` in the first-open path
+  (the branch for an already existing view had it). No unit test found this,
+  but the first run of the new GUI smoke against a real Obsidian — it is not
+  a statement about state, but about visibility.
 
-- **Ein am Token-Limit abgeschnittenes Transkript endet nicht mehr still.** Reasoning-Modelle
-  verbrauchen ihr Antwortbudget mitunter komplett fürs Denken und liefern danach wenige Zeichen
-  oder gar nichts — gemessen am 2026-08-14: 921 Zeichen Gedanken, 15 Zeichen Transkript. Die
-  Karte galt trotzdem als fertig, ohne Meldung; für Nutzende sah das aus wie „das Plugin hat
-  nichts erkannt". Der Server sagt es sehr wohl (`finish_reason: "length"`), und der
-  SSE-Parser las es bereits — der Transport hat es eine Ebene darüber verworfen. Jetzt trägt
-  die Kette es bis in die Sidebar: eine abgeschnittene Karte zeigt „Am Token-Limit
-  abgeschnitten — unvollständig" und bleibt anlegbar (der Teiltext ist gültig), und kam gar
-  kein Text, nennt die Fehlermeldung das Limit statt „Leeres Transkript". Gilt für
-  Transkribieren, Beschreiben, PDF-Seiten und den Kommando-Weg ohne Sidebar.
+- **A transcript truncated at the token limit no longer ends silently.** Reasoning models
+  sometimes spend their entire response budget on thinking and then deliver a few characters
+  or nothing at all — measured on 2026-08-14: 921 characters of thoughts, 15 characters of transcript. The
+  card still counted as finished, without any message; to users it looked like "the plugin
+  recognized nothing". The server does report it (`finish_reason: "length"`), and the
+  SSE parser already read it — the transport discarded it one level above. Now
+  the chain carries it all the way to the sidebar: a truncated card shows "Truncated at
+  the token limit — incomplete" and can still be created (the partial text is valid), and if no
+  text arrived at all, the error message names the limit instead of "Empty transcript". Applies to
+  transcribing, describing, PDF pages and the command path without the sidebar.
 
-### Geändert
+### Changed
 
-- **„Kopiert" erscheint jetzt erst, wenn wirklich kopiert wurde.** Die Erfolgsmeldung stand
-  bisher unbedingt hinter dem Schreibvorgang. Lehnt die Zwischenablage ab — Fokusverlust oder
-  fehlende Berechtigung, der Normalfall auf Android und in einem unfokussierten Fenster —, las
-  man „Kopiert" bei leerer Zwischenablage.
-- **Schlägt das Kopieren fehl, sagt das Plugin es jetzt.** Bisher passierte in diesem Fall
-  sichtbar nichts. Neue Meldung „Konnte nicht in die Zwischenablage kopieren" (EN: „Could not
+- **"Copied" now appears only once copying really happened.** The success message previously
+  came unconditionally after the write operation. If the clipboard refuses — loss of focus or
+  missing permission, the normal case on Android and in an unfocused window —,
+  you read "Copied" with an empty clipboard.
+- **If copying fails, the plugin now says so.** Previously nothing visibly happened in this case.
+  New message "Konnte nicht in die Zwischenablage kopieren" (EN: "Could not
   copy to clipboard").
 
-### Intern
+### Internal
 
-- **`diff`, `error_body` und `clipboard` kommen aus `obsidian-kit` 0.27.0 statt aus lokalem
-  Code.** Die lokale `src/diff.ts` ist gelöscht (sie war die kanonische Quelle der Kit-Fassung
-  und byte-identisch mit ihr), `parseErrorEnvelope` in `vision_client.ts` ist ein dünner Adapter
-  über das Kit-Modul geworden. Neu: `tools/sync-kit.sh` (erneuert den Vendor-Baum) und je eine
-  `VENDOR.json` in `src/vendor/kit/` und `src/vendor/kit-obsidian/`, die den Pin an einer Stelle
-  statt pro Dateikopf halten. Nicht nutzersichtbar bis auf die zwei Punkte oben; eine dritte,
-  unbeobachtbare Änderung betrifft die Fehlermeldungs-Kaskade (`message` gewinnt jetzt gegen
-  `detail`, sichtbar nur bei einem Fehlerkörper mit beiden Feldern).
+- **`diff`, `error_body` and `clipboard` now come from `obsidian-kit` 0.27.0 instead of local
+  code.** The local `src/diff.ts` is deleted (it was the canonical source of the Kit version
+  and byte-identical to it), `parseErrorEnvelope` in `vision_client.ts` has become a thin adapter
+  over the Kit module. New: `tools/sync-kit.sh` (renews the vendor tree) and one
+  `VENDOR.json` each in `src/vendor/kit/` and `src/vendor/kit-obsidian/`, which hold the pin in one place
+  instead of per file header. Not user-visible apart from the two points above; a third,
+  unobservable change concerns the error-message cascade (`message` now wins over
+  `detail`, visible only with an error body containing both fields).
 
-### Dokumentation
+### Documentation
 
-- **Bild-Standard (2026-08-16).** Beide READMEs betten mit `<img width>` ein statt mit
-  Markdown-Syntax — sonst bestimmt der Container die Breite, und GitHub, Forgejo und die
-  Store-Seite sind verschieden breit. `settings.png` und `refine.png` sind zu Recht hoch
-  (eine lange Seite je Bild) und stehen als 380-px-Vorschau aus `docs/images/thumbs/` mit
-  Link auf die Vollauflösung. Drei Bilder trugen toten Weißraum aus dem simulierten hohen
-  Aufnahmefenster (bei `describe-mode.png` 871 px **mitten im Bild**) und wurden
-  zugeschnitten; vier lagen über oder nahe am 400-KB-Budget und wurden neu komprimiert
-  (Ordner 3,3 → 1,9 MB). Vier Abbildungen im Manual waren doppelt eingebettet. Geprüft mit
-  `npm run shots:check` (neu verdrahtet) sowie gegen GitHub und Forgejo.
+- **Image standard (2026-08-16).** Both READMEs embed with `<img width>` instead of
+  Markdown syntax — otherwise the container determines the width, and GitHub, Forgejo and the
+  store page differ in width. `settings.png` and `refine.png` are rightly tall
+  (one long page per image) and appear as a 380-px preview from `docs/images/thumbs/` with a
+  link to the full resolution. Three images carried dead whitespace from the simulated tall
+  capture window (in `describe-mode.png` 871 px **in the middle of the image**) and were
+  cropped; four were over or near the 400-KB budget and were recompressed
+  (folder 3.3 → 1.9 MB). Four figures in the manual were embedded twice. Checked with
+  `npm run shots:check` (newly wired up) as well as against GitHub and Forgejo.
 
-- **Screenshots (CORE-META-03).** `docs/images/` enthält jetzt **alle 15** im Aufnahme-Vertrag
-  benannten Assets; README (EN/DE) tragen Hero + Galerie, das Manual seine Abbildungen.
-  Aufgenommen gegen einen Wegwerf-Demo-Vault über Obsidians Debug-Port, mit eigens erzeugtem
-  Material (zwei Textblätter, ein Schema, ein dreiseitiges PDF) — nichts Privates, nichts
-  Fremdes. Zwei Assets brauchten einen Sonderweg: `tutorial-lmstudio.png` (Fenster außerhalb
-  Obsidians, von Hand aufgenommen und retuschiert — die LAN-Adresse durch `localhost` ersetzt)
-  und `diff-modal.png` (Dialog ließ sich automatisiert nicht auslösen; die Notiz wurde dabei
-  aber auch **nicht** überschrieben — kein stiller Überschreiber). Beide sind seit dem
-  2026-08-14 vorhanden.
-- **Aufnahme-Vertrag korrigiert.** Der Editor-Eintrag „Image → Markdown" hängt am
-  `editor-menu`-Event: ein Rechtsklick auf das *gerenderte* Bild öffnet Obsidians Datei-Menü und
-  enthält ihn nicht. Nötig ist der Cursor auf der Embed-Quellzeile.
+- **Screenshots (CORE-META-03).** `docs/images/` now contains **all 15** assets named in the capture contract;
+  the READMEs (EN/DE) carry hero + gallery, the manual its figures.
+  Captured against a throwaway demo vault via Obsidian's debug port, with specially created
+  material (two text sheets, a schema, a three-page PDF) — nothing private, nothing
+  third-party. Two assets needed a special route: `tutorial-lmstudio.png` (window outside
+  Obsidian, captured by hand and retouched — the LAN address replaced by `localhost`)
+  and `diff-modal.png` (the dialog could not be triggered automatically; the note was
+  also **not** overwritten in the process — no silent overwriter). Both have been present since
+  2026-08-14.
+- **Capture contract corrected.** The editor entry "Image → Markdown" hangs on the
+  `editor-menu` event: a right-click on the *rendered* image opens Obsidian's file menu and
+  does not contain it. The cursor must be on the embed source line.
 
 ## [0.19.0] — 2026-08-08
 
-### Hinzugefügt
+### Added
 
-- **API-Schlüssel je Endpunkt.** Jede Zeile der Endpunkt-Liste trägt jetzt ihren eigenen,
-  optionalen Schlüssel (Passwortfeld neben der Adresse). Damit dürfen lokale und gehostete
-  Anbieter in **einer** Fallback-Kette stehen — bisher ging nur lokal, weil es keinen Weg gab,
-  einen `Authorization`-Header zu setzen. Lokale Server bleiben unberührt: ohne Schlüssel geht
-  auch kein Header raus. Der Schlüssel erreicht **alle** Netzwege, ausdrücklich auch den Ping
-  und die Vision-Fähigkeits-Probe — sonst gälte ein gehosteter Endpunkt als nicht erreichbar
-  und würde still übersprungen.
+- **API key per endpoint.** Each row of the endpoint list now carries its own,
+  optional key (password field next to the address). This allows local and hosted
+  providers to stand in **one** fallback chain — previously only local worked, because there was no way
+  to set an `Authorization` header. Local servers remain untouched: without a key,
+  no header goes out either. The key reaches **all** network paths, explicitly including the ping
+  and the vision capability probe — otherwise a hosted endpoint would count as unreachable
+  and be silently skipped.
 
-### Behoben
+### Fixed
 
-- **Gemma-Modelle wurden fälschlich als „Keine Vision" angezeigt.** Die Namens-Heuristik kannte
-  nur die Ollama-Schreibweise `gemma3`; LM Studios `google/gemma-3-4b-it` und die gesamte
-  Gemma-4-Reihe fielen durch, obwohl beide multimodal sind. `google/gemma-3-1b-it` und
-  `-270m` bleiben korrekt text-only. Fix liegt in obsidian-kit 0.25.1, hier neu vendored.
-- Eine `null`-Antwort eines Endpunkts ließ die Fähigkeits-Probe mit einem `TypeError`
-  abbrechen, statt schlicht „keine Metadaten" zu bedeuten (ebenfalls Kit 0.25.1).
+- **Gemma models were wrongly shown as "No vision".** The name heuristic knew
+  only the Ollama spelling `gemma3`; LM Studio's `google/gemma-3-4b-it` and the entire
+  Gemma 4 series fell through, although both are multimodal. `google/gemma-3-1b-it` and
+  `-270m` correctly remain text-only. The fix lives in obsidian-kit 0.25.1, newly vendored here.
+- A `null` response from an endpoint made the capability probe abort with a `TypeError`,
+  instead of simply meaning "no metadata" (likewise Kit 0.25.1).
 
-### Intern
+### Internal
 
-- Endpunkt-Einträge sind `EndpointConfig`-Objekte statt blanker Strings (vendored
-  `obsidian-kit#0.25.1` `pure/endpoint_config`). Alte `data.json`-Stände — sowohl das ur-alte
-  Einzelfeld `visionEndpoint` als auch die String-Liste — werden beim Laden migriert.
-- `check-no-nul-bytes.mjs` hängt in der Test-Kette (drift-audit 2026-08-05, damals wegen
-  Feature-Branch ausgelassen).
+- Endpoint entries are `EndpointConfig` objects instead of bare strings (vendored
+  `obsidian-kit#0.25.1` `pure/endpoint_config`). Old `data.json` states — both the ancient
+  single field `visionEndpoint` and the string list — are migrated on load.
+- `check-no-nul-bytes.mjs` is part of the test chain (drift-audit 2026-08-05, omitted back then because of
+  a feature branch).
 
 ## [0.18.0] — 2026-08-07
 
-### Hinzugefügt
+### Added
 
-- **Die Einstellungen erscheinen ab Obsidian 1.13 in der Einstellungs-Suche.** Wer dort nach
-  „PDF", „Endpunkt" oder „Frontmatter" sucht, findet die Zeilen dieses Plugins jetzt direkt,
-  statt sich durch den Tab scrollen zu müssen. Auf 1.13 rendert Obsidian die Einstellungen
-  zudem selbst — sichtbar an einem echten Zahlenfeld (mit Grenzen 1–500) statt eines Textfelds.
+- **From Obsidian 1.13 on, the settings appear in the settings search.** Anyone searching there for
+  "PDF", "endpoint" or "frontmatter" now finds this plugin's rows directly,
+  instead of having to scroll through the tab. On 1.13 Obsidian also renders the settings
+  itself — visible in a real number field (with bounds 1–500) instead of a text field.
 
-### Intern
+### Internal
 
-- **Zweigleisiger Settings-Tab nach dem Kit-Muster:** `getSettingDefinitions()` ist ab sofort die
-  einzige Definition; für Obsidian < 1.13 (`minAppVersion` ist 1.8.7) zeichnet `display()`
-  dieselbe Struktur mit der klassischen `Setting`-API nach — über den vendorten Kit-Walker
-  `renderSettingDefinitions` (obsidian-kit 0.25.0). Kein zweiter Definitionsbaum, der
-  auseinanderlaufen kann. Stateful Zeilen (Endpunkt-Liste mit Live-Erreichbarkeit, asynchron
-  befülltes Modell-Dropdown, Vision-Test, Kategorien-Liste, die migrationsauslösenden
-  Frontmatter-Felder) bleiben `render`-Hatches: ein Code, der in beiden Pfaden unverändert läuft.
+- **Dual-track settings tab following the Kit pattern:** `getSettingDefinitions()` is from now on the
+  only definition; for Obsidian < 1.13 (`minAppVersion` is 1.8.7) `display()` draws
+  the same structure with the classic `Setting` API — via the vendored Kit walker
+  `renderSettingDefinitions` (obsidian-kit 0.25.0). No second definition tree that can
+  drift apart. Stateful rows (endpoint list with live reachability, asynchronously
+  populated model dropdown, vision test, category list, the migration-triggering
+  frontmatter fields) remain `render` hatches: one code that runs unchanged in both paths.
 
 ## [0.17.1] — 2026-08-07
 
-### Intern
+### Internal
 
-- **Store-Konformität: `prefer-create-el`.** Zehn `createEl("span")`-Aufrufe in der Sidebar-View
-  nutzen jetzt `createSpan()`. Die beiden Offscreen-Canvas-Stellen (PDF-Seitenrender,
-  Vision-Testbild) verwenden die freie Funktion `createEl("canvas")` statt
-  `activeDocument.createElement` — die gleichnamige *Node*-Methode hängt das Element an den Node
-  an und wirft für ein Dokument `HierarchyRequestError`, die freie Funktion liefert das benötigte
-  detached Element.
-- **Lint reproduziert den Store-Review wieder vollständig:** `eslint-plugin-obsidianmd` von 0.3.0
-  auf 0.4.1 angehoben. Die ältere Version kannte die Regel nicht, wodurch der lokale Lauf sauber
-  aussah, während der Store-Scan Warnungen meldete.
+- **Store compliance: `prefer-create-el`.** Ten `createEl("span")` calls in the sidebar view
+  now use `createSpan()`. The two offscreen-canvas places (PDF page render,
+  vision test image) use the free function `createEl("canvas")` instead of
+  `activeDocument.createElement` — the same-named *Node* method attaches the element to the node
+  and throws `HierarchyRequestError` for a document, while the free function returns the required
+  detached element.
+- **Lint reproduces the store review completely again:** `eslint-plugin-obsidianmd` raised from 0.3.0
+  to 0.4.1. The older version did not know the rule, so the local run
+  looked clean while the store scan reported warnings.
 
 ## [0.17.0] — 2026-08-07
 
-### Geändert
+### Changed
 
-- **Der Thinking-Toggle erkennt mehr Modelle, die sich nicht abschalten lassen.** Bisher kannte er
-  zwei Namensmuster, jetzt zwölf Modellfamilien. Wählst du ein Modell, das vermutlich immer denkt
-  (`deepseek-r1`, `qwq`, `magistral` …), steht der Hinweis „Dieses Modell denkt vermutlich immer —
-  Abschalten wirkt wahrscheinlich nicht" im Tooltip des Toggles.
-  **Der Button bleibt dabei bedienbar:** die Erkennung ändert nur die Beschriftung, nie das
-  Verhalten. Gesperrt wird weiterhin ausschließlich bei `gpt-oss`/`harmony` — die lehnen die
-  Abschalt-Parameter tatsächlich ab, während die übrigen sie als wirkungslos schlucken. Eine
-  Namensvermutung soll keinen funktionierenden Button totlegen, zumal lokale Modelle frei
-  gewählte Namen tragen.
-  Die sichtbare Beschriftung des Buttons ist unverändert, damit die Sidebar schmal bleibt.
+- **The thinking toggle recognizes more models that cannot be switched off.** Previously it knew
+  two name patterns, now twelve model families. If you choose a model that presumably always thinks
+  (`deepseek-r1`, `qwq`, `magistral` …), the hint "This model presumably always thinks —
+  turning it off probably has no effect" appears in the toggle's tooltip.
+  **The button remains operable:** the detection changes only the label, never the
+  behavior. Locking still happens exclusively for `gpt-oss`/`harmony` — they
+  actually reject the turn-off parameters, whereas the others swallow them as ineffective. A
+  name guess should not disable a working button, especially since local models carry freely
+  chosen names.
+  The visible label of the button is unchanged, so the sidebar stays narrow.
 
-### Intern
+### Internal
 
-- **Capability-Erkennung kommt jetzt aus dem `obsidian-kit`** (0.21.0) statt aus einer
-  plugin-eigenen Kopie: Das Modul liegt als vendored Kopie unter `src/vendor/kit/capabilities.ts`,
-  `src/capabilities.ts` ist auf einen Adapter geschrumpft, der die Vision-Achse rausprojiziert.
-  Dieselbe Heuristik lag zuvor doppelt unter dem Entwicklungs-Dach — in `vault-rag` vollständig,
-  hier als vision-only-Fork mit byte-gleichen Listen. Keine Verhaltensänderung an der
-  Vision-Anzeige.
+- **Capability detection now comes from `obsidian-kit`** (0.21.0) instead of a
+  plugin-own copy: the module lives as a vendored copy under `src/vendor/kit/capabilities.ts`,
+  `src/capabilities.ts` has shrunk to an adapter that projects out the vision axis.
+  The same heuristic previously lay twice under the development umbrella — in `vault-rag` in full,
+  here as a vision-only fork with byte-identical lists. No behavior change to the
+  vision display.
 
 ## [0.16.0] — 2026-07-27
 
-### Hinzugefügt
+### Added
 
-- **Frontmatter-Keys nachträglich vaultweit umbenennen:** Änderst du in den Einstellungen einen
-  Schlüssel des Frontmatter-Mappings (z. B. `kind` → `type`), bietet das Plugin an, die
-  **bestehenden** Transkript-, PDF- und Beschreibungs-Notizen im ganzen Vault mitzuziehen. Vorher
-  zeigt ein Dialog eine **Vorschau pro betroffener Notiz** (zeilenweiser Diff) und fragt **doppelt**
-  nach: „Migrieren & anwenden", „Ohne Migration anwenden" (nur die Einstellung greift, Notizen
-  bleiben) oder „Abbrechen" (Änderung verfällt). Nicht-destruktiv — fremde Frontmatter-Felder und
-  der Notiz-Text bleiben unangetastet, Notizen mit einem Schlüssel-Konflikt werden sicher
-  übersprungen, und ein Abschlussbericht nennt „N migriert · M fehlgeschlagen · K Konflikte".
-  Schließt die seit 0.13.0 offene Lücke, dass nachträglich geänderte Keys bestehende Notizen
-  unauffindbar machten (Dubletten-Risiko).
+- **Rename frontmatter keys vault-wide after the fact:** If you change a key of the frontmatter
+  mapping in the settings (e.g. `kind` → `type`), the plugin offers to carry the **existing**
+  transcript, PDF and description notes across the whole vault along with it. Beforehand, a dialog
+  shows a **preview per affected note** (line-by-line diff) and asks for confirmation **twice**:
+  "Migrate & apply", "Apply without migration" (only the setting takes effect, notes stay as they
+  are) or "Cancel" (the change is discarded). Non-destructive — foreign frontmatter fields and
+  the note text remain untouched, notes with a key conflict are safely skipped, and a closing
+  report states "N migrated · M failed · K conflicts".
+  Closes the gap open since 0.13.0, where keys changed after the fact made existing notes
+  undiscoverable (duplicate risk).
 
 ## [0.15.3] — 2026-07-26
 
-### Geändert
+### Changed
 
-- **Ursprungstranskription scrollt gleichwertig mit:** Sie ist jetzt der erste Block im scrollbaren
-  Nachbesserungs-Verlauf (statt oben festgepinnt) — gleicher Aufbau wie die Nachbesserungen, scrollt
-  mit ihnen.
-- **Footer:** „Ergebnisse verwerfen" (grau) links, rechts ein farbiger **„Anwenden"**-Knopf, der die
-  aktuellste Version schreibt.
+- **Original transcription scrolls along equally:** It is now the first block in the scrollable
+  refinement history (instead of being pinned at the top) — same structure as the refinements, scrolls
+  together with them.
+- **Footer:** "Discard results" (grey) on the left, on the right a colored **"Apply"** button that writes
+  the latest version.
 
 ## [0.15.2] — 2026-07-26
 
-### Geändert
+### Changed
 
-- **Nachbesserungs-Verlauf vereinheitlicht:** Jede Nachbesserung ist jetzt genauso aufgebaut wie die
-  ursprüngliche Transkription — Version mit **[Kopieren]** und **[Notiz anlegen]** darunter. Du
-  schreibst direkt die Version, die du willst (kein separates „Auswählen" mehr); die redundante
-  „Original / Diese Version verwenden"-Zeile ist entfallen. Das Feedback-Eingabefeld sitzt jetzt
-  immer **unten** (Chat-Stil), statt mitten im Verlauf.
+- **Refinement history unified:** Each refinement is now built exactly like the
+  original transcription — version with **[Copy]** and **[Create note]** below it. You
+  write the version you want directly (no separate "Select" any more); the redundant
+  "Original / Use this version" row has been removed. The feedback input field now always sits
+  at the **bottom** (chat style), instead of in the middle of the history.
 
 ## [0.15.1] — 2026-07-25
 
-### Geändert
+### Changed
 
-- **Nachbesserungs-Verlauf aufgeräumt:** Jede Nachbesserung ist jetzt eine klar abgegrenzte Karte
-  mit Titel, aufklappbarem Denkprozess und einheitlicher Schriftgröße; das Original und die Auswahl
-  „Diese Version verwenden" sind sauber getrennt statt gequetscht. Der Denkprozess ist auch **während**
-  des Denkens aufklappbar; per Einstellung lässt sich festlegen, ob er standardmäßig auf- oder
-  zugeklappt startet.
+- **Refinement history tidied up:** Each refinement is now a clearly delimited card
+  with a title, a collapsible thinking process and a uniform font size; the original and the selection
+  "Use this version" are cleanly separated instead of squeezed together. The thinking process can also be expanded **while**
+  thinking; a setting lets you choose whether it starts expanded or
+  collapsed by default.
 
-### Behoben
+### Fixed
 
-- **Ansicht „resettete" bei Klicks in der Seitenleiste:** Ein Klick in der Seitenleiste (z. B. auf den
-  Denkprozess) konnte die Ergebnis-Karten verschwinden lassen. Behoben — die Ansicht wird nur noch bei
-  einem **echten Notizwechsel** neu aufgebaut, nicht bei jedem Fokuswechsel.
+- **View "reset" on clicks in the sidebar:** A click in the sidebar (e.g. on the
+  thinking process) could make the result cards disappear. Fixed — the view is now only
+  rebuilt on a **real note change**, not on every focus change.
 
 ## [0.15.0] — 2026-07-25
 
-### Geändert
+### Changed
 
-- **Nachbessern als Chat-Verlauf:** Jede Nachbesserung wird jetzt als eigener Eintrag unten
-  angehängt (statt den Text in-place zu ersetzen) — mit sichtbarem Denk-Prozess (Thinking) und
-  scrollbarem Verlauf. Du kannst die Versionen vergleichen und **jede** frei als die zu
-  schreibende Version wählen (ersetzt das bisherige „Zurück").
+- **Refining as a chat history:** Each refinement is now appended at the bottom as its own entry
+  (instead of replacing the text in place) — with a visible thinking process (Thinking) and
+  a scrollable history. You can compare the versions and freely choose **any** of them as the version
+  to write (replaces the previous "Back").
 
 ## [0.14.1] — 2026-07-25
 
-### Geändert
+### Changed
 
-- **Klarere Schreib-Buttons:** Der Karten-Button heißt „Notiz aktualisieren" statt „Notiz anlegen",
-  wenn er eine bestehende Notiz überschreibt (z. B. nach einer Nachbesserung). Der Sammel-Button
-  „Alle anlegen" erscheint nur noch, wenn wirklich mehrere Notizen anzulegen sind — bei einem einzigen
-  Ergebnis genügt der eine Karten-Button (keine verwirrende Doppelung).
+- **Clearer write buttons:** The card button is named "Update note" instead of "Create note"
+  when it overwrites an existing note (e.g. after a refinement). The bulk button
+  "Create all" now only appears when there are actually several notes to create — with a single
+  result the one card button is enough (no confusing duplication).
 
 ## [0.14.0] — 2026-07-23
 
 ### Added
 
-- **LLM-Feedback-Refinement (#7):** Transkript-Karten in der Sidebar per Prosa-Feedback iterativ nachbessern („Tabellen als GFM", „Überschriften-Ebene falsch"). Konversationeller Verlauf pro Karte (das Modell sieht Original + bisherige Runden), ein Schritt zurücknehmbar; text-only, funktioniert auch nach dem Schreiben (erneutes Schreiben via bestehendem Diff-Gate).
+- **LLM feedback refinement (#7):** Iteratively refine transcript cards in the sidebar via prose feedback ("tables as GFM", "heading level wrong"). Conversational history per card (the model sees the original + previous rounds), one step can be undone; text-only, also works after writing (writing again via the existing diff gate).
 
-### Behoben
+### Fixed
 
-- **Beschreibung eines PDFs:** Die erzeugte Beschreibungs-Notiz trägt jetzt den Quell-Schlüssel
-  `source_pdf` (statt `source_image`) — konsistent mit den Transkript-Notizen. Die Wiedererkennung
-  bestehender Beschreibungen war nie betroffen.
+- **Description of a PDF:** The generated description note now carries the source key
+  `source_pdf` (instead of `source_image`) — consistent with the transcript notes. The recognition of
+  existing descriptions was never affected.
 
 ## [0.13.0] — 2026-07-12
 
-### Hinzugefügt
+### Added
 
-- **Bild-Beschreibungs-Modus:** Neben „Transkribieren" gibt es jetzt einen Modus **„Beschreiben"**
-  (Umschalter oben in der Seitenleiste). Statt Text aus einem Bild zu ziehen, erzeugt er eine
-  **Beschreibung** — ideal für textarme Bilder (Fotos, Diagramme, Whiteboards), damit du sie über
-  die Suche (z. B. vault-rag) **wiederfindest**, obwohl kein Text drinsteht. Die Beschreibungs-Notiz
-  ist **nicht-destruktiv** (dein Bild in der Quellnotiz bleibt unangetastet), zeigt **Bild und
-  Beschreibung zusammen** (Karteikarte) und trägt eine **Kategorie** (aus einer konfigurierbaren
-  Taxonomie) plus freie **Tags** — beides in der Karte editierbar, bevor du speicherst. Transkript
-  und Beschreibung zum selben Bild können unabhängig **koexistieren**.
-- **Konfigurierbares Frontmatter-Mapping:** Alle Frontmatter-Schlüssel der erzeugten Notizen (und der
-  Typ-Wert) lassen sich in den Einstellungen an dein eigenes Vault-Schema anpassen (z. B. `kind` →
-  `type`) — gilt einheitlich für Transkript-, PDF- und Beschreibungs-Notizen. *(Nachträgliches
-  vaultweites Umbenennen bestehender Notizen folgt in einem späteren Release.)*
+- **Image description mode:** Besides "Transcribe" there is now a **"Describe"** mode
+  (switch at the top of the sidebar). Instead of extracting text from an image, it produces a
+  **description** — ideal for images with little text (photos, diagrams, whiteboards), so that you can **find them again** via
+  search (e.g. vault-rag) even though no text is in them. The description note
+  is **non-destructive** (your image in the source note stays untouched), shows **image and
+  description together** (index card) and carries a **category** (from a configurable
+  taxonomy) plus free **tags** — both editable in the card before you save. Transcript
+  and description of the same image can **coexist** independently.
+- **Configurable frontmatter mapping:** All frontmatter keys of the generated notes (and the
+  type value) can be adapted in the settings to your own vault schema (e.g. `kind` →
+  `type`) — applies uniformly to transcript, PDF and description notes. *(Renaming existing
+  notes vault-wide after the fact follows in a later release.)*
 
-### Geändert
+### Changed
 
-- Das frühere Prompt-Preset „Bild beschreiben" ist entfallen — sein Zweck lebt jetzt erstklassig im
-  neuen Beschreiben-Modus (alte Einstellung wird automatisch auf „Standard" migriert).
+- The former prompt preset "Describe image" has been removed — its purpose now lives as a first-class feature in the
+  new Describe mode (old setting is automatically migrated to "Default").
 
 ## [0.12.0] — 2026-07-12
 
-### Hinzugefügt
+### Added
 
-- **Ergebnisse überstehen einen Notizwechsel:** Ein fertig transkribiertes, noch nicht übernommenes
-  Ergebnis in der Seitenleiste geht nicht mehr verloren, wenn du zwischendurch die Notiz wechselst,
-  die Seitenleiste zuklappst oder eine andere Ansicht öffnest. Kommst du in derselben Sitzung zur
-  Quelle zurück, ist das vorläufige Ergebnis wieder da (pro Quelldatei gemerkt). Ein neuer Button
-  **„Ergebnisse verwerfen"** räumt es explizit weg; ein erneutes Transkribieren derselben Quelle
-  ersetzt es. Nach einem Obsidian-Neustart ist es weg (die Quelle liegt ja vor → neu transkribieren).
+- **Results survive a note change:** A finished transcribed result in the sidebar that has not yet been accepted
+  is no longer lost when you switch notes in between, collapse the sidebar or open
+  another view. If you return to the source in the same session, the provisional result is back
+  (remembered per source file). A new button **"Discard results"** explicitly clears it away;
+  transcribing the same source again replaces it. After an Obsidian restart it is gone
+  (the source is available anyway → transcribe again).
 
 ## [0.11.0] — 2026-07-12
 
-### Hinzugefügt
+### Added
 
-- **Selektiver Diff-Apply:** Der Überschreiben-Dialog zeigt jetzt vor jeder Änderungsstelle eine
-  Checkbox. Standardmäßig sind alle angehakt (Bestätigen übernimmt wie bisher alles) — du kannst aber
-  gezielt einzelne Änderungen abwählen, um an dieser Stelle die alte Fassung zu behalten. So mischst
-  du pro Notiz die guten neuen und die bewährten alten Zeilen, statt nur „alles oder nichts". Wählst
-  du jede Änderung ab, bleibt die Notiz unverändert (es wird nichts geschrieben).
+- **Selective diff apply:** The overwrite dialog now shows a checkbox in front of each changed spot.
+  By default all are ticked (confirming applies everything as before) — but you can
+  deliberately untick individual changes to keep the old version at that spot. This way you mix
+  the good new and the proven old lines per note, instead of just "all or nothing". If you untick
+  every change, the note stays unchanged (nothing is written).
 
-### Behoben
+### Fixed
 
-- **Verschobener Vergleich im Überschreiben-Dialog:** Hatte der Obsidian-Linter eine Leerzeile zwischen
-  Frontmatter und Bild-/PDF-Einbettung eingefügt, blieb die Einbettungszeile fälschlich im Vergleich
-  hängen — dadurch war der gesamte Zeilenvergleich um eine Zeile verschoben und stellte falsche
-  Textstellen gegenüber. Die Einbettung wird jetzt unabhängig von solchen Leerzeilen zuverlässig
-  ausgeblendet, der Vergleich richtet sich wieder korrekt aus.
+- **Shifted comparison in the overwrite dialog:** If the Obsidian Linter had inserted a blank line between
+  frontmatter and image/PDF embed, the embed line wrongly stayed in the comparison
+  — which shifted the entire line comparison by one line and set the wrong
+  passages against each other. The embed is now reliably hidden regardless of such blank lines,
+  and the comparison aligns correctly again.
 
 ## [0.10.1] — 2026-07-11
 
-### Behoben
+### Fixed
 
-- **Schmalere Seitenleiste:** Modellauswahl, Preset und der Thinking-Schalter drängten sich in einer
-  Zeile und zwangen die Seitenleiste unnötig breit. Die Modellauswahl bekommt jetzt eine eigene Zeile
-  (Platz für lange Modellnamen), Preset und Thinking-Schalter teilen sich die Zeile darunter — die
-  Seitenleiste bleibt schmal.
+- **Narrower sidebar:** Model picker, preset and the Thinking toggle crowded into one
+  row and forced the sidebar unnecessarily wide. The model picker now gets its own row
+  (room for long model names), preset and Thinking toggle share the row below — the
+  sidebar stays narrow.
 
 ## [0.10.0] — 2026-07-11
 
-### Hinzugefügt
+### Added
 
-- **Thinking-Toggle in der Seitenleiste:** Ein Schalter neben der Modellauswahl schaltet das
-  „Nachdenken" (Reasoning) von Hybrid-Modellen ab — praktisch, wenn ein großes Reasoning-Modell
-  sonst lange denkt und man das Ergebnis schneller braucht. Der Zustand bleibt erhalten
-  (Standard: an). Modelle, die sich nicht abschalten lassen (z. B. gpt-oss/harmony), zeigen
-  „immer an" und bleiben unverändert.
+- **Thinking toggle in the sidebar:** A switch next to the model picker turns off the
+  "thinking" (reasoning) of hybrid models — handy when a large reasoning model
+  otherwise thinks for a long time and you need the result faster. The state is kept
+  (default: on). Models that cannot be switched off (e.g. gpt-oss/harmony) show
+  "always on" and remain unchanged.
 
 ## [0.9.1] — 2026-07-07
 
-### Behoben
+### Fixed
 
-- **Diff-Gate übersieht manuelle Notiz-Edits nicht mehr:** Wird eine bereits überschriebene
-  Transkript-Notiz von Hand bearbeitet und dieselbe Quelle danach in derselben Sitzung erneut
-  überschrieben, erscheint der Diff-Dialog jetzt wieder (statt die Änderungen still zu verwerfen).
-  Der Gate vergleicht dafür den tatsächlichen Notiz-Inhalt statt nur zu merken, ob die Notiz in
-  dieser Sitzung schon einmal angefasst wurde.
-- **CRLF-Notizen verlieren beim Überschreiben kein Frontmatter mehr:** Notizen mit
-  Windows-Zeilenenden (`\r\n`) behalten jetzt `source_image`/`source_note`/`created` beim Override,
-  statt sie durch einen stillen Fallback zu verlieren.
+- **Diff gate no longer misses manual note edits:** If an already overwritten
+  transcript note is edited by hand and the same source is then overwritten again in the same session,
+  the diff dialog now appears again (instead of silently discarding the changes).
+  To do so, the gate compares the actual note content instead of merely remembering whether the note was already touched
+  in this session.
+- **CRLF notes no longer lose frontmatter on overwrite:** Notes with
+  Windows line endings (`\r\n`) now keep `source_image`/`source_note`/`created` on override,
+  instead of losing them through a silent fallback.
 
 ## [0.9.0] — 2026-07-07
 
-### Hinzugefügt
+### Added
 
-- **Diff vor dem Überschreiben:** Überschreibt eine Transkription eine bereits vorhandene
-  Transkript-Notiz (opt-in „Override"), zeigt ein Dialog vorher einen zeilenweisen Diff (alt ↔ neu)
-  und lässt dich bestätigen oder abbrechen — ein Sicherheitsnetz für die einzige Operation, die
-  vorhandene Notizen ersetzt. Abbrechen lässt die alte Notiz unangetastet. In-Session-Wiederholungen
-  (z. B. fehlgeschlagene PDF-Seiten nachtragen) laufen weiterhin ohne Rückfrage. Die `+`/`-`-Marker
-  im Diff sind farbunabhängig lesbar (Barrierefreiheit bei Rot-Grün-Sehschwäche).
+- **Diff before overwriting:** If a transcription overwrites an already existing
+  transcript note (opt-in "Override"), a dialog first shows a line-by-line diff (old ↔ new)
+  and lets you confirm or cancel — a safety net for the only operation that
+  replaces existing notes. Cancelling leaves the old note untouched. In-session repeats
+  (e.g. filling in failed PDF pages) continue to run without a prompt. The `+`/`-` markers
+  in the diff are readable independent of color (accessibility for red-green color blindness).
 
 ## [0.8.0] — 2026-06-30
 
-### Hinzugefügt
+### Added
 
-- **Born-digital PDFs nutzen den eingebetteten Text:** Hat eine PDF-Seite einen echten Text-Layer
-  (exportierte Folien, Paper, Text-PDFs), wird ihr exakter Text ans Modell geschickt und nach Markdown
-  formatiert — statt ein gerendertes Bild zu OCR'en. Schneller und ohne OCR-Fehler. Scan-/Figuren-Seiten
-  fallen automatisch aufs Vision-Modell zurück. Abschaltbar (Setting „Eingebetteten PDF-Text nutzen").
+- **Born-digital PDFs use the embedded text:** If a PDF page has a real text layer
+  (exported slides, papers, text PDFs), its exact text is sent to the model and formatted
+  to Markdown — instead of OCRing a rendered image. Faster and without OCR errors. Scan/figure pages
+  automatically fall back to the vision model. Can be switched off (setting "Use embedded PDF text").
 
 ## [0.7.0] — 2026-06-30
 
-### Hinzugefügt
+### Added
 
-- **Prompt-Presets:** Neben dem Modell-Picker in der Sidebar ein Preset-Wähler — „Standard" (dein
-  editierbarer Prompt) plus feste Modi für **Tabellen → Markdown**, **Handschrift**, **Mathe → LaTeX**,
-  **Quellcode** und **Bild beschreiben**. Die Wahl bleibt erhalten (sticky). Bei einem lokalen
-  Vision-Modell ist der Prompt der wichtigste Qualitätshebel — die Presets schalten den Modus pro Lauf
-  ohne Settings-Umweg um.
+- **Prompt presets:** Next to the model picker in the sidebar, a preset selector — "Default" (your
+  editable prompt) plus fixed modes for **Tables → Markdown**, **Handwriting**, **Math → LaTeX**,
+  **Source code** and **Describe image**. The choice is kept (sticky). With a local
+  vision model the prompt is the most important quality lever — the presets switch the mode per run
+  without a detour through the settings.
 
 ## [0.6.1] — 2026-06-28
 
-### Behoben
+### Fixed
 
-- **Keine stillen Lücken mehr in PDF-Transkripten:** Schlug bei einem mehrseitigen PDF eine Seite fehl
-  (z.B. weil das lokale Modell mittendrin abbrach), verschwand sie bisher spurlos aus der
-  zusammengeführten Notiz — die Notiz sah vollständig aus, obwohl Seiten fehlten, und die
-  `pages`-Angabe war falsch. Jetzt erscheint an der Stelle ein sichtbarer Hinweis
-  („Seite N — Transkription fehlgeschlagen"), und der Seitenbereich im Frontmatter entspricht ehrlich
-  dem transkribierten Bereich.
+- **No more silent gaps in PDF transcripts:** If a page of a multi-page PDF failed
+  (e.g. because the local model aborted midway), it previously vanished without a trace from the
+  merged note — the note looked complete although pages were missing, and the
+  `pages` value was wrong. Now a visible notice appears at that spot
+  ("Page N — transcription failed"), and the page range in the frontmatter honestly corresponds
+  to the transcribed range.
 
-### Hinzugefügt
+### Added
 
-- **Fehlgeschlagene Seiten erneut transkribieren:** Jede fehlgeschlagene Karte hat jetzt einen
-  „Erneut versuchen"-Knopf; im Fußbereich erscheint „Fehlgeschlagene erneut", sobald es Fehler gibt.
-  Eine erneut erfolgreiche Seite wird beim nächsten Anlegen sauber in dieselbe Notiz übernommen
-  (keine Dublette, nichts geht verloren).
-- **Klare Fehlermeldungen vom Vision-Server:** Antwortet der lokale Server mit einem Fehler im Body
-  (z.B. LM Studio: „model X is not loaded") statt eines echten HTTP-Fehlers, wird jetzt die echte
-  Meldung angezeigt statt eines generischen „leeres Transkript".
+- **Re-transcribe failed pages:** Every failed card now has a
+  "Retry" button; in the footer "Retry failed" appears as soon as there are errors.
+  A page that succeeds on retry is cleanly merged into the same note on the next create
+  (no duplicate, nothing is lost).
+- **Clear error messages from the vision server:** If the local server responds with an error in the body
+  (e.g. LM Studio: "model X is not loaded") instead of a real HTTP error, the real
+  message is now shown instead of a generic "empty transcript".
 
 ## [0.6.0] — 2026-06-28
 
-### Geändert
+### Changed
 
-- **Flüssigeres Streaming in der Sidebar:** Die Transkriptions-Karten werden beim Streaming nur
-  noch inkrementell aktualisiert statt bei jedem Token komplett neu aufgebaut. Kein Flackern und
-  keine Scroll-Sprünge mehr — spürbar besonders auf Mobilgeräten; der Gedanken-Block behält dabei
-  seinen Auf-/Zu-Zustand.
-- **Aufgeräumte Sidebar-Optik (theme-treu):** Der Gedanken-Block trägt jetzt ein `brain`-Icon statt
-  eines Emojis, lange Dateinamen werden im Karten-Kopf mittig gekürzt, der „Notiz anlegen"-Button
-  hat ein Icon, und die Abstände im Kopfbereich sind ruhiger. Die Schrift bleibt unverändert vom
-  Obsidian-Theme bestimmt (kein Font-Override).
+- **Smoother streaming in the sidebar:** The transcription cards are now only updated
+  incrementally while streaming instead of being completely rebuilt on every token. No more flicker and
+  no more scroll jumps — noticeable especially on mobile devices; the thought block keeps
+  its open/closed state.
+- **Tidied-up sidebar look (theme-faithful):** The thought block now carries a `brain` icon instead of
+  an emoji, long file names are truncated in the middle in the card header, the "Create note" button
+  has an icon, and the spacing in the header area is calmer. The font remains determined entirely by the
+  Obsidian theme (no font override).
 
 ## [0.5.1] — 2026-06-26
 
-### Behoben
+### Fixed
 
-- **Endpunkt-Eingabe:** Beim Tippen ins Endpunkt-Feld wurde pro Tastendruck ein eigener,
-  unvollständiger Eintrag angelegt (`l`, `lo`, `loc`, …) statt eines einzigen. Die Listen-
-  Bearbeitung wird jetzt erst beim Verlassen des Felds (blur) angewandt — ein Feld = ein Eintrag.
+- **Endpoint input:** Typing into the endpoint field created a separate, incomplete entry per
+  keystroke (`l`, `lo`, `loc`, …) instead of a single one. List
+  editing is now applied only when the field is left (blur) — one field = one entry.
 
-### Hinzugefügt
+### Added
 
-- **Endpunkt löschen:** Jede Endpunkt-Zeile hat einen eigenen Lösch-Button (Mülleimer). Das
-  Erreichbarkeits-Status-Icon (`circle-check`/`circle-x`) links bleibt reine Anzeige.
+- **Delete endpoint:** Every endpoint row has its own delete button (trash can). The
+  reachability status icon (`circle-check`/`circle-x`) on the left remains display-only.
 
 ## [0.5.0] — 2026-06-25
 
-### Hinzugefügt
+### Added
 
-- **Endpoint-Fallback-Liste:** statt eines einzelnen Vision-Endpoints lässt sich eine geordnete
-  Liste konfigurieren — das Plugin pingt sie der Reihe nach und nutzt den **ersten erreichbaren**
-  automatisch (re-resolved beim Sidebar-Refresh und nach einem fehlgeschlagenen Aufruf mit einem
-  Retry). So funktioniert eine einzelne gesyncte Config auf mehreren Geräten und Netzen: z.B.
-  `localhost:1234` (das Gerät, auf dem LM Studio läuft) als Erstes, dann `192.168.178.27:1234`
-  (LAN-IP, erreichbar vom iPhone/iPad via WireGuard). Im Settings-Tab gibt es ein dynamisches
-  Endpunkt-Feld pro Eintrag (leeres Feld am Ende = „Neuen hinzufügen"; Feld leeren entfernt den
-  Eintrag beim Verlassen) mit je einem Erreichbarkeits-Icon pro Feld (Kreis-Haken / Kreis-X /
-  Ladekreis + Titeltext). Der aktive Endpoint ist markiert. Die Sidebar zeigt
-  **„verbunden via \<Endpoint\>"** statt nur des Status. Migration: ein vorhandenes
-  `visionEndpoint`-Feld in `data.json` wird automatisch nach `visionEndpoints` migriert —
-  bestehende Konfigurationen bleiben ohne manuellen Eingriff funktionsfähig.
+- **Endpoint fallback list:** instead of a single vision endpoint, an ordered
+  list can be configured — the plugin pings it in order and automatically uses the **first reachable one**
+  (re-resolved on sidebar refresh and, with one retry, after a failed call). This way a single synced config works
+  across several devices and networks: e.g.
+  `localhost:1234` (the device running LM Studio) first, then `192.168.178.27:1234`
+  (LAN IP, reachable from iPhone/iPad via WireGuard). The settings tab has a dynamic
+  endpoint field per entry (an empty field at the end = "Add new"; clearing a field removes the
+  entry when you leave it), each with a reachability icon per field (circle-check / circle-x /
+  loading circle + title text). The active endpoint is highlighted. The sidebar shows
+  **"connected via \<endpoint\>"** instead of just the status. Migration: an existing
+  `visionEndpoint` field in `data.json` is automatically migrated to `visionEndpoints` —
+  existing configurations keep working without manual intervention.
 
-- **Aktive Datei als Quelle (Etappe 3):** ist die aktive Datei selbst ein Bild oder eine PDF
-  (d.h. keine Notiz, sondern die Mediendatei wird direkt in Obsidian angezeigt), zeigt die
-  Sidebar diese Datei als einzelnen Eintrag mit dem Label **„diese Datei"** (DE) bzw.
-  **„this file"** (EN) an und behandelt sie als Transkriptions-Quelle. PDFs: Seitenbereich
-  wählbar wie gewohnt; Bilder: einzelne Karte. Die Transkript-Notiz wird am
-  **„Standard-Speicherort für neue Notizen"** (`app.fileManager.getNewFileParent`) angelegt,
-  da es keine Quellnotiz gibt, neben der sie abgelegt werden könnte. Das Frontmatter enthält
-  kein `source_note`-Feld (es gibt keine Quellnotiz); `source_pdf`/`source_image`, `created`
-  und `transcribed_by` (PDFs auch `pages`) bleiben erhalten. Die Quelldatei wird **nicht
-  verändert** (kein Embed-Ersatz). Idempotenz und Override funktionieren wie gewohnt: eine
-  bereits transkribierte Datei zeigt „✓ Transkript vorhanden → öffnen"; Override überschreibt
-  die bestehende Notiz. Ausschließlich über die Sidebar — der Command „Bilder der aktiven Notiz
-  transkribieren" und das Kontextmenü betreffen weiterhin nur Notizen mit Embeds.
+- **Active file as source (stage 3):** if the active file is itself an image or a PDF
+  (i.e. not a note, but the media file displayed directly in Obsidian), the
+  sidebar shows this file as a single entry with the label **"diese Datei"** (DE) or
+  **"this file"** (EN) and treats it as a transcription source. PDFs: page range
+  selectable as usual; images: a single card. The transcript note is created at the
+  **"Default location for new notes"** (`app.fileManager.getNewFileParent`),
+  since there is no source note next to which it could be placed. The frontmatter contains
+  no `source_note` field (there is no source note); `source_pdf`/`source_image`, `created`
+  and `transcribed_by` (for PDFs also `pages`) are retained. The source file is **not
+  modified** (no embed replacement). Idempotency and override work as usual: an
+  already transcribed file shows "✓ Transcript exists → open"; override overwrites
+  the existing note. Sidebar only — the command "Transcribe images of the active note"
+  and the context menu still apply only to notes with embeds.
 
 ## [0.4.2] — 2026-06-24
 
-### Geändert
+### Changed
 
-Barrierefreie Statusanzeige (keine Änderung am Transkribieren):
+Accessible status display (no change to transcription):
 
-- Verbindungs- und Modell-Status werden über die Icon-**Form** unterschieden
-  (`circle-check` verbunden · `circle-x` offline · `circle-slash` Modell nicht geladen ·
-  `loader` prüft) statt allein über Farbe — lesbar auch bei Rot-Grün-Sehschwäche
-  (WCAG 1.4.1, redundante Kodierung aus Form + Text + Farbe).
-- `minAppVersion` bleibt 1.8.7.
+- Connection and model status are distinguished by icon **shape**
+  (`circle-check` connected · `circle-x` offline · `circle-slash` model not loaded ·
+  `loader` checking) instead of by color alone — readable even with red-green color
+  blindness (WCAG 1.4.1, redundant encoding of shape + text + color).
+- `minAppVersion` remains 1.8.7.
 
 ## [0.4.1] — 2026-06-24
 
-### Geändert
+### Changed
 
-Wartungs-Release für die Konformität mit dem Obsidian-Community-Plugin-Review (keine
-nutzersichtbaren Funktionsänderungen):
+Maintenance release for conformance with the Obsidian community plugin review (no
+user-visible functional changes):
 
-- Settings-Re-Render läuft über eine private Methode statt der seit Obsidian 1.13 veralteten
-  `display()` — `minAppVersion` bleibt 1.8.7, Verhalten unverändert.
-- `authorUrl` im Manifest zeigt auf die Autoren-Homepage (jkaindl.de).
-- Installations-Doku auf die Community-Plugins-Suche umgestellt (BRAT-Anleitung entfernt, da
-  das Plugin nun gelistet ist).
+- Settings re-render goes through a private method instead of `display()`, which has been
+  deprecated since Obsidian 1.13 — `minAppVersion` remains 1.8.7, behavior unchanged.
+- `authorUrl` in the manifest points to the author's homepage (jkaindl.de).
+- Installation docs switched to the community plugins search (BRAT instructions removed, since
+  the plugin is now listed).
 
 ## [0.4.0] — 2026-06-24
 
-### Hinzugefügt
+### Added
 
-- **Modell-Transparenz:** ein Refresh-Icon neben beiden Modell-Auswahlen (Sidebar + Einstellungen)
-  lädt die Modell-Liste neu — nützlich, wenn ein externer Prozess das geladene Modell des lokalen
-  Backends (MLX/LM Studio) gewechselt hat. Nach jeder Transkription gleicht die Sidebar die Auswahl
-  automatisch an das tatsächlich verwendete Modell (`response.model`) an. Ein grüner Haken neben dem
-  Dropdown zeigt, ob die Auswahl im Backend geladen ist; der Refresh gibt sichtbares Feedback
-  („N Modelle geladen").
+- **Model transparency:** a refresh icon next to both model pickers (sidebar + settings)
+  reloads the model list — useful when an external process has switched the loaded model of the local
+  backend (MLX/LM Studio). After every transcription the sidebar automatically
+  aligns the selection with the model actually used (`response.model`). A green checkmark next to the
+  dropdown shows whether the selection is loaded in the backend; the refresh gives visible feedback
+  ("N models loaded").
 
-- **Verlinkte Quellen:** reine Links auf Bilder/PDFs (`[[x.pdf]]`, `[text](x.pdf)` ohne `!`) werden
-  jetzt ebenfalls als Quelle erkannt und transkribiert; der Link im Text bleibt dabei unverändert
-  (im Gegensatz zu Embeds, die durch das Transkript ersetzt werden). Sidebar markiert solche Einträge
-  mit „linked".
+- **Linked sources:** plain links to images/PDFs (`[[x.pdf]]`, `[text](x.pdf)` without `!`) are
+  now also recognized as sources and transcribed; the link in the text remains unchanged
+  (unlike embeds, which are replaced by the transcript). The sidebar marks such entries
+  with "linked".
 
 ## [0.3.0] — 2026-06-23
 
-### Hinzugefügt
+### Added
 
-- **Backlink-Idempotenz:** Die Sidebar erkennt eine bereits existierende Transkript-Notiz für
-  eine Quelle (via Backlink-Index + `source_pdf`/`source_image`-Frontmatter-Filter) und zeigt
-  „vorhanden → öffnen" an, statt erneut zu transkribieren.
-  Nur Notizen, deren Frontmatter per `source_pdf` / `source_image` auf die Quelldatei verweist,
-  zählen — ein bloßer Body-Embed (z.B. `![[datei.pdf]]`) genügt nicht (Frontmatter-Filter load-bearing).
-- **Override-Option:** Per Checkbox in der Sidebar lässt sich eine erneute Transkription erzwingen;
-  das Plugin überschreibt dann die bestehende Transkript-Notiz und erhält dabei das komplette
-  existierende Frontmatter (nur `transcribed_by`/`pages` + Body werden ersetzt).
+- **Backlink idempotency:** The sidebar detects an already existing transcript note for
+  a source (via backlink index + `source_pdf`/`source_image` frontmatter filter) and shows
+  "exists → open" instead of transcribing again.
+  Only notes whose frontmatter points to the source file via `source_pdf` / `source_image`
+  count — a mere body embed (e.g. `![[datei.pdf]]`) is not enough (frontmatter filter is load-bearing).
+- **Override option:** A checkbox in the sidebar forces a repeated transcription;
+  the plugin then overwrites the existing transcript note and keeps the complete
+  existing frontmatter (only `transcribed_by`/`pages` + body are replaced).
 
-### Geändert
+### Changed
 
-- **PDF render scale** (`pdfRenderScale`) ist jetzt ein Slider (Bereich 1.0–4.0, Schritt 0.5)
-  statt eines freien Textfelds — direktes, gegrenztes Einstellen der Render-Auflösung.
+- **PDF render scale** (`pdfRenderScale`) is now a slider (range 1.0–4.0, step 0.5)
+  instead of a free text field — direct, bounded adjustment of the render resolution.
 
 ## [0.2.0] — 2026-06-22
 
-### Hinzugefügt
+### Added
 
-- **PDF-Embed-Transkription:** eingebettete PDFs werden seitenweise über die Sidebar transkribiert.
-  Seitenbereich wählbar (Default: alle), eine Transkript-Notiz pro PDF, PDF-Embed wird ersetzt.
-  Limits: `pdfMaxPages` (konfigurierbar) und `pdfRenderScale` (mobil kleiner, schützt vor OOM).
-  Umgesetzt über einen gebündelten pdf.js-Worker (Blob-URL, kein CDN, komplett offline).
-- **Konfigurierbarer PDF-Seiten-Trenner** (`pdfPageSeparator`): per Dropdown wählbar, wie Seiten
-  in der zusammengeführten Transkript-Notiz getrennt werden — fünf Optionen:
-  „Obsidian comment %% Page N %% (hidden in reading view)" (Default), „Heading ## Page N",
-  „Horizontal rule ---", „Page break (HTML, for export)" und „None (seamless text)".
-- **Lokalisierter Titel-Suffix** für Transkript-Notizen: „(transcript)" für Bilder bzw.
-  „(PDF transcript)" für PDFs (folgt der UI-Sprache).
+- **PDF embed transcription:** embedded PDFs are transcribed page by page via the sidebar.
+  Page range selectable (default: all), one transcript note per PDF, the PDF embed is replaced.
+  Limits: `pdfMaxPages` (configurable) and `pdfRenderScale` (smaller on mobile, protects against OOM).
+  Implemented via a bundled pdf.js worker (blob URL, no CDN, fully offline).
+- **Configurable PDF page separator** (`pdfPageSeparator`): a dropdown selects how pages
+  are separated in the merged transcript note — five options:
+  "Obsidian comment %% Page N %% (hidden in reading view)" (default), "Heading ## Page N",
+  "Horizontal rule ---", "Page break (HTML, for export)" and "None (seamless text)".
+- **Localized title suffix** for transcript notes: "(transcript)" for images and
+  "(PDF transcript)" for PDFs (follows the UI language).
 
 ## [0.1.3] — 2026-06-22
 
-### Hinzugefügt
+### Added
 
-- GitHub-Actions-Release-Pipeline (`.github/workflows/release.yml`): baut das Plugin bei einem
-  SemVer-Tag, erzeugt **Build-Provenance-Attestations** für `main.js`/`manifest.json`/`styles.css`
-  und veröffentlicht das GitHub-Release. Läuft auf der GitHub-Mirror-Seite (BRAT/Registry).
+- GitHub Actions release pipeline (`.github/workflows/release.yml`): builds the plugin on a
+  SemVer tag, generates **build provenance attestations** for `main.js`/`manifest.json`/`styles.css`
+  and publishes the GitHub release. Runs on the GitHub mirror side (BRAT/registry).
 
 ## [0.1.2] — 2026-06-22
 
-### Behoben
+### Fixed
 
-- Live-Streaming nutzt jetzt `activeWindow.fetch` (injizierter Stream-Transport) statt des
-  globalen `fetch` — erfüllt die Obsidian-Lint-Regel `no-restricted-globals` ohne `eslint-disable`
-  (das der Community-Review nicht erlaubt). Verhalten unverändert.
-- README: „Coming soon"-Platzhalter im Community-Plugins-Abschnitt durch echte Install-Anleitung ersetzt.
+- Live streaming now uses `activeWindow.fetch` (injected stream transport) instead of the
+  global `fetch` — satisfies the Obsidian lint rule `no-restricted-globals` without `eslint-disable`
+  (which the community review does not allow). Behavior unchanged.
+- README: "Coming soon" placeholder in the community plugins section replaced with real install instructions.
 
 ## [0.1.1] — 2026-06-22
 
-Submission-Readiness für die Obsidian-Community-Registry (Lint-/API-Konformität).
+Submission readiness for the Obsidian community registry (lint/API conformance).
 
-### Geändert
+### Changed
 
-- `minAppVersion` auf **1.8.7** angehoben (offizielle `getLanguage()`-API statt 1.4.0 mit Fallback).
-- Nicht-streamende Netzwerk-Calls laufen über Obsidians `requestUrl` (per Dependency-Injection;
-  der reine Kern bleibt obsidian-frei). Das Live-Streaming nutzt weiterhin `fetch` — `requestUrl`
-  liefert nur die vollständige Antwort und kann nicht token-weise streamen.
+- `minAppVersion` raised to **1.8.7** (official `getLanguage()` API instead of 1.4.0 with a fallback).
+- Non-streaming network calls go through Obsidian's `requestUrl` (via dependency injection;
+  the pure core stays obsidian-free). Live streaming still uses `fetch` — `requestUrl`
+  only returns the complete response and cannot stream token by token.
 
-### Behoben
+### Fixed
 
-- Obsidian-Plugin-Lint sauber: keine `no-unsupported-api`-Verstöße mehr, `activeDocument` statt
-  `document`, keine floating Promises / unsicheren `any`-Zuweisungen / unnötigen Type-Assertions.
+- Obsidian plugin lint clean: no more `no-unsupported-api` violations, `activeDocument` instead of
+  `document`, no floating promises / unsafe `any` assignments / unnecessary type assertions.
 
-### Entwicklung
+### Development
 
-- `eslint` + `eslint-plugin-obsidianmd` + `npm run lint` — reproduziert die Community-Review-Checks lokal.
+- `eslint` + `eslint-plugin-obsidianmd` + `npm run lint` — reproduces the community review checks locally.
 
 ## [0.1.0] — 2026-06-21
 
-Erstes Release. Ausgegliedert aus [vault-rag](https://git.jkaindl.de/jkaindl/vault-rag) 0.2.0.
+First release. Split out of [vault-rag](https://git.jkaindl.de/jkaindl/vault-rag) 0.2.0.
 
-### Hinzugefügt
+### Added
 
-- **Sidebar-View** mit Bild-Auswahl, live streamender Transkription (Gedanken-Block bei
-  Reasoning-Modellen, Kopier-Button) und Notiz-Anlage pro Bild bzw. „Alle anlegen".
-- **Commands** „Bilder der aktiven Notiz transkribieren" (Batch) und „Sidebar öffnen".
-- **Editor-Kontextmenü** „Image → Markdown" für das Bild unter dem Cursor.
-- Geteilter SSE-Streaming-Transport; `VisionClient` mit `ping`/`listModels` für Modell-Picker
-  und Verbindungsstatus.
-- Nicht-destruktiv & idempotent: pro Bild eine Transkript-Notiz, Bild-Embed wird ersetzt.
-- **Settings-QoL:** große, resizebare Prompt-Textarea; Verbindungs-Status-Dot + „Verbindung testen";
-  „Vision-Fähigkeit"-Anzeige mit aktivem „Vision testen"-Button; „Modelle laden"-Fallback bei offline.
-- **Vision-Capability-Detektion** (`capabilities.ts`): Namens-Heuristik + Metadaten-Probe gegen
-  Ollama (`/api/show`) und LM Studio (`/api/v1/models`, `/api/v0/models`).
-- **Zweisprachige Oberfläche (Englisch/Deutsch):** alle nutzersichtbaren Strings folgen der
-  Sprach-Einstellung von Obsidian. Englisch ist kanonisch, Deutsch ist die Übersetzung; die
-  Sprache wird einmalig beim Laden des Plugins erkannt, ein Wechsel wird also nach einem
-  Plugin-Reload wirksam. Auch der mitgelieferte Standard-Vision-Prompt ist lokalisiert; Marken-
-  und Steuer-Strings („Image → Markdown", „IMG → MD", „Stop") bleiben unverändert.
-- `npm run deploy` (env-gesteuert via `$OBSIDIAN_PLUGIN_DIR`).
+- **Sidebar view** with image selection, live streaming transcription (thought block for
+  reasoning models, copy button) and note creation per image or "Create all".
+- **Commands** "Transcribe images of the active note" (batch) and "Open sidebar".
+- **Editor context menu** "Image → Markdown" for the image under the cursor.
+- Shared SSE streaming transport; `VisionClient` with `ping`/`listModels` for the model picker
+  and connection status.
+- Non-destructive & idempotent: one transcript note per image, the image embed is replaced.
+- **Settings QoL:** large, resizable prompt textarea; connection status dot + "Test connection";
+  "Vision capability" display with an active "Test vision" button; "Load models" fallback when offline.
+- **Vision capability detection** (`capabilities.ts`): name heuristic + metadata probe against
+  Ollama (`/api/show`) and LM Studio (`/api/v1/models`, `/api/v0/models`).
+- **Bilingual interface (English/German):** all user-visible strings follow the
+  language setting of Obsidian. English is canonical, German is the translation; the
+  language is detected once when the plugin loads, so a change takes effect after a
+  plugin reload. The bundled default vision prompt is localized too; brand
+  and control strings ("Image → Markdown", "IMG → MD", "Stop") remain unchanged.
+- `npm run deploy` (env-controlled via `$OBSIDIAN_PLUGIN_DIR`).
 
-### Behoben
+### Fixed
 
-- Sidebar-View überlebt jetzt einen Plugin-Reload/-Update (kein Leaf-Detach in `onunload` mehr).
+- Sidebar view now survives a plugin reload/update (no more leaf detach in `onunload`).
