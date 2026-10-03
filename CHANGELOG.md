@@ -180,7 +180,7 @@ and versioning follows [SemVer](https://semver.org/).
   card still counted as finished, without any message; to users it looked like "the plugin
   recognized nothing". The server does report it (`finish_reason: "length"`), and the
   SSE parser already read it — the transport discarded it one level above. Now
-  the chain carries it all the way to the sidebar: a truncated card shows "Truncated at
+  the chain carries it all the way to the sidebar: a truncated card shows "Cut off at
   the token limit — incomplete" and can still be created (the partial text is valid), and if no
   text arrived at all, the error message names the limit instead of "Empty transcript". Applies to
   transcribing, describing, PDF pages and the command path without the sidebar.
