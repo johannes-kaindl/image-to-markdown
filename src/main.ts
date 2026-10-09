@@ -43,7 +43,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
    *  Transport und Fristen, Schwärzung, Prüfung der Antwort und die Settings-Abschnitte. */
   llm!: LlmConnection;
   /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet, `visionModel` ist der Rückfall. */
-  get model(): string { return this.llm.source().model || this.settings.visionModel; }
+  get model(): string {
+    // Nach `invalidate()` ist `source()` bis zur nächsten Auflösung neutral: mit Manager steht die Wahl dann in
+    // `choice.model`, nicht im lokalen `visionModel`.
+    return this.llm.source().model || (findEndpointManager(this.app) ? this.settings.choice.model : undefined) || this.settings.visionModel;
+  }
   private pendingCards = new CardCache();
   /** Anbieter-API v1 (Spec Baustein 4/D, Kit-Vertrag `ocr-provider`) — Konsumenten fragen
    *  `app.plugins.plugins["image-to-markdown"].api`, nie die Brücke direkt. Sofort in onload
@@ -146,12 +150,16 @@ export default class ImageToMarkdownPlugin extends Plugin {
    *  fehl (und wurde nicht abgebrochen), löst die Verbindung neu auf — ein anderer Endpunkt der Liste
    *  kann inzwischen erreichbar sein — und versucht es einmal erneut. */
   private async callLlm(messages: readonly ChatWireMessage[], h: CompleteHandlers, retry = false): Promise<ChatOut> {
-    const run = async (): Promise<ChatOut> => chatOutOrThrow(await this.llm.complete({ messages }, h));
+    // Kam schon Text an (die Karte hängt ihn an), würde ein zweiter Lauf ihn doppeln: dann kein Retry.
+    let received = false;
+    const run = async (): Promise<ChatOut> => chatOutOrThrow(await this.llm.complete({ messages }, {
+      ...h, onToken: (text: string) => { received = true; h.onToken?.(text); },
+    }));
     if (!retry) return run();
     try {
       return await run();
     } catch (err) {
-      if (h.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
+      if (received || h.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
       this.llm.invalidate();
       const src = await this.llm.resolve({ force: true }).catch(() => null);
       this.refreshThinkingControls();
