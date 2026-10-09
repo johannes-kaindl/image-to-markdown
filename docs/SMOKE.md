@@ -70,6 +70,11 @@ bleiben optional.
 | D1 | PDF geladen | „Trail handbook" zeigt eine PDF-Zeile mit Seitenbereich `1`–`3`. Die `3` kommt aus `pdfPageCount` — der Punkt prüft damit die **Worker-Blob-Strategie** mit, an der das Bundling hängt |
 | D2 | Seitenbereich begrenzt | die `to`-Eingabe akzeptiert keinen Wert über der Seitenzahl |
 | E1 | Endpunkt-Editor + seine CSS-Hälfte | der Settings-Tab zeigt den Kit-Baustein (`.okit-ep-row`, `.okit-ep-status`) **und** dessen Darstellung greift: `.setting-item-info` der Zeile steht auf `display:none`. Das ist der inhaltliche Gegenpart zu `tools/ui_adoption_check.py` — der vergleicht nur die Regelmenge in `styles.css`, nicht ob sie wirkt |
+| V1 | Schlüssel an Ping und Chat | gegen einen Fake-Endpunkt: eine Zeile mit `apiKey` → `GET /v1/models` und `POST /v1/chat/completions` tragen `Authorization: Bearer …`, die aufgelöste Config trägt den Schlüssel (`(await llm.resolve()).config`), und der Vision-Test der Einstellungen (`plugin.testVision`) läuft ohne Fehler. Die Backend-Erkennung (`/api/v1/models`) geht im Kit ohne Schlüssel raus und steht nur im Detail |
+| V2 | Schlüsselbund | ein Klartext-`apiKey` wandert beim ersten `llm.resolve({ force: true })` in `app.secretStorage`: `data.json` enthält weder den Wert noch ein Feld `apiKey`, die Zeile trägt `secretId`, der Wert liegt im Schlüsselbund. Der Punkt räumt den Eintrag danach auf |
+| V3 | Nicht-Stream-Weg | `makeImgIO().transcribe` (Befehl, Kontextmenü, Anbieter-API) sendet `stream: false` und liefert den Volltext des Fake-Endpunkts |
+| V4 | Schwärzung (Textpfad) | ein Prompt mit `Bearer …` (≥ 16 Zeichen) geht als Platzhalter (`[redacted-token-1]`) an den Server, im Ergebnis steht das Original wieder. Bildteile werden nie geschwärzt |
+| V5 | Stufenwahl und Host | der Anfrage-Abschnitt in den Einstellungen zeigt „Stufenwahl im Chat“ (`levelPicker: true`), die Hilfe-Zeile bleibt die erste und die Prompt-Zeile nach dem Host ist noch da (`renderSettings` bekommt einen eigenen Host, nicht den Tab) |
 
 ### Nur mit `--with-model` — **geplant, noch nicht gebaut**
 

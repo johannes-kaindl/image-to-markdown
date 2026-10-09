@@ -5,7 +5,7 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE)
 [![Docs: CC BY-SA 4.0](https://img.shields.io/badge/docs-CC%20BY--SA%204.0-lightgrey.svg)](https://github.com/johannes-kaindl/image-to-markdown/blob/main/LICENSE-DOCS)
 [![Release](https://img.shields.io/github/v/release/johannes-kaindl/image-to-markdown?label=release)](https://github.com/johannes-kaindl/image-to-markdown/releases)
-![Platform](https://img.shields.io/badge/platform-Obsidian%201.8.7%2B%20·%20desktop%20%26%20mobile-7c3aed)
+![Platform](https://img.shields.io/badge/platform-Obsidian%201.11.4%2B%20·%20desktop%20%26%20mobile-7c3aed)
 
 **Transkribiert Bilder und PDFs einer Notiz per lokalem Vision-LLM nach Markdown — komplett offline, nicht-destruktiv, live in die Sidebar gestreamt.**
 
@@ -26,7 +26,7 @@
 - **Nicht-destruktiv** — Quellnotizen werden nie überschrieben; Embeds werden ersetzt, Originale bleiben erhalten
 - **Eigenständige Dateien** — eine PDF oder ein Bild direkt in Obsidian öffnen, und die Sidebar behandelt *diese Datei* als Quelle — keine umgebende Notiz nötig
 - **Prompt-Presets** — ein Wähler neben dem Modell in der Sidebar: ein „Standard"-Preset (dein editierbarer Prompt) plus feste Modi für Tabellen → Markdown, Handschrift, Mathe → LaTeX und Quellcode; die Wahl bleibt erhalten. Bei einem lokalen Vision-Modell ist der Prompt der wichtigste Qualitätshebel. (Bildbeschreibung gewünscht? Dafür gibt es jetzt den Beschreiben-Modus oben.)
-- **Endpoint-Fallback-Liste** — eine geordnete Liste von Vision-Endpunkten konfigurieren; das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren automatisch — eine einzige gesyncte Config funktioniert auf allen Geräten und Netzen
+- **Endpoint-Fallback-Liste** — eine geordnete Liste von Vision-Endpunkten konfigurieren (API-Schlüssel optional, im Schlüsselbund von Obsidian statt in der `data.json`); das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren automatisch — eine einzige gesyncte Config funktioniert auf allen Geräten und Netzen
 - **Thinking-Toggle** — ein Schalter neben der Modellauswahl schaltet das Nachdenken (Reasoning) von Hybrid-Modellen ab, um Wartezeit zu sparen; bleibt erhalten (Default: an); Modelle, die sich nicht abschalten lassen, zeigen „immer an"
 - **Konfigurierbares Frontmatter-Mapping** — jeder Frontmatter-Schlüssel der erzeugten Notizen (und der `type`-Wert) lässt sich auf dein eigenes Vault-Schema anpassen — einheitlich für Transkript-, PDF- und Beschreibungs-Notizen
 
@@ -135,7 +135,7 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
   Quelle zurück, ist das vorläufige Ergebnis wieder da (pro Quelldatei gemerkt). Ein Button
   „Ergebnisse verwerfen" räumt es explizit weg; ein erneutes Transkribieren derselben Quelle
   ersetzt es. Nach einem Obsidian-Neustart ist es weg (die Quelle liegt ja vor → neu transkribieren).
-- **Endpoint-Fallback-Liste.** Statt eines einzelnen Vision-Endpunkts nimmt das Plugin eine geordnete Liste entgegen. Bei jedem Resolve (Sidebar-Refresh oder nach einem fehlgeschlagenen Aufruf mit einem automatischen Retry) werden die Endpunkte der Reihe nach angepingt und der erste erreichbare genutzt. Der aktive Endpunkt ist im Settings-Tab markiert und wird in der Sidebar-Statuszeile als **„verbunden via \<Endpunkt\>"** angezeigt. Der Settings-Tab rendert ein dynamisches Feld pro Eintrag — ein leeres Abschlussfeld ist der „Neu hinzufügen"-Einstieg; ein Feld leeren und verlassen entfernt den Eintrag. Jedes Feld zeigt ein eigenes Erreichbarkeits-Icon (Kreis-Haken / Kreis-X / Ladekreis) plus barrierefreien Titeltext. Eine einzige gesyncte `data.json` funktioniert damit auf allen Geräten: `localhost:1234` zuerst (das Gerät mit LM Studio), dann eine LAN-IP als Fallback (z.B. erreichbar vom Handy via WireGuard). Jeder Eintrag kann seinen **eigenen API-Schlüssel** tragen (Passwortfeld neben der Adresse) — so stehen ein lokaler Server und ein gehosteter Anbieter in derselben Kette; ohne Schlüssel geht gar kein `Authorization`-Header raus. Migration ist automatisch: sowohl ein vorhandenes `visionEndpoint`-Feld als auch eine reine String-Liste werden still in die aktuelle Form überführt — kein manueller Eingriff nötig.
+- **Endpoint-Fallback-Liste.** Statt eines einzelnen Vision-Endpunkts nimmt das Plugin eine geordnete Liste entgegen. Bei jedem Resolve (Sidebar-Refresh oder nach einem fehlgeschlagenen Aufruf mit einem automatischen Retry) werden die Endpunkte der Reihe nach angepingt und der erste erreichbare genutzt. Der aktive Endpunkt ist im Settings-Tab markiert und wird in der Sidebar-Statuszeile als **„verbunden via \<Endpunkt\>"** angezeigt. Der Settings-Tab rendert ein dynamisches Feld pro Eintrag — ein leeres Abschlussfeld ist der „Neu hinzufügen"-Einstieg; ein Feld leeren und verlassen entfernt den Eintrag. Jedes Feld zeigt ein eigenes Erreichbarkeits-Icon (Kreis-Haken / Kreis-X / Ladekreis) plus barrierefreien Titeltext. Eine einzige gesyncte `data.json` funktioniert damit auf allen Geräten: `localhost:1234` zuerst (das Gerät mit LM Studio), dann eine LAN-IP als Fallback (z.B. erreichbar vom Handy via WireGuard). Jeder Eintrag kann seinen **eigenen API-Schlüssel** tragen (Passwortfeld neben der Adresse) — so stehen ein lokaler Server und ein gehosteter Anbieter in derselben Kette; ohne Schlüssel geht gar kein `Authorization`-Header raus. **Die Schlüssel liegen im Schlüsselbund von Obsidian** (Einstellungen → Schlüsselbund), nicht in der `data.json`: ein Schlüssel aus einer älteren Version zieht beim ersten Auflösen der Endpunkte automatisch dorthin um, und eine gesyncte `data.json` trägt ihn nicht mehr — das Schlüsselfeld auf jedem Gerät prüfen. Migration ist automatisch: sowohl ein vorhandenes `visionEndpoint`-Feld als auch eine reine String-Liste werden still in die aktuelle Form überführt — kein manueller Eingriff nötig.
 
 - **LLM Endpoint Manager.** Ist das Plugin **LLM Endpoint Manager** installiert, kommen die Endpunkte (samt Schlüsseln) stattdessen von ihm: Der Einstellungen-Tab bietet dann eine Endpunkt- und Modellwahl sowie einen Knopf, der deine lokalen Endpunkte in den Manager übernimmt; die lokale Liste bleibt als Rückfall erhalten, wenn der Manager aus ist. Meldet der Manager keinen Endpunkt, gibt es keinen Rückfall auf die lokale Liste.
 - **Thinking-Toggle.** Ein Schalter neben der Modellauswahl (Gehirn-Icon, beschriftet
@@ -163,7 +163,7 @@ Gedanken-Block. Das Reasoning ist ephemer und geht nie in die LLM-History ein.
 
 ## Voraussetzungen
 
-- Obsidian 1.8.7+ (Desktop oder Mobile).
+- Obsidian 1.11.4+ (Desktop oder Mobile) — API-Schlüssel liegen im Schlüsselbund von Obsidian, das braucht diese Version.
 - Ein OpenAI-kompatibler lokaler Server mit einem **vision-fähigen** Modell — z.B.
   [LM Studio](https://lmstudio.ai), [Ollama](https://ollama.com) oder ein MLX-Server. In den
   Einstellungen konfigurierbar; nichts verlässt die Maschine (offline-first, keine Cloud, kein
@@ -222,7 +222,7 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 
 | Einstellung | Default | Hinweis |
 |---|---|---|
-| **Vision-Endpunkte** | `["http://localhost:8080"]` | Geordnete Liste OpenAI-kompatibler Server. Das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren. MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
+| **Vision-Endpunkte** | `["http://localhost:8080"]` | Geordnete Liste OpenAI-kompatibler Server (API-Schlüssel im Schlüsselbund von Obsidian). Das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren; eine Zeile lässt sich mit „Diesen Endpunkt zuerst probieren“ nach vorn schieben. MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
 | **Vision-Modell** | (leer) | Vision-fähiges Modell (z.B. Qwen2-VL, Llama-3.2-Vision). Dropdown, gefüllt aus `/v1/models` des Endpoints; ist der Endpoint offline, wird es zum Freitextfeld. Das tatsächlich genutzte Modell wird aus `response.model` gelesen. |
 | **Vision-Prompt** | Markdown-Transkription (siehe unten) | Anweisung an das Vision-Modell, frei editierbar (Text-Area). |
 | **PDF max. Seiten pro Lauf** | `25` | Schutzgrenze für die Zahl transkribierter PDF-Seiten pro Lauf — größere PDFs über den Seitenbereich einschränken. Harte Obergrenze 500. |
@@ -245,7 +245,7 @@ Default-Prompt:
 `/v1` selbst an (`normalizeEndpoint` strippt ein abschließendes `/v1`; beide Formen werden
 akzeptiert).
 
-Der Settings-Tab zeigt außerdem einen **Verbindungs-Status** mit „**Verbindung testen**" sowie
+Der Settings-Tab zeigt außerdem einen **Verbindungs-Status** mit „**Verbindung prüfen**" sowie
 eine **„Vision-Fähigkeit"**-Zeile mit „**Vision testen**"-Button, der aktiv prüft, ob das gewählte
 Modell wirklich Bilder lesen kann — Details im [Handbuch](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/manual/reference.md#vision-capability-detection).
 

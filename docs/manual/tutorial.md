@@ -11,7 +11,7 @@ have felt how the pieces fit, the [How-to guides](how-to.md) and the
 
 What you need before we start:
 
-- Obsidian 1.8.7 or newer (Desktop or Mobile).
+- Obsidian 1.11.4 or newer (Desktop or Mobile).
 - A few minutes and one note with an embedded image of some text — a scanned page, a
   whiteboard photo, a screenshot of a document. Anything readable.
 

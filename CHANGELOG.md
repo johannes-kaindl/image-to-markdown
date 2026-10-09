@@ -6,6 +6,23 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The LLM connection is now the shared Kit connection.** Endpoint source (LLM Endpoint Manager first, otherwise the local list), model list, request profile, transport, timeouts and the check of every answer come from one Kit component instead of a plugin-owned client. Kit pins: obsidian-kit 0.51.2, code-kit 0.15.0.
+- **Minimum Obsidian version is now 1.11.4** (was 1.8.7), because API keys move into Obsidian's keychain.
+- **API keys live in Obsidian's keychain.** A plain-text key from an older version moves there the first time the endpoints are resolved; `data.json` keeps only the row's `id` and `secretId`, so a synced `data.json` no longer carries the key — check the key field on each device.
+- **Endpoint list and "Request" section use the Kit texts and rows.** Visible differences: the connection button reads "Test connection" / "Verbindung prüfen", each row has "Try this endpoint first", and the status lines are the Kit's ("Timed out — network unreachable.", "Answers, but is not an OpenAI-compatible endpoint."). The "Request" section now sits directly below the endpoint list, above the model row.
+- **Local resolution is remembered** until the list, the model or a refresh changes it (the connection re-resolves by itself after every edit); with the LLM Endpoint Manager installed each call asks the manager again. A saved endpoint/model choice still applies only with the manager.
+- **Secrets are redacted before sending.** Tokens (`Bearer …`), PEM blocks and similar secrets in text sent to the model are replaced by placeholders and restored in the answer you get back; images are never touched. The default is on.
+- **A cancelled call is no longer retried.** After any other failure the plugin still re-resolves the endpoint once and retries.
+- Timeouts, the "truncated" handling (`finish_reason: length` stays a result with the existing hint) and the non-streaming calls (command "Transcribe active note", context menu, provider API) are unchanged: 120 s idle, 600 s to the first chunk, 900 s without a stream. There are no timeout settings to migrate.
+- The English notice for a request deviation now ends with “Request” (curly quotes) instead of „Request“.
+- New error text when no vision endpoint is available: "No vision endpoint is available (…)." / "Kein Vision-Endpunkt verfügbar (…)."
+
+### Removed
+
+- `src/request_text.ts` and the `request.dev.*` / `request.*` / `settings.endpoints.*` / `settings.source.*` texts (the Kit supplies them), the plugin-owned chat client wrapper and transports, and `cachedProbe` in `src/http.ts`.
+
 ## [0.27.1] — 2026-10-03
 
 ### Changed
