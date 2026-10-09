@@ -708,7 +708,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
           p.settings.visionEndpoints = [{ url: ${JSON.stringify(sicht.url)} }];
           p.settings.visionModel = "google/gemma-4-e4b";
           p.settings.request = { overrides: {}, thinking: {}, lastOnLevel: {}, levelPickerInChat: false };
-          await p.resolveAndReconnect();
+          p.llm.invalidate();
           const deps = p.makeImgViewDeps();
           const items = await deps.scan(${JSON.stringify(NOTIZ.bilder)});
           const item = items.find((i) => i.supported && i.kind === "image");
@@ -729,33 +729,166 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
           const v = JSON.parse(${JSON.stringify(vor)});
           p.settings.visionEndpoints = v.eps; p.settings.visionModel = v.model; p.settings.request = v.request; p.settings.choice = v.choice;
           await p.saveSettings();
-          await p.resolveAndReconnect();
+          p.llm.invalidate();
           return true;
         `).catch(() => undefined);
       }
     },
   },
+  // ── V: Verbindungs-Tausch (Welle 15) — Schluessel, Schluesselbund, Nicht-Stream, Schwaerzung ─────
+  // Alle gegen den Fake-Endpunkt im Node-Prozess; kein Modell noetig. Der Schluessel ist ein Fake-Wert.
+  {
+    key: "V1",
+    titel: "Verbindung: der Schluessel geht als Bearer an Ping UND Chat — auch der Vision-Test der Einstellungen laeuft mit Schluessel",
+    async run(cdp) {
+      const fake = await startFakeChat();
+      const vor = await verbindungVorher(cdp);
+      const KEY = "sk-v1-fake-schluessel-0123456789";
+      try {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)}, apiKey: ${JSON.stringify(KEY)} }];
+          p.settings.visionModel = "google/gemma-4-e4b"; p.settings.choice = {};
+          p.llm.invalidate();
+          const src = await p.llm.resolve({ force: true });
+          let testFehler = null;
+          try { await p.testVision("google/gemma-4-e4b", "data:image/png;base64,AAAA"); } catch (e) { testFehler = String(e && e.message || e); }
+          return JSON.stringify({ url: src.config ? src.config.url : null, schluesselInConfig: src.config ? src.config.apiKey === ${JSON.stringify(KEY)} : false, testFehler });
+        `);
+        const d = JSON.parse(r) as { url: string | null; schluesselInConfig: boolean; testFehler: string | null };
+        const auth = (rq: FakeRequest): string => String(rq.headers.authorization ?? "");
+        // Die Backend-Erkennung (`/api/v1/models`, LM-Studio-Nativ-Probe) geht im Kit OHNE Schluessel raus —
+        // dasselbe tat `cachedProbe` vor dem Tausch. Sie steht nur im Detail, nicht in der Bedingung.
+        const ping = fake.requests.filter((q) => q.url.startsWith("/v1/models"));
+        const chat = fake.requests.filter((q) => q.method === "POST");
+        const ok = d.url === fake.url && d.schluesselInConfig && ping.length > 0 && chat.length > 0
+          && [...ping, ...chat].every((q) => auth(q) === `Bearer ${KEY}`) && d.testFehler === null;
+        return { ok, detail: `Config traegt den Schluessel: ${d.schluesselInConfig} · Ping ${ping.length}x, Chat ${chat.length}x, Bearer ueberall: ${[...ping, ...chat].every((q) => auth(q) === `Bearer ${KEY}`)} (${fake.requests.map((q) => `${q.method} ${q.url}: ${auth(q) === `Bearer ${KEY}` ? "Bearer" : auth(q) === "" ? "OHNE" : "anderer"}`).join(", ")}) · Vision-Test ${d.testFehler ?? "ohne Fehler"}` };
+      } finally {
+        await fake.close();
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
+  {
+    key: "V2",
+    titel: "Verbindung: ein Klartext-Schluessel wandert beim ersten Aufloesen in den Schluesselbund — data.json traegt keinen apiKey mehr",
+    async run(cdp) {
+      const fake = await startFakeChat();
+      const vor = await verbindungVorher(cdp);
+      const KEY = "sk-v2-fake-schluessel-9876543210";
+      try {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)}, apiKey: ${JSON.stringify(KEY)} }];
+          p.settings.visionModel = ""; p.settings.choice = {};
+          await p.saveSettings();
+          p.llm.invalidate();
+          await p.llm.resolve({ force: true });
+          await new Promise((x) => setTimeout(x, 600));
+          const roh = await app.vault.adapter.read(".obsidian/plugins/" + ${JSON.stringify(PLUGIN_ID)} + "/data.json");
+          const eintrag = p.settings.visionEndpoints[0];
+          return JSON.stringify({ imRoh: roh.includes(${JSON.stringify(KEY)}), apiKeyFeld: roh.includes('"apiKey"'), secretId: !!(eintrag && eintrag.secretId), imBund: eintrag && eintrag.secretId ? app.secretStorage.getSecret(eintrag.secretId) === ${JSON.stringify(KEY)} : false });
+        `);
+        const d = JSON.parse(r) as { imRoh: boolean; apiKeyFeld: boolean; secretId: boolean; imBund: boolean };
+        return { ok: !d.imRoh && !d.apiKeyFeld && d.secretId && d.imBund, detail: `Schluessel in data.json: ${d.imRoh} · Feld "apiKey" in data.json: ${d.apiKeyFeld} · secretId gesetzt: ${d.secretId} · Wert im Schluesselbund: ${d.imBund}` };
+      } finally {
+        await fake.close();
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
+  {
+    key: "V3",
+    titel: "Verbindung: der Nicht-Stream-Weg (Befehl, Kontextmenue, Anbieter-API) sendet stream:false und liefert den Text",
+    async run(cdp) {
+      const fake = await startFakeChat({ content: "Volltext ohne Stream" });
+      const vor = await verbindungVorher(cdp);
+      try {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)} }];
+          p.settings.visionModel = "google/gemma-4-e4b"; p.settings.choice = {};
+          p.llm.invalidate();
+          const io = p.makeImgIO();
+          const out = await io.transcribe("data:image/png;base64,AAAA");
+          return JSON.stringify({ content: out.content, model: out.model });
+        `);
+        const d = JSON.parse(r) as { content: string; model: string };
+        const body = fake.bodies.at(-1) as Record<string, unknown> | undefined;
+        return { ok: !!body && body.stream === false && d.content === "Volltext ohne Stream", detail: `Server sah stream=${String(body?.stream)} · Ergebnis "${d.content}" · Modell ${d.model}` };
+      } finally {
+        await fake.close();
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
+  {
+    key: "V4",
+    titel: "Verbindung: ein Token im Prompt geht als Platzhalter an den Server und kommt im Ergebnis im Original zurueck (Schwaerzung, Textpfad)",
+    async run(cdp) {
+      const fake = await startFakeChat({ echo: true });
+      const vor = await verbindungVorher(cdp);
+      const TOKEN = "Bearer abcdefghijklmnopqrstuvwx1234";
+      try {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)} }];
+          p.settings.visionModel = "google/gemma-4-e4b"; p.settings.choice = {};
+          p.llm.invalidate();
+          const out = await p.callLlm([{ role: "user", content: "Notiz mit Zugang: ${TOKEN} Ende" }], { stream: false });
+          return JSON.stringify({ content: out.content });
+        `);
+        const d = JSON.parse(r) as { content: string };
+        const body = fake.bodies.at(-1) as { messages?: { content: unknown }[] } | undefined;
+        const gesendet = JSON.stringify(body?.messages ?? []);
+        const ok = !gesendet.includes("abcdefghijklmnopqrstuvwx1234") && /redacted|\[/.test(gesendet) && d.content.includes(TOKEN);
+        return { ok, detail: `Server sah: ${gesendet.slice(0, 120)} · Ergebnis im Original: ${d.content.includes(TOKEN)}` };
+      } finally {
+        await fake.close();
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
+  {
+    key: "V5",
+    titel: "Einstellungen: der Anfrage-Abschnitt bietet die „Stufenwahl im Chat“ an (levelPicker: true) — in einem Host, ohne den Tab zu leeren",
+    async run(cdp) {
+      const sicht = await oeffneEinstellungen(cdp);
+      if (!sicht) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      try {
+        const r = await sicht.evaluate<string>(`
+          const wurzel = document.querySelector(".modal.mod-settings") ?? document.body;
+          const namen = [...wurzel.querySelectorAll(".setting-item-name")].map((n) => n.textContent.trim());
+          return JSON.stringify({ stufenwahl: namen.some((n) => /Stufenwahl|Level picker/i.test(n)), hilfeErste: /^(Help|Hilfe)$/.test(namen[0] ?? ""), prompt: namen.some((n) => /Prompt/i.test(n)), anzahl: namen.length });
+        `);
+        const d = JSON.parse(r) as { stufenwahl: boolean; hilfeErste: boolean; prompt: boolean; anzahl: number };
+        return { ok: d.stufenwahl && d.hilfeErste && d.prompt, detail: `Stufenwahl-Zeile: ${d.stufenwahl} · Hilfe-Zeile zuerst: ${d.hilfeErste} · Prompt-Zeile (nach dem Host) noch da: ${d.prompt} · ${d.anzahl} Zeilen` };
+      } finally { await schliesseEinstellungen(cdp, sicht); }
+    },
+  },
   // ── G: Streaming gegen einen ECHTEN Endpunkt (Welle 11, Chat-Client-Tausch) ──────────────────
   // Der Kernlauf ist absichtlich modellfrei; diese drei Punkte sind der Beleg, dass der Chat-Weg
-  // (Transport, SSE, Abbruch, Fehlerkoerper) gegen einen echten Server traegt. Sie bauen einen
-  // FRISCHEN Client aus dem Konstruktor des laufenden Plugins — Einstellungen bleiben unberuehrt.
+  // (Transport, SSE, Abbruch, Fehlerkoerper) gegen einen echten Server traegt. Seit dem
+  // Verbindungs-Tausch laufen sie ueber `callLlm` des Plugins (Kit-Verbindung); der Endpunkt wird
+  // dafuer VORUEBERGEHEND in die Einstellungen gelegt (`setzeGEndpoint`) und im finally zurueckgestellt.
   // Endpunkt/Modell per Umgebung ueberschreibbar (I2M_SMOKE_ENDPOINT / I2M_SMOKE_MODEL).
   {
     key: "G1",
     titel: "Streaming: ein Vision-Aufruf gegen den echten Endpunkt liefert Text in mehreren Stuecken",
     modell: true,
     async run(cdp) {
+      await setzeGEndpoint(cdp);
+      try {
       await cdp.evaluate(`
         const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-        const C = p.visionClient.constructor;
-        const c = new C(${JSON.stringify(G_ENDPOINT)}, ${JSON.stringify(G_MODEL)});
         const cv = document.createElement("canvas"); cv.width = 320; cv.height = 96;
         const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, 320, 96);
         g.fillStyle = "#000"; g.font = "bold 48px sans-serif"; g.fillText("HELLO 42", 20, 64);
         const st = { chunks: 0, text: "", fertig: false, fehler: null, model: "", t0: Date.now() };
         globalThis.__i2mG1 = st;
-        c.transcribeStream(cv.toDataURL("image/png"), "Transcribe the text in the image. Reply with the text only.",
-          (t) => { st.chunks++; st.text += t; }, () => {}, new AbortController().signal, { reasoning_effort: "none" })
+        p.callLlm(p.imageMessages(cv.toDataURL("image/png"), "Transcribe the text in the image. Reply with the text only."),
+          { onToken: (t) => { st.chunks++; st.text += t; }, onReasoning: () => {}, signal: new AbortController().signal })
           .then((r) => { st.model = r.model; st.fertig = true; }, (e) => { st.fehler = String(e && e.message || e); st.fertig = true; });
         return true;
       `);
@@ -769,6 +902,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         ok: st.fehler === null && st.chunks > 1 && /42/.test(st.text),
         detail: `${st.chunks} Stueck(e) · Modell "${st.model}" · Text "${st.text.trim().slice(0, 60)}"${st.fehler ? ` · FEHLER ${st.fehler}` : ""}`,
       };
+      } finally { await stelleGWieder(cdp); }
     },
   },
   {
@@ -776,15 +910,15 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     titel: "Streaming: Abbruch per Signal beendet den Aufruf zuegig, mit Fehler statt Ergebnis",
     modell: true,
     async run(cdp) {
+      await setzeGEndpoint(cdp);
+      try {
       await cdp.evaluate(`
         const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-        const C = p.visionClient.constructor;
-        const c = new C(${JSON.stringify(G_ENDPOINT)}, ${JSON.stringify(G_MODEL)});
         const ctrl = new AbortController();
         const st = { fertig: false, fehler: null, ergebnis: false, dauer: 0, abgebrochenNach: 0, t0: Date.now() };
         globalThis.__i2mG2 = st;
-        c.transcribeTextStream("Write the numbers from 1 to 400, one per line.", "Follow the instruction.",
-          () => { if (!st.abgebrochenNach) { st.abgebrochenNach = Date.now() - st.t0; ctrl.abort(); } }, () => {}, ctrl.signal, { reasoning_effort: "none" })
+        p.callLlm([{ role: "user", content: "Follow the instruction.\n\nWrite the numbers from 1 to 400, one per line." }],
+          { onToken: () => { if (!st.abgebrochenNach) { st.abgebrochenNach = Date.now() - st.t0; ctrl.abort(); } }, onReasoning: () => {}, signal: ctrl.signal })
           .then(() => { st.ergebnis = true; st.fertig = true; st.dauer = Date.now() - st.t0; },
                 (e) => { st.fehler = String(e && (e.name + ": " + e.message) || e); st.fertig = true; st.dauer = Date.now() - st.t0; });
         return true;
@@ -799,6 +933,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         ok: st.fehler !== null && !st.ergebnis && st.abgebrochenNach > 0 && st.dauer - st.abgebrochenNach < 3000,
         detail: `erstes Stueck nach ${st.abgebrochenNach} ms, Abbruch, Ende nach ${st.dauer} ms · ${st.fehler ?? "KEIN Fehler, Ergebnis geliefert"}`,
       };
+      } finally { await stelleGWieder(cdp); }
     },
   },
   {
@@ -806,13 +941,13 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     titel: "Streaming: HTTP-Fehler (ungueltige Bild-URL → 400) → Fehler mit nicht leerer Meldung (Text wird nur berichtet)",
     modell: true,
     async run(cdp) {
+      await setzeGEndpoint(cdp);
+      try {
       await cdp.evaluate(`
         const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-        const C = p.visionClient.constructor;
-        const c = new C(${JSON.stringify(G_ENDPOINT)}, ${JSON.stringify(G_MODEL)});
         const st = { fertig: false, fehler: null, ergebnis: false };
         globalThis.__i2mG3 = st;
-        c.transcribeStream("nonsense", "y", () => {}, () => {}, new AbortController().signal, { reasoning_effort: "none" })
+        p.callLlm(p.imageMessages("nonsense", "y"), { onToken: () => {}, onReasoning: () => {}, signal: new AbortController().signal })
           .then(() => { st.ergebnis = true; st.fertig = true; }, (e) => { st.fehler = String(e && e.message || e); st.fertig = true; });
         return true;
       `);
@@ -823,6 +958,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       if (!r) return { ok: false, detail: "Aufruf nach 60 s nicht beendet" };
       const st = JSON.parse(r) as { fehler: string | null; ergebnis: boolean };
       return { ok: st.fehler !== null && st.fehler.trim() !== "", detail: st.fehler !== null ? `Meldung: "${st.fehler}"` : "KEIN Fehler" };
+      } finally { await stelleGWieder(cdp); }
     },
   },
 ];
@@ -851,22 +987,40 @@ async function schliesseEinstellungen(cdp: Cdp, sicht: Cdp): Promise<void> {
   await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
 }
 
+/** Ein aufgezeichneter Aufruf des Fake-Endpunkts. */
+interface FakeRequest { method: string; url: string; headers: Record<string, string | string[] | undefined>; body: unknown }
+
 /** Fake-Chat-Endpunkt im Node-Prozess: beantwortet /v1/models und /v1/chat/completions und merkt
- *  sich jeden POST-Body. Mit CORS-Freigabe, damit der Stream-Weg (XHR) durchkommt und der Body
- *  vom echten Transport stammt, nicht vom Fallback. */
-async function startFakeChat(): Promise<{ url: string; bodies: unknown[]; close(): Promise<void> }> {
+ *  sich jeden Aufruf samt Headern (`requests`) und jeden POST-Body (`bodies`). Mit CORS-Freigabe, damit
+ *  der Stream-Weg (XHR) durchkommt und der Body vom echten Transport stammt, nicht vom Fallback.
+ *  Ohne Stream (`stream: false`) antwortet er mit einer vollen Completion; mit `echo` spiegelt er den
+ *  gesendeten Text der letzten Nutzernachricht in die Antwort (Beleg der umkehrbaren Schwärzung). */
+async function startFakeChat(opts: { echo?: boolean; content?: string } = {}): Promise<{ url: string; bodies: unknown[]; requests: FakeRequest[]; close(): Promise<void> }> {
   const bodies: unknown[] = [];
+  const requests: FakeRequest[] = [];
   const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
-    if (req.url?.includes("/v1/models")) { res.writeHead(200, { ...cors, "Content-Type": "application/json" }); res.end(JSON.stringify({ data: [{ id: "google/gemma-4-e4b", object: "model" }] })); return; }
+    if (req.url?.includes("/v1/models")) {
+      requests.push({ method: req.method ?? "GET", url: req.url, headers: req.headers, body: null });
+      res.writeHead(200, { ...cors, "Content-Type": "application/json" }); res.end(JSON.stringify({ data: [{ id: "google/gemma-4-e4b", object: "model" }] })); return;
+    }
     if (req.method === "POST" && req.url?.includes("/v1/chat/completions")) {
       let raw = "";
       req.on("data", (c: Buffer) => { raw += c.toString("utf8"); });
       req.on("end", () => {
-        try { bodies.push(JSON.parse(raw)); } catch { bodies.push({ kein_json: raw.slice(0, 80) }); }
+        let body: { stream?: boolean; messages?: { role: string; content: unknown }[] } = {};
+        try { body = JSON.parse(raw) as typeof body; bodies.push(body); } catch { bodies.push({ kein_json: raw.slice(0, 80) }); }
+        requests.push({ method: "POST", url: req.url ?? "", headers: req.headers, body });
+        const letzte = body.messages?.filter((m) => m.role === "user").at(-1)?.content;
+        const antwort = opts.echo && typeof letzte === "string" ? letzte : (opts.content ?? "Fake-Transkript");
+        if (body.stream === false) {
+          res.writeHead(200, { ...cors, "Content-Type": "application/json" });
+          res.end(JSON.stringify({ model: "google/gemma-4-e4b", choices: [{ message: { role: "assistant", content: antwort }, finish_reason: "stop" }] }));
+          return;
+        }
         res.writeHead(200, { ...cors, "Content-Type": "text/event-stream" });
-        res.write(`data: ${JSON.stringify({ model: "google/gemma-4-e4b", choices: [{ delta: { content: "Fake-Transkript" } }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ model: "google/gemma-4-e4b", choices: [{ delta: { content: antwort } }] })}\n\n`);
         res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`);
         res.end("data: [DONE]\n\n");
       });
@@ -878,6 +1032,7 @@ async function startFakeChat(): Promise<{ url: string; bodies: unknown[]; close(
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     bodies,
+    requests,
     close: () => new Promise<void>((resolve) => { server.close(() => { resolve(); }); }),
   };
 }
@@ -912,8 +1067,47 @@ const entferneManager = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
 `);
 const aufloesung = (cdp: Cdp): Promise<{ url: string | null; model: string }> => cdp.evaluate(`
   const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-  await p.resolveAndReconnect();
-  return { url: p.activeEndpoint ? p.activeEndpoint.url : null, model: p.model };
+  const src = await p.llm.resolve({ force: true });
+  return { url: src.config ? src.config.url : null, model: p.model };
+`);
+
+/** G1–G3 laufen gegen einen ECHTEN Endpunkt: er wird voruebergehend in die Einstellungen gelegt (die
+ *  Verbindung liest sie bei jedem Aufruf) und im finally zurueckgestellt. */
+const setzeGEndpoint = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
+  const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+  globalThis.__i2mGVor = JSON.stringify({ eps: p.settings.visionEndpoints, model: p.settings.visionModel, choice: p.settings.choice });
+  p.settings.visionEndpoints = [{ url: ${JSON.stringify(G_ENDPOINT)} }];
+  p.settings.visionModel = ${JSON.stringify(G_MODEL)};
+  p.settings.choice = {};
+  p.llm.invalidate();
+  return true;
+`);
+const stelleGWieder = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
+  const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+  if (globalThis.__i2mGVor) {
+    const v = JSON.parse(globalThis.__i2mGVor);
+    p.settings.visionEndpoints = v.eps; p.settings.visionModel = v.model; p.settings.choice = v.choice;
+    delete globalThis.__i2mGVor;
+    await p.saveSettings();
+    p.llm.invalidate();
+  }
+  return true;
+`).catch(() => undefined);
+
+/** Stellt die Verbindungs-Einstellungen nach einem V-Punkt zurueck und raeumt den Schluesselbund-Eintrag auf,
+ *  den der Punkt angelegt hat (ein liegen gebliebener Eintrag wuerde den naechsten Lauf verfaelschen). */
+const stelleVerbindungWieder = (cdp: Cdp, vor: string): Promise<unknown> => cdp.evaluate(`
+  const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+  for (const e of p.settings.visionEndpoints) if (e.secretId) { try { app.secretStorage.setSecret(e.secretId, ""); } catch { /* nichts gesetzt */ } }
+  const v = JSON.parse(${JSON.stringify(vor)});
+  p.settings.visionEndpoints = v.eps; p.settings.visionModel = v.model; p.settings.request = v.request; p.settings.choice = v.choice;
+  await p.saveSettings();
+  p.llm.invalidate();
+  return true;
+`).catch(() => undefined);
+const verbindungVorher = (cdp: Cdp): Promise<string> => cdp.evaluate<string>(`
+  const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+  return JSON.stringify({ eps: p.settings.visionEndpoints, model: p.settings.visionModel, request: p.settings.request, choice: p.settings.choice });
 `);
 
 /** Misst den Endpunkt-Abschnitt im Einstellungen-Fenster (eigenes CDP-Target ab 1.13). */

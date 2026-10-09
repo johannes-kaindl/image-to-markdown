@@ -2,24 +2,16 @@ import { App, PluginSettingTab, Setting, setIcon, Notice, type SettingDefinition
 import type ImageToMarkdownPlugin from "./main";
 import { VisionClient } from "./vision_client";
 import { visionDisplay, VISION_TEST_TOKEN, type Confidence } from "./capabilities";
-import { t, defaultVisionPrompt } from "./i18n";
+import { t, getLang, defaultVisionPrompt } from "./i18n";
 import type { PdfPageSeparator } from "./pdf_to_md";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 import { helpSettingDefinition, githubHelpUrls } from "./vendor/kit-obsidian/help-setting";
-import { buildRequestSection } from "./vendor/kit-obsidian/request-section";
-import { BACKENDS, DEFAULT_REQUEST_SETTINGS, FAMILIES, type BackendId, type FamilyId, type FieldExplain, type RequestSettings } from "./vendor/kit/sampling-profiles";
-import { MODE } from "./request_params";
-import { deviationDetail } from "./request_text";
+import { DEFAULT_REQUEST_SETTINGS, type RequestSettings } from "./vendor/kit/sampling-profiles";
 import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab, installTabRefreshOnOpen } from "./vendor/kit-obsidian/settings_walker";
-import { buildEndpointList, type EndpointListStrings } from "./vendor/kit-obsidian/endpoint-list";
-import { createModelListCache, type ModelListCache } from "./vendor/kit/model-list-cache";
-import { ENDPOINT_PRESETS, type EndpointStatusKind, type EndpointWarning } from "./vendor/kit/endpoint_diagnostics";
-import type { EndpointRole } from "./vendor/kit/endpoint_config";
 import { migrateEndpointList, type EndpointConfig } from "./vendor/kit/endpoint_config";
 import { FolderSuggest } from "./vendor/kit-obsidian/folder-suggest";
 import type { EndpointChoice } from "./vendor/kit/endpoint-source";
-import { buildEndpointSourceSection, findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
-import { ENDPOINT_CALLER } from "./resolve_endpoint";
+import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
 
 export type { EndpointConfig };
 
@@ -143,28 +135,8 @@ export function makeVisionTestImage(token: string = VISION_TEST_TOKEN): string {
   }
 }
 
-/** Kit-Vokabel → eigener i18n-Key. Das Kit reicht `kind`/`rule` heraus und formuliert
- *  bewusst nicht; sein eingebauter Klartext ist deutsch, EN ist hier aber kanonisch. */
-const STATUS_KEY: Record<Exclude<EndpointStatusKind, "unknown">, string> = {
-  "ok": "settings.endpoints.status.ok",
-  "refused": "settings.endpoints.status.refused",
-  "unknown-host": "settings.endpoints.status.unknownHost",
-  "timeout": "settings.endpoints.status.timeout",
-  "not-an-llm-api": "settings.endpoints.status.notAnLlmApi",
-  "unauthorized": "settings.endpoints.status.unauthorized",
-};
-const WARN_KEY: Record<string, string> = {
-  "scheme": "settings.endpoints.warn.scheme",
-  "malformed": "settings.endpoints.warn.malformed",
-  "port": "settings.endpoints.warn.port",
-  "placeholder-ip": "settings.endpoints.warn.placeholderIp",
-};
-
 export class ImageToMarkdownSettingTab extends PluginSettingTab {
   private confirmedModels = new Set<string>();
-  /** Modell-Listen je Endpunkt. Gehoert der Lebensdauer des TABS, nicht eines Renders —
-   *  deshalb Feld und nicht lokale Variable (Kit-Vertrag von ModelListCache). */
-  private modelLists: ModelListCache = createModelListCache();
   /** Cleanups der render-Hatches aus dem Fallback-Pfad — vor jedem Rebuild ausführen. */
   private cleanupPrevious: () => void = () => { /* erster Lauf: nichts aufzuräumen */ };
   /** Von der Capability-Hatch gesetzt; das Modell-Dropdown ruft sie nach einem Wechsel. */
@@ -181,32 +153,27 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     this.uninstallRefresh = installTabRefreshOnOpen(this, () => { this.renderFallback(); });
   }
 
-  /** Vertragspflicht des Kit-Modell-Cache, und sein Fehlen waere UNSICHTBAR: der Cache haelt
-   *  Promises absichtlich ueber jeden Tab-Neuaufbau hinweg. Ohne dieses clear() bliebe ein
-   *  einmal als „nicht erreichbar“ gemessener Endpunkt die restliche Sitzung so stehen — wer
-   *  seinen LLM-Server danach startet und die Einstellungen neu oeffnet, saehe dauerhaft den
-   *  alten Zustand, und kein Test schluege an. */
+  /** Vertragspflicht der Kit-Verbindung: `hideSettings()` verwirft die Modell-Listen des Tabs. Ohne
+   *  das bliebe ein einmal als „nicht erreichbar“ gemessener Endpunkt die restliche Sitzung so
+   *  stehen — wer seinen LLM-Server danach startet und die Einstellungen neu öffnet, sähe dauerhaft
+   *  den alten Zustand, und kein Test schlüge an. */
   hide(): void {
-    this.modelLists.clear();
+    this.plugin.llm.hideSettings();
     this.uninstallRefresh();
     super.hide();
   }
 
-  /** Der Endpunkt, gegen den die Settings-UI arbeitet (Modell-Liste, Vision-Test): der aktive,
-   *  sonst der erste konfigurierte. GANZE Config, weil jeder dieser Calls den Schlüssel braucht. */
-  private endpointCfg(): EndpointConfig | undefined {
-    return this.plugin.activeEndpoint ?? (findEndpointManager(this.app) ? undefined : this.plugin.settings.visionEndpoints[0]);
-  }
-
-  /** VisionClient für die Settings-UI — immer über endpointCfg(), damit der Schlüssel mitgeht. */
-  private client(model: string): VisionClient {
-    const cfg = this.endpointCfg();
-    return new VisionClient(cfg?.url ?? "", model, cfg?.apiKey);
+  /** Probe der Settings-UI (Fähigkeits-Anzeige): gegen den aufgelösten Endpunkt, GANZE Config, weil
+   *  der Schlüssel nach dem Schlüsselbund-Umzug nicht mehr in den Settings steht, sondern nur in
+   *  `(await llm.resolve()).config`. Ohne Endpunkt (z. B. Manager ohne Eintrag) bleibt die URL leer. */
+  private async probe(): Promise<VisionClient> {
+    const cfg = (await this.plugin.llm.resolve()).config;
+    return new VisionClient(cfg?.url ?? "", cfg?.apiKey);
   }
 
   // ── Die eine Wahrheit ──────────────────────────────────────────────────────
   // Ab Obsidian 1.13 fragt der Host diese Struktur ab und ruft display() nie; nur so
-  // erscheinen die Einstellungen in der Settings-Suche. minAppVersion ist 1.8.7, dort
+  // erscheinen die Einstellungen in der Settings-Suche. minAppVersion ist 1.11.4, dort
   // gibt es die deklarative API noch nicht — deshalb zeichnet display() DIESELBE
   // Struktur mit der klassischen Setting-API nach (Kit-Walker). Kein zweiter
   // Definitionsbaum, der auseinanderlaufen kann.
@@ -245,14 +212,13 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
         type: "group",
         heading: t("settings.heading"),
         items: [
+          // Quelle, lokale Liste und Abschnitt „Anfrage“ zeichnet die Kit-Verbindung in einem Zug.
           { name: t("settings.endpoints.name"), desc: t("settings.endpoints.desc"),
-            render: (s: Setting) => { this.renderEndpoints(s); } },
+            render: (s: Setting) => { this.renderConnection(s); } },
           { name: t("settings.model.name"), desc: t("settings.model.desc"),
             render: (s: Setting) => { this.renderModel(s); } },
           { name: t("settings.capability.name"),
             render: (s: Setting) => { this.renderCapability(s); } },
-          { name: "", desc: t("settings.request.hint"), render: () => { /* nur Text */ } },
-          { name: "", render: (s: Setting) => { this.renderRequestSection(s); } },
           { name: t("settings.prompt.name"), desc: t("settings.prompt.desc"),
             render: (s: Setting) => { this.renderPrompt(s); } },
           // min/max sind die UI-Seite derselben Grenze, die setControlValue erzwingt: das
@@ -337,103 +303,13 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
 
   // ── Render-Hatches (ein Code, beide Pfade) ────────────────────────────────
 
-  /** Endpunkt-Liste — der verbindliche §8-Baustein aus dem Kit
-   *  (`vendor/kit-obsidian/endpoint-list.ts`), nicht mehr die eigene Zeilen-UI.
-   *
-   *  Der Eigenbau davor konnte weniger (kein Modell-Override je Zeile, keine Presets, keine
-   *  Rollen-/Diagnose-Zeile) und hatte einen Fehlbuchungs-Pfad: die Zeilen-Indizes wurden erst
-   *  beim Re-Render neu vergeben, waehrend `resolveAndReconnect()` noch pingte — ein blur in
-   *  dem Fenster schrieb auf den NACHRUECKENDEN Eintrag, im schlimmsten Fall einen
-   *  API-Schluessel an den falschen Host. Der Kit-Baustein sperrt die Zeilen dafuer. */
-  private renderEndpoints(setting: Setting): void {
+  /** Endpunkt-Quelle, lokale Liste und Abschnitt „Anfrage“ — die verbindlichen §8-Bausteine aus dem Kit,
+   *  gezeichnet von `createLlmConnection().renderSettings` in EINEM eigenen Host (es leert ihn beim
+   *  Neuzeichnen, nie den ganzen Tab). Die Kit-Texte kommen in der App-Sprache; was das Plugin anders
+   *  sagt, wäre ein Teil-Bündel. */
+  private renderConnection(setting: Setting): void {
     const host = settingBodyHost(setting);
-    buildEndpointSourceSection({
-      app: this.app, containerEl: host, capability: "vision", caller: ENDPOINT_CALLER,
-      choice: () => this.plugin.settings.choice,
-      setChoice: async c => { this.plugin.settings.choice = c; await this.plugin.saveSettings(); await this.plugin.resolveAndReconnect(); },
-      local: () => this.plugin.settings.visionEndpoints,
-      strings: {
-        managed: t("settings.source.managed"), managedDesc: t("settings.source.managedDesc"),
-        openManager: t("settings.source.openManager"), pickEndpoint: t("settings.source.pickEndpoint"),
-        automatic: t("settings.source.automatic"), model: t("settings.model.name"),
-        importLocal: t("settings.source.importLocal"),
-        imported: r => t("settings.source.imported", String(r.added.length), String(r.merged.length)),
-        importFailed: t("settings.source.importFailed"),
-        modelHint: key => key === "unreachable" ? t("settings.endpoints.hint.unreachable")
-          : key === "no-list" ? t("settings.endpoints.hint.noList")
-          : "",
-        savedSuffix: t("settings.endpoints.saved"), refreshModels: t("settings.refreshModels"),
-        saveFailed: t("settings.endpoints.saveFailed"),
-      },
-      renderLocalList: () => { this.renderLocalEndpointList(host); },
-      rerender: () => { this.refresh(); },
-    });
-  }
-
-  /** Der lokale Listen-Editor — nur ohne installierten LLM Endpoint Manager sichtbar. */
-  private renderLocalEndpointList(host: HTMLElement): void {
-    buildEndpointList({
-      containerEl: host,
-      label: t("settings.endpoints.name"),
-      desc: t("settings.endpoints.desc"),
-      placeholder: "http://localhost:1234",
-      strings: this.endpointStrings(),
-      cache: this.modelLists,
-      get: () => this.plugin.settings.visionEndpoints,
-      set: eps => { this.plugin.settings.visionEndpoints = eps; },
-      active: () => this.plugin.activeEndpoint?.url ?? null,
-      // EIN Client je Zeile traegt Status-Icon UND Modell-Liste — so koennen die beiden nie
-      // ueber dieselbe Zeile auseinanderlaufen (Kit-Vertrag). probeStatus() statt ping():
-      // die Zeile zeigt den GRUND, nicht nur rot/gruen.
-      clientFor: cfg => {
-        const c = new VisionClient(cfg.url, cfg.model ?? "", cfg.apiKey);
-        return { probe: () => c.probeStatus(), listModels: () => c.listModels() };
-      },
-      globalModel: () => this.plugin.settings.visionModel,
-      save: () => this.plugin.saveSettings(),
-      reconnect: () => this.plugin.resolveAndReconnect(),
-      rerender: () => { this.refresh(); },
-      presets: ENDPOINT_PRESETS,
-    });
-  }
-
-  /** Jeder Text des Endpunkt-Editors. Gemappt ueber `kind`/`rule`, nicht der Kit-Klartext. */
-  private endpointStrings(): EndpointListStrings {
-    return {
-      addPlaceholder: t("settings.endpoints.addPlaceholder"),
-      apiKeyPlaceholder: t("settings.endpoints.apiKeyPlaceholder"),
-      modelPlaceholder: t("settings.endpoints.modelPlaceholder"),
-      ariaUrl: t("settings.endpoints.ariaUrl"),
-      ariaAdd: t("settings.endpoints.ariaAdd"),
-      ariaApiKey: (url: string) => t("settings.endpoints.ariaApiKey", url),
-      ariaModel: (url: string) => t("settings.endpoints.ariaModel", url),
-      emptyModelLabel: (globalModel: string) => globalModel
-        ? t("settings.endpoints.globalModel", globalModel)
-        : t("settings.endpoints.globalModelUnset"),
-      modelHint: key => key === "unreachable" ? t("settings.endpoints.hint.unreachable")
-        : key === "no-list" ? t("settings.endpoints.hint.noList")
-        : "",
-      savedSuffix: t("settings.endpoints.saved"),
-      refreshModels: t("settings.refreshModels"),
-      moveToFront: t("settings.endpoints.moveToFront"),
-      remove: t("settings.endpoints.remove"),
-      thirdParty: t("settings.endpoints.thirdParty"),
-      probing: t("view.checking"),
-      statusTooltip: status => status.kind === "unknown"
-        ? t("settings.endpoints.status.unknown", status.raw ?? "")
-        : t(STATUS_KEY[status.kind]),
-      role: (role: EndpointRole) => role.kind === "active" ? t("settings.endpoints.role.active")
-        : role.kind === "standby" ? t("settings.endpoints.role.standby", String(role.position))
-        : role.kind === "unreachable" ? t("settings.endpoints.role.unreachable")
-        : t("settings.endpoints.role.skippedModel"),
-      warnings: (warnings: EndpointWarning[]) => warnings
-        .map(w => WARN_KEY[w.rule] ? t(WARN_KEY[w.rule]) : w.message)
-        .join(" · "),
-      presetTooltip: preset => t("settings.endpoints.preset", preset.label),
-      presetLabel: preset => preset.label,
-      checkConnection: t("settings.testConnection"),
-      saveFailed: t("settings.endpoints.saveFailed"),
-    };
+    this.plugin.llm.renderSettings(host, { lang: getLang() });
   }
 
   /** Modell: Dropdown wird asynchron aus dem Endpunkt befüllt; offline stattdessen ein
@@ -444,7 +320,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     // Managers hinweg zwischenspeichern, render() laeuft bei jedem Oeffnen des Tabs.
     if (findEndpointManager(this.app)) { setting.settingEl.addClass("img2md-setting-managed"); return; }
     setting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => { this.refresh(); }));
-    void this.client("").listModels().then((models: string[]) => {
+    void this.plugin.llm.models({ force: true }).then(({ models }) => {
       const cur = this.plugin.settings.visionModel;
       const list = models.includes(cur) || !cur ? models : [cur, ...models];
       if (list.length) {
@@ -454,13 +330,13 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           d.onChange(async (v: string) => {
             this.plugin.settings.visionModel = v;
             await this.plugin.saveSettings();
-            void this.plugin.resolveAndReconnect();
+            void this.plugin.reconnect();
             this.showCaps(v);
           });
         });
       } else {
         setting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
-          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.resolveAndReconnect(); }));
+          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.reconnect(); }));
         setting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => { this.refresh(); }));
       }
       this.showCaps(this.plugin.settings.visionModel);
@@ -491,13 +367,13 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     };
     this.showCaps = (model: string): void => {
       if (this.confirmedModels.has(model)) { renderCap("confirmed"); return; }
-      void this.client("").visionConfidence(model).then(renderCap);
+      void this.probe().then((p) => p.visionConfidence(model)).then(renderCap);
     };
     setting.addButton(b => b.setButtonText(t("settings.testVision")).onClick(async () => {
       const model = this.plugin.model;
       b.setDisabled(true);
       try {
-        const ok = await this.client(model).testVision(makeVisionTestImage());
+        const ok = await this.plugin.testVision(model, makeVisionTestImage());
         if (ok) { this.confirmedModels.add(model); renderCap("confirmed"); } else { renderCap("no"); }
       } catch {
         new Notice(t("settings.endpointUnreachable"));
@@ -506,73 +382,6 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       }
     }));
     this.showCaps(this.plugin.model);
-  }
-
-  /** Abschnitt „Anfrage“ — Sampling-Profil des Modus `transform` (Kit `request-section`): zeigt,
-   *  was gesendet wird und was davon wirkt, nimmt Ueberschreibungen je Familie an. Die Texte
-   *  stehen in `i18n.ts`; Familie und Backend uebersetzt das Plugin selbst, auch `unknown`. */
-  private renderRequestSection(setting: Setting): void {
-    const host = settingBodyHost(setting);
-    buildRequestSection({
-      containerEl: host,
-      modes: [MODE],
-      state: () => this.plugin.requestSectionState(),
-      settings: () => this.plugin.settings.request,
-      save: (s) => this.plugin.saveRequestSettings(s),
-      maxTokens: () => undefined,
-      session: this.plugin.requestSession,
-      rerender: () => { this.refresh(); },
-      strings: {
-        title: t("request.title"),
-        head: (family, familySource, backend, backendSource) => {
-          const famLabel = family === "—" ? "—" : (FAMILIES[family as FamilyId]?.label ?? family);
-          const backLabel = backend === "unknown" ? t("request.backendSource.none") : (BACKENDS[backend as BackendId]?.label ?? backend);
-          return t("request.head", famLabel, t(`request.familySource.${familySource}`), backLabel, t(`request.backendSource.${backendSource}`));
-        },
-        unknownFamily: t("request.unknownFamily"),
-        jitWarning: (model, defaultModel) => t("request.jitWarning", model, defaultModel),
-        sentAs: (model) => t("request.sentAs", model),
-        modeHeading: (mode) => t(`request.mode.${mode}`),
-        fieldName: (field) => t(`request.field.${field}`),
-        fieldDesc: (e) => this.fieldStateText(e),
-        reset: t("request.reset"),
-        thinkingLevel: t("request.thinkingLevel"),
-        level: (l) => t(`request.level.${l}`),
-        levelPicker: t("request.levelPicker"),
-        levelPickerDesc: t("request.levelPickerDesc"),
-        dormant: (fam) => t("request.dormant", fam === "unknown" ? t("request.familySource.none") : (FAMILIES[fam]?.label ?? fam)),
-        deleteDormant: t("request.deleteDormant"),
-        lastRequest: t("request.lastRequest"),
-        lastRequestNone: t("request.lastRequestNone"),
-        copy: t("request.copy"),
-        copied: t("request.copied"),
-        deviationsOk: t("request.deviationsOk"),
-        deviationsWarn: (n) => t("request.deviationsWarn", String(n)),
-        deviation: (kind, count, detail) => `${deviationDetail(kind, detail)} (${count}×)`,
-      },
-    });
-  }
-
-  /** Erklaertext je Feld: Zustand (gesendet/nicht gesendet und warum) plus Anmerkung. */
-  private fieldStateText(e: FieldExplain): string {
-    const key = {
-      "sent-effective": "request.state.sentEffective",
-      "sent-unproven": "request.state.sentUnproven",
-      "not-sent-ignored": "request.state.notSentIgnored",
-      "not-sent-unsupported": "request.state.notSentUnsupported",
-      "not-sent-unknown-family": "request.state.notSentUnknownFamily",
-      "not-sent-no-value": "request.state.notSentNoValue",
-    }[e.state];
-    let s = t(key);
-    const noteKey = e.note ? {
-      "raised-to-reserve": "request.note.raisedToReserve",
-      "raised-to-thinking-floor": "request.note.raisedToThinkingFloor",
-      "below-thinking-floor": "request.note.belowThinkingFloor",
-      "off-not-possible": "request.note.offNotPossible",
-    }[e.note] : undefined;
-    if (noteKey) s += ` ${t(noteKey)}`;
-    if (e.field === "top_p") s += t("request.top_p.hint");
-    return s;
   }
 
   /** Prompt-Textarea — Hatch statt `textarea`-Control, weil sie zusätzlich die

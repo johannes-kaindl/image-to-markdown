@@ -1,18 +1,16 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
 import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
-import { VisionClient, setHttp, setChatTransports } from "./vision_client";
-import type { EndpointConfig } from "./vendor/kit/endpoint_config";
-import { resolveVisionEndpoint, sanitizeChoice } from "./resolve_endpoint";
+import { setHttp } from "./vision_client";
+import { ENDPOINT_CALLER, sanitizeChoice } from "./resolve_endpoint";
 import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
-import type { EndpointSourceResult } from "./vendor/kit/endpoint-source";
-import { createRequestSession, type RequestSession } from "./vendor/kit-obsidian/request-session";
-import type { RequestSectionState } from "./vendor/kit-obsidian/request-section";
-import { checkResponse, onLevelFor, thinkingFor, type FamilyId, type RequestSettings, type ResponseFacts, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
-import { MODE, buildVisionParams, loadRequestSettings } from "./request_params";
-import { deviationNotice } from "./request_text";
-import { obsidianHttp, cachedProbe } from "./http";
-import { xhrSseTransport, requestUrlTransport } from "./vendor/kit-obsidian/chat-transport";
+import { createLlmConnection, type CompleteHandlers, type LlmConnection, type LlmConnectionSettings } from "./vendor/kit-obsidian/llm-connection";
+import type { ChatWireMessage } from "./vendor/kit-obsidian/chat-client";
+import { onLevelFor, thinkingFor, type FamilyId, type RequestSettings, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
+import { MODE, loadRequestSettings } from "./request_params";
+import { chatOutOrThrow, type ChatOut } from "./llm_call";
+import { VISION_TEST_PROMPT, isVisionConfirmed } from "./capabilities";
+import { obsidianHttp } from "./http";
 import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem, resolveDestDir } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
 import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, normalizePreset } from "./prompts";
@@ -33,25 +31,19 @@ import { createShortcutsBridge, type ShortcutsBridge } from "./vendor/kit-obsidi
 import type { OcrProviderApi, OcrProviderError } from "./vendor/kit/ocr-provider";
 import { createOcrProviderApi, shortcutResultToOcr } from "./ocr_provider";
 
+/** Die Handler eines Stream-Aufrufs der View. */
+function streamHandlers(onToken: (t: string) => void, onReasoning: (t: string) => void, signal?: AbortSignal): CompleteHandlers {
+  return { onToken, onReasoning, ...(signal ? { signal } : {}) };
+}
+
 export default class ImageToMarkdownPlugin extends Plugin {
   settings!: ImageToMarkdownSettings;
-  visionClient!: VisionClient;
-  /** Zuletzt aufgelöster Endpunkt — die GANZE Config, nicht nur die URL: der Schlüssel muss
-   *  an jeden Folge-Call. `url` ist bereits normalisiert (resolveActiveEndpointConfig). */
-  activeEndpoint: EndpointConfig | null = null;
-  /** Modell, das der letzte resolveAndReconnect() gewählt hat (choice.model → Manager-Default →
-   *  Modell der Zeile → visionModel). Leer, solange nichts aufgelöst ist. */
-  activeModel = "";
+  /** Die ganze LLM-Anbindung (Kit `createLlmConnection`): Endpunkt-Quelle (Manager zuerst, sonst die
+   *  lokale Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Profil, Client mit
+   *  Transport und Fristen, Schwärzung, Prüfung der Antwort und die Settings-Abschnitte. */
+  llm!: LlmConnection;
   /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet, `visionModel` ist der Rückfall. */
-  get model(): string { return this.activeModel || this.settings.visionModel; }
-  /** Volles Ergebnis der letzten Aufloesung — traegt Familie/Backend/sentModel fuer den Abschnitt
-   *  „Anfrage" und den Denk-Knopf in der Sidebar (Sampling-Plan § 3.1). */
-  private activeSource: EndpointSourceResult | null = null;
-  /** Sitzungszustand fuer „Letzte Anfrage" und Abweichungen; wird nicht gespeichert. */
-  requestSession: RequestSession = createRequestSession({ message: (d) => deviationNotice(d) });
-  /** Familie und Denkstufe der zuletzt gebauten Anfrage — `checkResponse` prueft die Antwort
-   *  gegen genau das, was gesendet wurde, nicht gegen den Stand beim Eintreffen der Antwort. */
-  private lastRequestCtx: { family: FamilyId | null; thinking: ThinkingLevel } = { family: null, thinking: "off" };
+  get model(): string { return this.llm.source().model || this.settings.visionModel; }
   private pendingCards = new CardCache();
   /** Anbieter-API v1 (Spec Baustein 4/D, Kit-Vertrag `ocr-provider`) — Konsumenten fragen
    *  `app.plugins.plugins["image-to-markdown"].api`, nie die Brücke direkt. Sofort in onload
@@ -65,8 +57,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
   };
 
   async onload() {
-    setHttp(obsidianHttp);
-    setChatTransports({ transport: xhrSseTransport, fallbackTransport: requestUrlTransport });
+    setHttp(obsidianHttp);   // nur noch für die Fähigkeits-Probe der Settings
     setLang(pickLang(getLanguage()));
     const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
     this.settings = mergeSettings(defaultSettings(), saved);
@@ -82,9 +73,32 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
     this.settings.choice = sanitizeChoice(this.settings.choice);
     this.settings.promptPreset = normalizePreset(this.settings.promptPreset);
-    const first = this.settings.visionEndpoints[0];
-    this.visionClient = this.makeVisionClient(first?.url ?? "", this.settings.visionModel, first?.apiKey);
-    void this.resolveAndReconnect();
+    this.llm = createLlmConnection({
+      app: this.app,
+      pluginId: this.manifest.id,
+      caller: ENDPOINT_CALLER,
+      capability: "vision",
+      mode: MODE,   // kein maxTokens: i2m sendet kein Budget, ein abgeschnittenes Transkript meldet finish_reason length
+      lang: () => getLang(),
+      levelPicker: true,   // die Sidebar zeigt die Stufenwahl (buildThinkingControl, ImgToMdView)
+      getSettings: () => ({
+        endpoints: this.settings.visionEndpoints,
+        choice: this.settings.choice,
+        model: this.settings.visionModel,
+        request: this.settings.request,
+      }),
+      // Erst in die Settings schreiben, dann speichern: die Endpunkt-Liste liest ihre Zeilen danach zurück.
+      persist: (patch: Partial<LlmConnectionSettings>) => {
+        if (patch.endpoints !== undefined) this.settings.visionEndpoints = patch.endpoints;
+        if (patch.model !== undefined) this.settings.visionModel = patch.model;
+        if (patch.choice !== undefined) this.settings.choice = patch.choice;
+        if (patch.request !== undefined) this.settings.request = patch.request;
+        const saved = this.saveSettings();
+        if (patch.request !== undefined) this.refreshThinkingControls();
+        return saved;
+      },
+    });
+    void this.llm.resolve().then(() => { this.refreshThinkingControls(); }).catch(() => { /* source() bleibt neutral */ });
 
     this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });
     this.api = createOcrProviderApi({ extractText: (p) => this.extractTextViaOcr(p) });
@@ -116,60 +130,49 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.refreshImgViews()));
   }
 
-  /** Löst Endpunkt UND Modell auf: Manager zuerst (bei JEDEM Aufruf frisch gefunden, nie
-   *  gecacht — das Plugin kann jederzeit deaktiviert werden), sonst die lokale Liste. */
-  async resolveAndReconnect(): Promise<void> {
-    // Der Schlüssel geht auch an die PROBE mit: ohne ihn antwortet ein gehosteter Endpunkt mit 401,
-    // gilt damit als nicht erreichbar und wird still übersprungen — das Feature wirkt tot, ohne Fehler.
-    const r = await resolveVisionEndpoint(
-      this.settings, findEndpointManager(this.app),
-      cfg => new VisionClient(cfg.url, "", cfg.apiKey).ping(),
-      cfg => cachedProbe(cfg.url, cfg.model || this.settings.visionModel),
-    );
-    this.activeEndpoint = r.config;
-    this.activeModel = r.model;
-    this.activeSource = r;
-    // Mit Manager und ohne Endpunkt gibt es keinen lokalen Rückfall (Kit-Vertrag): der Client
-    // zeigt dann ins Leere, connectionStatus meldet "nicht erreichbar".
-    const ep = r.config ?? (r.kind === "local" ? this.settings.visionEndpoints[0] : undefined);
-    // `sentModel` ist das Modell, wie es tatsaechlich gesendet wird (nach `aliasOf`-Aufloesung);
-    // `this.model` bleibt die Anzeige-/Wahl-Schreibweise.
-    this.visionClient = this.makeVisionClient(ep?.url ?? "", r.sentModel || this.model, ep?.apiKey);
+  /** Nachrichten für ein Bild (Text-Prompt + Bild als image_url-Data-URL). Bildteile baut das Plugin
+   *  selbst — die Verbindung nimmt fertige `messages`. */
+  private imageMessages(dataUrl: string, prompt: string): ChatWireMessage[] {
+    return [{
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: dataUrl } },
+      ],
+    }];
+  }
+
+  /** EIN Aufruf der Verbindung mit Ergebnis oder Fehler im Format der View. Mit `retry`: schlägt er
+   *  fehl (und wurde nicht abgebrochen), löst die Verbindung neu auf — ein anderer Endpunkt der Liste
+   *  kann inzwischen erreichbar sein — und versucht es einmal erneut. */
+  private async callLlm(messages: readonly ChatWireMessage[], h: CompleteHandlers, retry = false): Promise<ChatOut> {
+    const run = async (): Promise<ChatOut> => chatOutOrThrow(await this.llm.complete({ messages }, h));
+    if (!retry) return run();
+    try {
+      return await run();
+    } catch (err) {
+      if (h.signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
+      this.llm.invalidate();
+      const src = await this.llm.resolve({ force: true }).catch(() => null);
+      this.refreshThinkingControls();
+      if (src?.config) return run();
+      throw err;
+    }
+  }
+
+  /** Nach einer Änderung an Modell oder Liste: gemerkte Auflösung verwerfen, neu auflösen und die
+   *  Denk-Knöpfe der Sidebar nachziehen (Familie kann sich geändert haben). */
+  async reconnect(): Promise<void> {
+    this.llm.invalidate();
+    await this.llm.resolve().catch(() => undefined);
     this.refreshThinkingControls();
   }
 
-  /** EIN Weg, einen VisionClient zu bauen: jede Server-Antwort geht an `checkResponse`
-   *  (Sampling-Plan Rezept 5), damit Abweichungen im Abschnitt „Anfrage" sichtbar werden. */
-  private makeVisionClient(url: string, model: string, apiKey?: string): VisionClient {
-    return new VisionClient(url, model, apiKey, (facts) => { this.reportResponse(facts); });
-  }
-
-  private reportResponse(facts: ResponseFacts): void {
-    this.requestSession.report(checkResponse(this.lastRequestCtx, facts));
-  }
-
-  /** Die Sampling-Parameter fuer den NAECHSTEN Aufruf — einzige Stelle (statt acht): baut ueber
-   *  `buildVisionParams`, merkt Familie/Stufe fuer `checkResponse` und schreibt „Letzte Anfrage". */
-  requestParams(): Record<string, number | string> {
-    const src = this.activeSource;
-    const family = src?.family ?? null;
-    const level = thinkingFor(this.settings.request, MODE);
-    const overrides = this.settings.request.overrides[MODE]?.[family ?? "unknown"] ?? {};
-    const { params } = buildVisionParams({ family, backend: src?.backend ?? "unknown", thinking: level, overrides });
-    this.lastRequestCtx = { family, thinking: level };
-    this.requestSession.recordRequest(params);
-    return params;
-  }
-
-  /** Fuer `buildRequestSection` im Settings-Tab (Sampling-Plan § 5.1). */
-  requestSectionState(): RequestSectionState {
-    const s = this.activeSource;
-    return {
-      family: s?.family ?? null, familySource: s?.familySource ?? "none",
-      backend: s?.backend ?? "unknown", backendSource: s?.backendSource ?? "none",
-      model: s?.model ?? "", sentModel: s?.sentModel ?? "",
-      ...(s?.defaultModel !== undefined ? { defaultModel: s.defaultModel } : {}),
-    };
+  /** Aktiver Vision-Test der Settings: schickt das Test-Bild und prüft, ob die Antwort das erwartete
+   *  Token enthält. Wirft bei Netz-/HTTP-Fehler (Endpunkt nicht erreichbar). */
+  async testVision(model: string, dataUrl: string): Promise<boolean> {
+    const r = await this.llm.complete({ messages: this.imageMessages(dataUrl, VISION_TEST_PROMPT) }, { model, stream: false });
+    return isVisionConfirmed(chatOutOrThrow(r).content);
   }
 
   async saveRequestSettings(next: RequestSettings): Promise<void> {
@@ -192,7 +195,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   thinkingState(): { family: FamilyId | null; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean } {
     const r = this.settings.request;
-    return { family: this.activeSource?.family ?? null, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE), levelPicker: r.levelPickerInChat };
+    return { family: this.llm.source().family, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE), levelPicker: r.levelPickerInChat };
   }
 
   private refreshThinkingControls(): void {
@@ -219,11 +222,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
     if (!(f instanceof TFile)) return { error: "not-found", message: `Datei nicht gefunden: ${vaultPath}` };
     const ext = f.extension.toLowerCase();
     if (!SUPPORTED_EXTS.includes(ext)) return { error: "unsupported", message: `Dateityp nicht unterstützt: .${ext}` };
-    if (!this.activeEndpoint) return { error: "backend-unavailable", message: "kein Vision-Endpunkt erreichbar" };
+    if (!(await this.llm.resolve()).config) return { error: "backend-unavailable", message: "kein Vision-Endpunkt erreichbar" };
     try {
       const dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(vaultPath))}`;
       const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
-      const { content } = await this.visionClient.transcribe(dataUrl, prompt, this.requestParams());
+      const { content } = await this.callLlm(this.imageMessages(dataUrl, prompt), { stream: false });
       return content;
     } catch (e) {
       return { error: "failed", message: e instanceof Error ? e.message : String(e) };
@@ -295,7 +298,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
       noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
       readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
-      transcribe: (dataUrl) => this.visionClient.transcribe(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt), this.requestParams()),
+      // Ohne Stream (Befehl „Transcribe active note“, Kontextmenü): die Fristen bleiben die der Volltext-Antwort.
+      transcribe: (dataUrl) => this.callLlm(this.imageMessages(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt)), { stream: false }),
       notify: (m) => { new Notice(m); },
       confirmOverwrite: (ctx) => new Promise<string | null>((resolve) => new DiffModal(this.app, ctx.path, ctx.diff, resolve).open()),
     };
@@ -393,13 +397,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
             try { layerText = await extractPdfPageText(bytes, page ?? 1); } catch { layerText = ""; }
             if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
               const fmt = t("pdf.textLayerPrompt");
-              try {
-                return await this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, this.requestParams());
-              } catch (err) {
-                await this.resolveAndReconnect();
-                if (this.activeEndpoint) return this.visionClient.transcribeTextStream(layerText, fmt, onContent, onReasoning, signal, this.requestParams());
-                throw err;
-              }
+              return this.callLlm([{ role: "user", content: `${fmt}\n\n${layerText}` }], streamHandlers(onContent, onReasoning, signal), true);
             }
           }
           dataUrl = await renderPdfPage(bytes, page ?? 1, scale);
@@ -407,13 +405,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
           dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
         }
         const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
-        try {
-          return await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
-        } catch (err) {
-          await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
-          throw err;
-        }
+        return this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal), true);
       },
       writeTranscripts: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
@@ -449,27 +441,12 @@ export default class ImageToMarkdownPlugin extends Plugin {
           dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
         }
         const prompt = buildDescribePrompt(this.settings.describeTaxonomy, getLang());
-        try {
-          const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
-          return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
-        } catch (err) {
-          await this.resolveAndReconnect();
-          if (this.activeEndpoint) {
-            const r = await this.visionClient.transcribeStream(dataUrl, prompt, onContent, onReasoning, signal, this.requestParams());
-            return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
-          }
-          throw err;
-        }
+        const r = await this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal), true);
+        return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
       },
       refine: async (base, steps, feedback, onContent, onReasoning, signal) => {
         const messages = buildRefineMessages(base, steps, feedback, t("refine.systemPrompt"));
-        try {
-          return await this.visionClient.refineStream(messages, onContent, onReasoning, signal, this.requestParams());
-        } catch (err) {
-          await this.resolveAndReconnect();
-          if (this.activeEndpoint) return this.visionClient.refineStream(messages, onContent, onReasoning, signal, this.requestParams());
-          throw err;
-        }
+        return this.callLlm(messages, streamHandlers(onContent, onReasoning, signal), true);
       },
       getTaxonomy: () => this.settings.describeTaxonomy,
       writeDescriptions: async (sourcePath, entries) => {
@@ -485,18 +462,20 @@ export default class ImageToMarkdownPlugin extends Plugin {
       },
       getMode: () => this.settings.mode,
       setMode: (m) => { this.settings.mode = m; void this.saveSettings(); },
-      connectionStatus: async () => { await this.resolveAndReconnect(); return { ok: this.activeEndpoint !== null, endpoint: this.activeEndpoint?.url ?? null }; },
-      listModels: () => {
-        // Mit Manager gibt es keinen lokalen Rückfall — ohne aufgelösten Endpunkt bleibt die Liste leer.
-        const ep = this.activeEndpoint ?? (findEndpointManager(this.app) ? undefined : this.settings.visionEndpoints[0]);
-        return new VisionClient(ep?.url ?? "", "", ep?.apiKey).listModels();
+      connectionStatus: async () => {
+        const src = await this.llm.resolve({ force: true });
+        this.refreshThinkingControls();
+        return { ok: src.config !== null, endpoint: src.config?.url ?? null };
       },
+      // Mit Manager gibt es keinen lokalen Rückfall — ohne aufgelösten Endpunkt bleibt die Liste leer.
+      listModels: async () => (await this.llm.models({ force: true })).models,
       getModel: () => this.model,
       // Mit Manager gehört das Modell zur Wahl (choice.model), sonst ist es das globale visionModel.
       setModel: (m: string) => {
         if (findEndpointManager(this.app)) this.settings.choice = { ...this.settings.choice, model: m || undefined };
         else this.settings.visionModel = m;
-        void this.saveSettings(); void this.resolveAndReconnect();
+        void this.saveSettings();
+        void this.reconnect();
       },
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
       getPreset: () => this.settings.promptPreset,
