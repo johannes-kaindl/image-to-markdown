@@ -917,7 +917,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const ctrl = new AbortController();
         const st = { fertig: false, fehler: null, ergebnis: false, dauer: 0, abgebrochenNach: 0, t0: Date.now() };
         globalThis.__i2mG2 = st;
-        p.callLlm([{ role: "user", content: "Follow the instruction.\n\nWrite the numbers from 1 to 400, one per line." }],
+        p.callLlm([{ role: "user", content: "Follow the instruction.\\n\\nWrite the numbers from 1 to 400, one per line." }],
           { onToken: () => { if (!st.abgebrochenNach) { st.abgebrochenNach = Date.now() - st.t0; ctrl.abort(); } }, onReasoning: () => {}, signal: ctrl.signal })
           .then(() => { st.ergebnis = true; st.fertig = true; st.dauer = Date.now() - st.t0; },
                 (e) => { st.fehler = String(e && (e.name + ": " + e.message) || e); st.fertig = true; st.dauer = Date.now() - st.t0; });
