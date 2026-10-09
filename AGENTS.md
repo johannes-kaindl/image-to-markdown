@@ -29,8 +29,8 @@ nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanke
 ## Architecture principles
 
 Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`capabilities.ts`, `i18n.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
-`describe.ts`, `prompts.ts`, `request_params.ts`, `request_text.ts`, `card_cache.ts`, `frontmatter_map.ts`,
+`llm_call.ts`, `capabilities.ts`, `i18n.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
+`describe.ts`, `prompts.ts`, `request_params.ts`, `card_cache.ts`, `frontmatter_map.ts`,
 `fm_migration.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
 `settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und die
 vendorte Schicht `vendor/kit-obsidian/*` importieren `obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten
@@ -60,27 +60,16 @@ backlinks.ts        Reiner Kern: Backlink-Idempotenz-Lookup — `findExistingTra
                     der Frontmatter-Filter ist load-bearing: Body-Embeds allein reichen nicht).
                     Interface `BacklinkLookup` (von der Obsidian-Schicht injiziert, obsidian-frei
                     testbar). Verwendet von `img_to_md_state.ts` via Scan.
-vision_client.ts    VisionClient(endpoint, model, apiKey?) → OpenAI-kompatibler /v1/chat/completions (transcribe +
-                    transcribeStream/transcribeTextStream/refineStream) · ping/listModels · visionConfidence/testVision · normalizeEndpoint ·
-                    resolveActiveEndpoint (pingt Endpoint-Liste der Reihe nach, gibt den ersten
-                    erreichbaren zurück oder null wenn alle offline).
-                    ⚠️ EIN Erreichbarkeits-Begriff, seit 0.22.0: `ping()` delegiert an
-                    `probeStatus()` (→ Kit-`classifyEndpointStatus`), gilt also nur bei HTTP 200
-                    MIT Modell-Listen-Form. Bis 0.21.0 fragte `ping()` nur `res.ok` — dann warnte
-                    die Endpunkt-Zeile vor einem Endpunkt, den die Auflösung gleich darauf nahm.
-                    Ein leeres `data`-Array bleibt gültig (frisches MLX ohne Modelle im Cache).
-                    Transport injiziert: ping/listModels/Capability-Probe über HttpFetch/setHttp (requestUrl-Adapter),
-                    der CHAT-Weg (transcribe + Streams) über den Kit-`createChatClient` mit `setChatTransports`
-                    (XHR-Stream, `requestUrl` als Fallback ohne Stream). Der optionale API-Schlüssel wird per
-                    authHeaders auf ALLE Wege gelegt (inkl. ping/listModels/Capability-Probe — ohne ihn
-                    gälte ein gehosteter Endpunkt als offline und würde still übersprungen).
-                    `parseErrorEnvelope` ist seit 0.27.0 ein Adapter über das vendored Kit-Modul
-                    (`vendor/kit/error_body.ts` → errorMessageFromText mit `bodyMayBeSuccess: true`);
-                    dieses Repo ist laut Kit-Dateikopf die kanonische Quelle der Kaskade. Die Option
-                    ist Pflicht: alle drei Aufrufstellen reichen einen Body herein, von dem noch nicht
-                    feststeht, ob er ein Fehler ist. Reiner Kern, obsidian-frei.
-http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert (nur für die
-                    NICHT-Chat-Wege: ping/listModels/Capability-Probe; der Chat-Weg nutzt die Kit-Transporte, s. u.).
+vision_client.ts    Schmale Hilfsklasse `VisionClient(endpoint, apiKey?)` NUR für die passive Fähigkeits-Anzeige
+                    der Settings (`visionConfidence`, über HttpFetch/setHttp). Chat, Ping, Modellliste, Transport
+                    und Fristen sind seit Welle 15 (Verbindungs-Tausch) die Kit-Verbindung `createLlmConnection`
+                    (`plugin.llm`). Der Schlüssel kommt aus `(await llm.resolve()).config`, nicht aus den Settings:
+                    er liegt im Obsidian-Schlüsselbund. Reiner Kern, obsidian-frei.
+llm_call.ts         `chatOutOrThrow(LlmResult)`: übersetzt das Ergebnis der Verbindung in `ChatOut`
+                    {content, reasoning, model, finishReason?} oder wirft den Fehler mit dem nutzersichtbaren Satz
+                    (`t("chat.err.*")`, `error.noEndpoint`; Abbruch bleibt ein `AbortError`). Reiner Kern.
+http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert (nur noch
+                    für die Fähigkeits-Probe der Settings).
 capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projiziert): asJsonFetch
                     (übersetzt HttpFetch → CapabilityFetch) · fetchVisionCapability · resolveVision ·
                     visionDisplay · aktiver Vision-Test (VISION_TEST_TOKEN/VISION_TEST_PROMPT/
@@ -93,12 +82,9 @@ describe.ts         Beschreiben-Modus: buildDescribePrompt (festes CATEGORY/TAGS
                     Taxonomie-Auswahl) + Parsing nach ParsedDescription. Reiner Kern.
 prompts.ts          Prompt-Presets (default/tables/handwriting/math/code): PROMPT_PRESETS ·
                     isPromptPreset · normalizePreset · Preset-Auflösung. Reiner Kern.
-request_params.ts   Sampling-Profil (Modus `transform`): `buildVisionParams` (Request-Bau-Funktion DES PLUGINS, eine
-                    Stelle für alle Aufrufe — goldene Requests testen sie, nicht das Kit) · `loadRequestSettings`
-                    (lädt `request`, zieht das Altfeld `suppressThinking` nach: true → Stufe „aus“, false → Ein-Stufe).
-                    Kein `max_tokens`: i2m hat kein Budget. `main.ts::requestParams()` baut je Aufruf neu, merkt Familie
-                    und Stufe für `checkResponse` und schreibt „Letzte Anfrage“. Reiner Kern.
-request_text.ts     Texte der Abweichungen (Notice + Statuszeile des Abschnitts „Anfrage“). Reiner Kern.
+request_params.ts   `MODE` (Sampling-Modus `transform`) · `loadRequestSettings` (lädt `request`, zieht das Altfeld
+                    `suppressThinking` nach: true → Stufe „aus“, false → Ein-Stufe). Den Request baut die Kit-Verbindung
+                    (kein `maxTokens`: i2m hat kein Budget). Reiner Kern.
 card_cache.ts       CardCache: In-Session-Cache der Sidebar-Ergebnis-Karten pro Quelldatei
                     (Plugin-Ebene, überlebt View-Close; kein Disk-Persist). Reiner Kern.
 frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskriminator-Werte aller
@@ -115,23 +101,21 @@ migration_modal.ts  MigrationModal (Modal): Vorschau der Frontmatter-Migration (
 i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t() (Fallback lang→en→key,
                     {0}-Interpolation) · pickLang · setLang/getLang · defaultVisionPrompt. EN kanonisch.
 settings.ts         ImageToMarkdownSettings (enthält `visionEndpoints: EndpointConfig[]` — je Eintrag
-                    URL + optionaler API-Schlüssel) · migrateEndpoints (überführt beide Alt-Stände aus
+                    URL + `id`/`secretId`; der Schlüssel liegt im Schlüsselbund) · migrateEndpoints (überführt beide Alt-Stände aus
                     data.json — Einzelfeld `visionEndpoint` und String-Liste — via Kit-`migrateEndpointList`
                     auf Configs) · applyListEdit (String-Listen, Basis für applyTaxonomyEdit; Endpunkte
                     nutzen das Kit-`applyEndpointEdit` mit Feld-Diskriminator) · defaultSettings()
-                    (Prompt sprachabhängig) · SettingTab: dynamische Endpunkt-Felder (URL + Passwortfeld
-                    pro Eintrag + leeres „Neu"-Feld OHNE Schlüsselfeld — der Adder verwirft alles außer
-                    der URL; Pro-Feld-Erreichbarkeits-Icon circle-check/circle-x/loader + title-Text;
-                    aktiver Endpoint markiert, Vergleich über normalisierte URLs; „Verbindung testen") · Modell + „Vision-Fähigkeit"
-                    (visionConfidence + aktiver „Vision testen") · Prompt (große Textarea) ·
+                    (Prompt sprachabhängig) · SettingTab: Endpunkt-Quelle, lokale Liste und Abschnitt „Anfrage“
+                    zeichnet `llm.renderSettings(host, { lang })` in EINEM Host (Hatch `renderConnection`),
+                    `hide()` ruft `llm.hideSettings()` · Modell (Dropdown aus `llm.models`) + „Vision-Fähigkeit"
+                    (visionConfidence + aktiver „Vision testen" über `plugin.testVision`) · Prompt (große Textarea) ·
                     PDF-Einstellungen (pdfMaxPages, pdfRenderScale, pdfPageSeparator) ·
                     makeVisionTestImage (Canvas, DOM-Schicht).
 main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setLang) beim onload,
-                    View/Ribbon/Command/Kontextmenü/SettingTab, VisionClient. Hält `activeEndpoint`
-                    (zuletzt aufgelöste EndpointConfig — die ganze Config, weil der Schlüssel an jeden
-                    Folge-Call muss; `url` bereits normalisiert) + `resolveAndReconnect` (ruft
-                    resolveActiveEndpointConfig auf und reicht den Schlüssel auch an die Ping-Probe,
-                    speichert Ergebnis, informiert View).
+                    View/Ribbon/Command/Kontextmenü/SettingTab. Hält `llm` (= `createLlmConnection`, Fähigkeit
+                    `vision`, Modus `transform`, `levelPicker: true`; `persist` bildet endpoints→visionEndpoints,
+                    model→visionModel synchron ab) + `callLlm` (ein Aufruf mit `messages`, optional EIN Retry nach
+                    `invalidate()`, nie nach Abbruch oder bereits gestreamtem Text) + `testVision` + `reconnect`.
 pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
                     gebündelten pdf.js-Worker als eingebetteten String (Blob-URL-Quelle). Nicht
                     manuell editieren; wird bei `npm run build` neu erzeugt.
@@ -154,17 +138,17 @@ vendor/kit/         Aus obsidian-kit vendored — obsidian-freie Schicht (`obsid
                     migration_modal.ts bauen daraus die CSS-Klasse `img2md-diff-${kind}` gegen
                     styles.css. Eine Umbenennung im Kit bräche das Styling still.
   error_body.ts     errorMessageFromBody/errorMessageFromText — Fehlermeldung aus einem
-                    JSON-Fehlerkörper. Konsument ist der Adapter `parseErrorEnvelope` in
-                    vision_client.ts (s. o.).
+                    JSON-Fehlerkörper. Konsument ist der Kit-Chat-Client.
   clipboard.ts      writeClipboard (obsidian-frei) — Abhängigkeit von kit-obsidian/clipboard.ts.
 vendor/kit-obsidian/ Aus obsidian-kit vendored — obsidian-abhängige Schicht
                     (`obsidian-kit/src/obsidian/*`), eigener Pin in `VENDOR.json`:
-  chat-client.ts    createChatClient (Kit 0.42.0): Streaming, Idle-/Erst-Chunk-Frist, Abbruch, Fehlerkörper, Fallback ohne Stream. Obsidian-frei (Transport injiziert) — deshalb vom Kern `vision_client.ts` importierbar. Querimporte auf code-kit sind wie bei clipboard.ts auf `../kit/` umgeschrieben.
-  chat-transport.ts xhrSseTransport (Stream) + requestUrlTransport (Fallback ohne Stream). Importiert `obsidian`; `main.ts` injiziert beide per `setChatTransports`.
+  llm-connection.ts createLlmConnection (Welle 15): die ganze LLM-Anbindung (Quelle, gemerkte Auflösung, Modellliste, Profil, Client, Schwärzung, Antwortprüfung, Settings-Abschnitte); zieht backend-probe, endpoint-secrets, secrets, llm-connection-strings mit. Alle Module stehen auf EINER Ref (kit-sync.json).
+  chat-client.ts    createChatClient: Streaming, Idle-/Erst-Chunk-Frist, Abbruch, Fehlerkörper, Fallback ohne Stream. Obsidian-frei (Transport injiziert) — von der Verbindung genutzt. Querimporte auf code-kit sind wie bei clipboard.ts auf `../kit/` umgeschrieben.
+  chat-transport.ts xhrSseTransport (Stream) + requestUrlTransport (Fallback ohne Stream). Importiert `obsidian`; die Verbindung wählt sie selbst (`transportFor`).
   clock.ts          Uhr-Port für chat-client (Tests injizieren eine Fake-Uhr).
   request-section.ts / request-session.ts / thinking-control.ts / collapsible.ts  Sampling-Plan-Bausteine (Abschnitt „Anfrage“, Sitzung, Denk-Knopf der Sidebar); CSS verbatim in `styles.css`.
   clipboard.ts      copyToClipboard: Zwischenablage mit Notice-Quittung. Genutzt von main.ts
-                    (copyText in ImgToMdViewDeps). ⚠️ Nicht-verbatim (wie chat-client.ts, endpoint-list.ts, model-picker.ts, endpoint-source.ts): die
+                    (copyText in ImgToMdViewDeps). ⚠️ Nicht-verbatim (wie endpoint-list.ts, model-picker.ts, endpoint-source.ts): die
                     kit-internen Importe `../pure/` heißen hier `../kit/` (Vendor-Layout). Der
                     Umschrieb ist mechanisch, wird von sync-kit.sh reproduziert und ist in Zeile 2
                     der Datei sowie im note-Feld der VENDOR.json deklariert.
@@ -184,9 +168,9 @@ aus `obsidian-kit/src/pure/`) und `src/vendor/kit-obsidian/` (obsidian-abhängig
 Geschmack: ein obsidian-importierendes Modul unter `vendor/kit/` fällt in den Nachbar-Repos
 durch deren `check:pure`. Erneuert wird über `tools/sync-kit.sh` (`sh tools/sync-kit.sh`,
 liest `../obsidian-kit` bzw. `$KIT_DIR`), nie von Hand; die beiden `VENDOR.json` tragen den Pin.
-Der Chat-Weg läuft seit 0.25.0 über den Kit-`createChatClient` (Welle 11) — `sse.ts`/`streamSSE` und der fetch-Stream sind entfallen. `VisionClient` baut den Client lazy, einen je Instanz; `main.ts::resolveAndReconnect` erzeugt bei jedem Endpunktwechsel einen neuen `VisionClient`, damit die Fallback-Entscheidung (ohne Stream weitermachen) nicht am neuen Endpunkt kleben bleibt. Die Fehlertexte baut `vision_client.ts::chatError` aus `kind` über `t("chat.err.*")`, die Servermeldung steht hinter dem eigenen Satz. Fristen: Idle 120 s, erster Chunk 600 s (JIT-ladendes Modell, großes Bild). Sampling: `params` ist übergangsweise `suppressParams(...)`; die Anfrage-Profile (Sampling-Plan Teil E Task 14) sind noch nicht umgesetzt.
+Der Chat-Weg läuft seit Welle 15 (0.28.0) über die Kit-Verbindung `createLlmConnection` (`plugin.llm`); vorher über `createChatClient` mit eigenem `VisionClient`. Fristen sind die des Kits und statisch: Idle 120 s, erster Chunk 600 s (JIT-ladendes Modell, großes Bild), ohne Stream 900 s; die Nicht-Stream-Aufrufe (Befehl, Kontextmenü, Anbieter-API, Vision-Test) laufen mit `stream: false`. Die Fehlertexte baut `llm_call.ts::chatOutOrThrow` aus `kind` über `t("chat.err.*")`. Die Verbindung schwärzt Geheimnisse vor dem Senden (umkehrbar, Bildteile nie). Das Anfrage-Profil (Modus `transform`) und der Abschnitt „Anfrage“ kommen ebenfalls aus der Verbindung.
 
-**Die Endpunkt-QUELLE gehört dem LLM Endpoint Manager, sobald er installiert ist (Welle 8, 2026-09-25):** `plugin.resolveAndReconnect()` (`src/main.ts`) löst Endpunkt UND Modell über `resolveVisionEndpoint()` (`src/resolve_endpoint.ts`, Kit `endpoint-source`, Fähigkeit `vision`) auf — Manager zuerst, sonst `visionEndpoints` + `visionModel`; `plugin.model` ist das Modell für jeden Aufruf (`activeModel`, Rückfall `visionModel`), `settings.choice` hält die Wahl gegenüber dem Manager und gilt nur mit Manager (ein Modellname ist an seinen Endpunkt gebunden). Den Manager findet `findEndpointManager(app)` bei JEDEM Aufruf frisch. Im Settings-Tab zeigt `buildEndpointSourceSection` den Manager-Baustein, sonst den lokalen Listen-Editor; die globale Modell-Zeile blendet sich mit Manager über die Klasse `img2md-setting-managed` aus — **in `render()`, nicht beim Bau der Definitionsliste**, weil Obsidian ≥ 1.13 diese Liste über das Erscheinen des Managers hinweg zwischenspeichern kann (in slide-deck gemessen, GUI-Smoke E1b). Ein Manager ohne Endpunkt ergibt KEINEN lokalen Rückfall (Kit-Vertrag). `tools/sync-kit.sh` kennt seither `relayer_pure` für `endpoint-source` (Querimport auf `sampling-profiles`, nur als Abhängigkeit mitvendort). GUI-Smoke F1–F3 legen einen Fake-Manager in den Plugin-Slot und stellen den Slot im `finally` und im Abbruch-Handler zurück.
+**Die Endpunkt-QUELLE gehört dem LLM Endpoint Manager, sobald er installiert ist (Welle 8, 2026-09-25; seit Welle 15 über die Verbindung):** `plugin.llm.resolve()` löst Endpunkt UND Modell auf — Manager zuerst (bei JEDEM Aufruf frisch gefunden, nie gemerkt), sonst `visionEndpoints` + `visionModel` (lokal gemerkt bis `invalidate()`); `plugin.model` ist das Modell für jeden Aufruf (`llm.source().model`, mit Manager nach `invalidate()` aus `choice.model`, Rückfall `visionModel`), `settings.choice` hält die Wahl gegenüber dem Manager und gilt nur mit Manager (ein Modellname ist an seinen Endpunkt gebunden). Die globale Modell-Zeile blendet sich mit Manager über die Klasse `img2md-setting-managed` aus — **in `render()`, nicht beim Bau der Definitionsliste**, weil Obsidian ≥ 1.13 diese Liste über das Erscheinen des Managers hinweg zwischenspeichern kann (in slide-deck gemessen, GUI-Smoke E1b). Ein Manager ohne Endpunkt ergibt KEINEN lokalen Rückfall (Kit-Vertrag). GUI-Smoke F1–F3 legen einen Fake-Manager in den Plugin-Slot und stellen den Slot im `finally` und im Abbruch-Handler zurück; V1–V5 prüfen Schlüssel, Schlüsselbund, Nicht-Stream, Schwärzung und Stufenwahl gegen einen Fake-Endpunkt.
 
 ## Commands
 
@@ -196,7 +180,7 @@ npm run dev                       # esbuild watch
 npm run build                     # prod-Bundle → main.js (gitignored)
 npm run deploy                    # build + nach $OBSIDIAN_PLUGIN_DIR ins Vault-Plugin-Verzeichnis kopieren
 npm run lint                      # eslint src (reproduziert die Obsidian-Community-Review-Checks)
-npm test                          # vitest run (498 Tests)
+npm test                          # vitest run
 npx vitest run tests/<datei>      # eine Test-Datei
 npm run typecheck                 # tsc --noEmit (separat von vitest)
 npm run gate                      # typecheck + typecheck:scripts + test + lint + build (die Abnahme-Schleife)
