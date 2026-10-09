@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.2, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.3, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ein Chat-Aufruf gegen `/v1/chat/completions` (OpenAI-kompatibel) — Streaming, Tool-Calls,
  *  Abbruch, Idle-Timeout, Fehlerbody, Fallback ohne Stream. Kein `obsidian`-Import: der Transport
  *  wird injiziert (`chat-transport.ts` liefert XHR und `requestUrl`), die Uhr ebenso. Damit ist
@@ -296,6 +296,22 @@ function restoreInJson(session: RedactionSession, json: string): string {
   });
 }
 
+/** Nachrichten, Antwort und Denkspur in EINER Schwärzung — für ein Log, das dem Draht entsprechen soll (llm-lab):
+ *  derselbe Wert hat in allen dreien denselben Platzhalter, `count` zählt verschiedene Werte. Die Nachrichten
+ *  laufen zuerst (wie im Chat-Client, gleiche Nummerierung), dann Antwort und Denkspur. Eingaben bleiben unverändert;
+ *  `reasoning: null` bleibt `null`. Herkunft: transmute `core/llm/lab-view.ts`, lingotuner `main.ts` (`tune`),
+ *  vault-rag `ChatClient.reportToLab` — drei Kopien derselben Handgriffe um `redactMessages`. */
+export function redactExchange<M extends ChatWireMessage>(
+  exchange: { messages: readonly M[]; answer?: string; reasoning?: string | null },
+  rules: RedactRules = DEFAULT_REDACT_RULES,
+): { messages: M[]; answer: string; reasoning: string | null; count: number } {
+  const session = createRedactionSession(rules);
+  const messages = redactWith(exchange.messages, session) as M[];
+  const answer = session.redact(exchange.answer ?? "");
+  const reasoning = exchange.reasoning === undefined || exchange.reasoning === null ? null : session.redact(exchange.reasoning);
+  return { messages, answer, reasoning, count: session.count };
+}
+
 class ToolCallAssembler {
   private readonly map = new Map<number, { id: string; name: string; args: string }>();
   push(d: ToolCallDelta): void {
@@ -453,9 +469,12 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
           : fail("aborted", "aborted");
       }
       if (namedErrorName(e) === "StreamNetworkError" && opts.fallbackTransport && stream && raw === "") {
-        streamRefused = true;
         cleanup();
-        return run(req, opts.fallbackTransport, false, session);
+        // Der Stream gilt erst als abgelehnt, wenn der Fallback GELINGT: ein kurz abwesender Server (Verbindung
+        // verweigert) darf den Client nicht dauerhaft auf Nicht-Stream stellen.
+        const viaFallback = await run(req, opts.fallbackTransport, false, session);
+        if (viaFallback.ok) streamRefused = true;
+        return viaFallback;
       }
       return fail("network", e instanceof Error ? e.message : "network error");
     } finally {

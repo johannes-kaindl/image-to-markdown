@@ -1,4 +1,4 @@
-// vendored from code-kit@0.15.0, src/ts/pure/sse.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.15.4, src/ts/pure/sse.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ein `tool_calls`-Delta aus einem SSE-Chunk; `id`/`name` stehen nur im ersten Chunk eines Aufrufs. */
 export interface ToolCallDelta { index: number; id?: string; name?: string; argsDelta?: string }
 

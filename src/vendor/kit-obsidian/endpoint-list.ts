@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.2, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.3, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
  * Status-Icon, Rollenzeile, Drittanbieter-Hinweis und Preset-Knöpfe.
@@ -9,6 +9,8 @@
  * Modell-Cache und Tab-Neuaufbau sind Callbacks statt Tab-Zustand, CSS-Präfix `okit-`. */
 import { Notice, Setting, setIcon, setTooltip, type App } from "obsidian";
 import { localEndpointSecrets, migrateLocalEndpoints } from "./endpoint-secrets";
+import type { EndpointSecretHook } from "../kit/endpoint-secret-hook";
+export type { EndpointSecretHook };
 import { renderModelPicker } from "./model-picker";
 import { resolveModelChoice } from "../kit/model-choice";
 import type { ModelHintKey } from "../kit/model-choice";
@@ -64,20 +66,6 @@ export interface EndpointListStrings {
   secretChange?: string;
   secretClear?: string;
   secretUnavailable?: string;
-}
-
-/** Schlüssel-Hook: der Consumer hält das Token woanders (Obsidian-Schlüsselbund, Kit-Modul
- *  `secrets`) — die Liste schreibt dann NIE in `cfg.apiKey`, sondern ruft diese vier. Fehlt der
- *  Hook, gilt das bisherige Verhalten (Passwortfeld → `apiKey` in der Liste). */
-export interface EndpointSecretHook<T extends EndpointConfig = EndpointConfig> {
-  available: boolean;
-  has(cfg: T, index: number): boolean;
-  set(cfg: T, index: number, value: string): Promise<void>;
-  clear(cfg: T, index: number): Promise<void>;
-  /** Optional: die Zeile wird entfernt (Mülleimer oder leere URL) — ihr Schlüssel geht mit, damit
-   *  kein verwaister Schlüssel im Schlüsselbund bleibt. Wirkt nur auf den Schlüsselbund, nicht
-   *  auf die Liste (die mutiert der Aufrufer). */
-  release?(cfg: T): void;
 }
 
 export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> {

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.2, src/testing/kit-css.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.3, src/testing/kit-css.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus 3d-codeblocks/tests/kit-css.test.ts, 2026-10-09
 /** Kit-Vertrag: Die `*_CSS`-Konstanten gevendorter Kit-Bausteine gehören wortgleich in die `styles.css`
  *  des Konsumenten — vendort wird nur das Verhalten, die Darstellung ist eine Kopie. Fehlt eine,

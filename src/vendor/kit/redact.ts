@@ -1,4 +1,4 @@
-// vendored from code-kit@0.15.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.15.4, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus ghostline/src/core/context.ts (redactText) und settings-assistant/src/core/secrets.ts (redactFields), 2026-10-09
 /** Redaction of secrets, in two entry points (plus a reversible session for text): over free
  *  text and over parsed JSON.

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.2, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.3, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, setIcon } from "obsidian";
 import { collapsibleSection, type CollapsibleStorage } from "./collapsible";
 import { copyToClipboard } from "./clipboard";

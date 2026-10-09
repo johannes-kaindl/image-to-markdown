@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.2, src/obsidian/endpoint-secrets.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.3, src/obsidian/endpoint-secrets.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Schlüsselbund für die LOKALE Endpunkt-Liste eines Plugins ohne Endpoint-Manager.
  *
  *  Die Liste persistiert `secretId` statt `apiKey`; der Schlüssel lebt im Obsidian-Schlüsselbund
@@ -13,7 +13,7 @@ import type { App } from "obsidian";
 import { secretIdFor, type SecretStore } from "../kit/secrets";
 import { obsidianSecretStore, secretStorageAvailable } from "./secrets";
 import { ensureEndpointIds, hydrateEndpointSecrets, migrateEndpointSecrets, type EndpointConfig } from "../kit/endpoint_config";
-import type { EndpointSecretHook } from "./endpoint-list";
+import type { EndpointSecretHook } from "../kit/endpoint-secret-hook";
 
 /** Präfix aller Zeilen-Schlüssel dieses Plugins (ohne abschließenden Bindestrich). */
 export function endpointSecretPrefix(pluginId: string): string {

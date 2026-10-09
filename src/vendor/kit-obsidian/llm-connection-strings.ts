@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.2, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.3, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -63,6 +63,8 @@ interface Texts {
   redactedOne: string; redactedMany: string;
   /** Hinweis in den Einstellungen eines Manager-only-Plugins, wenn der Manager fehlt. */
   noManager: string;
+  /** `managedDesc` für `managerOnly`: ohne den Satz über die lokale Liste. */
+  managedDescManagerOnly: string;
 }
 
 const familyLabel = (f: string): string => (f === "—" ? "—" : (FAMILIES[f as FamilyId]?.label ?? f));
@@ -79,6 +81,7 @@ function build(x: Texts): LlmConnectionStrings {
     deviationNotice: (d) => `${fmt(pick(x.deviations, d.kind), d.detail ?? "")} ${fmt(x.seeSettings, x.requestTitle)}`,
     redactedNote: (n) => fmt(n === 1 ? x.redactedOne : x.redactedMany, String(n)),
     noManager: x.noManager,
+    managedDescManagerOnly: x.managedDescManagerOnly,
     endpointSource: {
       managed: x.managed, managedDesc: x.managedDesc, openManager: x.openManager, pickEndpoint: x.pickEndpoint,
       automatic: x.automatic, model: x.model, importLocal: x.importLocal,
@@ -214,6 +217,7 @@ const EN: Texts = {
   seeSettings: "Details in the settings under “{0}”.",
   redactedOne: "{0} passage redacted", redactedMany: "{0} passages redacted",
   noManager: "No LLM Endpoint Manager found. Install and enable it to choose an endpoint.",
+  managedDescManagerOnly: "This plugin uses the endpoints configured in the LLM Endpoint Manager plugin.",
 };
 
 const DE: Texts = {
@@ -291,6 +295,7 @@ const DE: Texts = {
   seeSettings: "Details in den Einstellungen unter „{0}“.",
   redactedOne: "{0} Stelle geschwärzt", redactedMany: "{0} Stellen geschwärzt",
   noManager: "Kein LLM Endpoint Manager gefunden. Installiere und aktiviere ihn, um einen Endpunkt zu wählen.",
+  managedDescManagerOnly: "Dieses Plugin nutzt die Endpunkte aus dem Plugin LLM Endpoint Manager.",
 };
 
 export const LLM_CONNECTION_STRINGS_EN: LlmConnectionStrings = build(EN);
@@ -305,6 +310,7 @@ export interface LlmConnectionStringsOverride {
   deviationNotice?: (d: Deviation) => string;
   redactedNote?: (n: number) => string;
   noManager?: string;
+  managedDescManagerOnly?: string;
   endpointSource?: Partial<LlmConnectionStrings["endpointSource"]>;
   endpointList?: Partial<LlmConnectionStrings["endpointList"]>;
   request?: Partial<LlmConnectionStrings["request"]>;
@@ -321,6 +327,7 @@ export function resolveLlmConnectionStrings(override?: LlmConnectionStringsOverr
     deviationNotice: override.deviationNotice ?? base.deviationNotice,
     redactedNote: override.redactedNote ?? base.redactedNote,
     noManager: override.noManager ?? base.noManager,
+    managedDescManagerOnly: override.managedDescManagerOnly ?? base.managedDescManagerOnly,
     endpointSource: { ...base.endpointSource, ...override.endpointSource },
     endpointList: { ...base.endpointList, ...override.endpointList },
     request: { ...base.request, ...override.request },

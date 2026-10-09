@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.2, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.3, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -58,7 +58,7 @@ import { hydrateLocalEndpoints, prepareLocalEndpoints } from "./endpoint-secrets
 import { buildEndpointSourceSection, findEndpointManager, type EndpointSourceSectionStrings } from "./endpoint-source";
 import { buildRequestSection, type RequestSectionState, type RequestSectionStrings } from "./request-section";
 import { createRequestSession, type RequestSession } from "./request-session";
-import { resolveLlmConnectionStrings, type LlmConnectionStringsOverride } from "./llm-connection-strings";
+import { LLM_CONNECTION_STRINGS_DE, LLM_CONNECTION_STRINGS_EN, resolveLlmConnectionStrings, type LlmConnectionStringsOverride } from "./llm-connection-strings";
 
 export interface LlmConnectionSettings {
   endpoints: EndpointConfig[];
@@ -130,6 +130,10 @@ export interface LlmConnectionOptions {
   /** Wie `content` im Ergebnis restauriert wird (`chat-client` `restoreContent`): `"text"` (Default) oder `"json"` für
    *  Konsumenten, die JSON aus `content` parsen (ein mehrzeiliger PEM bliebe sonst ein ungültiger JSON-String). Je Aufruf überschreibbar. */
   restoreContent?: "text" | "json";
+  /** Wird nach jeder abgeschlossenen Auflösung gerufen (auch der internen aus Liste, Wahl und `invalidate`),
+   *  nicht bei einem gemerkten Ergebnis und nicht bei einem überholten parallelen Lauf. Für Plugin-eigene Zeilen
+   *  im Settings-Tab (Kontextlänge, Modelldetails), die einer Endpunkt-Änderung folgen sollen. */
+  onResolved?: (result: EndpointSourceResult) => void;
   /** Modi, die der Anfrage-Abschnitt in `renderSettings` zeigt (Default `[mode]`). */
   modes?: ModeId[];
   /** Schwärzung der gesendeten Nachrichten (Default an, nur Geheimnisse; `chat-client` Kopfkommentar):
@@ -154,6 +158,8 @@ export interface LlmConnectionStrings {
   redactedNote: (n: number) => string;
   /** Hinweis in den Einstellungen mit `managerOnly`, wenn der Manager fehlt. */
   noManager: string;
+  /** `endpointSource.managedDesc` für `managerOnly`, ohne den Satz über die lokale Liste. */
+  managedDescManagerOnly: string;
   request: RequestSectionStrings;
 }
 
@@ -255,7 +261,7 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
     ...(message ? (o.notice ? { notice: o.notice } : {}) : { notice: () => {} }),
   });
   const backendProbe = createObsidianBackendProbe();
-  const backendOf = o.backendOf ?? ((cfg: EndpointConfig) => backendProbe(cfg.url, cfg.model ?? o.getSettings().model ?? ""));
+  const backendOf = o.backendOf ?? ((cfg: EndpointConfig) => backendProbe(cfg.url, cfg.model ?? o.getSettings().model ?? "", cfg.apiKey));
   const modelCache = createModelListCache();
   const settingsCache = createModelListCache();
 
@@ -295,6 +301,11 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
   // ── Auflösung ──────────────────────────────────────────────────────────────────────────────
   let pending: Promise<EndpointSourceResult> | null = null;
   let last: EndpointSourceResult | null = null;
+  // Was `source()` zeigt: die letzte abgeschlossene Auflösung, auch nach `invalidate()` bis die neue da ist.
+  let shown: EndpointSourceResult | null = null;
+  // Seit dem letzten `invalidate()` abgeschlossen? Steuert die Auflösung beim Zeichnen der Einstellungen (ein „kein Endpunkt“
+  // wird nicht gemerkt, löst aber auch keine Endlosschleife aus).
+  let freshSinceInvalidate = false;
   let lastManagerEntry: string | undefined;
 
   async function resolveNow(): Promise<EndpointSourceResult> {
@@ -324,15 +335,25 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
   function resolve(opts?: { force?: boolean }): Promise<EndpointSourceResult> {
     const manager = findEndpointManager(o.app);
     // Der Manager kann jederzeit deaktiviert werden: seine Quelle wird nie gemerkt.
-    if (!opts?.force && !manager && last !== null) return Promise.resolve(last);
+    if (!opts?.force && !manager && last !== null && last.kind !== "manager") return Promise.resolve(last);
     if (!opts?.force && pending !== null) return pending;
-    const p = resolveNow().then((r) => { if (pending === p) { pending = null; last = r; } return r; },
+    // Gemerkt wird nur ein Treffer: „kein Endpunkt“ (Server beim Start aus) klebt sonst bis zur nächsten Listenänderung.
+    const p = resolveNow().then((r) => {
+      if (pending === p) {
+        pending = null;
+        last = r.config !== null ? r : null;
+        shown = r;
+        freshSinceInvalidate = true;
+        try { o.onResolved?.(r); } catch { /* ein Fehler im UI-Callback darf die Auflösung nicht scheitern lassen */ }
+      }
+      return r;
+    },
       (e: unknown) => { if (pending === p) pending = null; throw e; });
     pending = p;
     return p;
   }
   // `pending` hält die Auflösung nur, solange sie läuft; danach bewahrt `last` die lokale.
-  function invalidate(): void { pending = null; last = null; modelCache.clear(); settingsCache.clear(); }
+  function invalidate(): void { pending = null; last = null; client = null; freshSinceInvalidate = false; modelCache.clear(); settingsCache.clear(); }
 
   // ── Modellliste ────────────────────────────────────────────────────────────────────────────
   async function models(opts?: { force?: boolean }): Promise<ModelListResult> {
@@ -355,12 +376,13 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
 
   // ── Anzeige ────────────────────────────────────────────────────────────────────────────────
   function source(): RequestSectionState {
-    if (!last) return NEUTRAL_SOURCE();
+    const r = shown;
+    if (!r) return NEUTRAL_SOURCE();
     return {
-      family: last.family, familySource: last.familySource, backend: last.backend, backendSource: last.backendSource,
-      model: last.model, sentModel: last.sentModel,
-      ...(last.displayFamily ? { displayFamily: last.displayFamily } : {}),
-      ...(last.defaultModel ? { defaultModel: last.defaultModel } : {}),
+      family: r.family, familySource: r.familySource, backend: r.backend, backendSource: r.backendSource,
+      model: r.model, sentModel: r.sentModel,
+      ...(r.displayFamily ? { displayFamily: r.displayFamily } : {}),
+      ...(r.defaultModel ? { defaultModel: r.defaultModel } : {}),
     };
   }
 
@@ -459,8 +481,13 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
   function renderSettings(containerEl: HTMLElement, input?: LlmConnectionStrings | LlmConnectionStringsOverride): void {
     const strings = resolveLlmConnectionStrings(input);
     const rerender = (): void => { containerEl.empty(); renderSettings(containerEl, input); };
+    // Bei managerOnly gibt es keine lokale Liste: der Kit-Default-Text ohne diesen Satz (ein eigener Text des Konsumenten bleibt).
+    const isKitDefault = (t: string): boolean => t === LLM_CONNECTION_STRINGS_EN.endpointSource.managedDesc || t === LLM_CONNECTION_STRINGS_DE.endpointSource.managedDesc;
+    const sourceStrings = o.managerOnly && isKitDefault(strings.endpointSource.managedDesc)
+      ? { ...strings.endpointSource, managedDesc: strings.managedDescManagerOnly }
+      : strings.endpointSource;
     // Noch nie aufgelöst (Tab als Erstes geöffnet): im Hintergrund auflösen und einmal neu zeichnen.
-    if (last === null && pending === null) void resolve().then(rerender).catch(() => { /* source() bleibt neutral */ });
+    if (!freshSinceInvalidate && pending === null) void resolve().then(rerender).catch(() => { /* source() bleibt neutral */ });
     let saved: Promise<void> = Promise.resolve();
     buildEndpointSourceSection({
       app: o.app, containerEl, capability: o.capability, caller: o.caller, pluginId: o.pluginId,
@@ -468,7 +495,7 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
       choice: () => o.getSettings().choice ?? {},
       setChoice: async (c) => { await persist({ choice: c }); invalidate(); },
       local: () => (o.managerOnly ? [] : o.getSettings().endpoints),
-      strings: strings.endpointSource,
+      strings: sourceStrings,
       renderLocalList: () => {
         // Manager-only: es gibt keine lokale Liste, nur den Hinweis; `endpoints` wird nie geschrieben.
         if (o.managerOnly) { new Setting(containerEl).setDesc(strings.noManager); return; }
@@ -477,7 +504,7 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
           strings: strings.endpointList, cache: settingsCache,
           get: () => o.getSettings().endpoints,
           set: (eps) => { saved = persist({ endpoints: eps }); },
-          active: () => last?.config?.url ?? null,
+          active: () => shown?.config?.url ?? null,
           clientFor,
           ...(o.getSettings().model !== undefined ? { globalModel: () => o.getSettings().model ?? "" } : {}),
           save: () => saved,
