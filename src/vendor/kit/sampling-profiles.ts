@@ -1,4 +1,4 @@
-// vendored from code-kit@0.7.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.15.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -20,7 +20,7 @@ export type FamilyId = (typeof FAMILY_IDS)[number];
 /** Override key: a known family, or "unknown" for models the kit cannot place. */
 export type FamilyKey = FamilyId | "unknown";
 
-export const MODE_IDS = ["agent", "structured", "transform", "grounded", "companion", "creative"] as const;
+export const MODE_IDS = ["agent", "structured", "transform", "grounded", "companion", "creative", "complete"] as const;
 export type ModeId = (typeof MODE_IDS)[number];
 
 export const BACKEND_IDS = ["lmstudio", "openwebui", "ollama", "openai", "unknown"] as const;
@@ -136,6 +136,7 @@ export const MODES: Record<ModeId, ModeProfile> = {
   grounded: { temperature: u(0.4, RECO), thinking: "off" },
   companion: { temperature: u(0.7, RECO), thinking: "off" },
   creative: { temperature: u(0.7, RECO), thinking: "medium" },
+  complete: { temperature: u(0.2, RECO), thinking: "off" },
 };
 
 const STANDARD_ONLY: Record<FieldId, FieldSupport> = {
@@ -171,6 +172,29 @@ const FAMILY_PATTERNS: readonly [RegExp, FamilyId][] = [
   [/gemma[-_]?4/i, "gemma4"],
   [/gpt-oss/i, "gpt-oss"],
 ];
+
+/** Model family as SHOWN (label, origin), decoupled from the tuning key. `FamilyId` keys
+ *  `FAMILIES` and demands a full sampling profile per entry; a model without sampling
+ *  parameters (Apple Intelligence via Shortcuts) has none. `sampling` names the tuning family
+ *  the model maps to, or `null` when sampling does not apply. `apple-fm` never enters
+ *  `FAMILY_IDS`. Context size, streaming, tool calls and vision stay with the endpoint manager
+ *  (`Capability`), not here. */
+export const MODEL_FAMILY_IDS = [...FAMILY_IDS, "apple-fm"] as const;
+export type ModelFamilyId = (typeof MODEL_FAMILY_IDS)[number];
+export interface ModelFamilyInfo { label: string; sampling: FamilyId | null }
+
+export const MODEL_FAMILIES: Record<ModelFamilyId, ModelFamilyInfo> = {
+  "qwen3.8": { label: FAMILIES["qwen3.8"].label, sampling: "qwen3.8" },
+  "qwen3.6": { label: FAMILIES["qwen3.6"].label, sampling: "qwen3.6" },
+  "gemma4": { label: FAMILIES["gemma4"].label, sampling: "gemma4" },
+  "gpt-oss": { label: FAMILIES["gpt-oss"].label, sampling: "gpt-oss" },
+  "apple-fm": { label: "Apple Foundation Models", sampling: null },
+};
+
+/** The sampling-profile family for a display family, or `null` (no sampling parameters). */
+export function samplingFamilyOf(id: ModelFamilyId): FamilyId | null {
+  return MODEL_FAMILIES[id]?.sampling ?? null;
+}
 
 /** Best guess from a model id. Aliases such as `verdigado-pro` return null on purpose:
  *  the family of an alias is configured in llm-endpoint-manager, not guessed. */
@@ -383,6 +407,47 @@ export interface ResponseFacts {
   content: string;
   reasoning?: string;
   responseModel?: string;
+}
+
+/** Structural view of what a chat client returns (obsidian-kit `ChatResult` fits it); code-kit
+ *  knows no client, so only the fields the facts need are named. */
+export type ChatOutcome =
+  | { ok: true; content: string; reasoning: string; finishReason?: string; model?: string; truncated?: boolean }
+  | { ok: false; kind: string; detail: string; partial: string; reasoning: string; status?: number; body?: string };
+
+/** The facts `checkResponse` needs, from a chat outcome — one build rule instead of seven copies
+ *  (vault-rag, slide-deck, image-to-markdown, neurovim, settings-assistant, kuro, yijing).
+ *  `null` when no server answer exists (abort, network error, timeout, stall): the check has
+ *  nothing to say there. `truncated` (a 200 that stopped at the limit without text) is a 200 with
+ *  finish_reason `length`; `http` and `overflow` carry the status (0 if unknown) and
+ *  `errorText = body ?? detail`. */
+export function responseFactsOf(r: ChatOutcome): ResponseFacts | null {
+  if (r.ok) {
+    return {
+      status: 200, finishReason: r.finishReason ?? null, content: r.content, reasoning: r.reasoning,
+      ...(r.model !== undefined ? { responseModel: r.model } : {}),
+    };
+  }
+  switch (r.kind) {
+    case "truncated":
+      return { status: 200, finishReason: "length", content: r.partial, reasoning: r.reasoning };
+    case "http":
+    case "overflow":
+      return { status: r.status ?? 0, errorText: r.body ?? r.detail, content: "", reasoning: r.reasoning };
+    default:
+      return null;
+  }
+}
+
+/** What a caller does with a response that hit the token limit without any text (reasoning models:
+ *  the thinking ate the budget). `"error"`: the outcome stays an error, as the chat client returns
+ *  it. `"result"`: it becomes an ok outcome with finish_reason `length`, which a format check can
+ *  turn into its own retry or message (slide-deck, image-to-markdown, vault-rag, lingotuner). */
+export type TruncatedPolicy = "error" | "result";
+
+export function mapTruncated<R extends ChatOutcome>(r: R, policy: TruncatedPolicy): R | Extract<ChatOutcome, { ok: true }> {
+  if (policy === "error" || r.ok || r.kind !== "truncated") return r;
+  return { ok: true, content: r.partial, reasoning: r.reasoning, finishReason: "length", truncated: true };
 }
 
 const THINK_BLOCK = /<think>[\s\S]*?<\/think>/g;

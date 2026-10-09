@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.45.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.51.2, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
  * Status-Icon, Rollenzeile, Drittanbieter-Hinweis und Preset-Knöpfe.
@@ -7,7 +7,8 @@
  * Aufrufstellen: Chat + Embedding). Umzug ohne Verhaltensänderung. Abweichungen zur
  * Vorlage: alle Texte kommen über `strings` aus `opts` (das Kit formuliert nicht),
  * Modell-Cache und Tab-Neuaufbau sind Callbacks statt Tab-Zustand, CSS-Präfix `okit-`. */
-import { Notice, Setting, setIcon, setTooltip } from "obsidian";
+import { Notice, Setting, setIcon, setTooltip, type App } from "obsidian";
+import { localEndpointSecrets, migrateLocalEndpoints } from "./endpoint-secrets";
 import { renderModelPicker } from "./model-picker";
 import { resolveModelChoice } from "../kit/model-choice";
 import type { ModelHintKey } from "../kit/model-choice";
@@ -73,6 +74,10 @@ export interface EndpointSecretHook<T extends EndpointConfig = EndpointConfig> {
   has(cfg: T, index: number): boolean;
   set(cfg: T, index: number, value: string): Promise<void>;
   clear(cfg: T, index: number): Promise<void>;
+  /** Optional: die Zeile wird entfernt (Mülleimer oder leere URL) — ihr Schlüssel geht mit, damit
+   *  kein verwaister Schlüssel im Schlüsselbund bleibt. Wirkt nur auf den Schlüsselbund, nicht
+   *  auf die Liste (die mutiert der Aufrufer). */
+  release?(cfg: T): void;
 }
 
 export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> {
@@ -120,6 +125,13 @@ export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> 
   rerender(): void;
   presets?: readonly EndpointPreset[];
   secret?: EndpointSecretHook<T>;
+  /** Zusammen mit `pluginId` der Default für `secret`: ohne eigenen Hook hängt die Liste an
+   *  `localEndpointSecrets` (Obsidian-Schlüsselbund) und migriert vorhandene Klartext-Schlüssel
+   *  beim ersten Render. Fehlt der Schlüsselbund (Obsidian < 1.11.4), ist das Schlüsselfeld
+   *  gesperrt (`secretUnavailable`); bereits gespeicherte Klartext-Schlüssel bleiben bis zur
+   *  Migration stehen und gelten weiter. Ohne beide Optionen gilt das bisherige Verhalten. */
+  app?: App;
+  pluginId?: string;
   /** Zusatz-Slot je echter Zeile (nicht am Adder): der Consumer zeichnet eigene Felder in
    *  `host` (ein `div.okit-ep-extra` unter der Rollenzeile). Für Einträge mit mehr Feldern als
    *  `EndpointConfig` — der Listen-Editor bleibt für URL/Schlüssel/Modell/Reihenfolge zuständig. */
@@ -131,6 +143,17 @@ export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> 
  *  Re-Render. Pro echtem Eintrag: Status-Icon (loader → check/x, aktiver Endpunkt markiert),
  *  URL-, Schlüssel- (maskiert) und Modell-Feld + Mülleimer. */
 export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opts: EndpointListOptions<T>): void {
+  // Default-Hook: Schlüsselbund für die lokale Liste, wenn der Konsument `app` + `pluginId` gibt
+  // und keinen eigenen Hook. Die Migration läuft hier beim ersten Render — der Resolver migriert
+  // ebenfalls (`prepareLocalEndpoints`), damit auch migriert, wer den Tab nie öffnet.
+  const secret: EndpointSecretHook<T> | undefined = opts.secret
+    ?? (opts.app && opts.pluginId
+      ? localEndpointSecrets<T>({ app: opts.app, pluginId: opts.pluginId, getList: () => opts.get(), setList: (l) => { opts.set(l); } })
+      : undefined);
+  if (!opts.secret && secret?.available && opts.app && opts.pluginId) {
+    const m = migrateLocalEndpoints(opts.app, opts.pluginId, opts.get());
+    if (m.changed) { opts.set(m.list); void opts.save().catch(() => { /* Schlüssel liegt im Schlüsselbund; nächster Save zieht nach */ }); }
+  }
   const eps = opts.get();
   const rows: EndpointConfig[] = [...eps, { url: "" }];   // leeres Zusatzfeld am Ende
   // Jede Mutation, die die Listen-FORM ändert (URL-Edit, Mülleimer, Preset), macht die
@@ -220,13 +243,14 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
       // apiKey ändert die Listen-FORM nicht (kein Re-Render) — das Drittanbieter-Icon muss sich
       // deshalb hier selbst aktualisieren, statt auf den (bewusst ausbleibenden) Neuaufbau zu warten.
       if (field === "apiKey") {
-        syncThirdPartyIcon(carriesApiKey(updated[i]));
+        const edited = updated[i];
+        if (edited) syncThirdPartyIcon(carriesApiKey(edited));
         // Ohne Schlüssel lieferte der Endpunkt vermutlich 401 → leere Liste → Notausgang.
         // Mit Schlüssel hat er eine Liste; der alte Eintrag wäre eine Lüge. Anders als das
         // Drittanbieter-Icon oben korrigiert sich die Modell-Zeile dadurch NICHT selbst —
         // sichtbar wird die neue Liste erst beim nächsten Zeilen-Neuaufbau (URL-Commit,
         // „Modelle abrufen", Tab-Reload), da dieser Commit bewusst kein rerender() auslöst.
-        opts.cache.invalidate(normalizeEndpoint(updated[i].url));
+        if (edited) opts.cache.invalidate(normalizeEndpoint(edited.url));
       }
       // Ein URL-Commit setzt oder entfernt den Bezug zu (mindestens) einer URL — die alte UND
       // die neue, denn beide koennen bereits eine (moeglicherweise laengst veraltete) Liste im
@@ -240,6 +264,7 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         const newUrl = value.trim();
         if (newUrl) opts.cache.invalidate(normalizeEndpoint(newUrl));
       }
+      if (field === "url" && !isAdder && updated.length < before.length && before[i]) secret?.release?.(before[i]);
       opts.set(updated);
       const chain = opts.save().then(() => opts.reconnect());
       // Das Modell-Override entscheidet mit über die Rolle der Zeile (`skipped-model`).
@@ -257,9 +282,9 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
     // Schlüssel + Modell nur an bestehenden Einträgen — am leeren Adder gäbe es nichts zu tragen.
     // aria-label statt bloßem Placeholder: der verschwindet beim Tippen, und drei unbeschriftete
     // Felder in einer Zeile sind für Screenreader nicht auseinanderzuhalten.
-    if (!isAdder && opts.secret) {
-      const hook = opts.secret;
-      const current = opts.get()[i] ?? cfg;
+    if (!isAdder && secret) {
+      const hook = secret;
+      const current = opts.get()[i] ?? (cfg as T);   // nicht-Adder-Zeile: cfg stammt aus `eps` (T), nur die Adder-Zeile ist kein T
       const st = opts.strings;
       const afterSecret = (): void => {
         lockRows();
@@ -330,7 +355,7 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
       const modelSlot = s.controlEl.createSpan({ cls: "okit-model-slot" });
       const listKey = normalizeEndpoint(cfg.url);
       const gen = opts.cache.generation();
-      void opts.cache.load(listKey, opts.clientFor(opts.get()[i] ?? cfg)).then(({ models, reachable }) => {
+      void opts.cache.load(listKey, opts.clientFor(opts.get()[i] ?? (cfg as T))).then(({ models, reachable }) => {
         if (gen !== opts.cache.generation()) return;   // Liste hat sich verschoben
         // `allowEmpty: true` wie in der Vorlage — die Leer-Option muss auch dann im Dropdown
         // stehen, wenn die Zeile bereits ein Override trägt, sonst ließe sich das Override
@@ -388,6 +413,8 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
           // Geht an commit() vorbei (kein blur-Feld) — die Invalidierung muss deshalb hier
           // selbst passieren, sonst ueberlebt die Modell-Liste dieser URL ihren Eintrag.
           opts.cache.invalidate(normalizeEndpoint(cfg.url));
+          const removed = opts.get()[i];
+          if (removed) secret?.release?.(removed);
           opts.set(applyEndpointEdit(opts.get(), i, "url", "", false) as T[]);
           void opts.save()
             .then(() => opts.reconnect())
@@ -412,7 +439,7 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         const isActive = normalizeEndpoint(ep) === (opts.active() ?? "");
         // Den Eintrag frisch aus der Liste lesen, nicht das `cfg` vom Render-Zeitpunkt:
         // nach einem Modell-Commit trägt nur die Liste den neuen Wert.
-        const current = opts.get()[i] ?? cfg;
+        const current = opts.get()[i] ?? (cfg as T);   // nicht-Adder-Zeile: cfg stammt aus `eps` (T), nur die Adder-Zeile ist kein T
         const role = endpointRole({
           isActive,
           reachable: probed.reachable,
@@ -424,7 +451,7 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         stateEl.toggleClass("is-active", role.kind === "active");
       };
       syncRoleLine = applyRole;
-      void opts.clientFor(opts.get()[i] ?? cfg).probe().then(status => {
+      void opts.clientFor(opts.get()[i] ?? (cfg as T)).probe().then(status => {
         statusIcon.empty();
         setIcon(statusIcon, status.reachable ? "circle-check" : "circle-x");
         statusIcon.toggleClass("is-ok", status.reachable);
@@ -447,11 +474,11 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
       // Sachlicher Hinweis, keine Warnung vor einem Fehler — Form/Icon + Text, nie Farbe allein
       // (WCAG 1.4.1); NIE den Schlüssel selbst im Text/Tooltip. syncThirdPartyIcon() hält das
       // danach auch beim apiKey-Commit aktuell (siehe dort), ohne den Tab neu zu bauen.
-      syncThirdPartyIcon(opts.secret ? opts.secret.has(opts.get()[i] ?? cfg, i) : carriesApiKey(cfg));
+      syncThirdPartyIcon(secret ? secret.has(opts.get()[i] ?? (cfg as T), i) : carriesApiKey(cfg));
     }
     if (!isAdder && opts.extraRow) {
       const host = s.controlEl.createDiv({ cls: "okit-ep-extra" });
-      opts.extraRow(host, opts.get()[i] ?? cfg, i);
+      opts.extraRow(host, opts.get()[i] ?? (cfg as T), i);
     }
   });
   const actions = new Setting(opts.containerEl);

@@ -1,4 +1,4 @@
-// vendored from code-kit@0.7.0, src/ts/pure/endpoint_config.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.15.0, src/ts/pure/endpoint_config.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Obsidian-freie Wahrheit für Endpunkt-Einträge: Struktur, Auth-Header, Modellwahl,
  *  Migration alter String-Listen und Listen-Bearbeitung.
  *
@@ -7,11 +7,19 @@
  *  (liefert deutschen Text — jeder Consumer rendert die Rolle in seiner Sprache). */
 
 import { normalizeEndpoint } from "./endpoint";
+import { secretIdFor } from "./secrets";
 
 export interface EndpointConfig {
   url: string;
-  /** Leer/fehlend = kein Authorization-Header (lokaler Server). */
+  /** Leer/fehlend = kein Authorization-Header (lokaler Server).
+   *  Mit Schlüsselbund ist das ein reines In-Memory-Feld: `hydrateEndpointSecrets` füllt es zur
+   *  Laufzeit, persistiert wird `secretId`. */
   apiKey?: string;
+  /** Stabile Zeilen-Identität, einmal vergeben (`ensureEndpointIds`). Weder Index (wandert beim
+   *  Umsortieren) noch URL (kommt doppelt vor, mit verschiedenen Schlüsseln). */
+  id?: string;
+  /** Name des Schlüssels im Schlüsselbund; wird statt `apiKey` persistiert. */
+  secretId?: string;
   /** Leer/fehlend = das globale Modell gilt. */
   model?: string;
 }
@@ -51,31 +59,176 @@ export function carriesApiKey(cfg: EndpointConfig): boolean {
   return !!cfg.apiKey?.trim();
 }
 
+const OPTIONAL_STRING_FIELDS = ["apiKey", "model", "id", "secretId"] as const;
+
 /** Ein Listen-Eintrag (alt: blanke URL, neu: Config) → normalisierte Config.
- *  null = unbrauchbar (leere URL) und fliegt aus der Liste. */
-function toConfig(entry: string | EndpointConfig): EndpointConfig | null {
+ *  `null` = leere URL, fliegt still aus der Liste (kein Datenverlust). `"invalid"` = der Eintrag
+ *  ist kein Text und kein Objekt oder trägt in `url`/`apiKey`/`model`/`id`/`secretId` einen
+ *  Nicht-String; er fliegt ebenfalls raus, wird aber GEZÄHLT (siehe `migrateEndpointListChecked`).
+ *  Wirft nie. */
+function toConfig(entry: unknown): EndpointConfig | null | "invalid" {
   if (typeof entry === "string") {
     const url = entry.trim();
     return url ? { url } : null;
   }
-  const url = entry?.url?.trim();
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return "invalid";
+  const e = entry as Record<string, unknown>;
+  if (e.url !== undefined && e.url !== null && typeof e.url !== "string") return "invalid";
+  for (const f of OPTIONAL_STRING_FIELDS) {
+    const v = e[f];
+    if (v !== undefined && v !== null && typeof v !== "string") return "invalid";
+  }
+  const url = e.url?.trim();
   if (!url) return null;
-  const key = entry.apiKey?.trim();
-  const model = entry.model?.trim();
-  return { url, ...(key ? { apiKey: key } : {}), ...(model ? { model } : {}) };
+  const key = (e.apiKey as string | null | undefined)?.trim();
+  const model = (e.model as string | null | undefined)?.trim();
+  return {
+    url,
+    ...(key ? { apiKey: key } : {}),
+    ...(model ? { model } : {}),
+    ...(e.id ? { id: e.id as string } : {}),
+    ...(e.secretId ? { secretId: e.secretId as string } : {}),
+  };
 }
 
-/** Migriert alte Einzel-/String-Listen-Settings auf EndpointConfig[]. Reiner Helfer. */
+/** Das Stück des Schlüsselbunds, das die Helfer brauchen. Strukturell kompatibel zu
+ *  `SecretStore` aus obsidian-kit (`get`/`set`), damit code-kit kein Schlüsselbund-Modul braucht. */
+export interface EndpointSecretStore {
+  get(id: string): string | null;
+  set(id: string, value: string): void;
+}
+
+/** Zufallskennung ohne Hostzugriff (die pure Schicht kennt weder `crypto` noch `window`). Die
+ *  Standard-Id ist nur für Tests und Aufrufer ohne Browser gedacht: obsidian-kit übergibt
+ *  `crypto.randomUUID` als `newId`. Die Id ist eine Zeilen-Identität, kein Geheimnis. */
+function randomId(): string {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
+
+/** Vergibt jedem Eintrag ohne (oder mit doppelter) `id` eine Zufallskennung. Neue Liste, die
+ *  Eingabe bleibt unberührt. `newId` ist für Tests injizierbar. */
+export function ensureEndpointIds(list: EndpointConfig[], newId: () => string = randomId): EndpointConfig[] {
+  const seen = new Set<string>();
+  return list.map((e) => {
+    let id = e.id;
+    if (!id || seen.has(id)) {
+      id = newId();
+      while (seen.has(id)) id = newId();
+    }
+    seen.add(id);
+    return id === e.id ? { ...e } : { ...e, id };
+  });
+}
+
+/** Namensraum eines Plugins im Schlüsselbund: der NORMALISIERTE Präfix plus `-`, abgeleitet aus
+ *  `secretIdFor` (ein Rohvergleich mit dem Präfix verwürfe im zweiten Lauf die selbst erzeugten
+ *  Ids, z. B. bei `My_Plugin`). Der Bindestrich gehört dazu: Präfix `p` deckt `pq-1` nicht.
+ *  Grenze: Präfix `a` deckt `a-b-…` mit, also auch Ids eines Plugins `a-b` — Präfixe so wählen,
+ *  dass keiner ein `-`-Anfang eines anderen ist. Ein leerer normalisierter Präfix wirft, weil
+ *  ein leerer Namensraum alles durchließe. */
+function secretNamespace(prefix: string): string {
+  const ns = secretIdFor(prefix, "x").slice(0, -2);
+  if (!ns) throw new Error("endpoint secrets: Präfix ist leer — ohne Namensraum gäbe es keinen Schutz");
+  return ns;
+}
+
+/** Verschiebt Klartext-`apiKey`s in den Schlüsselbund: je Eintrag mit Schlüssel eine `id` (falls
+ *  nötig), `secretId` (falls nötig), `store.set`, dann `apiKey` entfernen. Neue Liste, Eingabe
+ *  unberührt; `changed` sagt, ob sich etwas bewegt hat (dann muss der Aufrufer speichern).
+ *
+ *  **Ein Schlüssel wird nie verworfen, den man nicht gespeichert hat:** ohne Store, bei einem
+ *  werfenden `set` und wenn `get` den Wert danach nicht zurückgibt, bleibt der Klartext stehen.
+ *  Idempotent — ein zweiter Lauf findet keinen Klartext mehr.
+ *
+ *  **Namensraum:** `prefix` ist Pflicht. Eine `secretId` außerhalb von `<prefix>-` wird weder
+ *  gelesen noch geschrieben, sondern ignoriert; die eigene wird aus `prefix` und `id` erzeugt
+ *  und der Klartext dorthin verschoben. Grund: eine präparierte `secretId` in einem gesyncten
+ *  `data.json` ließe sonst das Geheimnis eines anderen Plugins als Bearer an eine fremde URL
+ *  gehen. */
+export function migrateEndpointSecrets(
+  list: EndpointConfig[],
+  store: EndpointSecretStore | null | undefined,
+  prefix: string,
+  newId: () => string = randomId,
+): { list: EndpointConfig[]; changed: boolean } {
+  const ns = `${secretNamespace(prefix)}-`;
+  if (!store) return { list, changed: false };
+  const used = new Set(list.map((e) => e.id).filter((i): i is string => !!i));
+  let changed = false;
+  const out = list.map((e) => {
+    const key = e.apiKey?.trim();
+    if (!key) return e;
+    let id = e.id;
+    if (!id) {
+      id = newId();
+      while (used.has(id)) id = newId();
+      used.add(id);
+    }
+    const secretId = e.secretId?.startsWith(ns) ? e.secretId : secretIdFor(prefix, id);
+    // An id that normalises to nothing (" ", "-", "ä") makes secretIdFor return the bare prefix,
+    // which lies outside `<prefix>-` and which hydrate would never read back: keep the plaintext.
+    if (!secretId.startsWith(ns)) return e;
+    try {
+      store.set(secretId, key);
+      if (!store.get(secretId)) return e;
+    } catch {
+      return e;
+    }
+    changed = true;
+    const { apiKey: _drop, ...rest } = e;
+    return { ...rest, id, secretId };
+  });
+  return { list: changed ? out : list, changed };
+}
+
+/** Kopien der Liste mit `apiKey` aus dem Schlüsselbund (für `authHeaders` und alle, die den
+ *  Schlüssel brauchen). Das Original bleibt ohne Schlüssel — es wird gespeichert. Fehlt der
+ *  Store-Wert oder der Store, bleibt der Eintrag, wie er ist. Eine `secretId` außerhalb von
+ *  `<prefix>-` wird nicht gelesen (Eintrag bleibt unverändert, kein Wurf) — Begründung bei
+ *  `migrateEndpointSecrets`. */
+export function hydrateEndpointSecrets(
+  list: EndpointConfig[],
+  store: Pick<EndpointSecretStore, "get"> | null | undefined,
+  prefix: string,
+): EndpointConfig[] {
+  const ns = `${secretNamespace(prefix)}-`;
+  return list.map((e) => {
+    const v = store && e.secretId?.startsWith(ns) ? store.get(e.secretId) : null;
+    return v ? { ...e, apiKey: v } : { ...e };
+  });
+}
+
+/** Migriert alte Einzel-/String-Listen-Settings auf EndpointConfig[]. Reiner Helfer. Wirft nie;
+ *  verworfene Einträge meldet {@link migrateEndpointListChecked}. */
 export function migrateEndpointList(
   single: string | undefined,
   list: (string | EndpointConfig)[] | undefined,
 ): EndpointConfig[] {
-  if (list && list.length) {
-    const out = list.map(toConfig).filter((c): c is EndpointConfig => c !== null);
-    if (out.length) return out;
+  return migrateEndpointListChecked(single, list).list;
+}
+
+/** Wie {@link migrateEndpointList}, meldet aber `dropped`: die Zahl der Einträge, die verworfen
+ *  wurden, weil sie kein Text/Objekt sind oder in `url`/`apiKey`/`model`/`id`/`secretId` einen
+ *  Nicht-String tragen. Leere URLs zählen nicht (das ist Aufräumen, kein Datenverlust). Ist
+ *  `list` kein Array, wird sie als Ganzes verworfen (`dropped` 1) und `single` gilt. */
+export function migrateEndpointListChecked(
+  single: string | undefined,
+  list: (string | EndpointConfig)[] | undefined,
+): { list: EndpointConfig[]; dropped: number } {
+  let dropped = 0;
+  if (Array.isArray(list)) {
+    const out: EndpointConfig[] = [];
+    for (const entry of list) {
+      const c = toConfig(entry);
+      if (c === "invalid") dropped++;
+      else if (c) out.push(c);
+    }
+    if (out.length) return { list: out, dropped };
+  } else if (list !== undefined && list !== null) {
+    dropped = 1;
   }
-  const s = single?.trim();
-  return s ? [{ url: s }] : [];
+  const s = typeof single === "string" ? single.trim() : "";
+  return { list: s ? [{ url: s }] : [], dropped };
 }
 
 /** Wendet die Bearbeitung EINES Feldes an (bei blur, nicht pro Tastendruck).

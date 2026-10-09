@@ -1,46 +1,119 @@
 {
   "sources": {
-    "obsidian-kit": { "ref": "0.45.0" },
-    "code-kit": { "ref": "0.7.0" }
+    "obsidian-kit": {
+      "ref": "0.51.2"
+    },
+    "code-kit": {
+      "ref": "0.15.0"
+    }
   },
   "targets": [
     {
       "dir": "src/vendor/kit",
       "source": "obsidian-kit",
       "from": "src/pure",
-      "modules": ["endpoint-source", "ocr-provider"],
-      "rewrite": [["../vendor/code-kit/pure/", "./"], ["../vendor/code-kit/web/", "./"]]
+      "modules": [
+        "endpoint-source",
+        "ocr-provider"
+      ],
+      "rewrite": [
+        [
+          "../vendor/code-kit/pure/",
+          "./"
+        ],
+        [
+          "../vendor/code-kit/web/",
+          "./"
+        ]
+      ]
     },
     {
       "dir": "src/vendor/kit",
       "source": "code-kit",
       "from": "src/ts/pure",
-      "modules": ["capabilities", "diff", "endpoint", "endpoint_config", "endpoint_diagnostics", "error_body", "model-choice", "model-list-cache", "reasoning", "sampling-profiles", "settings", { "name": "sse", "ref": "0.8.0" }, "think-splitter"]
+      "modules": [
+        "backend-probe",
+        "capabilities",
+        "diff",
+        "endpoint",
+        "endpoint_config",
+        "endpoint_diagnostics",
+        "error_body",
+        "model-choice",
+        "model-list-cache",
+        "reasoning",
+        "redact",
+        "sampling-profiles",
+        "secrets",
+        "settings",
+        "sse",
+        "think-splitter"
+      ]
     },
     {
       "dir": "src/vendor/kit",
       "source": "code-kit",
       "from": "src/ts/web",
-      "modules": ["clipboard"]
+      "modules": [
+        "clipboard"
+      ]
     },
     {
       "dir": "src/vendor/kit-obsidian",
       "source": "obsidian-kit",
       "from": "src/obsidian",
-      "modules": ["chat-transport", "clock", "folder-suggest", "settings_walker", "help-setting", { "name": "shortcuts-bridge", "ref": "0.45.1" }]
+      "modules": [
+        "chat-transport",
+        "clock",
+        "folder-suggest",
+        "settings_walker",
+        "help-setting",
+        "shortcuts-bridge"
+      ]
     },
     {
       "dir": "src/vendor/kit-obsidian",
       "source": "obsidian-kit",
       "from": "src/obsidian",
-      "modules": [{ "name": "chat-client", "ref": "0.44.0" }, "clipboard", "collapsible", "endpoint-list", "endpoint-source", "model-picker", "request-section", "request-session", "thinking-control"],
-      "rewrite": [["../vendor/code-kit/pure/", "../kit/"], ["../vendor/code-kit/web/", "../kit/"], ["../pure/", "../kit/"]]
+      "modules": [
+        "backend-probe",
+        "chat-client",
+        "clipboard",
+        "collapsible",
+        "endpoint-list",
+        "endpoint-secrets",
+        "endpoint-source",
+        "llm-connection",
+        "llm-connection-strings",
+        "model-picker",
+        "request-section",
+        "request-session",
+        "secrets",
+        "thinking-control"
+      ],
+      "rewrite": [
+        [
+          "../vendor/code-kit/pure/",
+          "../kit/"
+        ],
+        [
+          "../vendor/code-kit/web/",
+          "../kit/"
+        ],
+        [
+          "../pure/",
+          "../kit/"
+        ]
+      ]
     },
     {
       "dir": "tests/vendor/kit",
       "source": "obsidian-kit",
       "from": "src/testing",
-      "modules": ["obsidian-mock"]
+      "modules": [
+        "kit-css",
+        "obsidian-mock"
+      ]
     }
   ]
 }

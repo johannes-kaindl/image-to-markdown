@@ -1,11 +1,11 @@
-// vendored from obsidian-kit@0.45.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
-import { Setting, setIcon } from "obsidian";
+// vendored from obsidian-kit@0.51.2, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+import { Notice, Setting, setIcon } from "obsidian";
 import { collapsibleSection, type CollapsibleStorage } from "./collapsible";
 import { copyToClipboard } from "./clipboard";
 import type { RequestSession } from "./request-session";
 import {
   FAMILY_IDS, THINKING_LEVELS, resolveRequestParams, thinkingFor, validateOverride,
-  type BackendId, type FamilyId, type FamilyKey, type FieldExplain, type FieldId, type ModeId,
+  type BackendId, type FamilyId, type FamilyKey, type FieldExplain, type FieldId, type ModeId, type ModelFamilyId,
   type RequestSettings, type ThinkingLevel, type DeviationKind,
 } from "../kit/sampling-profiles";
 
@@ -16,6 +16,9 @@ import {
 export interface RequestSectionState {
   family: FamilyId | null;
   familySource: "manager" | "name" | "none";
+  /** Anzeige-Familie (`EndpointSourceResult.displayFamily`); der Kopf fällt darauf zurück, wenn
+   *  `family` fehlt — als ID, das Plugin übersetzt sie selbst in `strings.head`. */
+  displayFamily?: ModelFamilyId;
   backend: BackendId;
   backendSource: "manager" | "probe" | "none";
   model: string;
@@ -45,6 +48,9 @@ export interface RequestSectionStrings {
   deviationsOk: string;
   deviationsWarn(n: number): string;
   deviation(kind: DeviationKind, count: number, detail?: string): string;
+  /** Notice und Status-Text, wenn `save` zurückweist. Optional, damit Konsumenten mit eigenen
+   *  `strings` nicht brechen; fehlt es, gilt `SAVE_FAILED_FALLBACK`. */
+  saveFailed?: string;
 }
 export interface RequestSectionOptions {
   containerEl: HTMLElement;
@@ -59,7 +65,13 @@ export interface RequestSectionOptions {
   rerender(): void;
   /** Phase 2 (Systemprompt): der Konsument hängt hier sein Kapitel ein. */
   promptSlot?(el: HTMLElement): void;
+  /** Zeigt den Schalter „Stufenwahl im Chat“. Default `false`: er wirkt nur dort, wo das Plugin
+   *  `settings.levelPickerInChat` an `buildThinkingControl` (`levelPicker`) reicht. Ist die
+   *  Einstellung schon `true`, bleibt der Schalter sichtbar, sonst ließe sie sich nicht mehr abschalten. */
+  levelPicker?: boolean;
 }
+
+const SAVE_FAILED_FALLBACK = "Could not save the request settings.";
 
 /** Fallback, wenn der Konsument kein `collapsedStorage` übergibt: Das Modul merkt sich den
  *  Auf/Zu-Zustand für die Laufzeit selbst. Ohne ihn klappte der Abschnitt nach jeder
@@ -92,9 +104,27 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
   const settings = opts.settings();
   const key = famKey(state.family);
 
+  // Speichern: ein Fehler wird zur Notice und färbt den Status-Indikator (entsteht erst weiter unten).
+  const ui: { status?: HTMLElement } = {};
+  const failed = (): void => {
+    const msg = st.saveFailed ?? SAVE_FAILED_FALLBACK;
+    new Notice(msg);
+    const statusEl = ui.status;
+    if (!statusEl) return;
+    statusEl.removeClass("is-ok", "is-warning");
+    statusEl.addClass("is-error");
+    statusEl.setAttribute("aria-label", msg);
+    statusEl.empty();
+    setIcon(statusEl.createSpan(), "circle-x");
+    statusEl.createSpan({ text: msg });
+  };
+  const persist = (next: RequestSettings, then?: () => void): void => {
+    void opts.save(next).then(then, failed);
+  };
+
   // 1. Kopf
   new Setting(body)
-    .setName(st.head(state.family ?? "—", state.familySource, state.backend, state.backendSource))
+    .setName(st.head(state.family ?? state.displayFamily ?? "—", state.familySource, state.backend, state.backendSource))
     .setDesc(state.family ? "" : st.unknownFamily);
   // 2. JIT-Warnung und Alias
   if (state.backend === "lmstudio" && state.defaultModel && state.sentModel !== state.defaultModel) {
@@ -129,7 +159,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
           if (v === null) { t.inputEl.addClass("is-invalid"); return; }
           const next = clone(opts.settings());
           ((next.overrides[mode] ??= {})[key] ??= {})[e.field] = v;
-          void opts.save(next).then(() => opts.rerender());
+          persist(next, () => opts.rerender());
         });
       });
       if (own !== undefined) {
@@ -141,7 +171,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
             if (Object.keys(byFam).length === 0) delete next.overrides[mode]![key];
             if (Object.keys(next.overrides[mode] ?? {}).length === 0) delete next.overrides[mode];
           }
-          void opts.save(next).then(() => opts.rerender());
+          persist(next, () => opts.rerender());
         }));
       }
     }
@@ -152,7 +182,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
         const next = clone(opts.settings());
         next.thinking[mode] = v as ThinkingLevel;
         if (v !== "off") next.lastOnLevel[mode] = v as ThinkingLevel;
-        void opts.save(next).then(() => opts.rerender());
+        persist(next, () => opts.rerender());
       });
     });
     // Ruhende Überschreibungen
@@ -164,18 +194,20 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
         const next = clone(opts.settings());
         delete next.overrides[mode]![fam];
         if (Object.keys(next.overrides[mode] ?? {}).length === 0) delete next.overrides[mode];
-        void opts.save(next).then(() => opts.rerender());
+        persist(next, () => opts.rerender());
       }));
     }
   }
 
   // 4. Stufenwahl im Chat
-  new Setting(body).setName(st.levelPicker).setDesc(st.levelPickerDesc).addToggle((t) =>
-    t.setValue(settings.levelPickerInChat).onChange((v) => {
-      const next = clone(opts.settings());
-      next.levelPickerInChat = v;
-      void opts.save(next);
-    }));
+  if (opts.levelPicker === true || settings.levelPickerInChat) {
+    new Setting(body).setName(st.levelPicker).setDesc(st.levelPickerDesc).addToggle((t) =>
+      t.setValue(settings.levelPickerInChat).onChange((v) => {
+        const next = clone(opts.settings());
+        next.levelPickerInChat = v;
+        persist(next);
+      }));
+  }
 
   // 5. Letzte Anfrage
   const last = opts.session.lastRequest();
@@ -193,6 +225,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
   // 6. Abweichungen (Status-Indikator, UI-STANDARD §8)
   const devs = opts.session.deviations();
   const status = body.createDiv({ cls: `okit-request-status ${devs.length === 0 ? "is-ok" : "is-warning"}` });
+  ui.status = status;
   const label = devs.length === 0 ? st.deviationsOk : st.deviationsWarn(devs.length);
   status.setAttribute("aria-label", label);
   const icon = status.createSpan();
@@ -212,5 +245,6 @@ export const REQUEST_SECTION_CSS = `
 .okit-request-status { display: flex; gap: var(--size-4-2); align-items: center; margin-top: var(--size-4-2); }
 .okit-request-status.is-ok { color: var(--text-success); }
 .okit-request-status.is-warning { color: var(--text-warning); }
+.okit-request-status.is-error { color: var(--text-error); }
 .okit-request-deviation { color: var(--text-muted); font-size: var(--font-ui-small); padding-left: var(--size-4-6); }
 `;
