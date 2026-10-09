@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-10-09
+
 ### Changed
 
 - **The LLM connection is now the shared Kit connection.** Endpoint source (LLM Endpoint Manager first, otherwise the local list), model list, request profile, transport, timeouts and the check of every answer come from one Kit component instead of a plugin-owned client. Kit pins: obsidian-kit 0.51.3, code-kit 0.15.4. Backend detection (LM Studio native probe) now sends the endpoint's API key too, so a hosted endpoint that requires authentication is recognised.
