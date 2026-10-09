@@ -8,7 +8,7 @@ and versioning follows [SemVer](https://semver.org/).
 
 ### Changed
 
-- **The LLM connection is now the shared Kit connection.** Endpoint source (LLM Endpoint Manager first, otherwise the local list), model list, request profile, transport, timeouts and the check of every answer come from one Kit component instead of a plugin-owned client. Kit pins: obsidian-kit 0.51.2, code-kit 0.15.0.
+- **The LLM connection is now the shared Kit connection.** Endpoint source (LLM Endpoint Manager first, otherwise the local list), model list, request profile, transport, timeouts and the check of every answer come from one Kit component instead of a plugin-owned client. Kit pins: obsidian-kit 0.51.3, code-kit 0.15.4. Backend detection (LM Studio native probe) now sends the endpoint's API key too, so a hosted endpoint that requires authentication is recognised.
 - **Minimum Obsidian version is now 1.11.4** (was 1.8.7), because API keys move into Obsidian's keychain.
 - **API keys live in Obsidian's keychain.** A plain-text key from an older version moves there the first time the endpoints are resolved; `data.json` keeps only the row's `id` and `secretId`, so a synced `data.json` no longer carries the key — check the key field on each device.
 - **Endpoint list and "Request" section use the Kit texts and rows.** Visible differences: the connection button reads "Test connection" / "Verbindung prüfen", each row has "Try this endpoint first", and the status lines are the Kit's ("Timed out — network unreachable.", "Answers, but is not an OpenAI-compatible endpoint."). The "Request" section now sits directly below the endpoint list, above the model row.

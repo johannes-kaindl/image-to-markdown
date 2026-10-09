@@ -739,7 +739,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   // Alle gegen den Fake-Endpunkt im Node-Prozess; kein Modell noetig. Der Schluessel ist ein Fake-Wert.
   {
     key: "V1",
-    titel: "Verbindung: der Schluessel geht als Bearer an Ping UND Chat — auch der Vision-Test der Einstellungen laeuft mit Schluessel",
+    titel: "Verbindung: der Schluessel geht als Bearer an Ping, Backend-Probe UND Chat — auch der Vision-Test der Einstellungen laeuft mit Schluessel",
     async run(cdp) {
       const fake = await startFakeChat();
       const vor = await verbindungVorher(cdp);
@@ -757,13 +757,15 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         `);
         const d = JSON.parse(r) as { url: string | null; schluesselInConfig: boolean; testFehler: string | null };
         const auth = (rq: FakeRequest): string => String(rq.headers.authorization ?? "");
-        // Die Backend-Erkennung (`/api/v1/models`, LM-Studio-Nativ-Probe) geht im Kit OHNE Schluessel raus —
-        // dasselbe tat `cachedProbe` vor dem Tausch. Sie steht nur im Detail, nicht in der Bedingung.
+        // Seit obsidian-kit 0.51.3 traegt auch die Backend-Erkennung (`/api/v1/models`, LM-Studio-Nativ-Probe)
+        // den Schluessel; bis 0.51.2 ging sie ohne raus (wie vorher `cachedProbe`). Sie MUSS vorkommen,
+        // sonst haette die Bedingung nichts gemessen.
         const ping = fake.requests.filter((q) => q.url.startsWith("/v1/models"));
+        const probe = fake.requests.filter((q) => q.url.startsWith("/api/v1/models"));
         const chat = fake.requests.filter((q) => q.method === "POST");
-        const ok = d.url === fake.url && d.schluesselInConfig && ping.length > 0 && chat.length > 0
-          && [...ping, ...chat].every((q) => auth(q) === `Bearer ${KEY}`) && d.testFehler === null;
-        return { ok, detail: `Config traegt den Schluessel: ${d.schluesselInConfig} · Ping ${ping.length}x, Chat ${chat.length}x, Bearer ueberall: ${[...ping, ...chat].every((q) => auth(q) === `Bearer ${KEY}`)} (${fake.requests.map((q) => `${q.method} ${q.url}: ${auth(q) === `Bearer ${KEY}` ? "Bearer" : auth(q) === "" ? "OHNE" : "anderer"}`).join(", ")}) · Vision-Test ${d.testFehler ?? "ohne Fehler"}` };
+        const ok = d.url === fake.url && d.schluesselInConfig && ping.length > 0 && chat.length > 0 && probe.length > 0
+          && [...ping, ...probe, ...chat].every((q) => auth(q) === `Bearer ${KEY}`) && d.testFehler === null;
+        return { ok, detail: `Config traegt den Schluessel: ${d.schluesselInConfig} · Ping ${ping.length}x, Chat ${chat.length}x, Bearer ueberall: ${[...ping, ...probe, ...chat].every((q) => auth(q) === `Bearer ${KEY}`)} (${fake.requests.map((q) => `${q.method} ${q.url}: ${auth(q) === `Bearer ${KEY}` ? "Bearer" : auth(q) === "" ? "OHNE" : "anderer"}`).join(", ")}) · Vision-Test ${d.testFehler ?? "ohne Fehler"}` };
       } finally {
         await fake.close();
         await stelleVerbindungWieder(cdp, vor);
