@@ -17,7 +17,7 @@ reproducible capture recipe so anyone can regenerate them consistently.
   (GitHub ~820 px, Forgejo unbounded, the Obsidian store page again different) — the same
   file then reads differently on each surface.
 - **Height limit:** an inline image may not exceed H/W 1.6, because height is scroll
-  distance. Two images are legitimately taller — `settings.png` (2.25) and `refine.png`
+  distance. Two images are legitimately taller — `settings.png` (3.11) and `refine.png`
   (2.08) show one long page each — and are therefore embedded as **380 px previews from
   `thumbs/` that link to the full-resolution file**. Regenerate a preview whenever its
   source changes: `thumbs/<name>.png` = the same image scaled to 380 px wide.
@@ -57,7 +57,7 @@ private, nothing copyrighted. Models: `google/gemma-4-e4b` for the transcription
 
 > Note: the project prefers script-generated screenshots, but the subject is an interactive
 > Obsidian UI plugin (sidebar view, live SSE stream, reasoning block, PDF page cards) with no
-> headless render path, so these are captured **manually**. Keep the recipe below so the manual
+> headless render path, so these are captured with a CDP recipe where possible (`npm run shots`: `tutorial-sidebar.png`, `thinking-toggle.png`, `settings.png`) and **manually** otherwise. Keep the recipe below so the manual
 > captures stay reproducible.
 
 **Language: capture in English.** The UI is bilingual and follows Obsidian's language setting.
@@ -103,8 +103,8 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 | `sidebar-streaming.png` | `README.md`, `README.de.md` (Features) | A single transcription card with the **finished** Markdown (headings, bullet list, GFM table), the collapsed **thinking block** and the **copy button**. ⚠️ The name says streaming, the image shows the **result** — deliberately: the live stream is already carried by `hero.png` and `pdf-streaming.png`, and this shot's job is to show what comes out. Renaming it would break the URLs in both READMEs for no gain. |
 | `describe-mode.png` | `README.md`, `README.de.md` (Features) | The sidebar's mode switch **"Transcribe"** / **"Describe"** (with **"Describe"** active) plus a finished description card: image + description text, an editable **Category** field (with taxonomy suggestions) and free-form **Tags**, and the **"Save description"** button. |
 | `refine.png` | `README.md`, `README.de.md` (Features) | A transcript card mid-refinement: the **"Refine"** feedback field, a scrollable history with the original transcription plus at least one refinement round, a per-round expandable **thinking** block, a **[Copy] [Create note]** action pair on each version, and the sidebar footer's **"Discard results"** / **"Apply"** buttons. |
-| `thinking-toggle.png` | `README.md`, `README.de.md` (Features) | The sidebar's preset row with the **Thinking toggle** (brain icon) visible, showing one of **"Thinking: on"**, **"Thinking: off"**, or **"Thinking: always on"**. |
-| `settings.png` | `README.md`, `README.de.md` (Configuration) | The settings tab under **"Vision (Image → Markdown)"**: the **"Vision endpoints"** list (per-entry reachability icon, active endpoint marked, **"Test connection"**), **"Vision model"** dropdown + **"Vision capability"** / **"Test vision"**, **"Vision prompt"**, the PDF settings — **"PDF max. pages per run"**, **"PDF render scale"** (a **slider**, 1–4), **"PDF page separator"** (dropdown), **"Use embedded PDF text"** toggle, **"Expand thinking by default"** toggle — and, further down the same page, the **"Description categories"** section (taxonomy fields). |
+| `thinking-toggle.png` | `README.md`, `README.de.md` (Features) | The sidebar's preset row with the **Thinking toggle** (brain icon) visible, showing one of **"Thinking: off"**, **"Thinking: low"** / **"medium"** / **"high"**, or **"Thinking: always on"** (Kit control since 0.27.0; the recipe captures the switched-on state). Reproducible: `npm run shots -- --only thinking-toggle.png`. |
+| `settings.png` | `README.md`, `README.de.md` (Configuration) | The settings tab under **"Vision (Image → Markdown)"**: the **"Vision endpoints"** list (per-entry reachability icon, active endpoint marked, **"Test connection"**), **"Vision model"** dropdown + **"Vision capability"** / **"Test vision"**, **"Vision prompt"**, the PDF settings — **"PDF max. pages per run"**, **"PDF render scale"** (a **slider**, 1–4), **"PDF page separator"** (dropdown), **"Use embedded PDF text"** toggle, **"Expand thinking by default"** toggle — and, further down the same page, the **"Description categories"** section (taxonomy fields). Reproducible: `npm run shots -- --only settings.png` (the recipe sets the endpoint to the local server on `:1234`, the model, English categories, and presses **"Test vision"**; the page ends before **"Frontmatter mapping"**, which is its own image). |
 | `frontmatter-mapping.png` | `README.md`, `README.de.md` (Configuration / Features) | The settings tab's **"Frontmatter mapping"** section: the per-key text fields (source image/PDF/note key, category key, tags key, transcribed-by key, described-by key, created key, pages key, kind key, and the two kind values for transcript/description). |
 | `tutorial-lmstudio.png` | `docs/manual/tutorial.md` (step 1) | A local server (e.g. LM Studio) with a **vision-capable model loaded**, listening on its port (LM Studio uses `:1234`). |
 | `tutorial-sidebar.png` | `docs/manual/tutorial.md` (step 5) | The sidebar's **checkbox list** of embedded images for the active note (all pre-selected), an unsupported format (e.g. `.heic`) **disabled**, and the **"Transcribe"** button. The "before you press the button" state. |

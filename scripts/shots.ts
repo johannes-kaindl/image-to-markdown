@@ -6,8 +6,9 @@
  * entstand — "nur Johannes, braucht laufendes Plugin" hielt ihn ein Jahr lang zu. Ein
  * Werkzeug, das nur einmal im Scratchpad existiert, ist keine Praxis.
  *
- * **Der Umfang ist ehrlich klein:** dieser Treiber nimmt EIN Motiv auf
- * (`tutorial-sidebar.png`) und stellt die Aufnahme-Primitive fuer die uebrigen bereit.
+ * **Der Umfang ist ehrlich klein:** dieser Treiber nimmt DREI Motive auf
+ * (`tutorial-sidebar.png`, `settings.png`, `thinking-toggle.png` — die beiden letzten seit 2026-10-10, vorher von Hand) und stellt
+ * die Aufnahme-Primitive fuer die uebrigen bereit.
  * Die restlichen 14 Assets brauchen je einen Modell-Lauf und entstehen nach der
  * Schrittfolge in `docs/images/README.md`. Das war schon in der Vorgaenger-Fassung so und
  * steht hier, weil der Name "shots" leicht mehr verspricht, als der Treiber haelt.
@@ -30,7 +31,8 @@
  *
  * ```bash
  * npm run build && npm run shots -- --setup     # Vault aus dem Fixture bauen
- * npm run shots -- --vault image-to-markdown    # aufnehmen
+ * npm run shots -- --vault image-to-markdown    # aufnehmen (beide Motive)
+ * npm run shots -- --only settings.png          # nur ein Motiv (Zweitinstanz: --port <port>)
  * ```
  *
  * ⚠️ **Vor einem Quit koordinieren — Obsidian ist geteilte Infrastruktur.** Laeuft schon
@@ -61,8 +63,8 @@
 import { execFileSync } from "node:child_process";
 import { argv, cwd, exit } from "node:process";
 
-import { Cdp, openExisting, pollUntil } from "../../tools/obsidian-cdp/cdp.js";
-import { capture, writeShot, type Rect } from "../../tools/obsidian-cdp/shot.js";
+import { attachTo, Cdp, openExisting, pollUntil, setPluginSetting } from "../../tools/obsidian-cdp/cdp.js";
+import { boxOf, capture, withMetrics, writeShot, type Rect } from "../../tools/obsidian-cdp/shot.js";
 import { buildVault, stagingVaultDir } from "../../tools/obsidian-cdp/vault.js";
 
 const PLUGIN_ID = "image-to-markdown";
@@ -142,6 +144,85 @@ function setup(): void {
   );
 }
 
+/** Das Einstellungs-Bild. Eigenes Fenster seit Obsidian 1.13 (dort existiert `app` nicht):
+ *  der Tab wird im Workspace-Fenster geoeffnet, das Fenster danach ueber `attachTo` gefasst.
+ *  Vorbild: json-editor/scripts/shots.ts `settingsBild` (Hoehe messen, dann so hoch simulieren). */
+async function settingsBild(cdp: Cdp, port: number, vault: string, outDir: string): Promise<void> {
+  // Zustand selbst herstellen: Auslieferungs-Default ist ein Endpunkt auf :8080 (nicht
+  // erreichbar → Bild mit rotem Kreuz) und eine deutsche Kategorie-Liste, das Bild ist aber
+  // englisch und zeigt den erreichbaren lokalen Server (Referenz-Setup LM Studio :1234).
+  // Das Modell wird nicht erfunden: es kommt aus der Modell-Liste des Endpunkts.
+  await setPluginSetting(cdp, PLUGIN_ID, "visionEndpoints", [{ url: "http://localhost:1234" }]);
+  // Referenz-Modell des Setups (Vision + reasoning_content), Auswahl wie im Dropdown; das
+  // Plugin selbst kennt keinen Modellnamen (modellagnostisch).
+  await setPluginSetting(cdp, PLUGIN_ID, "visionModel", "qwen/qwen3.6-27b");
+  await setPluginSetting(
+    cdp, PLUGIN_ID, "describeTaxonomy",
+    ["Photo", "Diagram", "Screenshot", "Handwriting", "Whiteboard", "Table", "Other"],
+  );
+  await cdp.evaluate(`
+    app.setting.open();
+    app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+    await new Promise((r) => setTimeout(r, 900));
+    return true;
+  `);
+  const fenster = await attachTo("settings", port, vault);
+  if (!fenster) throw new Error("settings.png — kein Einstellungen-Fenster gefunden");
+  try {
+    await fenster.send("Page.bringToFront");
+    await new Promise((r) => setTimeout(r, 1500));
+    // „Test vision“ druecken, damit die Faehigkeits-Zeile einen Befund zeigt statt „No vision“
+    // (der Ausgangszustand ohne Probe liest sich wie ein Fehler).
+    await fenster.evaluate(`
+      const zeile = [...document.querySelectorAll(".setting-item")]
+        .find((z) => /Vision capability/.test(z.textContent || ""));
+      zeile?.querySelector("button")?.click();
+      return true;
+    `);
+    const probe = await pollUntil<boolean>(fenster, `
+      const zeile = [...document.querySelectorAll(".setting-item")]
+        .find((z) => /Vision capability/.test(z.textContent || ""));
+      const knopf = zeile?.querySelector("button");
+      const t = (zeile?.textContent || "").replace("Test vision", "");
+      // fertig = der Knopf ist wieder frei (waehrend der Probe ist er gesperrt und dreht) und es steht ein Befund da
+      return knopf && !knopf.disabled && /Vision/.test(t) && !/No vision/.test(t) ? true : null;
+    `, 60_000, 500);
+    if (!probe) throw new Error("settings.png — Vision-Probe lieferte kein Ergebnis (Modell geladen?)");
+    const hoehe = await fenster.evaluate<number>(`
+      const el = document.querySelector(".vertical-tab-content");
+      return el ? Math.ceil(el.scrollHeight) + 80 : 0;
+    `);
+    if (!hoehe) throw new Error("settings.png — kein Inhaltsbereich im Einstellungen-Fenster");
+    const hinweis = await withMetrics(fenster, 1000, Math.max(hoehe, 700), async () => {
+      await new Promise((r) => setTimeout(r, 600));
+      const box = await boxOf(fenster, ".vertical-tab-content", 0);
+      if (!box) throw new Error("settings.png — Inhaltsbereich nach der Simulation weg");
+      // Auf den INHALT kappen: im simulierten hohen Fenster ist der Container so hoch wie die
+      // Simulation, darunter steht Leere.
+      // Der Vertrag endet bei „Description categories“; „Frontmatter mapping“ ist ein eigenes
+      // Bild (frontmatter-mapping.png). Unten also vor dieser Ueberschrift kappen.
+      const unten = await fenster.evaluate<number>(`
+        const el = document.querySelector(".vertical-tab-content");
+        const kopf = [...el.querySelectorAll(".setting-item-heading")]
+          .find((h) => /Frontmatter mapping/.test(h.textContent || ""));
+        if (kopf) return Math.floor(kopf.getBoundingClientRect().top) - 8;
+        const kinder = [...el.children].filter((k) => k.getBoundingClientRect().height > 0);
+        const letztes = kinder[kinder.length - 1];
+        return letztes ? Math.ceil(letztes.getBoundingClientRect().bottom) : 0;
+      `);
+      const geschnitten = unten > box.y ? { ...box, height: Math.round(unten - box.y) } : box;
+      const png = await capture(fenster, geschnitten, 2);
+      return await writeShot(fenster, "settings.png", png, {
+        outDir, captureWidth: CAPTURE_WIDTH, thumbWidth: THUMB_WIDTH, thumb: true,
+      });
+    });
+    console.log(`  ${hinweis}`);
+  } finally {
+    await fenster.evaluate("window.close(); return true;").catch(() => undefined);
+    fenster.close();
+  }
+}
+
 async function main(): Promise<void> {
   const args = argv.slice(2);
   const flag = (name: string): string | undefined => {
@@ -154,6 +235,7 @@ async function main(): Promise<void> {
   const port = Number(flag("port") ?? 9222);
   const vault = flag("vault") ?? REPO_NAME;
   const outDir = flag("out") ?? "docs/images";
+  const only = flag("only");
 
   const cdp = await Cdp.attach(port, vault);
   try {
@@ -166,6 +248,11 @@ async function main(): Promise<void> {
         console.log("  (Hinweis: `osascript activate` schlug fehl — Fenster ggf. von Hand nach vorn holen)");
       }
       await cdp.send("Page.bringToFront");
+    }
+
+    if (only === "settings.png") {
+      await settingsBild(cdp, port, vault, outDir);
+      return;
     }
 
     // Zustand selbst herstellen, nicht vorfinden: Sidebar offen, Split ausgeklappt, eine
@@ -184,6 +271,22 @@ async function main(): Promise<void> {
     `, 15_000, 250);
     if (!bereit) throw new Error("Sidebar verarbeitete \"Field notes.md\" nicht");
 
+    // Zuschnitt auf die Preset-Zeile mit dem Denk-Knopf (Kit-Baustein „Thinking: …“).
+    const denkBild = async (): Promise<void> => {
+      // Der Vertrag bevorzugt den eingeschalteten Zustand; steht er auf „off“, einmal umschalten.
+      await cdp.evaluate(`
+        const k = document.querySelector(${JSON.stringify(SIDEBAR + " .img2md-think .okit-thinking-toggle")});
+        if (k && /off/.test(k.textContent || "")) k.click();
+        await new Promise((r) => setTimeout(r, 600));
+        return true;
+      `);
+      const zeile = await boxOf(cdp, `${SIDEBAR} .img2md-preset-row`, 4);
+      if (!zeile) throw new Error("thinking-toggle.png — keine Preset-Zeile in der Sidebar");
+      const png = await capture(cdp, zeile, 2);
+      console.log(`  ${await writeShot(cdp, "thinking-toggle.png", png, { outDir, captureWidth: 900, thumbWidth: 450 })}`);
+    };
+    if (only === "thinking-toggle.png") { await denkBild(); return; }
+
     const box = await inhaltsBox(cdp, SIDEBAR);
     const png = await capture(cdp, box, 2);
     const hinweis = await writeShot(cdp, "tutorial-sidebar.png", png, {
@@ -192,8 +295,12 @@ async function main(): Promise<void> {
       thumbWidth: THUMB_WIDTH,
     });
     console.log(`  ${hinweis}`);
+    if (!only) {
+      await denkBild();
+      await settingsBild(cdp, port, vault, outDir);
+    }
     console.log(
-      "\nEin Motiv aufgenommen. Die uebrigen brauchen je einen Modell-Lauf —\n"
+      "\nDrei Motive aufgenommen. Die uebrigen brauchen je einen Modell-Lauf —\n"
       + "Schrittfolge in docs/images/README.md § 'Reproducible capture recipe'.",
     );
   } finally {

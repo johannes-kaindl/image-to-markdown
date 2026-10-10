@@ -6,6 +6,9 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Documentation
+- Re-captured the settings and thinking-toggle screenshots (shared endpoint list, request section, new "Thinking: …" control); both are now reproducible with `npm run shots`.
+
 ## [0.28.0] — 2026-10-09
 
 ### Changed
