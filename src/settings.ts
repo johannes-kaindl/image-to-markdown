@@ -359,7 +359,14 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     }));
     this.showCaps(this.plugin.model);
     // Das Modell steht in der Endpunkt-Zeile: ändert sich die Auflösung, folgt die Anzeige.
-    this.plugin.onSourceResolved = () => { this.showCaps(this.plugin.model); };
+    // Nur bei geändertem Modell: `showCaps` löst selbst auf (`probe`), ein bedingungsloser Aufruf liefe im Kreis.
+    let angezeigt = this.plugin.model;
+    this.plugin.onSourceResolved = () => {
+      const m = this.plugin.model;
+      if (m === angezeigt) return;
+      angezeigt = m;
+      this.showCaps(m);
+    };
   }
 
   /** Prompt-Textarea — Hatch statt `textarea`-Control, weil sie zusätzlich die

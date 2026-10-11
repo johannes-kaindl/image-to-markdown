@@ -98,7 +98,7 @@ Reasoning ("thinking") models emit their chain of thought separately from the
 final answer. Image to Markdown surfaces that as a collapsible thinking block so
 you can see how the model arrived at a transcription.
 
-1. Configure a reasoning-capable vision model as your **Vision model** (see
+1. Configure a reasoning-capable vision model as the model of your endpoint row (see
    [Pick or pin a specific model](#pick-or-pin-a-specific-model)).
 2. Open the sidebar (ribbon **"Image → Markdown"**, view title **"IMG → MD"**)
    and click **"Transkribieren"** (Transcribe).
@@ -223,18 +223,20 @@ To get iPhone photos transcribed, do one of the following:
 Choose exactly which vision model runs, or pin one when you have several loaded.
 
 1. Open the Image to Markdown settings (heading **"Vision (Image → Markdown)"**).
-2. Use the **"Vision model"** setting:
+2. In the **"Vision endpoints"** list, use the **model field of the endpoint row**:
    - When the endpoint is reachable, this is a **dropdown** populated from the
      endpoint's `/v1/models`. Pick the model you want (examples: Qwen2-VL,
      Llama-3.2-Vision).
-   - When the endpoint is offline, the same setting becomes a **free-text field**
-     so you can type a model name, with a **"Modelle laden"** (Load models) button
-     to refresh the dropdown once the server is back up.
+   - When the endpoint is offline, the same field becomes a **free-text field**
+     so you can type a model name; the refresh icon re-fetches the list once the
+     server is back up.
+   - Each endpoint row carries its own model. There is no separate global model
+     setting any more.
 
 Good to know:
 
-- The default is empty (`""`). With an empty value, the actually-used model is
-  read from the server's `response.model`.
+- A row without a model works too: the actually-used model is read from the
+  server's `response.model`.
 - **LM Studio ignores the `model` field** in the request and uses whichever
   model is currently loaded. Either way, the model that actually ran is recorded
   in the `transcribed_by` frontmatter of each transcript note, taken from
@@ -242,7 +244,7 @@ Good to know:
   you selected.
 - If an external process swaps the model your backend has loaded, click the
   **"Refresh models"** ("Modelle aktualisieren") icon (`refresh-cw`) next to
-  the model dropdown — in both the sidebar and Settings — to re-fetch the model
+  the model dropdown — in the sidebar and in the endpoint row — to re-fetch the model
   list. If the previously selected model is no longer loaded, the selection is
   automatically aligned to the first available model. After each transcription
   run, the sidebar also performs an automatic post-sync: if `response.model`

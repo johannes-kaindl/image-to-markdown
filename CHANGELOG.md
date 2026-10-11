@@ -6,6 +6,12 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **The global *Vision model* setting is gone; each endpoint row carries its own model.** An existing value moves once into every row that had none (a row with its own model keeps it; a row you clear stays empty after a restart). With an installed LLM Endpoint Manager the model is still chosen there.
+- With the row the settings tab loses the *Vision model* dropdown, its "Load models" button and its refresh icon: the model is chosen in the endpoint row. The "Vision capability" line follows the model of the active row.
+- The sidebar's model dropdown now writes the choice into the active endpoint row instead of a global field.
+- Vendored `obsidian-kit` 0.53.0 (was 0.51.3) and `code-kit` 0.21.0 (was 0.15.4). Mermaid diagrams in a reply that would load remote sources are shown as plain `text`, and the redaction masks more bearer tokens.
+
 ## [0.28.1] — 2026-10-10
 
 ### Documentation

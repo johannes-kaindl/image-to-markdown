@@ -72,8 +72,8 @@ answers a wrong path with an empty success rather than a visible error — which
 like the transcription silently did nothing. So: base URL, no `/v1`. The plugin handles
 the rest.
 
-You can leave **"Vision model"** and **"Vision prompt"** at their defaults for now.
-With the server running, the model field will offer your loaded model in a dropdown; if
+You can leave **"Vision prompt"** at its default for now. The endpoint row has a model
+field: with the server running it offers your loaded model in a dropdown; if
 the server is offline it becomes a free-text field instead. Either way, the model that
 actually does the work is read back from the server's response, so you do not need to
 fuss over it today.

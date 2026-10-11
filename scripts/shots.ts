@@ -152,10 +152,9 @@ async function settingsBild(cdp: Cdp, port: number, vault: string, outDir: strin
   // erreichbar → Bild mit rotem Kreuz) und eine deutsche Kategorie-Liste, das Bild ist aber
   // englisch und zeigt den erreichbaren lokalen Server (Referenz-Setup LM Studio :1234).
   // Das Modell wird nicht erfunden: es kommt aus der Modell-Liste des Endpunkts.
-  await setPluginSetting(cdp, PLUGIN_ID, "visionEndpoints", [{ url: "http://localhost:1234" }]);
-  // Referenz-Modell des Setups (Vision + reasoning_content), Auswahl wie im Dropdown; das
-  // Plugin selbst kennt keinen Modellnamen (modellagnostisch).
-  await setPluginSetting(cdp, PLUGIN_ID, "visionModel", "qwen/qwen3.6-27b");
+  // Referenz-Modell des Setups (Vision + reasoning_content) steht in der Zeile; das Plugin selbst
+  // kennt keinen Modellnamen (modellagnostisch).
+  await setPluginSetting(cdp, PLUGIN_ID, "visionEndpoints", [{ url: "http://localhost:1234", model: "qwen/qwen3.6-27b" }]);
   await setPluginSetting(
     cdp, PLUGIN_ID, "describeTaxonomy",
     ["Photo", "Diagram", "Screenshot", "Handwriting", "Whiteboard", "Table", "Other"],

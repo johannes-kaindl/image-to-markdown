@@ -43,8 +43,7 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading wor
 
 | Name (verbatim) | Description | Default |
 | --- | --- | --- |
-| "Vision endpoints" ("Vision-Endpunkte") | Ordered list of OpenAI-compatible servers, each with an optional API key (password field beside the address; leave empty for local servers; the key is stored in Obsidian's keychain, not in `data.json`). The plugin pings them in priority order and uses the **first reachable** one. Each entry is a base URL. The settings tab renders a dynamic field per entry; an empty trailing field is the "add new" slot — blurring an empty field removes it from the list. Each field shows its own per-field reachability icon (circle-check / circle-x / loader, with accessible `title` text), and the currently **active** endpoint is marked. See also [Endpoint fallback resolution](#endpoint-fallback-resolution). | `[{"url": "http://localhost:8080"}]` |
-| "Vision model" ("Vision-Modell") | Vision-capable model (examples: Qwen2-VL, Llama-3.2-Vision). Dropdown populated from the endpoint's `/v1/models`; falls back to a free-text field when the endpoint is offline. | `""` (empty) |
+| "Vision endpoints" ("Vision-Endpunkte") | Ordered list of OpenAI-compatible servers, each with an optional API key (password field beside the address; leave empty for local servers; the key is stored in Obsidian's keychain, not in `data.json`). The plugin pings them in priority order and uses the **first reachable** one. Each entry is a base URL with its own vision model. The settings tab renders a dynamic field per entry; an empty trailing field is the "add new" slot — blurring an empty field removes it from the list. Each field shows its own per-field reachability icon (circle-check / circle-x / loader, with accessible `title` text), and the currently **active** endpoint is marked. See also [Endpoint fallback resolution](#endpoint-fallback-resolution). | `[{"url": "http://localhost:8080"}]` |
 | "Vision prompt" ("Vision-Prompt") | Text of the **"Default"** prompt preset (large free-text area). The shipped default is itself localized — see note below. Other presets are fixed and chosen via the sidebar preset picker (see the next row). | English: "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, \*\*emphasis\*\*, lists and tables. Output only the Markdown, no comments." German: "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, \*\*Hervorhebungen\*\*, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
 | Prompt preset (sidebar dropdown) | Selects which prompt is sent. **Default** uses the editable "Vision prompt" above; the fixed built-ins are **Tables → Markdown**, **Handwriting**, **Math → LaTeX**, **Source code**, **Describe image**. Stored as `promptPreset` in `data.json`; the choice is sticky across runs and sessions. Not a settings-tab control — chosen in the "IMG → MD" sidebar next to the model dropdown. | `default` |
 | "PDF max. pages per run" ("PDF max. Seiten pro Lauf") | Safety cap — PDFs with more pages than this limit must be narrowed via the page range selector in the sidebar. | `25` |
@@ -58,7 +57,7 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading wor
 Notes:
 
 - The default endpoint list contains `http://localhost:8080` (the MLX default). LM Studio listens on `:1234` — this is the most common misconfiguration. With the fallback list you can put both in order: `localhost:1234` first, then a LAN IP as fallback.
-- "Vision-Modell" defaults to empty; the model actually used is read from `response.model`. LM Studio ignores the `model` field in the request and uses the loaded model, so the effective model name comes back in the response.
+- An endpoint row without a model: the model actually used is read from `response.model`. LM Studio ignores the `model` field in the request and uses the loaded model, so the effective model name comes back in the response.
 
 ### Connection & model controls
 
@@ -66,8 +65,7 @@ Alongside the settings listed above, the tab shows:
 
 - A **per-field reachability icon** next to each endpoint input (auto-pinged when the tab opens) — circle-check (reachable), circle-x (unreachable), or loader (checking) — plus accessible `title` text. The **active** endpoint (the first reachable one) is marked. A **"Test connection"** ("Verbindung prüfen") button re-runs the ping sequence. **"Try this endpoint first"** ("Diesen Endpunkt zuerst probieren") moves a row to the front of the list. The **sidebar** connection status now reads **"connected via \<endpoint\>"** ("verbunden via \<endpoint\>") to show which endpoint is currently in use.
 - A **"Vision capability"** ("Vision-Fähigkeit") row for the selected model, plus a **"Test vision"** ("Vision testen") button — see [Vision capability detection](#vision-capability-detection).
-- A **"Load models"** ("Modelle laden") button that appears when the endpoint is offline, to refresh the model dropdown once the server is up.
-- A **"Refresh models"** ("Modelle aktualisieren") icon button (`refresh-cw`) next to the "Vision model" dropdown — re-fetches `/v1/models` at any time. If the previously selected model is no longer in the list (e.g. because an external process swapped the loaded model), the selection is automatically aligned to the first available model. The same icon also appears next to the model dropdown in the **sidebar**. After every transcription run the sidebar additionally performs an automatic post-sync: if `response.model` differs from the current selection, the selection is updated and a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …") is shown in the status line.
+- A **"Refresh models"** ("Modelle aktualisieren") icon button (`refresh-cw`) in the endpoint row — re-fetches `/v1/models` at any time. If the previously selected model is no longer in the list (e.g. because an external process swapped the loaded model), the selection is automatically aligned to the first available model. The same icon also appears next to the model dropdown in the **sidebar**. After every transcription run the sidebar additionally performs an automatic post-sync: if `response.model` differs from the current selection, the selection is updated and a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …") is shown in the status line.
 
 ## Vision capability detection
 
@@ -151,7 +149,7 @@ The plugin's interface is bilingual. **English is the canonical language; German
 
 ### What is localized
 
-- **Settings** — the tab body labels and descriptions ("Vision endpoint", "Vision model", "Vision prompt", "Test connection", "Vision capability", "Test vision", "Load models") and the capability states.
+- **Settings** — the tab body labels and descriptions ("Vision endpoint", "Vision prompt", "Test connection", "Vision capability", "Test vision", "Load models") and the capability states.
 - **Buttons** — the sidebar controls "Transcribe", "Create note", "Apply".
 - **Notices** — status and error messages, including the unsupported-format notice and "No active note." ("Keine aktive Notiz.").
 - **View** — the in-view prompts and helper text of the sidebar.

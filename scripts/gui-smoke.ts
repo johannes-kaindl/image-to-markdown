@@ -511,15 +511,15 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "F1",
-    titel: "Endpunkt-Quelle: Manager an — Settings zeigen den Baustein statt der lokalen Liste, Modell-Zeile ausgeblendet",
+    titel: "Endpunkt-Quelle: Manager an — Settings zeigen den Baustein statt der lokalen Liste, keine eigene Modell-Zeile",
     async run(cdp) {
       await installiereManager(cdp);
       try {
         const m = await messeEinstellungen(cdp);
         if (!m) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
         return {
-          ok: m.baustein && m.zeilen === 0 && m.ausgeblendet === 1 && m.ausgeblendetSichtbar === 0,
-          detail: `Baustein ${m.baustein ? "da" : "FEHLT"} · ${m.zeilen} lokale Zeile(n) sichtbar · globale Modell-Zeile ausgeblendet: ${m.ausgeblendet} im DOM, ${m.ausgeblendetSichtbar} sichtbar (Modell-Zeilen gesamt sichtbar: ${m.modellSichtbar}, davon eine im Baustein)`,
+          ok: m.baustein && m.zeilen === 0 && m.modellZeilen === 0,
+          detail: `Baustein ${m.baustein ? "da" : "FEHLT"} · ${m.zeilen} lokale Zeile(n) sichtbar · eigene Modell-Zeilen: ${m.modellZeilen} (Modell-Zeilen sichtbar: ${m.modellSichtbar}, davon eine im Baustein)`,
         };
       } finally {
         await entferneManager(cdp);
@@ -546,14 +546,14 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "F3",
-    titel: "Endpunkt-Quelle: Manager aus — lokale Liste und Modell-Zeile zurueck (Gegenprobe zu F1/F2)",
+    titel: "Endpunkt-Quelle: Manager aus — lokale Liste zurueck, weiterhin keine eigene Modell-Zeile (Gegenprobe zu F1/F2)",
     async run(cdp) {
       const m = await messeEinstellungen(cdp);
       if (!m) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
       const r = await aufloesung(cdp);
       return {
-        ok: m.zeilen > 0 && m.ausgeblendet === 0 && m.modellSichtbar === 1 && r.url !== MGR_URL,
-        detail: `${m.zeilen} lokale Zeile(n) · ausgeblendet: ${m.ausgeblendet} · Modell-Zeile sichtbar: ${m.modellSichtbar} · Aufloesung ${r.url}`,
+        ok: m.zeilen > 0 && m.modellZeilen === 0 && r.url !== MGR_URL,
+        detail: `${m.zeilen} lokale Zeile(n) · eigene Modell-Zeilen: ${m.modellZeilen} · Aufloesung ${r.url}`,
       };
     },
   },
@@ -700,13 +700,12 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       const sicht = await startFakeChat();
       const vor = await cdp.evaluate<string>(`
         const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-        return JSON.stringify({ eps: p.settings.visionEndpoints, model: p.settings.visionModel, request: p.settings.request, choice: p.settings.choice });
+        return JSON.stringify({ eps: p.settings.visionEndpoints, request: p.settings.request, choice: p.settings.choice });
       `);
       try {
         const r = await cdp.evaluate<string>(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-          p.settings.visionEndpoints = [{ url: ${JSON.stringify(sicht.url)} }];
-          p.settings.visionModel = "google/gemma-4-e4b";
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(sicht.url)}, model: "google/gemma-4-e4b" }];
           p.settings.request = { overrides: {}, thinking: {}, lastOnLevel: {}, levelPickerInChat: false };
           p.llm.invalidate();
           const deps = p.makeImgViewDeps();
@@ -727,7 +726,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         await cdp.evaluate(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
           const v = JSON.parse(${JSON.stringify(vor)});
-          p.settings.visionEndpoints = v.eps; p.settings.visionModel = v.model; p.settings.request = v.request; p.settings.choice = v.choice;
+          p.settings.visionEndpoints = v.eps; p.settings.request = v.request; p.settings.choice = v.choice;
           await p.saveSettings();
           p.llm.invalidate();
           return true;
@@ -747,8 +746,8 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       try {
         const r = await cdp.evaluate<string>(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)}, apiKey: ${JSON.stringify(KEY)} }];
-          p.settings.visionModel = "google/gemma-4-e4b"; p.settings.choice = {};
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)}, apiKey: ${JSON.stringify(KEY)}, model: "google/gemma-4-e4b" }];
+          p.settings.choice = {};
           p.llm.invalidate();
           const src = await p.llm.resolve({ force: true });
           let testFehler = null;
@@ -783,7 +782,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const r = await cdp.evaluate<string>(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
           p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)}, apiKey: ${JSON.stringify(KEY)} }];
-          p.settings.visionModel = ""; p.settings.choice = {};
+          p.settings.choice = {};
           await p.saveSettings();
           p.llm.invalidate();
           await p.llm.resolve({ force: true });
@@ -809,8 +808,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       try {
         const r = await cdp.evaluate<string>(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)} }];
-          p.settings.visionModel = "google/gemma-4-e4b"; p.settings.choice = {};
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)}, model: "google/gemma-4-e4b" }]; p.settings.choice = {};
           p.llm.invalidate();
           const io = p.makeImgIO();
           const out = await io.transcribe("data:image/png;base64,AAAA");
@@ -835,8 +833,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       try {
         const r = await cdp.evaluate<string>(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)} }];
-          p.settings.visionModel = "google/gemma-4-e4b"; p.settings.choice = {};
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(fake.url)}, model: "google/gemma-4-e4b" }]; p.settings.choice = {};
           p.llm.invalidate();
           const out = await p.callLlm([{ role: "user", content: "Notiz mit Zugang: ${TOKEN} Ende" }], { stream: false });
           return JSON.stringify({ content: out.content });
@@ -867,6 +864,49 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const d = JSON.parse(r) as { stufenwahl: boolean; hilfeErste: boolean; prompt: boolean; anzahl: number };
         return { ok: d.stufenwahl && d.hilfeErste && d.prompt, detail: `Stufenwahl-Zeile: ${d.stufenwahl} · Hilfe-Zeile zuerst: ${d.hilfeErste} · Prompt-Zeile (nach dem Host) noch da: ${d.prompt} · ${d.anzahl} Zeilen` };
       } finally { await schliesseEinstellungen(cdp, sicht); }
+    },
+  },
+  {
+    key: "V6",
+    titel: "Welle 17: ein Altwert visionModel in data.json steht nach dem Laden in der Zeile (zweiter Lauf ändert nichts), die Zeile „Vision model“ fehlt",
+    async run(cdp) {
+      const pfad = `.obsidian/plugins/${PLUGIN_ID}/data.json`;
+      const vor = await cdp.evaluate<string | null>(`return (await app.vault.adapter.exists(${JSON.stringify(pfad)})) ? await app.vault.adapter.read(${JSON.stringify(pfad)}) : null;`);
+      const ladeNeu = `await app.plugins.disablePlugin(${JSON.stringify(PLUGIN_ID)}); await app.plugins.enablePlugin(${JSON.stringify(PLUGIN_ID)}); await new Promise((r) => setTimeout(r, 800));`;
+      try {
+        const r = await cdp.evaluate<string>(`
+          const roh = ${JSON.stringify(vor)};
+          const alt = { ...(roh ? JSON.parse(roh) : {}), visionEndpoints: [{ url: "http://127.0.0.1:1", id: "v6a" }, { url: "http://127.0.0.1:2", id: "v6b", model: "eigenes-modell" }], visionModel: "alt-modell" };
+          delete alt.choice;
+          await app.vault.adapter.write(${JSON.stringify(pfad)}, JSON.stringify(alt));
+          ${ladeNeu}
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          const platte = JSON.parse(await app.vault.adapter.read(${JSON.stringify(pfad)}));
+          return JSON.stringify({ zeilen: p.settings.visionEndpoints.map((e) => e.model ?? null), speicher: "visionModel" in p.settings, platte: "visionModel" in platte });
+        `);
+        const d = JSON.parse(r) as { zeilen: Array<string | null>; speicher: boolean; platte: boolean };
+        // Zweiter Lauf: ohne den Schluessel aendert das Laden nichts (eine geleerte Zeile bliebe leer).
+        const zweiter = await cdp.evaluate<string>(`
+          ${ladeNeu}
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          return JSON.stringify(p.settings.visionEndpoints.map((e) => e.model ?? null));
+        `);
+        const z2 = JSON.parse(zweiter) as Array<string | null>;
+        const m = await messeEinstellungen(cdp);
+        const zeileOk = d.zeilen[0] === "alt-modell" && d.zeilen[1] === "eigenes-modell" && !d.speicher && !d.platte && JSON.stringify(z2) === JSON.stringify(d.zeilen);
+        return {
+          ok: zeileOk && m !== null && m.modellZeilen === 0,
+          detail: `Zeilen-Modelle: ${JSON.stringify(d.zeilen)} (erwartet ["alt-modell","eigenes-modell"]) · visionModel im Speicher: ${d.speicher}, auf der Platte: ${d.platte} · zweiter Lauf gleich: ${JSON.stringify(z2) === JSON.stringify(d.zeilen)} · Zeile „Vision model“: ${m ? m.modellZeilen : "nicht gemessen"}`,
+        };
+      } finally {
+        await cdp.evaluate(`
+          const roh = ${JSON.stringify(vor)};
+          if (roh === null) { if (await app.vault.adapter.exists(${JSON.stringify(pfad)})) await app.vault.adapter.remove(${JSON.stringify(pfad)}); }
+          else await app.vault.adapter.write(${JSON.stringify(pfad)}, roh);
+          ${ladeNeu}
+          return true;
+        `).catch(() => undefined);
+      }
     },
   },
   // ── G: Streaming gegen einen ECHTEN Endpunkt (Welle 11, Chat-Client-Tausch) ──────────────────
@@ -1077,9 +1117,8 @@ const aufloesung = (cdp: Cdp): Promise<{ url: string | null; model: string }> =>
  *  Verbindung liest sie bei jedem Aufruf) und im finally zurueckgestellt. */
 const setzeGEndpoint = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
   const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-  globalThis.__i2mGVor = JSON.stringify({ eps: p.settings.visionEndpoints, model: p.settings.visionModel, choice: p.settings.choice });
-  p.settings.visionEndpoints = [{ url: ${JSON.stringify(G_ENDPOINT)} }];
-  p.settings.visionModel = ${JSON.stringify(G_MODEL)};
+  globalThis.__i2mGVor = JSON.stringify({ eps: p.settings.visionEndpoints, choice: p.settings.choice });
+  p.settings.visionEndpoints = [{ url: ${JSON.stringify(G_ENDPOINT)}, model: ${JSON.stringify(G_MODEL)} }];
   p.settings.choice = {};
   p.llm.invalidate();
   return true;
@@ -1088,7 +1127,7 @@ const stelleGWieder = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
   const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
   if (globalThis.__i2mGVor) {
     const v = JSON.parse(globalThis.__i2mGVor);
-    p.settings.visionEndpoints = v.eps; p.settings.visionModel = v.model; p.settings.choice = v.choice;
+    p.settings.visionEndpoints = v.eps; p.settings.choice = v.choice;
     delete globalThis.__i2mGVor;
     await p.saveSettings();
     p.llm.invalidate();
@@ -1102,14 +1141,14 @@ const stelleVerbindungWieder = (cdp: Cdp, vor: string): Promise<unknown> => cdp.
   const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
   for (const e of p.settings.visionEndpoints) if (e.secretId) { try { app.secretStorage.setSecret(e.secretId, ""); } catch { /* nichts gesetzt */ } }
   const v = JSON.parse(${JSON.stringify(vor)});
-  p.settings.visionEndpoints = v.eps; p.settings.visionModel = v.model; p.settings.request = v.request; p.settings.choice = v.choice;
+  p.settings.visionEndpoints = v.eps; p.settings.request = v.request; p.settings.choice = v.choice;
   await p.saveSettings();
   p.llm.invalidate();
   return true;
 `).catch(() => undefined);
 const verbindungVorher = (cdp: Cdp): Promise<string> => cdp.evaluate<string>(`
   const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-  return JSON.stringify({ eps: p.settings.visionEndpoints, model: p.settings.visionModel, request: p.settings.request, choice: p.settings.choice });
+  return JSON.stringify({ eps: p.settings.visionEndpoints, request: p.settings.request, choice: p.settings.choice });
 `);
 
 /** Misst den Endpunkt-Abschnitt im Einstellungen-Fenster (eigenes CDP-Target ab 1.13). */

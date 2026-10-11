@@ -86,7 +86,7 @@ or, when you transcribed from the command palette: `Empty transcript: <image>`
 
 Other messages you can meet here: “The endpoint is not reachable” (nothing listens at the address), “The endpoint stopped responding” (no data for two minutes while a response was running, or ten minutes before the first byte) and “The input is too long for the model's context window”.
 
-**Fix:** press **Test connection**, check the model under **Vision model**, and use the retry button on the card.
+**Fix:** press **Test connection**, check the model in the endpoint row, and use the retry button on the card.
 
 > Image not found: photo.png
 
