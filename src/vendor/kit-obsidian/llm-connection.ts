@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.3, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.53.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -35,7 +35,7 @@
 import { requestUrl, Setting, type App } from "obsidian";
 import { normalizeEndpoint } from "../kit/endpoint";
 import type { RedactRules } from "../kit/redact";
-import { authHeaders, type EndpointConfig } from "../kit/endpoint_config";
+import { applyEndpointEdit, authHeaders, type EndpointConfig } from "../kit/endpoint_config";
 import { classifyEndpointStatus, extractModelIds, type EndpointStatus } from "../kit/endpoint_diagnostics";
 import { createModelListCache, type ModelListClient, type ModelListResult } from "../kit/model-list-cache";
 import {
@@ -158,6 +158,9 @@ export interface LlmConnectionStrings {
   redactedNote: (n: number) => string;
   /** Hinweis in den Einstellungen mit `managerOnly`, wenn der Manager fehlt. */
   noManager: string;
+  /** Text für ein lokales `kind: "no-endpoint"`. Optional, damit ein volles Bündel ohne dieses Feld
+   *  weiter übersetzt; das Default-Bündel trägt es immer. */
+  noEndpoint?: string;
   /** `endpointSource.managedDesc` für `managerOnly`, ohne den Satz über die lokale Liste. */
   managedDescManagerOnly: string;
   request: RequestSectionStrings;
@@ -216,6 +219,17 @@ export interface LlmConnection {
   renderSettings(containerEl: HTMLElement, strings?: LlmConnectionStrings | LlmConnectionStringsOverride): void;
   /** Beim Schließen des Settings-Tabs rufen (`hide()`): verwirft die Modell-Listen des Tabs. */
   hideSettings(): void;
+  /** Modellwahl eines Panels (Dropdown im Chat, Modellfeld im Panel). Mit Manager ändert sie nur `choice.model`;
+   *  ohne Manager schreibt sie das Modell der AKTIVEN lokalen Zeile (gefunden über `id`, nur ohne `id` über die URL) —
+   *  das globale Modell-Feld gibt es dafür nicht mehr. `""` leert die Wahl (Manager) bzw. die Zeile („Server wählt“).
+   *  Löst danach mit `force` neu auf (`onResolved` feuert; die Modell-Caches bleiben). Ohne aktiven Endpunkt: nichts.
+   *  Bis zum Ende gilt die Wahl schon in `modelInUse()` und als Default von `complete()` ohne `model`.
+   *  Origin: vault-rag/src/main.ts `applyChatModel`. */
+  setModel(model: string): Promise<void>;
+  /** Das Modell, das eine Anfrage jetzt mitschickt: die ausstehende Wahl von `setModel`, sonst `source().model`
+   *  (der Auswahlname; vor der ersten Auflösung `""`). Der Name auf dem Draht steht in `source().sentModel`.
+   *  Origin: vault-rag/src/main.ts `chatModelInUse`. */
+  modelInUse(): string;
   readonly session: RequestSession;
 }
 
@@ -386,6 +400,36 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
     };
   }
 
+  // ── Modellwahl eines Panels ────────────────────────────────────────────────────────────────
+  let pendingModel: string | null = null;
+
+  async function applyModel(m: string): Promise<void> {
+    if (findEndpointManager(o.app)) {
+      const { model: _old, ...rest } = o.getSettings().choice ?? {};
+      await persist({ choice: m ? { ...rest, model: m } : rest });
+      await resolve({ force: true });
+      return;
+    }
+    const active = (await resolve()).config;
+    if (!active) return;
+    // Zeilen erst NACH dem Auflösen lesen und im selben synchronen Zug schreiben (`persist`-Vertrag).
+    const eps = o.getSettings().endpoints;
+    const i = active.id !== undefined
+      ? eps.findIndex((e) => e.id === active.id)
+      : eps.findIndex((e) => normalizeEndpoint(e.url) === normalizeEndpoint(active.url));
+    if (i < 0) return;
+    await persist({ endpoints: applyEndpointEdit(eps, i, "model", m, false) });
+    await resolve({ force: true });
+  }
+
+  async function setModel(m: string): Promise<void> {
+    pendingModel = m;
+    try { await applyModel(m); }
+    finally { if (pendingModel === m) pendingModel = null; }
+  }
+
+  const modelInUse = (): string => pendingModel ?? source().model;
+
   // ── Anfrage ────────────────────────────────────────────────────────────────────────────────
   let client: { key: string; chat: ChatClient } | null = null;
 
@@ -425,10 +469,11 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
     const resolved0 = await resolve();
     // Anderes Modell je Aufruf: Alias und Familie für DIESES Modell (Manager-Tabelle, sonst Name).
     let src = resolved0;
-    if (h.model !== undefined && h.model !== "") {
-      const d = describeModel(h.model, resolved0.models);
+    const wanted = h.model !== undefined && h.model !== "" ? h.model : (pendingModel ?? "");
+    if (wanted !== "") {
+      const d = describeModel(wanted, resolved0.models);
       const { displayFamily: _drop, ...rest } = resolved0;
-      src = { ...rest, model: h.model, family: d.family, familySource: d.familySource, sentModel: d.sentModel, ...(d.displayFamily ? { displayFamily: d.displayFamily } : {}) };
+      src = { ...rest, model: wanted, family: d.family, familySource: d.familySource, sentModel: d.sentModel, ...(d.displayFamily ? { displayFamily: d.displayFamily } : {}) };
     }
     const fail = (kind: "no-endpoint", detail: string): LlmResult => {
       const now = clock.now();
@@ -526,7 +571,7 @@ export function createLlmConnection(o: LlmConnectionOptions): LlmConnection {
   }
 
   return {
-    resolve, invalidate, models, source, complete, renderSettings,
+    resolve, invalidate, models, source, complete, renderSettings, setModel, modelInUse,
     hideSettings: () => settingsCache.clear(),
     session,
   };

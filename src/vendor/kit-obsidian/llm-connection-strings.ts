@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.3, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.53.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -17,6 +17,12 @@
  *  Seit 0.50.0 trägt das Bündel auch den Notice-Text einer Abweichung (`deviationNotice`), den
  *  `createLlmConnection` als Default nimmt. Er stand bis dahin in elf Plugins als Kopie
  *  (`deviationNotice` in `request-text.ts`, Herkunft lingotuner), die Satzteile lagen hier schon.
+ *
+ *  Seit 0.52.0: `noEndpoint` (Text für das lokale `kind: "no-endpoint"`, Herkunft koda-agent
+ *  `src/i18n/strings.ts` `error.noEndpoint`, die reichste Fassung), die reicheren Statustexte
+ *  `timeout`/`not-an-llm-api` aus vault-rag (`endpointStatus.*`), `unknown` ohne Strich, wenn kein
+ *  Rohtext da ist, und das optionale Listen-Label `listAriaLabel` für `ariaUrl`/`ariaAdd`.
+ *  Die heutigen Kit-Texte lagen daneben; übernommen wurde nur, was reicher ist (UI-STANDARD § 10).
  *
  *  Überschreiben: `renderSettings(el, { lang: "de", request: { title: "…" } })` — ein Teil-Merge
  *  über dem Default, je Abschnitt ein Feld genau. */
@@ -40,7 +46,7 @@ interface Texts {
   ariaApiKey: string; ariaModel: string; globalModel: string; globalModelUnset: string;
   moveToFront: string; remove: string; thirdParty: string; probing: string;
   statusOk: string; statusRefused: string; statusUnknownHost: string; statusTimeout: string; statusNotAnLlmApi: string;
-  statusUnauthorized: string; statusUnknown: string;
+  statusUnauthorized: string; statusUnknown: string; statusUnknownBare: string;
   roleActive: string; roleStandby: string; roleUnreachable: string; roleSkippedModel: string;
   warnScheme: string; warnMalformed: string; warnPort: string; warnPlaceholderIp: string;
   preset: string; checkConnection: string;
@@ -63,6 +69,8 @@ interface Texts {
   redactedOne: string; redactedMany: string;
   /** Hinweis in den Einstellungen eines Manager-only-Plugins, wenn der Manager fehlt. */
   noManager: string;
+  /** Text für ein lokales `kind: "no-endpoint"` (kein Endpunkt erreichbar). */
+  noEndpoint: string;
   /** `managedDesc` für `managerOnly`: ohne den Satz über die lokale Liste. */
   managedDescManagerOnly: string;
 }
@@ -81,6 +89,7 @@ function build(x: Texts): LlmConnectionStrings {
     deviationNotice: (d) => `${fmt(pick(x.deviations, d.kind), d.detail ?? "")} ${fmt(x.seeSettings, x.requestTitle)}`,
     redactedNote: (n) => fmt(n === 1 ? x.redactedOne : x.redactedMany, String(n)),
     noManager: x.noManager,
+    noEndpoint: x.noEndpoint,
     managedDescManagerOnly: x.managedDescManagerOnly,
     endpointSource: {
       managed: x.managed, managedDesc: x.managedDesc, openManager: x.openManager, pickEndpoint: x.pickEndpoint,
@@ -103,7 +112,7 @@ function build(x: Texts): LlmConnectionStrings {
           case "timeout": return x.statusTimeout;
           case "not-an-llm-api": return x.statusNotAnLlmApi;
           case "unauthorized": return x.statusUnauthorized;
-          default: return fmt(x.statusUnknown, s.raw ?? "");
+          default: return s.raw ? fmt(x.statusUnknown, s.raw) : x.statusUnknownBare;
         }
       },
       role: (r) => (r.kind === "active" ? x.roleActive
@@ -160,9 +169,9 @@ const EN: Texts = {
   moveToFront: "Try this endpoint first", remove: "Remove endpoint",
   thirdParty: "Carries an API key — your text goes to this provider, not to a local server.", probing: "Checking…",
   statusOk: "Connected", statusRefused: "Connection refused — server not running or wrong port.",
-  statusUnknownHost: "Unknown host — typo in the address?", statusTimeout: "Timed out — network unreachable.",
-  statusNotAnLlmApi: "Answers, but is not an OpenAI-compatible endpoint.", statusUnauthorized: "Access denied — API key missing or invalid.",
-  statusUnknown: "Not reachable — {0}",
+  statusUnknownHost: "Unknown host — typo in the address?", statusTimeout: "Timeout — network unreachable (wrong network / VPN off?).",
+  statusNotAnLlmApi: "Responds, but is not an OpenAI-compatible endpoint — wrong path/service?", statusUnauthorized: "Access denied — API key missing or invalid.",
+  statusUnknown: "Not reachable — {0}", statusUnknownBare: "Not reachable",
   roleActive: "active — this one is used", roleStandby: "reachable — fallback {0}", roleUnreachable: "not reachable — skipped",
   roleSkippedModel: "skipped — model does not fit",
   warnScheme: "Address needs http:// or https://", warnMalformed: "Address is not a valid URL",
@@ -217,6 +226,7 @@ const EN: Texts = {
   seeSettings: "Details in the settings under “{0}”.",
   redactedOne: "{0} passage redacted", redactedMany: "{0} passages redacted",
   noManager: "No LLM Endpoint Manager found. Install and enable it to choose an endpoint.",
+  noEndpoint: "No endpoint reachable. Check the endpoint list in the settings — the test button says which one answers.",
   managedDescManagerOnly: "This plugin uses the endpoints configured in the LLM Endpoint Manager plugin.",
 };
 
@@ -237,9 +247,9 @@ const DE: Texts = {
   moveToFront: "Diesen Endpunkt zuerst versuchen", remove: "Endpunkt entfernen",
   thirdParty: "Trägt einen API-Schlüssel — dein Text geht an diesen Anbieter, nicht an einen lokalen Server.", probing: "Wird geprüft…",
   statusOk: "Verbunden", statusRefused: "Verbindung abgelehnt — Server läuft nicht oder Port falsch.",
-  statusUnknownHost: "Hostname unbekannt — Tippfehler in der Adresse?", statusTimeout: "Zeitüberschreitung — Netz nicht erreichbar.",
-  statusNotAnLlmApi: "Antwortet, ist aber kein OpenAI-kompatibler Endpunkt.",
-  statusUnauthorized: "Zugriff verweigert — Schlüssel fehlt oder ist ungültig.", statusUnknown: "Nicht erreichbar — {0}",
+  statusUnknownHost: "Hostname unbekannt — Tippfehler in der Adresse?", statusTimeout: "Zeitüberschreitung — Netz nicht erreichbar (falsches Netz / VPN aus?).",
+  statusNotAnLlmApi: "Antwortet, ist aber kein OpenAI-kompatibler Endpunkt — falscher Pfad/Dienst?",
+  statusUnauthorized: "Zugriff verweigert — Schlüssel fehlt oder ist ungültig.", statusUnknown: "Nicht erreichbar — {0}", statusUnknownBare: "Nicht erreichbar",
   roleActive: "aktiv — dieser wird genutzt", roleStandby: "erreichbar — Reserve {0}", roleUnreachable: "nicht erreichbar — wird übersprungen",
   roleSkippedModel: "übersprungen — Modell passt nicht",
   warnScheme: "Adresse braucht http:// oder https://", warnMalformed: "Adresse ist keine gültige URL",
@@ -295,6 +305,7 @@ const DE: Texts = {
   seeSettings: "Details in den Einstellungen unter „{0}“.",
   redactedOne: "{0} Stelle geschwärzt", redactedMany: "{0} Stellen geschwärzt",
   noManager: "Kein LLM Endpoint Manager gefunden. Installiere und aktiviere ihn, um einen Endpunkt zu wählen.",
+  noEndpoint: "Kein Endpunkt erreichbar. Prüf die Endpunkt-Liste in den Einstellungen — der Testknopf sagt, welcher antwortet.",
   managedDescManagerOnly: "Dieses Plugin nutzt die Endpunkte aus dem Plugin LLM Endpoint Manager.",
 };
 
@@ -310,10 +321,19 @@ export interface LlmConnectionStringsOverride {
   deviationNotice?: (d: Deviation) => string;
   redactedNote?: (n: number) => string;
   noManager?: string;
+  noEndpoint?: string;
+  /** Label dieser Liste für `ariaUrl`/`ariaAdd` („Chat endpoints: Endpoint address“) — nötig, sobald zwei
+   *  Listen auf einem Tab stehen und die Beschriftungen sonst gleich lauten. Ohne Angabe wie bisher. */
+  listAriaLabel?: string;
   managedDescManagerOnly?: string;
   endpointSource?: Partial<LlmConnectionStrings["endpointSource"]>;
   endpointList?: Partial<LlmConnectionStrings["endpointList"]>;
   request?: Partial<LlmConnectionStrings["request"]>;
+}
+
+/** `ariaUrl`/`ariaAdd` mit vorangestelltem Listen-Label; ohne Label nichts. */
+function labelled(list: LlmConnectionStrings["endpointList"], label: string | undefined): Partial<LlmConnectionStrings["endpointList"]> {
+  return label ? { ariaUrl: `${label}: ${list.ariaUrl}`, ariaAdd: `${label}: ${list.ariaAdd}` } : {};
 }
 
 /** Default der Sprache (EN ohne Angabe), Abschnitt für Abschnitt von `override` überlagert. */
@@ -327,9 +347,10 @@ export function resolveLlmConnectionStrings(override?: LlmConnectionStringsOverr
     deviationNotice: override.deviationNotice ?? base.deviationNotice,
     redactedNote: override.redactedNote ?? base.redactedNote,
     noManager: override.noManager ?? base.noManager,
+    noEndpoint: override.noEndpoint ?? base.noEndpoint,
     managedDescManagerOnly: override.managedDescManagerOnly ?? base.managedDescManagerOnly,
     endpointSource: { ...base.endpointSource, ...override.endpointSource },
-    endpointList: { ...base.endpointList, ...override.endpointList },
+    endpointList: { ...base.endpointList, ...labelled(base.endpointList, override.listAriaLabel), ...override.endpointList },
     request: { ...base.request, ...override.request },
   };
 }

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.51.3, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.53.0, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { hydrateEndpointSecrets, resolveActiveEndpointConfig, type EndpointConfig } from "./endpoint_config";
 import type { SecretStore } from "./secrets";
 import { familyFromName, type BackendId, type FamilyId, type ModelFamilyId } from "./sampling-profiles";
@@ -128,8 +128,8 @@ function modelOf(choice: EndpointChoice | undefined, fallback: string | undefine
 }
 
 /** Modell-Priorität für den lokalen Pfad: choice.model (explizite Nutzerwahl) → config.model
- *  (Zeilen-Modell, dieselbe Vorrangregel wie `effectiveModel` in `endpoint_config.ts`) →
- *  localModel (globaler Fallback) → "". */
+ *  (das Modell der Zeile, ohne globalen Rückfall gelesen) → localModel (globaler Rückfall,
+ *  nur für Konsumenten, die noch eines führen) → "". */
 function localModelOf(choice: EndpointChoice | undefined, config: EndpointConfig | null, localModel: string | undefined): string {
   return choice?.model?.trim() || config?.model?.trim() || localModel?.trim() || "";
 }
