@@ -1,5 +1,5 @@
 import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
-import { defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
+import { migrateVisionModel, defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
 import { setHttp } from "./vision_client";
 import { ENDPOINT_CALLER, sanitizeChoice } from "./resolve_endpoint";
@@ -42,11 +42,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
    *  lokale Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Profil, Client mit
    *  Transport und Fristen, Schwärzung, Prüfung der Antwort und die Settings-Abschnitte. */
   llm!: LlmConnection;
-  /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet, `visionModel` ist der Rückfall. */
+  /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet (Zeilen-Modell bzw. Wahl beim Manager). */
   get model(): string {
     // Nach `invalidate()` ist `source()` bis zur nächsten Auflösung neutral: mit Manager steht die Wahl dann in
-    // `choice.model`, nicht im lokalen `visionModel`.
-    return this.llm.source().model || (findEndpointManager(this.app) ? this.settings.choice.model : undefined) || this.settings.visionModel;
+    // `choice.model`, nicht in der Zeile.
+    return this.llm.source().model || (findEndpointManager(this.app) ? this.settings.choice.model : undefined) || "";
   }
   private pendingCards = new CardCache();
   /** Anbieter-API v1 (Spec Baustein 4/D, Kit-Vertrag `ocr-provider`) — Konsumenten fragen
@@ -74,7 +74,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
       console.warn("image-to-markdown: request settings dropped", dropped);
     }
     const migratedEps = migrateEndpoints(saved);
-    this.settings.visionEndpoints = migratedEps.length ? migratedEps : defaultSettings().visionEndpoints;
+    const folded = migrateVisionModel(saved, migratedEps.length ? migratedEps : defaultSettings().visionEndpoints);
+    this.settings.visionEndpoints = folded.endpoints;
+    delete this.settings.visionModel;
     this.settings.choice = sanitizeChoice(this.settings.choice);
     this.settings.promptPreset = normalizePreset(this.settings.promptPreset);
     this.llm = createLlmConnection({
@@ -88,13 +90,11 @@ export default class ImageToMarkdownPlugin extends Plugin {
       getSettings: () => ({
         endpoints: this.settings.visionEndpoints,
         choice: this.settings.choice,
-        model: this.settings.visionModel,
         request: this.settings.request,
       }),
       // Erst in die Settings schreiben, dann speichern: die Endpunkt-Liste liest ihre Zeilen danach zurück.
       persist: (patch: Partial<LlmConnectionSettings>) => {
         if (patch.endpoints !== undefined) this.settings.visionEndpoints = patch.endpoints;
-        if (patch.model !== undefined) this.settings.visionModel = patch.model;
         if (patch.choice !== undefined) this.settings.choice = patch.choice;
         if (patch.request !== undefined) this.settings.request = patch.request;
         const saved = this.saveSettings();
@@ -102,6 +102,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         return saved;
       },
     });
+    if (folded.changed) await this.saveSettings();
     void this.llm.resolve().then(() => { this.refreshThinkingControls(); }).catch(() => { /* source() bleibt neutral */ });
 
     this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });

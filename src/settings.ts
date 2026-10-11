@@ -8,7 +8,7 @@ import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
 import { helpSettingDefinition, githubHelpUrls } from "./vendor/kit-obsidian/help-setting";
 import { DEFAULT_REQUEST_SETTINGS, type RequestSettings } from "./vendor/kit/sampling-profiles";
 import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab, installTabRefreshOnOpen } from "./vendor/kit-obsidian/settings_walker";
-import { migrateEndpointList, type EndpointConfig } from "./vendor/kit/endpoint_config";
+import { fillMissingRowModels, migrateEndpointList, type EndpointConfig } from "./vendor/kit/endpoint_config";
 import { FolderSuggest } from "./vendor/kit-obsidian/folder-suggest";
 import type { EndpointChoice } from "./vendor/kit/endpoint-source";
 import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
@@ -22,6 +22,17 @@ export function migrateEndpoints(
   saved: { visionEndpoint?: string; visionEndpoints?: (string | EndpointConfig)[] } | null | undefined,
 ): EndpointConfig[] {
   return migrateEndpointList(saved?.visionEndpoint, saved?.visionEndpoints);
+}
+
+/** Das globale Modell `visionModel` ist abgeschafft (Welle 17): der Altwert geht einmal in jede Zeile ohne
+ *  Modell. Aufruf NACH `migrateEndpoints` und dem Einsetzen der Default-Zeile; danach entfernt der Aufrufer
+ *  den Schluessel aus den geladenen Settings, sonst fuellt jeder Start eine vom Nutzer geleerte Zeile
+ *  wieder auf. `changed`: der Schluessel stand in den Rohdaten, also einmal neu speichern. */
+export function migrateVisionModel(
+  saved: { visionModel?: unknown } | null | undefined,
+  endpoints: readonly EndpointConfig[],
+): { endpoints: EndpointConfig[]; changed: boolean } {
+  return { endpoints: fillMissingRowModels(endpoints, saved?.visionModel), changed: saved != null && "visionModel" in saved };
 }
 
 /** Wendet die Bearbeitung eines Listen-Felds auf die Liste an — bewusst EINMAL bei `blur`,
@@ -47,7 +58,9 @@ export interface ImageToMarkdownSettings {
   /** Wahl gegenüber dem LLM Endpoint Manager (Endpunkt + Modell). Leer = automatisch. Nur
    *  relevant, solange der Manager installiert ist; sonst gilt `visionEndpoints` + `visionModel`. */
   choice: EndpointChoice;
-  visionModel: string;
+  /** Abgeschafft (Welle 17): das Modell steht je Endpunkt-Zeile. Nur noch bis zur Umstellung der Modell-Zeile
+   *  und der Panel-Wahl; geladen wird es nie (`migrateVisionModel` + `delete` in `onload`). */
+  visionModel?: string;
   visionPrompt: string;
   promptPreset: string;
   pdfMaxPages: number;
@@ -77,7 +90,6 @@ export function defaultSettings(): ImageToMarkdownSettings {
   return {
     visionEndpoints: [{ url: "http://localhost:8080" }],
     choice: {},
-    visionModel: "",
     visionPrompt: defaultVisionPrompt(),
     promptPreset: "default",
     pdfMaxPages: 25,
@@ -321,7 +333,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     if (findEndpointManager(this.app)) { setting.settingEl.addClass("img2md-setting-managed"); return; }
     setting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => { this.refresh(); }));
     void this.plugin.llm.models({ force: true }).then(({ models }) => {
-      const cur = this.plugin.settings.visionModel;
+      const cur = this.plugin.settings.visionModel ?? "";
       const list = models.includes(cur) || !cur ? models : [cur, ...models];
       if (list.length) {
         setting.addDropdown(d => {
@@ -339,7 +351,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.reconnect(); }));
         setting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => { this.refresh(); }));
       }
-      this.showCaps(this.plugin.settings.visionModel);
+      this.showCaps(this.plugin.settings.visionModel ?? "");
     });
   }
 

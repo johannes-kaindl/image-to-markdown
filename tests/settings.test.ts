@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultSettings, migrateEndpoints, applyListEdit, applyTaxonomyEdit, fmMapFromSettings } from "../src/settings";
+import { defaultSettings, migrateEndpoints, migrateVisionModel, applyListEdit, applyTaxonomyEdit, fmMapFromSettings } from "../src/settings";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("defaultSettings — OCR-Weg (Baustein B)", () => {
@@ -29,6 +29,34 @@ describe("migrateEndpoints", () => {
   it("nichts vorhanden → leere Liste", () => {
     expect(migrateEndpoints(null)).toEqual([]);
     expect(migrateEndpoints({})).toEqual([]);
+  });
+});
+
+describe("migrateVisionModel — globales Modell wandert in die Zeilen (Welle 17)", () => {
+  it("erster Lauf: Altwert geht in Zeilen ohne Modell, eine Zeile mit Modell bleibt byte-gleich", () => {
+    const eigen = { url: "http://b:2", model: "eigen" };
+    const r = migrateVisionModel({ visionModel: " alt " }, [{ url: "http://a:1" }, eigen]);
+    expect(r.endpoints).toEqual([{ url: "http://a:1", model: "alt" }, eigen]);
+    expect(r.endpoints[1]).not.toBe(eigen);
+    expect(r.changed).toBe(true);
+  });
+  it("zweiter Lauf (Schlüssel weg): ändert nichts, eine geleerte Zeile bleibt leer", () => {
+    const eps = [{ url: "http://a:1" }];
+    const r = migrateVisionModel({}, eps);
+    expect(r.endpoints).toEqual(eps);
+    expect(r.changed).toBe(false);
+    expect(migrateVisionModel(null, eps).changed).toBe(false);
+  });
+  it("leerer oder fremder Altwert: Schlüssel zählt als migriert, Zeilen bleiben", () => {
+    const eps = [{ url: "http://a:1" }];
+    expect(migrateVisionModel({ visionModel: "" }, eps)).toEqual({ endpoints: eps, changed: true });
+    expect(migrateVisionModel({ visionModel: 5 as unknown as string }, eps).endpoints).toEqual(eps);
+  });
+});
+
+describe("defaultSettings — kein globales Modell mehr", () => {
+  it("trägt kein visionModel", () => {
+    expect("visionModel" in defaultSettings()).toBe(false);
   });
 });
 
