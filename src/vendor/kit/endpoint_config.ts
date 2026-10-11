@@ -1,4 +1,4 @@
-// vendored from code-kit@0.15.4, src/ts/pure/endpoint_config.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.20.0, src/ts/pure/endpoint_config.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Obsidian-freie Wahrheit für Endpunkt-Einträge: Struktur, Auth-Header, Modellwahl,
  *  Migration alter String-Listen und Listen-Bearbeitung.
  *
@@ -20,8 +20,49 @@ export interface EndpointConfig {
   id?: string;
   /** Name des Schlüssels im Schlüsselbund; wird statt `apiKey` persistiert. */
   secretId?: string;
-  /** Leer/fehlend = das globale Modell gilt. */
+  /** The model of this row (`rowModel`). Empty/missing = no model chosen; there is no global
+   *  fallback (removed in 0.16.0, formerly `effectiveModel`). */
   model?: string;
+}
+
+/** The model of a row, trimmed; `""` = nothing chosen yet. The ONLY source for the model of an
+ *  endpoint: a model name exists only on the endpoint that reports it in `/v1/models`, so a second,
+ *  global field would be the same fact in two places plus a precedence rule. Successor of
+ *  `effectiveModel` (removed in 0.16.0), without the global fallback. Consequence for a consumer:
+ *  a new row inherits no model, and a selection that offered "empty = default" loses that option.
+ *
+ *  Origin: vault-rag/src/endpoint_config.ts (`rowModel`). */
+export function rowModel(cfg: EndpointConfig): string {
+  return cfg.model?.trim() ?? "";
+}
+
+/** Migration from the global model field to the row: every row WITHOUT a model
+ *  (`rowModel(e) === ""`) gets `legacyModel` (trimmed), rows with a model stay as they are. Pure:
+ *  ALWAYS returns copies (never the input rows) and mutates nothing. A legacy value that is not a
+ *  string, or empty after trimming, changes nothing — it comes from `data.json` and is untrusted.
+ *
+ *  Without this step existing users would be left with endpoints without a model after the update,
+ *  and that fails SILENTLY (an empty model name in the request).
+ *
+ *  ── The protocol around it belongs to the caller, and that is the part that goes wrong ────
+ *  1. **Order on load:** merge the settings → migrate the rows (`migrateEndpointList`) → insert the
+ *     default rows if the list is empty → ONLY THEN `fillMissingRowModels` (otherwise an empty
+ *     `data.json` overwrites the default row, which already carries its model) → remove the legacy
+ *     key → save once if it was there (vault-rag `main.ts`).
+ *  2. **The legacy key must disappear from the merged object, or the migration runs again on EVERY
+ *     start** and silently refills a row the user cleared on purpose (vault-rag, measured
+ *     2026-09-07). The merge carries it along: `{ ...DEFAULTS, ...raw }` and `Object.assign` have no
+ *     schema boundary (kuro `DataStore.ts` `...rest`, settings-assistant `core/settings.ts`
+ *     `...merged`). A `delete` on load is enough; the keys are plugin-specific (`embeddingModel` /
+ *     `chatModel`, `localModel`), a generic helper would only know a list of names and so does not
+ *     belong here.
+ *  3. **Test the second run:** fill a row, clear it, load again — it has to stay empty. A test of the
+ *     first run alone is green with the bug in.
+ *
+ *  Origin: vault-rag/src/settings_core.ts (`migrateGlobalModels`, 0.31.0). */
+export function fillMissingRowModels(eps: readonly EndpointConfig[], legacyModel: unknown): EndpointConfig[] {
+  const legacy = typeof legacyModel === "string" ? legacyModel.trim() : "";
+  return eps.map((e) => (legacy && !rowModel(e) ? { ...e, model: legacy } : { ...e }));
 }
 
 /** Auth-Header für einen Endpunkt — die EINZIGE Stelle, an der ein Bearer aus einem
@@ -29,27 +70,6 @@ export interface EndpointConfig {
 export function authHeaders(apiKey?: string): Record<string, string> {
   const k = apiKey?.trim();
   return k ? { Authorization: `Bearer ${k}` } : {};
-}
-
-/** Modell-Override des Endpunkts, sonst das globale Modell.
- *
- *  @deprecated Migrationskrücke, terminiert. Ein Modellname existiert nur auf dem Endpunkt, der
- *  ihn in `/v1/models` meldet — auf der Nachbarzeile ist er bedeutungslos. „Globales Modell +
- *  Override je Zeile" ist damit dieselbe Information an zwei Orten plus Vorrangregel, und der
- *  Leerwert wird still bedeutungstragend („leer heißt: nimm das globale"). Das Kit hat die
- *  Struktur nicht erfunden, sondern von seinen ersten Konsumenten geerbt — und gab sie seither an
- *  jeden neuen weiter, auch an die, die nie ein globales Feld hatten.
- *
- *  **Statt dessen:** das Modell gehört in die Zeile (`cfg.model`), und die Modell-Liste kommt
- *  ohnehin je Endpunkt (`model-list-cache`). Ein Konsument ohne globales Feld lässt in
- *  `obsidian-kit`s `EndpointListOptions` seit 0.29.0 einfach den `globalModel`-Callback weg.
- *
- *  Entfernt wird die Funktion erst, wenn die fünf Konsumenten mit globalem Feld migriert sind
- *  (obsidian-transmute, markdown-presentation, image-to-markdown, kuro-gamification, vim-dojo) —
- *  die Reihenfolge ist bindend, denn solange sie im Vertrag steht, erbt sie jeder Neue. */
-export function effectiveModel(cfg: EndpointConfig, globalModel: string): string {
-  const m = cfg.model?.trim();
-  return m ? m : globalModel;
 }
 
 /** Verlässlicher Indikator für "geht an einen Drittanbieter": der Schlüssel, NICHT die URL —

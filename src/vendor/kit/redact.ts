@@ -1,5 +1,5 @@
-// vendored from code-kit@0.15.4, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
-// uebernommen aus ghostline/src/core/context.ts (redactText) und settings-assistant/src/core/secrets.ts (redactFields), 2026-10-09
+// vendored from code-kit@0.20.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// uebernommen aus ghostline/src/core/context.ts (redactText) und settings-assistant/src/core/secrets.ts (redactFields), 2026-10-09; vault-crews/src/core/redact.ts und llm-lab/src/core/redact_secrets.ts + redact_pii.ts (redactKeys, redactKeysInValue, createPiiRedactor), 2026-10-10
 /** Redaction of secrets, in two entry points (plus a reversible session for text): over free
  *  text and over parsed JSON.
  *
@@ -16,6 +16,26 @@
  *  PEM key running over the window edge went to the model in clear text. The orphan rules below
  *  catch a lone BEGIN or END half as a second line, but the order is the real protection: run
  *  `redactText` over the whole text, then slice.
+ *
+ *  - `redactKeys` / `redactKeysInValue` blank a LIST OF KNOWN KEYS (the apiKeys of the configured
+ *    endpoints) in text or in a whole value, and any `Bearer <token>` echo. Origin: vault-crews'
+ *    `redactSecrets` / `redactRunState` and llm-lab's `redactSecrets` / `redactRecordSecrets`, one copy chain.
+ *  - `createPiiRedactor` replaces e-mail addresses, IBANs, phone numbers and credentials in URLs by
+ *    numbered placeholders that stay the same for the same value across calls (training data, traces).
+ *    Origin: llm-lab's `createPiiRedactor`.
+ *
+ *  **Why the two key/PII functions are their own functions and not rule sets for `redactText` /
+ *  `createRedactionSession`** (measured 2026-10-10, "adapt before building beside"): (1) `scan` always
+ *  appends the orphan rules, so `redactText('note -----END PRIVATE KEY----- …', rules)` gives
+ *  `[redacted-private-key] …` and everything before an END marker is lost — a key list is no PEM
+ *  scanner; (2) rule replacements are inserted literally, but the original Bearer rule keeps the
+ *  spelling and whitespace of the word (`bearer\t••••`) and a rule pair cannot do that; (3) the kit's
+ *  `Bearer {16,}` rule has no `i` flag and misses `Bearer xyz789abcdef` (12 characters), which both
+ *  sources pin in a test and which is llm-lab's ONLY redaction (it passes no key); (4) `redactText`
+ *  returns `{ text, count }`, the sources return a string; (5) the session issues `[redacted-<kind>-<n>]`
+ *  with one global counter, llm-lab's traces and datasets hold `[EMAIL_1]` with a counter per label —
+ *  re-expressing it would change every placeholder already written. `createPiiRedactor` therefore takes a
+ *  `format(label, n)` and keeps the old shape as its default.
  *
  *  Rule sets are exported separately so a consumer picks the set it applies:
  *  {@link SECRET_REDACT_RULES} (keys, tokens, Bearer, PEM) and {@link EMAIL_REDACT_RULE}.
@@ -177,6 +197,151 @@ export function createRedactionSession(rules: RedactRules = DEFAULT_REDACT_RULES
     },
     restore,
     restorer,
+  };
+}
+
+// ---- known keys -------------------------------------------------------------------------
+
+/** Mask `redactKeys` writes for a key and for a Bearer token. The value both sources used, so a
+ *  consumer's output stays the same (CORE-META-21). */
+export const DEFAULT_KEY_MASK = "••••";
+/** A key shorter than this is ignored: as a substring it would shred ordinary words and make the
+ *  message unreadable — a real token is always longer. */
+const MIN_KEY_LENGTH = 8;
+/** Catches keys configured nowhere (a header echoed back by a gateway). The `i` flag and the 8-character floor are the
+ *  sources' (`Bearer xyz789abcdef` is redacted). */
+const BEARER_ECHO = /(Bearer\s+)[A-Za-z0-9._~+/-]{8,}=*/gi;
+
+export interface RedactKeysOptions {
+  /** Replaces a key and a Bearer token. Default {@link DEFAULT_KEY_MASK}. Inserted literally. */
+  mask?: string;
+}
+
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The strings to look for, longest first. Two per key: the raw form (for unserialised text) AND the form
+ *  JSON.stringify writes (a key with `"`, `\` or a line break stands there escaped, and the raw search would never
+ *  find it — the JSON stays valid and the key goes to disk). Neither replaces the other: JSON.stringify does not
+ *  escape non-ASCII (umlauts, CJK, emoji), so there only the raw form carries. Longest first so a key that is a
+ *  prefix of another cannot leave the rest of the longer one standing (measured: `••••-SECRETSUFFIX99`). */
+function keyNeedles(keys: readonly (string | undefined)[]): string[] {
+  const needles = new Set<string>();
+  for (const raw of keys) {
+    if (typeof raw !== "string") continue;
+    const key = raw.trim();
+    if (key.length < MIN_KEY_LENGTH) continue;
+    needles.add(key);
+    needles.add(JSON.stringify(key).slice(1, -1));
+  }
+  return [...needles].sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
+}
+
+function redactNeedles(text: string, needles: readonly string[], mask: string): string {
+  if (text === "") return text;
+  // One pass over the text: a sequence of replacements would look for the next key inside the mask just written.
+  // A function as replacement: a string would expand `$&` and `$1` in the mask.
+  const out = needles.length === 0 ? text : text.replace(new RegExp(needles.map(escapeRegExp).join("|"), "g"), () => mask);
+  return out.replace(BEARER_ECHO, (_m, bearer: string) => bearer + mask);
+}
+
+/** Blanks every key of `keys` in `text`, and any `Bearer <token>` (the word keeps its spelling and whitespace). A key
+ *  is trimmed first; `undefined`, empty and short (< 8) entries are skipped, so a consumer passes
+ *  `endpoints.map((e) => e.apiKey)` as it is. Idempotent.
+ *
+ *  **Limits — what it finds is the key as written, nothing else:** the raw form and the form JSON.stringify writes.
+ *  Not found: a key in another encoding (URL-encoded `%2F`, HTML entities, base64 such as `Authorization: Basic …`), in
+ *  another case (the match is case-sensitive; only the Bearer word is not), split across two chunks of a stream, or
+ *  altered by a gateway before it echoes it. The Bearer rule is the net for the usual echo, not for these. A consumer that
+ *  writes an error body or a trace to disk redacts the WHOLE text it writes, once, at the last step before the write. */
+export function redactKeys(text: string, keys: readonly (string | undefined)[], opts: RedactKeysOptions = {}): string {
+  return redactNeedles(text, keyNeedles(keys), opts.mask ?? DEFAULT_KEY_MASK);
+}
+
+/** {@link redactKeys} over a whole value, through its serialisation instead of field by field: the list of fields
+ *  to keep up would be exactly the bookkeeping that goes stale with the next new field. Returns a JSON COPY of the
+ *  value (`undefined` properties and functions fall away, a `Date` becomes text), the input is not mutated.
+ *
+ *  **Throws** on a circular reference, a BigInt and a top-level `undefined` or function — fail closed, on purpose: nothing
+ *  is written rather than something that was not redacted. The CALLER catches (llm-lab's trace store does;
+ *  vault-crews' run-state write has no `try` around it and needs one). Property names are redacted like values. */
+export function redactKeysInValue<T>(value: T, keys: readonly (string | undefined)[], opts: RedactKeysOptions = {}): T {
+  const json = JSON.stringify(value) as string | undefined;
+  if (json === undefined) throw new TypeError("redactKeysInValue: the value has no JSON form (undefined, function or symbol)");
+  // The mask lands inside JSON text: in its escaped form, so that a quote in it cannot break the structure.
+  const mask = JSON.stringify(opts.mask ?? DEFAULT_KEY_MASK).slice(1, -1);
+  return JSON.parse(redactNeedles(json, keyNeedles(keys), mask)) as T;
+}
+
+// ---- PII with stable numbering ------------------------------------------------------------
+
+export type PiiLabel = "EMAIL" | "IBAN" | "PHONE" | "URLCRED" | "CUSTOM";
+
+// The patterns of llm-lab/src/core/redact_pii.ts, in meaning unchanged (a differential test pins that). The EMAIL pattern
+// has one lookbehind more: without it every start inside a long run of local-part characters scans to the end of the
+// run, quadratic; the leftmost start of a run is the only one that can succeed, so the matches are the same.
+const PII_PATTERNS: readonly (readonly [Exclude<PiiLabel, "CUSTOM">, RegExp])[] = [
+  ["EMAIL", /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g],
+  ["IBAN", /\b[A-Z]{2}\d{2}(?:[ ]?[A-Za-z0-9]{4}){2,7}(?:[ ]?[A-Za-z0-9]{1,4})?\b/g],
+  ["PHONE", /(?:\+\d{1,3}[ /-]?)?(?:\(?\d{2,5}\)?[ /-]?)\d{3,}(?:[ -]?\d{2,})+/g],
+  ["URLCRED", /\/\/[^\s:/@]+:[^\s:/@]+@/g],
+];
+
+export interface PiiRedactorOptions {
+  /** Terms of the caller (names, project words), replaced as `CUSTOM`. Trimmed; empty and duplicate ones dropped; the
+   *  longest first, so a term that is a prefix of another does not cut it. Case-sensitive. */
+  extra?: readonly string[];
+  /** The placeholder for the `n`-th distinct value of `label`. Default `[LABEL_n]` (`[EMAIL_1]`). */
+  format?: (label: PiiLabel, n: number) => string;
+}
+
+export interface PiiRedactor {
+  /** Replaces the PII in `text`. The same value gets the same placeholder in EVERY call of this redactor — an address
+   *  in the prompt, in the answer and in a correction text all read `[EMAIL_1]`; two separate runs could not promise
+   *  that. Numbering is per label, from 1. */
+  text(text: string): string;
+}
+
+/** A redactor with ONE set of placeholders over everything that runs through it. Hand it the text fields of a record
+ *  (never the serialised record: ids, timestamps and latencies are digit groups the phone pattern would hit and
+ *  damage unnoticed). Order: EMAIL, IBAN, PHONE, URLCRED, then the extra terms, each over the result of the one before —
+ *  so an extra term that occurs inside a placeholder (`EMAIL`) corrupts it; choose terms that cannot, and credentials in a
+ *  URL with a dotted host (`https://user:pw@host.example`) are taken as an e-mail address (`user:[EMAIL_1]`) before
+ *  URLCRED sees them, as in the original.
+ *
+ *  Placeholders are not restorable: this is for data that leaves for good (traces, datasets). For text whose answer is
+ *  written back use {@link createRedactionSession}. Origin: llm-lab `createPiiRedactor`; the record wrapper
+ *  (`TraceRecord`) stays there. */
+export function createPiiRedactor(opts: PiiRedactorOptions = {}): PiiRedactor {
+  const format = opts.format ?? ((label: PiiLabel, n: number): string => `[${label}_${n}]`);
+  const seenByLabel = new Map<PiiLabel, Map<string, string>>();
+  const seenFor = (label: PiiLabel): Map<string, string> => {
+    const seen = seenByLabel.get(label);
+    if (seen) return seen;
+    const created = new Map<string, string>();
+    seenByLabel.set(label, created);
+    return created;
+  };
+  const customs = [...new Set((opts.extra ?? []).map((t) => t.trim()).filter((t) => t !== ""))].sort((a, b) => b.length - a.length);
+  const customRe = customs.length > 0 ? new RegExp(customs.map(escapeRegExp).join("|"), "g") : null;
+
+  const replaceAll = (text: string, label: PiiLabel, re: RegExp): string => {
+    const seen = seenFor(label);
+    return text.replace(re, (hit) => {
+      const known = seen.get(hit);
+      if (known !== undefined) return known;
+      const token = format(label, seen.size + 1);
+      seen.set(hit, token);
+      return token;
+    });
+  };
+
+  return {
+    text(text: string): string {
+      if (text === "") return text;
+      let out = text;
+      for (const [label, re] of PII_PATTERNS) out = replaceAll(out, label, re);
+      return customRe ? replaceAll(out, "CUSTOM", customRe) : out;
+    },
   };
 }
 
