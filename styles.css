@@ -221,9 +221,6 @@
 .img2md-migration-note-path { font-size: var(--font-ui-medium); margin: 0 0 var(--size-4-1); }
 .img2md-migration-confirm-text { font-weight: var(--font-semibold); }
 
-/* Globale Modell-Zeile: mit LLM Endpoint Manager waehlt der Endpunkt-Baustein das Modell. */
-.img2md-setting-managed { display: none; }
-
 /* Abschnitt „Anfrage“ in den Settings — verbatim aus obsidian-kit uebernommen (Sampling-Plan Rezept 6):
    collapsibleSection() traegt ihn (.okit-collapsible-*), buildRequestSection() den Inhalt
    (.okit-request-*). Das Kit injiziert bewusst kein CSS selbst; der Consumer uebernimmt es. */

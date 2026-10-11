@@ -44,10 +44,12 @@ export default class ImageToMarkdownPlugin extends Plugin {
   llm!: LlmConnection;
   /** Das Modell für jeden Vision-Aufruf: die Quelle entscheidet (Zeilen-Modell bzw. Wahl beim Manager). */
   get model(): string {
-    // Nach `invalidate()` ist `source()` bis zur nächsten Auflösung neutral: mit Manager steht die Wahl dann in
-    // `choice.model`, nicht in der Zeile.
-    return this.llm.source().model || (findEndpointManager(this.app) ? this.settings.choice.model : undefined) || "";
+    // Nach `invalidate()` ist die Auflösung bis zur nächsten neutral: mit Manager steht die Wahl dann in
+    // `choice.model`, nicht in der Zeile. `modelInUse()` nennt auch eine noch ausstehende Wahl von `setModel`.
+    return this.llm.modelInUse() || (findEndpointManager(this.app) ? this.settings.choice.model : undefined) || "";
   }
+  /** Der offene Settings-Tab hängt hier die Fähigkeits-Anzeige ein: sie folgt dem Modell der Zeile. */
+  onSourceResolved?: () => void;
   private pendingCards = new CardCache();
   /** Anbieter-API v1 (Spec Baustein 4/D, Kit-Vertrag `ocr-provider`) — Konsumenten fragen
    *  `app.plugins.plugins["image-to-markdown"].api`, nie die Brücke direkt. Sofort in onload
@@ -74,9 +76,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
       console.warn("image-to-markdown: request settings dropped", dropped);
     }
     const migratedEps = migrateEndpoints(saved);
-    const folded = migrateVisionModel(saved, migratedEps.length ? migratedEps : defaultSettings().visionEndpoints);
+    const folded = migrateVisionModel(saved as { visionModel?: unknown } | null, migratedEps.length ? migratedEps : defaultSettings().visionEndpoints);
     this.settings.visionEndpoints = folded.endpoints;
-    delete this.settings.visionModel;
+    delete (this.settings as { visionModel?: unknown }).visionModel;
     this.settings.choice = sanitizeChoice(this.settings.choice);
     this.settings.promptPreset = normalizePreset(this.settings.promptPreset);
     this.llm = createLlmConnection({
@@ -87,6 +89,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       mode: MODE,   // kein maxTokens: i2m sendet kein Budget, ein abgeschnittenes Transkript meldet finish_reason length
       lang: () => getLang(),
       levelPicker: true,   // die Sidebar zeigt die Stufenwahl (buildThinkingControl, ImgToMdView)
+      onResolved: () => { this.onSourceResolved?.(); },
       getSettings: () => ({
         endpoints: this.settings.visionEndpoints,
         choice: this.settings.choice,
@@ -479,13 +482,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
       // Mit Manager gibt es keinen lokalen Rückfall — ohne aufgelösten Endpunkt bleibt die Liste leer.
       listModels: async () => (await this.llm.models({ force: true })).models,
       getModel: () => this.model,
-      // Mit Manager gehört das Modell zur Wahl (choice.model), sonst ist es das globale visionModel.
-      setModel: (m: string) => {
-        if (findEndpointManager(this.app)) this.settings.choice = { ...this.settings.choice, model: m || undefined };
-        else this.settings.visionModel = m;
-        void this.saveSettings();
-        void this.reconnect();
-      },
+      // Mit Manager gehört das Modell zur Wahl (choice.model), ohne Manager zur aktiven Zeile — beides macht die Verbindung.
+      setModel: (m: string) => { void this.llm.setModel(m).then(() => { this.refreshThinkingControls(); }); },
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
       getPreset: () => this.settings.promptPreset,
       setPreset: (id: string) => { this.settings.promptPreset = isPromptPreset(id) ? id : "default"; void this.saveSettings(); },

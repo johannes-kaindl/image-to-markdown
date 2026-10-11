@@ -11,7 +11,6 @@ import { renderSettingDefinitions, settingBodyHost, refreshSettingsTab, installT
 import { fillMissingRowModels, migrateEndpointList, type EndpointConfig } from "./vendor/kit/endpoint_config";
 import { FolderSuggest } from "./vendor/kit-obsidian/folder-suggest";
 import type { EndpointChoice } from "./vendor/kit/endpoint-source";
-import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
 
 export type { EndpointConfig };
 
@@ -58,9 +57,6 @@ export interface ImageToMarkdownSettings {
   /** Wahl gegenüber dem LLM Endpoint Manager (Endpunkt + Modell). Leer = automatisch. Nur
    *  relevant, solange der Manager installiert ist; sonst gilt `visionEndpoints` + `visionModel`. */
   choice: EndpointChoice;
-  /** Abgeschafft (Welle 17): das Modell steht je Endpunkt-Zeile. Nur noch bis zur Umstellung der Modell-Zeile
-   *  und der Panel-Wahl; geladen wird es nie (`migrateVisionModel` + `delete` in `onload`). */
-  visionModel?: string;
   visionPrompt: string;
   promptPreset: string;
   pdfMaxPages: number;
@@ -171,6 +167,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
    *  den alten Zustand, und kein Test schlüge an. */
   hide(): void {
     this.plugin.llm.hideSettings();
+    this.plugin.onSourceResolved = undefined;
     this.uninstallRefresh();
     super.hide();
   }
@@ -227,8 +224,6 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
           // Quelle, lokale Liste und Abschnitt „Anfrage“ zeichnet die Kit-Verbindung in einem Zug.
           { name: t("settings.endpoints.name"), desc: t("settings.endpoints.desc"),
             render: (s: Setting) => { this.renderConnection(s); } },
-          { name: t("settings.model.name"), desc: t("settings.model.desc"),
-            render: (s: Setting) => { this.renderModel(s); } },
           { name: t("settings.capability.name"),
             render: (s: Setting) => { this.renderCapability(s); } },
           { name: t("settings.prompt.name"), desc: t("settings.prompt.desc"),
@@ -324,37 +319,6 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     this.plugin.llm.renderSettings(host, { lang: getLang() });
   }
 
-  /** Modell: Dropdown wird asynchron aus dem Endpunkt befüllt; offline stattdessen ein
-   *  Textfeld + „Modelle laden". */
-  private renderModel(setting: Setting): void {
-    // Mit Manager waehlt der Endpunkt-Baustein das Modell (choice.model). Hier entschieden, nicht
-    // beim Bau der Definitionsliste: Obsidian >= 1.13 kann diese Liste ueber das Erscheinen des
-    // Managers hinweg zwischenspeichern, render() laeuft bei jedem Oeffnen des Tabs.
-    if (findEndpointManager(this.app)) { setting.settingEl.addClass("img2md-setting-managed"); return; }
-    setting.addExtraButton(b => b.setIcon("refresh-cw").setTooltip(t("settings.refreshModels")).onClick(() => { this.refresh(); }));
-    void this.plugin.llm.models({ force: true }).then(({ models }) => {
-      const cur = this.plugin.settings.visionModel ?? "";
-      const list = models.includes(cur) || !cur ? models : [cur, ...models];
-      if (list.length) {
-        setting.addDropdown(d => {
-          for (const m of list) d.addOption(m, m);
-          d.setValue(cur);
-          d.onChange(async (v: string) => {
-            this.plugin.settings.visionModel = v;
-            await this.plugin.saveSettings();
-            void this.plugin.reconnect();
-            this.showCaps(v);
-          });
-        });
-      } else {
-        setting.addText(tx => tx.setPlaceholder(t("settings.endpointOfflinePlaceholder")).setValue(cur)
-          .onChange(async (v: string) => { this.plugin.settings.visionModel = v.trim(); await this.plugin.saveSettings(); void this.plugin.reconnect(); }));
-        setting.addButton(b => b.setButtonText(t("settings.loadModels")).onClick(() => { this.refresh(); }));
-      }
-      this.showCaps(this.plugin.settings.visionModel ?? "");
-    });
-  }
-
   /** Export-Ordner: Textfeld mit Ordner-Autocomplete (Kit-`FolderSuggest`), leer = neben der
    *  Quellnotiz. */
   private renderExportFolder(setting: Setting): void {
@@ -394,6 +358,8 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
       }
     }));
     this.showCaps(this.plugin.model);
+    // Das Modell steht in der Endpunkt-Zeile: ändert sich die Auflösung, folgt die Anzeige.
+    this.plugin.onSourceResolved = () => { this.showCaps(this.plugin.model); };
   }
 
   /** Prompt-Textarea — Hatch statt `textarea`-Control, weil sie zusätzlich die
