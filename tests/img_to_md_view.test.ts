@@ -1070,9 +1070,31 @@ describe("Refine-Zeile (#7)", () => {
     });
     await (view as any).refineCard(0, "Tabellen als GFM");
     const rf = (view as any).state.cards[0].refine;
-    expect(rf.rounds).toEqual([{ feedback: "Tabellen als GFM", text: "VERBESSERT", reasoning: "denke" }]);
-    expect(rf.selected).toBe(1);
+    expect(rf.rounds).toEqual([
+      { feedback: "", text: "Hallo", reasoning: "", basedOn: null },
+      { feedback: "Tabellen als GFM", text: "VERBESSERT", reasoning: "denke", basedOn: 0 },
+    ]);
+    expect(rf.active).toBe(1);
     expect((view as any).state.cards[0].text).toBe("VERBESSERT");
+  });
+
+  it("nachbessern baut auf dem aktiven Stand auf: nach Zurückspringen geht die übersprungene Runde nicht mit", async () => {
+    const calls: { base: string; steps: { feedback: string; text: string }[] }[] = [];
+    const refine = async (base: string, steps: { feedback: string; text: string }[], fb: string, onContent: any) => {
+      calls.push({ base, steps: steps.map(x => ({ ...x })) });
+      const text = `neu-${fb}`; onContent(text);
+      return { content: text, reasoning: "", model: "vm" };
+    };
+    const { view } = await runToDone({ refine });
+    const v = view as any;
+    await v.refineCard(0, "f1");
+    await v.refineCard(0, "f2");
+    v.state.selectRefineVersion(0, 1);
+    await v.refineCard(0, "f3");
+    await v.refineCard(0, "f4");
+    expect(calls[3].base).toBe("Hallo");
+    expect(calls[3].steps.map(x => x.feedback)).toEqual(["f1", "f3"]);
+    expect(calls.map(c => c.steps.length)).toEqual([0, 1, 1, 2]);
   });
 
   it("leeres Feedback → kein Refine-Aufruf, Karte unverändert", async () => {

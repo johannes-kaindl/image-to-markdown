@@ -1,5 +1,6 @@
 import { t } from "./i18n";
 import type { ParsedDescription } from "./describe";
+import { EMPTY_ROUNDS, pushRound, selectRound, refineBase, type Rounds } from "./vendor/kit/rounds";
 
 export interface ImgItem {
   raw: string;
@@ -15,7 +16,9 @@ export interface ImgItem {
   selfSource?: boolean;   // true = die aktive Datei selbst ist die Quelle (embed dann immer false)
 }
 
-export interface RefineRound { feedback: string; text: string; reasoning: string; }
+/** Eine Version der Karte. rounds[0] ist das Original (feedback "", basedOn null), rounds[k] die k-te
+ *  Nachbesserung; basedOn ist der Index der Version, auf der sie aufbaut (der aktive Stand beim Absenden). */
+export interface RefineRound { feedback: string; text: string; reasoning: string; basedOn: number | null; }
 
 export type CardStatus = "streaming" | "done" | "error" | "written";
 
@@ -37,9 +40,9 @@ export interface ImgCard {
   category?: string | null;
   tags?: string[];
   /** In-Session-Nachbesserungs-Chat (#7 v2). base = Original-Transkription, rounds = je Runde
-   *  Feedback + Ergebnis + Reasoning; selected = kanonische Version (0 = base, k = rounds[k-1]),
+   *  Feedback + Ergebnis + Reasoning; active = kanonische Version (0 = Original, k = k-te Runde),
    *  gespiegelt in card.text. Reitet auf dem CardCache. */
-  refine?: { base: string; rounds: RefineRound[]; selected: number };
+  refine?: Rounds<RefineRound>;
 }
 
 /** Reine View-Buchhaltung für die IMG→MD-Sidebar: Bild-Auswahl + Ergebnis-Karten.
@@ -127,27 +130,26 @@ export class ImgToMdState {
     const c = this.cards[i]; if (!c) return;
     c.text = ""; c.reasoning = ""; c.model = ""; c.status = "streaming"; c.error = undefined; c.truncated = undefined; c.writtenPath = undefined;
   }
-  /** Committet eine erfolgreiche Nachbesserung als neue Runde: setzt beim ersten Mal die Basis
-   *  (die vorige card.text — während des Streamens nicht mutiert), hängt {feedback,text,reasoning}
-   *  an, wählt die neue Runde und macht sie zur aktuellen. Status → done (written-Karte re-schreibbar,
+  /** Committet eine erfolgreiche Nachbesserung als neue Runde: legt beim ersten Mal das Original
+   *  (die vorige card.text — während des Streamens nicht mutiert) als rounds[0] ab, hängt die Runde
+   *  an (basedOn = der aktive Stand) und wählt sie. Status → done (written-Karte re-schreibbar,
    *  writtenPath bleibt). */
   commitRefineRound(i: number, feedback: string, text: string, reasoning: string): void {
     const c = this.cards[i]; if (!c) return;
-    if (!c.refine) c.refine = { base: c.text, rounds: [], selected: 0 };
-    c.refine.rounds.push({ feedback, text, reasoning });
-    c.refine.selected = c.refine.rounds.length;
+    const prev = c.refine ?? pushRound(EMPTY_ROUNDS as Rounds<RefineRound>, { feedback: "", text: c.text, reasoning: "", basedOn: null });
+    c.refine = pushRound(prev, { feedback, text, reasoning, basedOn: refineBase(prev) });
     c.text = text;
     c.status = "done";
   }
 
-  /** Wählt die kanonische Version (0 = Original/base, k = rounds[k-1]); klemmt den Index und
-   *  spiegelt card.text. Status bleibt done. Ersetzt das v1-Ein-Schritt-Undo. */
+  /** Wählt die kanonische Version (0 = Original, k = k-te Runde) und spiegelt card.text. Ein
+   *  ungültiger Index wird abgelehnt (Kit-Verhalten), nicht geklemmt. Status bleibt done. */
   selectRefineVersion(i: number, index: number): void {
     const c = this.cards[i]; const r = c?.refine; if (!c || !r) return;
-    const sel = Math.max(0, Math.min(index, r.rounds.length));
-    if (sel === r.selected) return;   // gleiche Version erneut gewählt → kein Status-/Text-Flip
-    r.selected = sel;
-    c.text = sel === 0 ? r.base : r.rounds[sel - 1].text;
+    const next = selectRound(r, index);
+    if (next === r) return;   // ungültig oder schon aktiv → kein Status-/Text-Flip
+    c.refine = next;
+    c.text = next.rounds[next.active].text;
     c.status = "done";
   }
 
@@ -155,6 +157,18 @@ export class ImgToMdState {
   failedCardIndices(): number[] { return this.cards.map((c, i) => ({ c, i })).filter(x => x.c.status === "error").map(x => x.i); }
   doneCardIndices(): number[] { return this.cards.map((c, i) => ({ c, i })).filter(x => x.c.status === "done").map(x => x.i); }
   clearCards(): void { this.cards = []; }
+}
+
+/** Was ein Nachbessern an das Modell schickt: das Original und die Kette vom aktiven Stand zurück
+ *  (über basedOn). Eine Runde, die beim Zurückspringen übersprungen wurde, gehört nicht dazu. */
+export function refineRequest(card: ImgCard): { base: string; steps: { feedback: string; text: string }[] } {
+  const r = card.refine;
+  if (!r) return { base: card.text, steps: [] };
+  const steps: { feedback: string; text: string }[] = [];
+  for (let k: number | null = r.active; k !== null && k > 0; k = r.rounds[k]?.basedOn ?? null) {
+    steps.unshift({ feedback: r.rounds[k].feedback, text: r.rounds[k].text });
+  }
+  return { base: r.rounds[0].text, steps };
 }
 
 /** Das tatsächlich verwendete Modell aus den Ergebnis-Karten: erstes nicht-leeres card.model.

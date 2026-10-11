@@ -6,6 +6,9 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Refining builds on the version you picked.** Before, every refinement sent the original plus all previous rounds, even after you had stepped back to an earlier version. Now the request carries only the chain behind the version you refine: pick round 1 after rounds 1 and 2 and refine, and round 2 is not sent. The new round hangs off the version you picked and becomes the active one; the earlier rounds stay in the log and can still be selected and written.
+
 ## [0.29.0] — 2026-10-11
 
 ### Changed

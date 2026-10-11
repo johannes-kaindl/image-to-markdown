@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ImgToMdState, ImgItem, ImgCard, partitionDoneCards, actualModel, canRefine } from "../src/img_to_md_state";
+import { ImgToMdState, ImgItem, ImgCard, partitionDoneCards, actualModel, canRefine, refineRequest } from "../src/img_to_md_state";
 
 const items: ImgItem[] = [
   { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
@@ -283,21 +283,27 @@ describe("ImgToMdState — Refine v2 (Chat-Verlauf)", () => {
     return s;
   }
 
-  it("commitRefineRound erste Runde: base=vorige Version, eine Runde inkl. Reasoning, selected=1", () => {
+  it("commitRefineRound erste Runde: Original wird rounds[0], dann die Runde; active=1", () => {
     const s = doneCard();
     s.commitRefineRound(0, "f1", "v1", "denke1");
-    expect(s.cards[0].refine).toEqual({ base: "v0", rounds: [{ feedback: "f1", text: "v1", reasoning: "denke1" }], selected: 1 });
+    expect(s.cards[0].refine).toEqual({
+      rounds: [
+        { feedback: "", text: "v0", reasoning: "", basedOn: null },
+        { feedback: "f1", text: "v1", reasoning: "denke1", basedOn: 0 },
+      ],
+      active: 1,
+    });
     expect(s.cards[0].text).toBe("v1");
     expect(s.cards[0].status).toBe("done");
   });
 
-  it("commitRefineRound zweite Runde: base bleibt, rounds akkumulieren, selected=2", () => {
+  it("commitRefineRound zweite Runde: Original bleibt, Runden akkumulieren, active=2", () => {
     const s = doneCard();
     s.commitRefineRound(0, "f1", "v1", "");
     s.commitRefineRound(0, "f2", "v2", "denke2");
-    expect(s.cards[0].refine!.base).toBe("v0");
-    expect(s.cards[0].refine!.rounds.map(r => r.text)).toEqual(["v1", "v2"]);
-    expect(s.cards[0].refine!.selected).toBe(2);
+    expect(s.cards[0].refine!.rounds.map(r => r.text)).toEqual(["v0", "v1", "v2"]);
+    expect(s.cards[0].refine!.rounds[2].basedOn).toBe(1);
+    expect(s.cards[0].refine!.active).toBe(2);
     expect(s.cards[0].text).toBe("v2");
   });
 
@@ -306,21 +312,48 @@ describe("ImgToMdState — Refine v2 (Chat-Verlauf)", () => {
     s.commitRefineRound(0, "f1", "v1", "");
     s.commitRefineRound(0, "f2", "v2", "");
     s.selectRefineVersion(0, 0);
-    expect(s.cards[0].refine!.selected).toBe(0);
+    expect(s.cards[0].refine!.active).toBe(0);
     expect(s.cards[0].text).toBe("v0");
     s.selectRefineVersion(0, 1);
     expect(s.cards[0].text).toBe("v1");
   });
 
-  it("selectRefineVersion klemmt Out-of-range-Indizes", () => {
+  it("selectRefineVersion lehnt Out-of-range-Indizes ab (Kit-Verhalten, kein Klemmen)", () => {
     const s = doneCard();
     s.commitRefineRound(0, "f1", "v1", "");
     s.selectRefineVersion(0, 9);
-    expect(s.cards[0].refine!.selected).toBe(1);   // geklemmt auf rounds.length
+    expect(s.cards[0].refine!.active).toBe(1);
     expect(s.cards[0].text).toBe("v1");
     s.selectRefineVersion(0, -3);
-    expect(s.cards[0].refine!.selected).toBe(0);
-    expect(s.cards[0].text).toBe("v0");
+    expect(s.cards[0].refine!.active).toBe(1);
+    expect(s.cards[0].text).toBe("v1");
+  });
+
+  it("refineRequest ohne Runde: Basis ist der Kartentext, keine Schritte", () => {
+    const s = doneCard();
+    expect(refineRequest(s.cards[0])).toEqual({ base: "v0", steps: [] });
+  });
+
+  it("refineRequest baut auf dem aktiven Stand auf: nach Zurückspringen fehlt die übersprungene Runde", () => {
+    const s = doneCard();
+    s.commitRefineRound(0, "f1", "v1", "");
+    s.commitRefineRound(0, "f2", "v2", "");
+    s.selectRefineVersion(0, 1);
+    expect(refineRequest(s.cards[0])).toEqual({ base: "v0", steps: [{ feedback: "f1", text: "v1" }] });
+    s.commitRefineRound(0, "f3", "v3", "");
+    s.commitRefineRound(0, "f4", "v4", "");
+    // aktiv ist r4 (basedOn r3, basedOn r1) — r2 gehört nicht zur Kette
+    expect(refineRequest(s.cards[0])).toEqual({
+      base: "v0",
+      steps: [{ feedback: "f1", text: "v1" }, { feedback: "f3", text: "v3" }, { feedback: "f4", text: "v4" }],
+    });
+  });
+
+  it("refineRequest vom Original aus: leere Kette trotz vorhandener Runden", () => {
+    const s = doneCard();
+    s.commitRefineRound(0, "f1", "v1", "");
+    s.selectRefineVersion(0, 0);
+    expect(refineRequest(s.cards[0])).toEqual({ base: "v0", steps: [] });
   });
 
   it("commitRefineRound auf written-Karte setzt Status zurück auf done (writtenPath bleibt)", () => {

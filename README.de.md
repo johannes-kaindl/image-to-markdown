@@ -86,7 +86,7 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
 - **Nachbessern per Feedback.** Ist eine Transkript-Karte fertig, gibst du im Feld „Nachbessern"
   (Platzhalter „Feedback, z. B. Tabellen als GFM") Prosa-Feedback ein — „diese Tabelle als GFM",
   „Überschriften-Ebene falsch" — und das Modell schreibt das ganze Dokument neu. Jede Karte behält
-  einen konversationellen Verlauf (das Modell sieht Original plus alle bisherigen Runden), als
+  einen konversationellen Verlauf (das Modell sieht das Original plus die Runden, auf denen die Version aufbaut, die du nachbesserst — wählst du eine frühere Version, werden spätere Runden, von denen du zurückgesprungen bist, nicht mitgeschickt), als
   scrollbarer Verlauf gerendert mit der Ursprungstranskription als erstem, gleichwertigem Eintrag,
   einem aufklappbaren Denkprozess je Runde und einem **[Kopieren] [Notiz anlegen]**-Aktionspaar auf
   jeder Version, sodass du frei wählst, welche du schreibst. Der Fußbereich bietet links „Ergebnisse

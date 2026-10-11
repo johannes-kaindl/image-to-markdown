@@ -44,6 +44,7 @@
         "model-list-cache",
         "reasoning",
         "redact",
+        "rounds",
         "sampling-profiles",
         "secrets",
         "settings",

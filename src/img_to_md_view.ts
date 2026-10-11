@@ -1,5 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine } from "./img_to_md_state";
+import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, refineRequest } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 import { buildThinkingControl } from "./vendor/kit-obsidian/thinking-control";
@@ -425,10 +425,10 @@ export class ImgToMdView extends ItemView {
       refs.liveWas = live;
     }
     // Transkript-Text (lazy, inkrementell). Sobald ein Refine existiert oder läuft, bleibt der obere
-    // Text auf der Original-Version fixiert (card.refine.base) — die gewählte Version erscheint im
+    // Text auf der Original-Version fixiert (card.refine.rounds[0]) — die gewählte Version erscheint im
     // Verlauf (syncRefineLog), nicht hier, damit ein Versionswechsel den oberen Text nicht ersetzt.
     const draft = this.refineDrafts.get(i);
-    const shownText = (card.refine || draft) ? (card.refine?.base ?? card.text) : card.text;
+    const shownText = (card.refine || draft) ? (card.refine?.rounds[0].text ?? card.text) : card.text;
     if (shownText) {
       if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
       refs.textEl.setText(shownText);
@@ -513,7 +513,7 @@ export class ImgToMdView extends ItemView {
         setIcon(copyBtn, "copy");
         // Der obere Block IST das Original — bei vorhandenem Verlauf kopiert/schreibt er die Basis-Version
         // (nicht card.text, das der zuletzt geschriebenen Runde folgt).
-        copyBtn.addEventListener("click", () => this.deps.copyText(this.state.cards[i].refine?.base ?? this.state.cards[i].text));
+        copyBtn.addEventListener("click", () => this.deps.copyText(this.state.cards[i].refine?.rounds[0].text ?? this.state.cards[i].text));
         refs.actionsEl = actions;
       }
       // Schreiben nur bei done UND wenn kein Lauf aktiv ist — sonst no-op'te ein Klick still,
@@ -547,11 +547,11 @@ export class ImgToMdView extends ItemView {
     this.updateRetryAll();
   }
 
-  /** Text einer Version: 0 = Original (base), k = rounds[k-1]. */
+  /** Text einer Version: 0 = Original, k = k-te Runde. */
   private versionText(i: number, versionIdx: number): string {
     const c = this.state.cards[i]; const r = c?.refine;
     if (!r) return c?.text ?? "";
-    return versionIdx === 0 ? r.base : (r.rounds[versionIdx - 1]?.text ?? "");
+    return r.rounds[versionIdx]?.text ?? "";
   }
 
   /** Baut eine [Kopieren][Notiz anlegen]-Aktionszeile für eine Version (0 = Original, k = Runde k) —
@@ -576,7 +576,7 @@ export class ImgToMdView extends ItemView {
   private syncRefineLog(i: number, refs: CardRefs, cardEl: HTMLElement): void {
     const card = this.state.cards[i];
     const draft = this.refineDrafts.get(i);
-    const rounds = card.refine?.rounds ?? [];
+    const rounds = card.refine?.rounds.slice(1) ?? [];   // ohne das Original (rounds[0]): der Verlauf zeigt es als eigenen Block
     // Verlauf nur bei Transkript-Karten mit ≥1 Runde ODER laufender Nachbesserung.
     if (card.mode === "description" || (!card.refine && !draft)) {
       // Kein Verlauf (mehr) — einen zuvor angelegten Container vollständig abräumen, sonst bleibt nach
@@ -746,8 +746,7 @@ export class ImgToMdView extends ItemView {
     this.running = true; this.runBtn?.setText("Stop");
     this.controller = new AbortController();
     const signal = this.controller.signal;
-    const base = card.refine?.base ?? card.text;
-    const rounds = (card.refine?.rounds ?? []).map(r => ({ feedback: r.feedback, text: r.text }));
+    const { base, steps: rounds } = refineRequest(card);
     this.refineDrafts.set(i, { feedback: fb, text: "", reasoning: "" });
     this.updateAllCards();
     try {
