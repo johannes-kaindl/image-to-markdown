@@ -1,4 +1,4 @@
-// vendored from code-kit@0.20.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.21.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus ghostline/src/core/context.ts (redactText) und settings-assistant/src/core/secrets.ts (redactFields), 2026-10-09; vault-crews/src/core/redact.ts und llm-lab/src/core/redact_secrets.ts + redact_pii.ts (redactKeys, redactKeysInValue, createPiiRedactor), 2026-10-10
 /** Redaction of secrets, in two entry points (plus a reversible session for text): over free
  *  text and over parsed JSON.
@@ -29,9 +29,12 @@
  *  appends the orphan rules, so `redactText('note -----END PRIVATE KEY----- …', rules)` gives
  *  `[redacted-private-key] …` and everything before an END marker is lost — a key list is no PEM
  *  scanner; (2) rule replacements are inserted literally, but the original Bearer rule keeps the
- *  spelling and whitespace of the word (`bearer\t••••`) and a rule pair cannot do that; (3) the kit's
- *  `Bearer {16,}` rule has no `i` flag and misses `Bearer xyz789abcdef` (12 characters), which both
- *  sources pin in a test and which is llm-lab's ONLY redaction (it passes no key); (4) `redactText`
+ *  spelling and whitespace of the word (`bearer\t••••`) and a rule pair cannot do that; (3) the log echo works without a
+ *  key list, which is llm-lab's ONLY redaction (it passes no key). Until 0.20.0 the kit's own Bearer rule was narrower (`{16,}`, no
+ *  `i` flag) and missed `Bearer xyz789abcdef` (12 characters), which both sources pin in a test; since 0.21.0 it
+ *  is a superset of the echo (`{8,}`, `i`, `=` anywhere in the token), so what the log masks the model never sees
+ *  either. Prose such as "bearer certificates" or "Bearer authentication" (8+ letters) is hit too: harmless in a
+ *  session (the answer gets it back), visible in `redactText` as `Bearer [redacted-token]`; (4) `redactText`
  *  returns `{ text, count }`, the sources return a string; (5) the session issues `[redacted-<kind>-<n>]`
  *  with one global counter, llm-lab's traces and datasets hold `[EMAIL_1]` with a counter per label —
  *  re-expressing it would change every placeholder already written. `createPiiRedactor` therefore takes a
@@ -52,7 +55,7 @@ export const SECRET_REDACT_RULES: RedactRules = [
   // The body may not contain another BEGIN: without that, every BEGIN lacking an END scans to the
   // end of the text and a long run of them costs quadratic time.
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----(?:(?!-----BEGIN)[\s\S])*?-----END [A-Z ]*PRIVATE KEY-----/g, "[redacted-private-key]"],
-  [/\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/g, "Bearer [redacted-token]"],
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [redacted-token]"],
   [/\b(?:sk|rk|pk|ghp|gho|github_pat|xoxb|xoxp)[-_][A-Za-z0-9_-]{12,}/g, "[redacted-token]"],
   [/\bAKIA[0-9A-Z]{16}\b/g, "[redacted-token]"],
 ];
