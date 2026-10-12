@@ -558,8 +558,8 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       if (!m) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
       const r = await aufloesung(cdp);
       return {
-        ok: m.zeilen > 0 && m.modellZeilen === 0 && r.url !== MGR_URL,
-        detail: `${m.zeilen} lokale Zeile(n) · eigene Modell-Zeilen: ${m.modellZeilen} · Aufloesung ${r.url}`,
+        ok: !m.baustein && m.zeilen > 0 && m.modellZeilen === 0 && r.url !== MGR_URL,
+        detail: `Baustein ${m.baustein ? "DA (ohne Manager!)" : "nicht da"} · ${m.zeilen} lokale Zeile(n) · eigene Modell-Zeilen: ${m.modellZeilen} · Aufloesung ${r.url}`,
       };
     },
   },
@@ -1182,7 +1182,9 @@ async function messeEinstellungen(cdp: Cdp): Promise<{ baustein: boolean; zeilen
       const modell = [...wurzel.querySelectorAll(".setting-item, .img2md-setting-managed")]
         .filter((z) => /^(Vision model|Vision-Modell)/.test(z.querySelector(".setting-item-name")?.textContent?.trim() ?? ""));
       return {
-        baustein: wurzel.textContent.includes("LLM Endpoint Manager"),
+        // Die Zeile des Bausteins (Name „Endpoints come from the LLM Endpoint Manager“), nicht irgendein Text mit dem
+        // Produktnamen: der Request-Abschnitt nennt ihn seit obsidian-kit 0.59.0 im Hinweis, auch ohne Manager.
+        baustein: [...wurzel.querySelectorAll(".setting-item-name")].some((e) => /come from the LLM Endpoint Manager|kommen vom LLM Endpoint Manager/.test(e.textContent ?? "")),
         zeilen: wurzel.querySelectorAll(".okit-ep-row").length,
         modellZeilen: modell.length,
         modellSichtbar: modell.filter((z) => z.offsetParent !== null).length,
