@@ -8,6 +8,9 @@ and versioning follows [SemVer](https://semver.org/).
 
 ### Changed
 - **Refining builds on the version you picked.** Before, every refinement sent the original plus all previous rounds, even after you had stepped back to an earlier version. Now the request carries only the chain behind the version you refine: pick round 1 after rounds 1 and 2 and refine, and round 2 is not sent. The new round hangs off the version you picked and becomes the active one; the earlier rounds stay in the log and can still be selected and written.
+- **The endpoint row shows the model's context length again.** Under a reachable row with a model it reads "Context: loaded N · max M tokens", or "Context: max M tokens" / "Context: loaded N tokens" when the server names only one of the two; nothing is shown when it names neither. The lookup asks LM Studio first and Ollama second, and every attempt gives up after 5 s, so a server that accepts the connection and never answers no longer holds the settings.
+- **The model dropdown of an endpoint row offers "— (server picks)" again.** Choosing it removes the model from that row, so the server decides (EN "— (server picks)", DE "— (Server wählt)"). In 0.29.0 a model you had set could not be cleared in the dropdown.
+- **Vendored `obsidian-kit` 0.56.0 (was 0.53.0) and `code-kit` 0.23.0 (was 0.21.0).** What a user sees from the skipped releases: removing a reply's `<think>` block no longer takes seconds on degenerate answers (code-kit 0.22.0); long streamed replies render faster and leak fewer remote sources (obsidian-kit 0.54.0, the DOM guard works incrementally); an unfinished render block is no longer cut off when the sidebar closes (obsidian-kit 0.55.0). The endpoint-row texts above are in obsidian-kit 0.56.0.
 
 ## [0.29.0] — 2026-10-11
 

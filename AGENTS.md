@@ -45,6 +45,8 @@ img_to_md.ts        reiner Kern: findImageEmbeds · buildTranscriptNote · repla
                     buildSelfSourceItem (erzeugt das einzelne ImgItem wenn die aktive Datei
                     selbst die Quelle ist); ImgItem hat dafür ein neues Feld selfSource: true.
 img_to_md_state.ts  ImgToMdState — Bild-Auswahl + Ergebnis-Karten (kein DOM/I/O).
+                    `card.refine` ist `Rounds<RefineRound>` (code-kit `rounds`): rounds[0] = Original, jede Runde trägt
+                    `basedOn`; `refineRequest` schickt nur die Kette vom aktiven Stand zurück, nicht alle Runden.
 img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten,
                     PDF-Seitenbereichs-Auswahl. Idempotenz-Anzeige je Liste-Zeile: bei vorhandenem
                     Transkript „✓ transcript exists" + „open"-Link (springt zur Notiz), Zeilen-Titel
@@ -82,9 +84,9 @@ describe.ts         Beschreiben-Modus: buildDescribePrompt (festes CATEGORY/TAGS
                     Taxonomie-Auswahl) + Parsing nach ParsedDescription. Reiner Kern.
 prompts.ts          Prompt-Presets (default/tables/handwriting/math/code): PROMPT_PRESETS ·
                     isPromptPreset · normalizePreset · Preset-Auflösung. Reiner Kern.
-request_params.ts   `MODE` (Sampling-Modus `transform`) · `loadRequestSettings` (lädt `request`, zieht das Altfeld
-                    `suppressThinking` nach: true → Stufe „aus“, false → Ein-Stufe). Den Request baut die Kit-Verbindung
-                    (kein `maxTokens`: i2m hat kein Budget). Reiner Kern.
+request_params.ts   `MODE` (Sampling-Modus `transform`) · `REQUEST_MIGRATIONS` (die Migration des Altfelds
+                    `suppressThinking`: true → Stufe „aus“, false → Ein-Stufe; geladen wird mit `loadRequestSettings` aus dem
+                    Kit, `sampling-profiles`). Den Request baut die Kit-Verbindung (kein `maxTokens`: i2m hat kein Budget). Reiner Kern.
 card_cache.ts       CardCache: In-Session-Cache der Sidebar-Ergebnis-Karten pro Quelldatei
                     (Plugin-Ebene, überlebt View-Close; kein Disk-Persist). Reiner Kern.
 frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskriminator-Werte aller
