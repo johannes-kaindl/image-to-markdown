@@ -58,8 +58,6 @@
  * die zwei Punkte, die zwingend einen Lauf brauchen, hinter `--with-model`.
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { argv, cwd } from "node:process";
 
@@ -69,10 +67,13 @@ import {
   Cdp,
   clickReal,
   closeExtraLeaves,
+  entferneFakeManager,
+  installFakeManager,
   openExisting,
   pollUntil,
   requireVisible,
 } from "../../tools/obsidian-cdp/cdp.js";
+import { echoText, startLlmStub } from "../../tools/obsidian-cdp/llm-stub.js";
 import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
 import { requireEigenerBuild } from "../../tools/obsidian-cdp/vault.js";
 import { MODES, familyFromName } from "../src/vendor/kit/sampling-profiles";
@@ -1093,81 +1094,34 @@ async function schliesseEinstellungen(cdp: Cdp, sicht: Cdp): Promise<void> {
 /** Ein aufgezeichneter Aufruf des Fake-Endpunkts. */
 interface FakeRequest { method: string; url: string; headers: Record<string, string | string[] | undefined>; body: unknown }
 
-/** Fake-Chat-Endpunkt im Node-Prozess: beantwortet /v1/models und /v1/chat/completions und merkt
- *  sich jeden Aufruf samt Headern (`requests`) und jeden POST-Body (`bodies`). Mit CORS-Freigabe, damit
- *  der Stream-Weg (XHR) durchkommt und der Body vom echten Transport stammt, nicht vom Fallback.
- *  Ohne Stream (`stream: false`) antwortet er mit einer vollen Completion; mit `echo` spiegelt er den
- *  gesendeten Text der letzten Nutzernachricht in die Antwort (Beleg der umkehrbaren Schwärzung). */
+/** Fake-Chat-Endpunkt: duenne Huelle ueber den zentralen LLM-Stub (`tools/obsidian-cdp/llm-stub.ts`). Der Stub beantwortet
+ *  `GET /v1/models` und `POST /v1/chat/completions` (SSE; `stream: false` als JSON), alles andere mit dem LM-Studio-404,
+ *  und schneidet jede Anfrage samt Headern mit (`requests`, auch die 404-Pfade; V1 verlangt nur, dass `/api/v1/models`
+ *  ANGEFRAGT wurde) und jeden POST-Body (`bodies`). Mit `echo` spiegelt er den Text der letzten Nutzernachricht in die
+ *  Antwort (Beleg der umkehrbaren Schwaerzung). */
 async function startFakeChat(opts: { echo?: boolean; content?: string } = {}): Promise<{ url: string; bodies: unknown[]; requests: FakeRequest[]; close(): Promise<void> }> {
-  const bodies: unknown[] = [];
-  const requests: FakeRequest[] = [];
-  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
-  const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
-    if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
-    if (req.url?.includes("/v1/models")) {
-      requests.push({ method: req.method ?? "GET", url: req.url, headers: req.headers, body: null });
-      res.writeHead(200, { ...cors, "Content-Type": "application/json" }); res.end(JSON.stringify({ data: [{ id: "google/gemma-4-e4b", object: "model" }] })); return;
-    }
-    if (req.method === "POST" && req.url?.includes("/v1/chat/completions")) {
-      let raw = "";
-      req.on("data", (c: Buffer) => { raw += c.toString("utf8"); });
-      req.on("end", () => {
-        let body: { stream?: boolean; messages?: { role: string; content: unknown }[] } = {};
-        try { body = JSON.parse(raw) as typeof body; bodies.push(body); } catch { bodies.push({ kein_json: raw.slice(0, 80) }); }
-        requests.push({ method: "POST", url: req.url ?? "", headers: req.headers, body });
-        const letzte = body.messages?.filter((m) => m.role === "user").at(-1)?.content;
-        const antwort = opts.echo && typeof letzte === "string" ? letzte : (opts.content ?? "Fake-Transkript");
-        if (body.stream === false) {
-          res.writeHead(200, { ...cors, "Content-Type": "application/json" });
-          res.end(JSON.stringify({ model: "google/gemma-4-e4b", choices: [{ message: { role: "assistant", content: antwort }, finish_reason: "stop" }] }));
-          return;
-        }
-        res.writeHead(200, { ...cors, "Content-Type": "text/event-stream" });
-        res.write(`data: ${JSON.stringify({ model: "google/gemma-4-e4b", choices: [{ delta: { content: antwort } }] })}\n\n`);
-        res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`);
-        res.end("data: [DONE]\n\n");
-      });
-      return;
-    }
-    res.writeHead(404, cors); res.end();
+  const stub = await startLlmStub({
+    models: ["google/gemma-4-e4b"],
+    antwort: (a) => ({ text: opts.echo ? echoText(a.json) : (opts.content ?? "Fake-Transkript"), model: "google/gemma-4-e4b" }),
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return {
-    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
-    bodies,
-    requests,
-    close: () => new Promise<void>((resolve) => { server.close(() => { resolve(); }); }),
+    url: stub.url,
+    get bodies() { return stub.anfragen().filter((a) => a.route === "chat").map((a) => a.json ?? { kein_json: a.body.slice(0, 80) }); },
+    get requests() { return stub.anfragen().map((a): FakeRequest => ({ method: a.methode, url: a.url, headers: a.header, body: a.json })); },
+    close: () => stub.stop(),
   };
 }
 
-const MGR_SLOT = "llm-endpoint-manager";
 const MGR_URL = "http://127.0.0.1:9312";
 const MGR_MODEL = "i2m-fake-vl";
 const G_ENDPOINT = process.env.I2M_SMOKE_ENDPOINT ?? "http://127.0.0.1:1234";
 const G_MODEL = process.env.I2M_SMOKE_MODEL ?? "google/gemma-4-e4b";
 
-const installiereManager = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
-  const plugins = app.plugins.plugins;
-  if (!("__i2mVorherMgr" in globalThis)) globalThis.__i2mVorherMgr = plugins[${JSON.stringify(MGR_SLOT)}];
-  const eintrag = { id: "fake1", label: "Fake-Endpunkt", defaultModel: ${JSON.stringify(MGR_MODEL)} };
-  const aufgeloest = { id: "fake1", label: "Fake-Endpunkt", config: { url: ${JSON.stringify(MGR_URL)} }, defaultModel: ${JSON.stringify(MGR_MODEL)} };
-  plugins[${JSON.stringify(MGR_SLOT)}] = { api: {
-    version: 1, list: () => [eintrag], get: () => eintrag,
-    resolve: async () => aufgeloest, materialize: async () => aufgeloest,
-    models: async () => [${JSON.stringify(MGR_MODEL)}],
-    importEndpoints: async () => ({ added: [], merged: [], skipped: [] }), on: () => () => {},
-  } };
-  return true;
-`);
-const entferneManager = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`
-  if ("__i2mVorherMgr" in globalThis) {
-    const vorher = globalThis.__i2mVorherMgr;
-    if (vorher === undefined) delete app.plugins.plugins[${JSON.stringify(MGR_SLOT)}];
-    else app.plugins.plugins[${JSON.stringify(MGR_SLOT)}] = vorher;
-    delete globalThis.__i2mVorherMgr;
-  }
-  return true;
-`);
+const installiereManager = (cdp: Cdp): Promise<unknown> => installFakeManager(cdp, {
+  endpunkte: [{ id: "fake1", label: "Fake-Endpunkt", url: MGR_URL, models: [MGR_MODEL], capabilities: ["chat", "vision"] }],
+  invalidiere: [PLUGIN_ID],
+});
+const entferneManager = (cdp: Cdp): Promise<unknown> => entferneFakeManager(cdp, { invalidiere: [PLUGIN_ID] });
 const aufloesung = (cdp: Cdp): Promise<{ url: string | null; model: string }> => cdp.evaluate(`
   const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
   const src = await p.llm.resolve({ force: true });
