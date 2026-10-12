@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.53.0, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.56.0, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { hydrateEndpointSecrets, resolveActiveEndpointConfig, type EndpointConfig } from "./endpoint_config";
 import type { SecretStore } from "./secrets";
 import { familyFromName, type BackendId, type FamilyId, type ModelFamilyId } from "./sampling-profiles";
@@ -73,7 +73,6 @@ export interface EndpointSourceInput {
    *  gelesen wird nur eine `secretId` im Raum `<secretPrefix>-` (code-kit 0.15.0). Fehlt er, wird nicht
    *  hydriert — die Config trägt dann keinen Schlüssel, es wird aber auch nie ein fremder gelesen. */
   secretPrefix?: string;
-  localModel?: string;
   capability: Capability;
   choice?: EndpointChoice;
   caller?: string;
@@ -82,7 +81,7 @@ export interface EndpointSourceInput {
 export interface EndpointSourceResult {
   kind: SourceKind;
   config: EndpointConfig | null;
-  /** Modell für den Aufruf: choice.model → defaultModel → localModel → "". */
+  /** Modell für den Aufruf: choice.model → defaultModel → "" (lokal: choice.model → Modell der Zeile → ""). */
   model: string;
   reason?: ApiErrorCode;
   family: FamilyId | null;
@@ -128,10 +127,9 @@ function modelOf(choice: EndpointChoice | undefined, fallback: string | undefine
 }
 
 /** Modell-Priorität für den lokalen Pfad: choice.model (explizite Nutzerwahl) → config.model
- *  (das Modell der Zeile, ohne globalen Rückfall gelesen) → localModel (globaler Rückfall,
- *  nur für Konsumenten, die noch eines führen) → "". */
-function localModelOf(choice: EndpointChoice | undefined, config: EndpointConfig | null, localModel: string | undefined): string {
-  return choice?.model?.trim() || config?.model?.trim() || localModel?.trim() || "";
+ *  (das Modell der Zeile; es gibt keinen globalen Rückfall mehr, `localModel` entfiel in 0.55.0) → "". */
+function localModelOf(choice: EndpointChoice | undefined, config: EndpointConfig | null): string {
+  return choice?.model?.trim() || config?.model?.trim() || "";
 }
 
 async function finish(
@@ -168,7 +166,7 @@ export async function resolveEndpointSource(
   const { manager } = input;
   if (!manager) {
     const config = await resolveActiveEndpointConfig(input.secrets && input.secretPrefix ? hydrateEndpointSecrets(input.local, input.secrets, input.secretPrefix) : input.local, ping);
-    return finish({ kind: "local", config, model: config ? localModelOf(input.choice, config, input.localModel) : "" }, input, null);
+    return finish({ kind: "local", config, model: config ? localModelOf(input.choice, config) : "" }, input, null);
   }
   const opts = input.caller ? { caller: input.caller } : undefined;
   try {

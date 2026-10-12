@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.53.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.56.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -27,7 +27,32 @@
  *  Überschreiben: `renderSettings(el, { lang: "de", request: { title: "…" } })` — ein Teil-Merge
  *  über dem Default, je Abschnitt ein Feld genau. */
 import { BACKENDS, FAMILIES, type FamilyId, type BackendId, type Deviation } from "../kit/sampling-profiles";
-import type { LlmConnectionStrings } from "./llm-connection";
+import type { EndpointSourceSectionStrings } from "./endpoint-source";
+import type { EndpointListStrings } from "./endpoint-list";
+import type { RequestSectionStrings } from "./request-section";
+import { endpointStatusText, endpointWarningText } from "./endpoint-status-text";
+
+/** Das volle Text-Bündel von `LlmConnection.renderSettings` (liegt hier, damit dieses Modul nicht von
+ *  `llm-connection` abhängt; `llm-connection` exportiert den Typ weiter). */
+export interface LlmConnectionStrings {
+  endpointSource: EndpointSourceSectionStrings;
+  endpointList: EndpointListStrings;
+  listLabel: string;
+  listDesc: string;
+  listPlaceholder: string;
+  /** Notice-Text einer Abweichung, die das Ergebnis ändert (Satz plus Verweis auf den Abschnitt). */
+  deviationNotice: (d: Deviation) => string;
+  /** Hinweiszeile unter einer Vorschau des GESENDETEN Textes: „N Stellen geschwärzt“ (`redactions`). */
+  redactedNote: (n: number) => string;
+  /** Hinweis in den Einstellungen mit `managerOnly`, wenn der Manager fehlt. */
+  noManager: string;
+  /** Text für ein lokales `kind: "no-endpoint"`. Optional, damit ein volles Bündel ohne dieses Feld
+   *  weiter übersetzt; das Default-Bündel trägt es immer. */
+  noEndpoint?: string;
+  /** `endpointSource.managedDesc` für `managerOnly`, ohne den Satz über die lokale Liste. */
+  managedDescManagerOnly: string;
+  request: RequestSectionStrings;
+}
 
 /** `{0}`, `{1}` … ersetzen. */
 const fmt = (tpl: string, ...args: string[]): string => tpl.replace(/\{(\d+)\}/g, (_, i: string) => args[Number(i)] ?? "");
@@ -41,14 +66,13 @@ interface Texts {
   importLocal: string; imported: string; importFailed: string;
   // gemeinsam (Quelle und Liste)
   hintUnreachable: string; hintNoList: string; saved: string; refreshModels: string; saveFailed: string;
+  emptyModel: string;
+  contextLoaded: string; contextMax: string; contextLoadedOnly: string;
   // Endpunkt-Liste
   addPlaceholder: string; apiKeyPlaceholder: string; modelPlaceholder: string; ariaUrl: string; ariaAdd: string;
-  ariaApiKey: string; ariaModel: string; globalModel: string; globalModelUnset: string;
+  ariaApiKey: string; ariaModel: string;
   moveToFront: string; remove: string; thirdParty: string; probing: string;
-  statusOk: string; statusRefused: string; statusUnknownHost: string; statusTimeout: string; statusNotAnLlmApi: string;
-  statusUnauthorized: string; statusUnknown: string; statusUnknownBare: string;
   roleActive: string; roleStandby: string; roleUnreachable: string; roleSkippedModel: string;
-  warnScheme: string; warnMalformed: string; warnPort: string; warnPlaceholderIp: string;
   preset: string; checkConnection: string;
   secretSaved: string; secretChange: string; secretClear: string; secretUnavailable: string;
   // Anfrage-Abschnitt
@@ -78,7 +102,7 @@ interface Texts {
 const familyLabel = (f: string): string => (f === "—" ? "—" : (FAMILIES[f as FamilyId]?.label ?? f));
 const backendLabel = (b: string, none: string): string => (b === "unknown" ? none : (BACKENDS[b as BackendId]?.label ?? b));
 
-function build(x: Texts): LlmConnectionStrings {
+function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
   const pick = (map: Record<string, string>, key: string): string => map[key] ?? key;
   const source = (map: Record<string, string>) => (key: string): string => map[key] ?? key;
   const familySource = source({ manager: x.familyManager, name: x.familyName, none: x.familyNone });
@@ -101,28 +125,18 @@ function build(x: Texts): LlmConnectionStrings {
       addPlaceholder: x.addPlaceholder, apiKeyPlaceholder: x.apiKeyPlaceholder, modelPlaceholder: x.modelPlaceholder,
       ariaUrl: x.ariaUrl, ariaAdd: x.ariaAdd,
       ariaApiKey: (url) => fmt(x.ariaApiKey, url), ariaModel: (url) => fmt(x.ariaModel, url),
-      emptyModelLabel: (g) => (g ? fmt(x.globalModel, g) : x.globalModelUnset),
-      modelHint: hint, savedSuffix: x.saved, refreshModels: x.refreshModels, moveToFront: x.moveToFront,
+      modelHint: hint, savedSuffix: x.saved, refreshModels: x.refreshModels, emptyModel: x.emptyModel,
+      contextText: (c) => (c.loadedContextLength !== undefined && c.maxContextLength !== undefined
+        ? fmt(x.contextLoaded, c.loadedContextLength.toLocaleString(lang), c.maxContextLength.toLocaleString(lang))
+        : c.loadedContextLength !== undefined ? fmt(x.contextLoadedOnly, c.loadedContextLength.toLocaleString(lang))
+        : fmt(x.contextMax, (c.maxContextLength ?? 0).toLocaleString(lang))), moveToFront: x.moveToFront,
       remove: x.remove, thirdParty: x.thirdParty, probing: x.probing,
-      statusTooltip: (s) => {
-        switch (s.kind) {
-          case "ok": return x.statusOk;
-          case "refused": return x.statusRefused;
-          case "unknown-host": return x.statusUnknownHost;
-          case "timeout": return x.statusTimeout;
-          case "not-an-llm-api": return x.statusNotAnLlmApi;
-          case "unauthorized": return x.statusUnauthorized;
-          default: return s.raw ? fmt(x.statusUnknown, s.raw) : x.statusUnknownBare;
-        }
-      },
+      statusTooltip: (s) => endpointStatusText(s.kind, { lang, raw: s.raw }),
       role: (r) => (r.kind === "active" ? x.roleActive
         : r.kind === "standby" ? fmt(x.roleStandby, String(r.position))
         : r.kind === "unreachable" ? x.roleUnreachable
         : x.roleSkippedModel),
-      warnings: (ws) => ws.map((w) => (
-        w.rule === "scheme" ? x.warnScheme : w.rule === "malformed" ? x.warnMalformed
-        : w.rule === "port" ? x.warnPort : w.rule === "placeholder-ip" ? x.warnPlaceholderIp : w.message
-      )).join(" · "),
+      warnings: (ws) => ws.map((w) => endpointWarningText(w.rule, { lang, fallback: w.message })).join(" · "),
       presetTooltip: (p) => fmt(x.preset, p.label), presetLabel: (p) => p.label,
       checkConnection: x.checkConnection, saveFailed: x.saveFailed,
       secretSaved: x.secretSaved, secretChange: x.secretChange, secretClear: x.secretClear, secretUnavailable: x.secretUnavailable,
@@ -163,19 +177,15 @@ const EN: Texts = {
   importLocal: "Copy local endpoints into the manager", imported: "Copied: {0} new, {1} merged.", importFailed: "Copying failed.",
   hintUnreachable: "endpoint unreachable — no model list", hintNoList: "endpoint returns no model list — type the name",
   saved: "saved", refreshModels: "Refresh models", saveFailed: "Could not save the endpoint list.",
+  emptyModel: "— (server picks)",
+  contextLoaded: "Context: loaded {0} · max {1} tokens", contextMax: "Context: max {0} tokens", contextLoadedOnly: "Context: loaded {0} tokens",
   addPlaceholder: "add another endpoint…", apiKeyPlaceholder: "API key (optional)", modelPlaceholder: "model (optional)",
   ariaUrl: "Endpoint address", ariaAdd: "Add another endpoint", ariaApiKey: "API key for {0}", ariaModel: "Model override for {0}",
-  globalModel: "global model ({0})", globalModelUnset: "global model (none set)",
+ 
   moveToFront: "Try this endpoint first", remove: "Remove endpoint",
   thirdParty: "Carries an API key — your text goes to this provider, not to a local server.", probing: "Checking…",
-  statusOk: "Connected", statusRefused: "Connection refused — server not running or wrong port.",
-  statusUnknownHost: "Unknown host — typo in the address?", statusTimeout: "Timeout — network unreachable (wrong network / VPN off?).",
-  statusNotAnLlmApi: "Responds, but is not an OpenAI-compatible endpoint — wrong path/service?", statusUnauthorized: "Access denied — API key missing or invalid.",
-  statusUnknown: "Not reachable — {0}", statusUnknownBare: "Not reachable",
   roleActive: "active — this one is used", roleStandby: "reachable — fallback {0}", roleUnreachable: "not reachable — skipped",
   roleSkippedModel: "skipped — model does not fit",
-  warnScheme: "Address needs http:// or https://", warnMalformed: "Address is not a valid URL",
-  warnPort: "Local LLM servers almost always need a port (e.g. :1234)", warnPlaceholderIp: "Looks like an example or placeholder address",
   preset: "Insert the {0} address", checkConnection: "Test connection",
   secretSaved: "saved", secretChange: "Change key", secretClear: "Remove key",
   secretUnavailable: "Secret storage is not available in this Obsidian version.",
@@ -241,20 +251,15 @@ const DE: Texts = {
   importFailed: "Übernahme fehlgeschlagen.",
   hintUnreachable: "Endpunkt nicht erreichbar — keine Modell-Liste", hintNoList: "Endpunkt gibt keine Modell-Liste heraus — Namen eintippen",
   saved: "gespeichert", refreshModels: "Modelle neu laden", saveFailed: "Die Endpunkt-Liste konnte nicht gespeichert werden.",
+  emptyModel: "— (Server wählt)",
+  contextLoaded: "Kontext: geladen {0} · max {1} Token", contextMax: "Kontext: max {0} Token", contextLoadedOnly: "Kontext: geladen {0} Token",
   addPlaceholder: "weiterer Endpunkt…", apiKeyPlaceholder: "API-Schlüssel (optional)", modelPlaceholder: "Modell (optional)",
   ariaUrl: "Adresse des Endpunkts", ariaAdd: "Weiteren Endpunkt hinzufügen", ariaApiKey: "API-Schlüssel für {0}",
-  ariaModel: "Modell-Override für {0}", globalModel: "globales Modell ({0})", globalModelUnset: "globales Modell (keines gesetzt)",
+  ariaModel: "Modell-Override für {0}",
   moveToFront: "Diesen Endpunkt zuerst versuchen", remove: "Endpunkt entfernen",
   thirdParty: "Trägt einen API-Schlüssel — dein Text geht an diesen Anbieter, nicht an einen lokalen Server.", probing: "Wird geprüft…",
-  statusOk: "Verbunden", statusRefused: "Verbindung abgelehnt — Server läuft nicht oder Port falsch.",
-  statusUnknownHost: "Hostname unbekannt — Tippfehler in der Adresse?", statusTimeout: "Zeitüberschreitung — Netz nicht erreichbar (falsches Netz / VPN aus?).",
-  statusNotAnLlmApi: "Antwortet, ist aber kein OpenAI-kompatibler Endpunkt — falscher Pfad/Dienst?",
-  statusUnauthorized: "Zugriff verweigert — Schlüssel fehlt oder ist ungültig.", statusUnknown: "Nicht erreichbar — {0}", statusUnknownBare: "Nicht erreichbar",
   roleActive: "aktiv — dieser wird genutzt", roleStandby: "erreichbar — Reserve {0}", roleUnreachable: "nicht erreichbar — wird übersprungen",
   roleSkippedModel: "übersprungen — Modell passt nicht",
-  warnScheme: "Adresse braucht http:// oder https://", warnMalformed: "Adresse ist keine gültige URL",
-  warnPort: "Lokale LLM-Server brauchen fast immer einen Port (z. B. :1234)",
-  warnPlaceholderIp: "Sieht aus wie eine Beispiel- oder Platzhalter-Adresse",
   preset: "Adresse von {0} eintragen", checkConnection: "Verbindung prüfen",
   secretSaved: "gespeichert", secretChange: "Schlüssel ändern", secretClear: "Schlüssel entfernen",
   secretUnavailable: "Der Schlüsselbund ist in dieser Obsidian-Version nicht verfügbar.",
@@ -309,8 +314,8 @@ const DE: Texts = {
   managedDescManagerOnly: "Dieses Plugin nutzt die Endpunkte aus dem Plugin LLM Endpoint Manager.",
 };
 
-export const LLM_CONNECTION_STRINGS_EN: LlmConnectionStrings = build(EN);
-export const LLM_CONNECTION_STRINGS_DE: LlmConnectionStrings = build(DE);
+export const LLM_CONNECTION_STRINGS_EN: LlmConnectionStrings = build(EN, "en");
+export const LLM_CONNECTION_STRINGS_DE: LlmConnectionStrings = build(DE, "de");
 
 /** Teil-Überschreibung: je Abschnitt einzelne Felder, dazu die Sprache des Defaults. */
 export interface LlmConnectionStringsOverride {

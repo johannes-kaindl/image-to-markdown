@@ -1,10 +1,10 @@
 {
   "sources": {
     "obsidian-kit": {
-      "ref": "0.53.0"
+      "ref": "0.56.0"
     },
     "code-kit": {
-      "ref": "0.21.0"
+      "ref": "0.23.0"
     }
   },
   "targets": [
@@ -36,11 +36,13 @@
         "backend-probe",
         "capabilities",
         "diff",
+        "embeddings-client",
         "endpoint",
         "endpoint_config",
         "endpoint_diagnostics",
         "error_body",
         "model-choice",
+        "model-context",
         "model-list-cache",
         "reasoning",
         "redact",
@@ -49,7 +51,8 @@
         "secrets",
         "settings",
         "sse",
-        "think-splitter"
+        "think-splitter",
+        "timeout"
       ]
     },
     {
@@ -82,9 +85,12 @@
         "chat-client",
         "clipboard",
         "collapsible",
+        "embedding-connection",
         "endpoint-list",
+        "endpoint-plumbing",
         "endpoint-secrets",
         "endpoint-source",
+        "endpoint-status-text",
         "llm-connection",
         "llm-connection-strings",
         "model-picker",

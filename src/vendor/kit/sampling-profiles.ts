@@ -1,4 +1,4 @@
-// vendored from code-kit@0.21.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.23.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -14,6 +14,7 @@
  *  - model cards as named per value. */
 
 import { reasoningHappened } from "./reasoning";
+import { stripThinkBlocks } from "./think-splitter";
 
 export const FAMILY_IDS = ["qwen3.8", "qwen3.6", "gemma4", "gpt-oss"] as const;
 export type FamilyId = (typeof FAMILY_IDS)[number];
@@ -389,6 +390,42 @@ export function sanitizeRequestSettings(raw: unknown): { settings: RequestSettin
   return { settings: { overrides, thinking, lastOnLevel, levelPickerInChat }, dropped };
 }
 
+/** What `loadRequestSettings` returns: the validated block, and the paths of stored values that failed
+ *  validation. The caller REPORTS `dropped` (Notice, `console.warn`) — a silent reset would hide that
+ *  the user's value is gone (CORE-DATA-01). */
+export interface RequestLoadResult { request: RequestSettings; dropped: string[] }
+
+/** One legacy migration of a plugin: reads its OLD field(s) out of the whole stored data (`raw`, the
+ *  object `loadData()` returned) and writes the result into `request`. It must not touch `raw` — the
+ *  caller deletes the legacy field itself, or the old value would come back with the next merge. */
+export type LegacyRequestMigration = (raw: Record<string, unknown>, request: RequestSettings) => void;
+
+/** The rule every plugin with a pre-profile "suppress thinking" switch wrote on its own (six copies, from
+ *  lingotuner `0061e2a`): fold the old switch into `request.thinking[mode]` — **once, and only while
+ *  nothing is stored there**. `true` (the old default, "no thinking") becomes `"off"`; `false` (thinking
+ *  ran) becomes {@link onLevelFor} the mode, so nothing changes for an existing user. A level that is
+ *  already stored WINS over the legacy value, so a second load of a saved block moves nothing. Anything
+ *  that is not a boolean (absent field, a string from a hand-edited file) is no switch and changes
+ *  nothing.
+ *
+ *  The switch's polarity is the caller's: a field that was an ON switch (yijing-oracle's
+ *  `llm.requestThinking`) passes the negation. */
+export function foldLegacyThinking(request: RequestSettings, mode: ModeId, suppressed: unknown): void {
+  if (typeof suppressed !== "boolean" || request.thinking[mode] !== undefined) return;
+  request.thinking[mode] = suppressed ? "off" : onLevelFor(request, mode);
+}
+
+/** Loads the `request` block out of the whole stored plugin data: {@link sanitizeRequestSettings} on
+ *  `raw.request`, then each plugin's legacy `migrations` in order (each sees what the one before wrote).
+ *  `raw` is the data as stored — anything that is not an object counts as empty, and a migration gets
+ *  an object, never `null`. The result is a fresh block every time (the caller mutates it). */
+export function loadRequestSettings(raw: unknown, migrations: readonly LegacyRequestMigration[] = []): RequestLoadResult {
+  const data = isObj(raw) ? raw : {};
+  const { settings: request, dropped } = sanitizeRequestSettings(data.request);
+  for (const migrate of migrations) migrate(data, request);
+  return { request, dropped };
+}
+
 export function thinkingFor(s: RequestSettings, mode: ModeId): ThinkingLevel {
   return s.thinking[mode] ?? MODES[mode].thinking;
 }
@@ -450,8 +487,6 @@ export function mapTruncated<R extends ChatOutcome>(r: R, policy: TruncatedPolic
   return { ok: true, content: r.partial, reasoning: r.reasoning, finishReason: "length", truncated: true };
 }
 
-const THINK_BLOCK = /<think>[\s\S]*?<\/think>/g;
-
 /** Deviations between what the profile asked for and what came back. No retry logic here:
  *  a silent retry would hide exactly what the settings UI is meant to show. */
 export function checkResponse(ctx: { family: FamilyId | null; thinking: ThinkingLevel }, r: ResponseFacts): Deviation[] {
@@ -460,7 +495,7 @@ export function checkResponse(ctx: { family: FamilyId | null; thinking: Thinking
   const thought = reasoningHappened(r.content, r.reasoning);
   const canTurnOff = ctx.family ? FAMILIES[ctx.family].canTurnOff : true;
   if (ctx.thinking === "off" && canTurnOff && thought) out.push({ kind: "thinking-despite-off", affectsResult: false });
-  const visible = r.content.replace(THINK_BLOCK, "").trim();
+  const visible = stripThinkBlocks(r.content).trim();
   if (visible === "" && thought && r.finishReason === "length") out.push({ kind: "empty-by-budget", affectsResult: true });
   const seen = r.responseModel ? familyFromName(r.responseModel) : null;
   if (seen && ctx.family && seen !== ctx.family) out.push({ kind: "family-mismatch", affectsResult: true, detail: seen });

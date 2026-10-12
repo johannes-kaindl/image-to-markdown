@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.53.0, src/obsidian/chat-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.56.0, src/obsidian/chat-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die zwei Transporte für `chat-client`: XHR für den Stream, `requestUrl` für die Anfrage ohne
  *  Stream (Fallback). Beide erfüllen `SseTransport`.
  *

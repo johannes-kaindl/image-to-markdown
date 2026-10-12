@@ -130,6 +130,13 @@
   color: var(--text-muted);
   margin-top: 2px;
 }
+/* Kontextlänge des Zeilen-Modells: eigene Zeile unter der Rolle, nur wenn der Server die Zahl nennt. */
+.okit-ep-row > .setting-item-control .okit-ep-context {
+  flex: 0 0 100%;
+  order: 2;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
 .okit-ep-row > .setting-item-control .okit-ep-state.is-active {
   color: var(--text-normal);
   font-weight: var(--font-bold);

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.53.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.56.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
  * Status-Icon, Rollenzeile, Drittanbieter-Hinweis und Preset-Knöpfe.
@@ -39,17 +39,15 @@ export interface EndpointListStrings {
   ariaAdd: string;
   ariaApiKey(url: string): string;
   ariaModel(url: string): string;
-  /** Beschriftung der Leer-Option des Modell-Dropdowns („nimm das globale Modell").
-   *  `globalModel` kann LEER sein — ist global kein Modell gesetzt, steht sonst
-   *  „globales Modell ()" in der Oberfläche. Die Vorlage hatte dafür einen Fallback
-   *  (`globalModel() || "nicht gesetzt"`); der gehört jetzt dem Consumer, weil der
-   *  Ersatztext ein Satz in seiner Sprache ist. */
-  /** Nur nötig, wenn `globalModel` gesetzt ist — ohne globales Feld gibt es keine Leer-Option
-   *  zu beschriften. */
-  emptyModelLabel?(globalModel: string): string;
   modelHint(key: ModelHintKey): string;
   savedSuffix: string;
   refreshModels: string;
+  /** Beschriftung der Leer-Option im Modell-Dropdown einer Zeile: kein Modell gewählt, der Server wählt
+   *  (`"model": ""` im Body; gemessen an LM Studio wie ein weggelassenes Feld: das geladene Modell antwortet).
+   *  Optional, damit Konsumenten, die das Objekt selbst bauen, weiter übersetzen; Default „—“. */
+  emptyModel?: string;
+  /** Text der Kontextlänge unter der Zeile; ohne ihn (oder ohne `modelContext` in den Optionen) zeichnet die Liste nichts. */
+  contextText?: (ctx: EndpointContextInfo) => string;
   moveToFront: string;
   remove: string;
   thirdParty: string;
@@ -67,6 +65,10 @@ export interface EndpointListStrings {
   secretClear?: string;
   secretUnavailable?: string;
 }
+
+/** Kontextlänge des Zeilen-Modells in Token: was der Server GELADEN hat und was das Modell höchstens kann.
+ *  Strukturell `ModelContext` aus code-kit — hier eigen, damit die Liste das Modul nicht mitzieht. */
+export interface EndpointContextInfo { loadedContextLength?: number; maxContextLength?: number }
 
 export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> {
   containerEl: HTMLElement;
@@ -90,24 +92,13 @@ export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> 
    *  TypeScript löst eine Methoden-Intersection als Überladungsliste in Schreibreihenfolge auf —
    *  stünde `ModelListClient` vorn, käme am Aufruf die schmalere Signatur heraus. */
   clientFor(cfg: T): { probe(): Promise<EndpointStatus> } & ModelListClient;
-  /** Globales Modell, das gilt, wenn die Zeile keinen Override trägt.
-   *
-   *  **Optional, und das Fehlen ist eine Aussage.** Fehlt der Callback, gibt es kein globales
-   *  Modellfeld: das Zeilen-Modell ist die einzige Wahrheit, und die Leer-Option des Dropdowns
-   *  („nimm das globale") entfällt — sie hätte nichts mehr zu bedeuten. `emptyModelLabel` wird
-   *  dann nie gerufen.
-   *
-   *  Bis 0.29.0 war der Callback **Pflicht**, und das war ein Konstruktionsfehler: ein Modellname
-   *  existiert nur auf dem Endpunkt, der ihn in `/v1/models` meldet — auf der Nachbarzeile ist er
-   *  bedeutungslos. „Globales Modell + Override je Zeile" ist dieselbe Information an zwei Orten
-   *  plus Vorrangregel, und der Leerwert wird dabei still bedeutungstragend. Das Kit hat diese
-   *  Struktur nicht erfunden, sondern von seinen ersten Konsumenten geerbt und im Vertrag
-   *  festgeschrieben — womit sie jeder neue Konsument erbte, auch wer nie ein globales Feld hatte
-   *  (belegt an vault-crews, das 2026-08-14 einen Wert übergeben musste, den es nicht hat). */
-  globalModel?(): string;
   /** Nur Embedding-Listen: passt das (Override-)Modell dieser Zeile zum geladenen Index?
    *  Fehlt der Callback (Chat-Liste), gilt true — dort hängt kein Index am Modell. */
   modelFits?(cfg: T): boolean;
+  /** Optional: Kontextlänge des Zeilen-Modells. Gerufen wird `load` **nach** der Status-Probe, nur für eine erreichbare
+   *  Zeile mit gesetztem Modell; liefert er `null` oder nichts Messbares, bleibt die Zeile ohne Kontextzeile.
+   *  `invalidate` läuft beim Knopf „Modelle neu laden“. Braucht `strings.contextText`. */
+  modelContext?: { load(cfg: T): Promise<EndpointContextInfo | null>; invalidate?(cfg: T): void };
   save(): Promise<void>;
   reconnect(): Promise<void>;
   rerender(): void;
@@ -345,23 +336,16 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
       const gen = opts.cache.generation();
       void opts.cache.load(listKey, opts.clientFor(opts.get()[i] ?? (cfg as T))).then(({ models, reachable }) => {
         if (gen !== opts.cache.generation()) return;   // Liste hat sich verschoben
-        // `allowEmpty: true` wie in der Vorlage — die Leer-Option muss auch dann im Dropdown
-        // stehen, wenn die Zeile bereits ein Override trägt, sonst ließe sich das Override
-        // über die Oberfläche nicht mehr zurücknehmen (Einbahnstraße). Die Kit-Fassung von
-        // resolveModelChoice kennt kein `emptyLabel`: die Option kommt sprachfrei mit leerem
-        // Label, beschriftet wird sie erst hier, beim Zeichnen.
-        // Die Leer-Option existiert nur, wo es ein globales Modell gibt, auf das sie zeigen kann.
-        const allowEmpty = opts.globalModel !== undefined;
-        const choice = resolveModelChoice({ reachable, models, current: cfg.model ?? "", allowEmpty });
-        const emptyLabel = allowEmpty ? opts.strings.emptyModelLabel?.(opts.globalModel?.() ?? "") : undefined;
-        const labelled = emptyLabel === undefined ? choice : {
-          ...choice,
-          options: choice.options.map(o => o.value === "" ? { ...o, label: emptyLabel } : o),
-        };
+        // Das Zeilen-Modell ist die einzige Wahrheit (kein globales Modell-Feld seit 0.55.0). Die Leer-Option
+        // bleibt trotzdem: sie heißt nicht „nimm das globale“, sondern „der Server wählt“ — sonst ließe sich ein
+        // gewähltes Zeilen-Modell in der Oberfläche nicht mehr zurücknehmen.
+        const resolved = resolveModelChoice({ reachable, models, current: cfg.model ?? "", allowEmpty: true });
+        const emptyLabel = opts.strings.emptyModel ?? "—";
+        const choice = { ...resolved, options: resolved.options.map((o) => (o.value === "" && o.label === "" ? { ...o, label: emptyLabel } : o)) };
         renderModelPicker({
           setting: s,
           target: modelSlot,
-          choice: labelled,
+          choice,
           ariaLabel: opts.strings.ariaModel(cfg.url),
           placeholder: opts.strings.modelPlaceholder,
           hint: opts.strings.modelHint(choice.hintKey),
@@ -369,7 +353,7 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
           savedSuffix: opts.strings.savedSuffix,
           refreshTooltip: opts.strings.refreshModels,
           onPick: (v: string) => { commit("model", v); },
-          onRefresh: () => { opts.cache.invalidate(listKey); opts.rerender(); },
+          onRefresh: () => { opts.cache.invalidate(listKey); opts.modelContext?.invalidate?.(opts.get()[i] ?? (cfg as T)); opts.rerender(); },
         });
       });
     }
@@ -449,6 +433,16 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         setTooltip(statusIcon, opts.strings.statusTooltip(status));
         probed = status;
         applyRole();
+        // Kontextlänge: nur für eine erreichbare Zeile mit Modell, erst nach der Probe (ein toter Endpunkt wird
+        // sonst ein zweites Mal angefragt), und nur, wenn der Server überhaupt eine Zahl nennt.
+        const rowNow = opts.get()[i] ?? (cfg as T);
+        const contextText = opts.strings.contextText;
+        if (opts.modelContext && contextText && status.reachable && (rowNow.model ?? "").trim() !== "") {
+          void opts.modelContext.load(rowNow).then((ctx) => {
+            if (!ctx || (ctx.loadedContextLength === undefined && ctx.maxContextLength === undefined)) return;
+            s.controlEl.createDiv({ cls: "okit-ep-context", text: contextText(ctx) });
+          }).catch(() => { /* nur Hinweis, nie ein Fehler in den Einstellungen */ });
+        }
       });
       // Eingabe-Prüfung: nicht-blockierendes Warn-Icon (WCAG-Form + Tooltip)
       const warnings = validateEndpointInput(ep);
@@ -522,6 +516,13 @@ export const ENDPOINT_LIST_CSS = `
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   margin-top: 2px;
+}
+/* Kontextlänge des Zeilen-Modells: eigene Zeile unter der Rolle, nur wenn der Server die Zahl nennt. */
+.okit-ep-row > .setting-item-control .okit-ep-context {
+  flex: 0 0 100%;
+  order: 2;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
 }
 .okit-ep-row > .setting-item-control .okit-ep-state.is-active {
   color: var(--text-normal);
