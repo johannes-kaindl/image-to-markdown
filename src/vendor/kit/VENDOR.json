@@ -1,10 +1,10 @@
 {
   "source": "obsidian-kit",
-  "version": "0.56.0",
-  "sha": "8c1be18",
-  "code_kit_version": "0.23.0",
+  "version": "0.57.0",
+  "sha": "004fdb1",
+  "code_kit_version": "0.24.0",
   "vendored": "endpoint-source.ts, endpoint-secret-hook.ts, ocr-provider.ts",
   "note": "Verbatim snapshot aus ZWEI Quellen (obsidian-kit + code-kit); welche Datei woher stammt, sagt ihr eigener Kopf. Never hand-edit. Pins in tools/kit-sync.json, re-vendor via tools/sync-kit.sh (zentrales kit-sync im Dach). version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien, die aus obsidian-kit stammen; code-kit-Herkunft steht je Datei im Kopf. kit-obsidian/ siehe dortige VENDOR.json.",
-  "code_kit_sha": "5d9c0d6",
+  "code_kit_sha": "c3117a3",
   "code_kit_vendored": "backend-probe.ts, capabilities.ts, diff.ts, embeddings-client.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, model-choice.ts, model-context.ts, model-list-cache.ts, reasoning.ts, redact.ts, rounds.ts, sampling-profiles.ts, secrets.ts, settings.ts, sse.ts, think-splitter.ts, timeout.ts, clipboard.ts"
 }

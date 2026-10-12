@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.56.0, src/obsidian/endpoint-plumbing.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.57.0, src/obsidian/endpoint-plumbing.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Verdrahtung der lokalen Endpunkt-Liste, die `createLlmConnection` (Chat) und `createLlmConnection` mit
  *  `capability: "embedding"` gemeinsam brauchen: der synchrone `persist`-Wächter, Erreichbarkeit und Modellliste einer Zeile
  *  (`GET /v1/models`, 5 s), die hydrierte Kopie mit Schlüssel und die Modellwahl eines Panels. Eigenes Modul statt zwei
@@ -9,10 +9,10 @@ import { applyEndpointEdit, authHeaders, type EndpointConfig } from "../kit/endp
 import { classifyEndpointStatus, extractModelIds, type EndpointStatus } from "../kit/endpoint_diagnostics";
 import type { ModelListClient } from "../kit/model-list-cache";
 import type { CapabilityFetch } from "../kit/capabilities";
-import { fetchModelContext, type ModelContext } from "../kit/model-context";
+import type { ModelContext } from "../kit/model-context";
 import type { EndpointChoice, EndpointSourceResult } from "../kit/endpoint-source";
 import type { ClockPort } from "./clock";
-import { requestUrlCapabilityFetch } from "./backend-probe";
+import { fetchEndpointContext } from "./backend-probe";
 import { hydrateLocalEndpoints } from "./endpoint-secrets";
 import { findEndpointManager } from "./endpoint-source";
 
@@ -122,8 +122,7 @@ export function createEndpointPlumbing<S extends PlumbingSettings>(o: EndpointPl
     await resolve({ force: true });
   }
 
-  // Die Header der Zeile (Schlüssel) mischt die Hülle ein: `requestUrlCapabilityFetch` sendet von sich aus keine.
-  const baseFetch = o.contextFetch ?? requestUrlCapabilityFetch;
+  // Die Hülle (Schlüssel als Header, Timer) liegt in `backend-probe.fetchEndpointContext`; hier nur Cache und `invalidate`.
   const contextCache = new Map<string, Promise<ModelContext | null>>();
   const contextKey = (cfg: EndpointConfig): string => `${normalizeEndpoint(cfg.url)}\n${cfg.model?.trim() ?? ""}`;
   const modelContext: EndpointContextSource = {
@@ -131,8 +130,7 @@ export function createEndpointPlumbing<S extends PlumbingSettings>(o: EndpointPl
       const key = contextKey(cfg);
       let hit = contextCache.get(key);
       if (!hit) {
-        const auth = authHeaders(hydrated(cfg).apiKey);
-        hit = fetchModelContext((req) => baseFetch({ ...req, headers: { ...auth, ...(req.headers ?? {}) } }), normalizeEndpoint(cfg.url), cfg.model?.trim() ?? "", { timers: o.clock });
+        hit = fetchEndpointContext(cfg.url, cfg.model ?? "", hydrated(cfg).apiKey, { timers: o.clock, ...(o.contextFetch ? { fetch: o.contextFetch } : {}) });
         contextCache.set(key, hit);
       }
       return hit;

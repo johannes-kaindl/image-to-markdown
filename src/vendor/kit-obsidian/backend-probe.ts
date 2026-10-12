@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.56.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.57.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Backend-Erkennung für Obsidian: der `requestUrl`-Adapter für die pure Probe aus code-kit
  *  (`vendor/code-kit/pure/backend-probe`). Die Kopier-Kette, die hier endet, hieß in zehn
  *  Konsumenten `cachedProbe(url, model)` (Herkunft lingotuner `obsidian/http.ts`); der Adapter ist
@@ -10,6 +10,10 @@ import { createBackendProbe, type BackendProbeOptions } from "../kit/backend-pro
 import type { BackendId } from "../kit/sampling-profiles";
 import type { CapabilityFetch } from "../kit/capabilities";
 import { authHeaders } from "../kit/endpoint_config";
+import { normalizeEndpoint } from "../kit/endpoint";
+import { fetchModelContext, type ModelContext } from "../kit/model-context";
+import type { TimeoutTimers } from "../kit/timeout";
+import { realClock } from "./clock";
 
 /** `null`, wenn die Antwort kein 2xx mit JSON ist — der Probe-Ablauf geht dann zum nächsten Versuch. */
 export const requestUrlCapabilityFetch: CapabilityFetch = async (req) => {
@@ -36,3 +40,30 @@ export function createObsidianBackendProbe(opts?: BackendProbeOptions): (url: st
 }
 
 export const cachedProbe = createObsidianBackendProbe();
+
+/** Kontextlänge eines Modells am Endpunkt (`fetchModelContext` aus code-kit) mit den Obsidian-Anschlüssen:
+ *  `requestUrl` als Transport, der Schlüssel als `Authorization: Bearer` (sonst bleibt ein Server mit Pflicht-Auth
+ *  stumm), die Fenster-Timer für die Frist (5 s je Versuch). `url` darf mit `/v1` enden (`normalizeEndpoint`).
+ *  Ohne Modell `null` ohne Anfrage; wirft nie, `null` heißt „der Endpunkt nennt sie nicht“. Mit `effectiveContext`
+ *  (code-kit) wird daraus die eine Zahl.
+ *
+ *  Herkunft: die Hülle in `endpoint-plumbing` (`modelContext.load`), gehoben, damit Plugins, die die Kontextlänge
+ *  außerhalb der Endpunkt-Liste brauchen (slide-deck Generate-Ansicht, vault-crews Orchestrator), sie nicht
+ *  nachbauen. Die Optionen sind für Tests und Sonderfälle; `fetch` bekommt die Header schon eingemischt.
+ *  Ohne `timers` gelten die Fenster-Timer: in einem Node-Test ohne `window` `timers` übergeben oder
+ *  `installWindowTimers()` (`testing/window-timers`) im Setup — sonst fängt das stille `null` den Fehler. */
+export function fetchEndpointContext(
+  url: string,
+  model: string,
+  apiKey?: string,
+  opts?: { timers?: TimeoutTimers; timeoutMs?: number; fetch?: CapabilityFetch },
+): Promise<ModelContext | null> {
+  const base = opts?.fetch ?? requestUrlCapabilityFetch;
+  const auth = authHeaders(apiKey);
+  return fetchModelContext(
+    (req) => base({ ...req, headers: { ...auth, ...(req.headers ?? {}) } }),
+    normalizeEndpoint(url),
+    model.trim(),
+    { timers: opts?.timers ?? realClock, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) },
+  );
+}

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.56.0, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.57.0, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Embedding-Anbindung eines Fachplugins (`createLlmConnection({ capability: "embedding" })`): Endpunkt-Quelle (Manager oder
  *  lokale Liste mit Schlüsselbund), gemerkte Auflösung mit Index-Passung, Modellliste, ein `Embedder` (code-kit) und der
  *  Settings-Abschnitt für Quelle und Liste. Schmaler als die Chat-Verbindung: kein Modus, kein Anfrage-Abschnitt, kein Streaming,
@@ -314,6 +314,7 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
           save: () => saved,
           reconnect: async () => { invalidate(); await resolve().catch(() => undefined); },
           rerender, app: o.app, pluginId: o.pluginId,
+          allowEmptyModel: false,   // ein Index braucht ein benanntes Modell: ohne Modell ist die Anbindung `no-model`
           ...(o.contextLength === false ? {} : { modelContext: plumbing.modelContext }),
         });
       },

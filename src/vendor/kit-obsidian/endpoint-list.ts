@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.56.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.57.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
  * Status-Icon, Rollenzeile, Drittanbieter-Hinweis und Preset-Knöpfe.
@@ -95,6 +95,10 @@ export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> 
   /** Nur Embedding-Listen: passt das (Override-)Modell dieser Zeile zum geladenen Index?
    *  Fehlt der Callback (Chat-Liste), gilt true — dort hängt kein Index am Modell. */
   modelFits?(cfg: T): boolean;
+  /** Bietet das Modell-Dropdown einer Zeile die Leer-Option „Server wählt“ an? Default `true` (Chat-Listen: ohne Modell wählt der
+   *  Server). Embedding-Listen setzen `false`: ein Index braucht ein benanntes Modell, eine Zeile ohne Modell zeigt dort nur den
+   *  Platzhalter „—“ und sie verschwindet, sobald ein Modell gewählt ist. */
+  allowEmptyModel?: boolean;
   /** Optional: Kontextlänge des Zeilen-Modells. Gerufen wird `load` **nach** der Status-Probe, nur für eine erreichbare
    *  Zeile mit gesetztem Modell; liefert er `null` oder nichts Messbares, bleibt die Zeile ohne Kontextzeile.
    *  `invalidate` läuft beim Knopf „Modelle neu laden“. Braucht `strings.contextText`. */
@@ -339,7 +343,7 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         // Das Zeilen-Modell ist die einzige Wahrheit (kein globales Modell-Feld seit 0.55.0). Die Leer-Option
         // bleibt trotzdem: sie heißt nicht „nimm das globale“, sondern „der Server wählt“ — sonst ließe sich ein
         // gewähltes Zeilen-Modell in der Oberfläche nicht mehr zurücknehmen.
-        const resolved = resolveModelChoice({ reachable, models, current: cfg.model ?? "", allowEmpty: true });
+        const resolved = resolveModelChoice({ reachable, models, current: cfg.model ?? "", allowEmpty: opts.allowEmptyModel ?? true });
         const emptyLabel = opts.strings.emptyModel ?? "—";
         const choice = { ...resolved, options: resolved.options.map((o) => (o.value === "" && o.label === "" ? { ...o, label: emptyLabel } : o)) };
         renderModelPicker({
