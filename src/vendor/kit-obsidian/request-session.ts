@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.59.0, src/obsidian/request-session.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.59.1, src/obsidian/request-session.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice } from "obsidian";
 import type { Deviation, DeviationKind } from "../kit/sampling-profiles";
 

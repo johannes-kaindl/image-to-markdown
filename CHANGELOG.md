@@ -7,9 +7,9 @@ and versioning follows [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
-- **The endpoint rows keep their buttons together.** The "move up" and "remove endpoint" buttons now sit in one group, so the trash can no longer end up alone on a second line when the settings pane is narrow; the key and model fields are a little narrower, the address stays fully visible (obsidian-kit 0.59.0).
+- **The endpoint rows keep their buttons together.** The "move up" and "remove endpoint" buttons stay together, and the address and the model ID stay fully visible at normal width; in a narrow window the block of model and buttons moves as a whole to a second line, right-aligned, so the trash can no longer end up alone (obsidian-kit 0.59.1).
 - **The Request section words an unknown model family kindly.** For an endpoint whose family is not known yet it now says "Family: not detected yet · Backend: not detected yet" with a note that this is normal and the LLM Endpoint Manager records family and backend; the fields read "not sent yet — waiting for the model family" (DE: "noch nicht erkannt"). Before it read "unknown" (obsidian-kit 0.59.0).
-- Vendored `obsidian-kit` 0.59.0 (was 0.56.0) and `code-kit` 0.24.0 (was 0.23.0). Besides the two changes above, the skipped kit releases only add build, test and logic pieces (`busy-guard`, `sanitizeBase`, `fetchEndpointContext`, embedding-row text for another plugin, a linearity fuzz for tests, `modelRow: false`, several classes in `cls` of a stream area this plugin does not use).
+- Vendored `obsidian-kit` 0.59.1 (was 0.56.0) and `code-kit` 0.24.0 (was 0.23.0). Besides the two changes above, the skipped kit releases only add build, test and logic pieces (`busy-guard`, `sanitizeBase`, `fetchEndpointContext`, embedding-row text for another plugin, a linearity fuzz for tests, `modelRow: false`, several classes in `cls` of a stream area this plugin does not use).
 - The stored endpoint choice in `data.json` is now cleaned by the kit's `sanitizeChoice` instead of a local copy; it behaves identically (only non-empty `endpointId` and `model` strings survive).
 
 ## [0.30.0] — 2026-10-12

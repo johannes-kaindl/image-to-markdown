@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.59.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.59.1, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.59.0, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.59.1, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { DropdownComponent, setIcon } from "obsidian";
 import { FAMILIES, THINKING_LEVELS, type FamilyId, type ThinkingLevel } from "../kit/sampling-profiles";
 

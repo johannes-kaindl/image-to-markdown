@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.59.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.59.1, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
