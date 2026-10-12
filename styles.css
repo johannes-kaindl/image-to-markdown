@@ -163,6 +163,25 @@
   flex: 1 1 12em;
   min-width: 8em;
 }
+.okit-ep-row > .setting-item-control input[type="password"] {
+  flex-basis: 8em;
+  min-width: 6em;
+}
+/* Aktionsknöpfe (nach oben, Papierkorb) als ein Block: die Felder dürfen umbrechen, die Knöpfe
+   bleiben zusammen und behalten ihre Größe. Bricht der Block um, steht er rechtsbündig
+   (margin-left: auto), wie die umbrechende Modellzeile. Die Adresse behält ihre Basis von 12em —
+   eine abgeschnittene Adresse liest sich wie ein anderer Port; kleiner sind nur Schlüsselfeld
+   (8em) und Modell-Platz (8em, wächst mit dem freien Platz). */
+.okit-ep-row > .setting-item-control > .okit-ep-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.okit-ep-row > .setting-item-control > .okit-ep-actions > .clickable-icon {
+  flex: 0 0 auto;
+}
 /* Reservierter Platz für das Modell-Dropdown (Auffüllen der Zeile erst nach dem geladenen
    Promise, siehe buildEndpointList). Selbst ein Flex-Container, damit Dropdown/Freitext + der
    „Modelle abrufen"-Knopf innerhalb genauso mitwachsen wie URL/Schlüssel daneben. */
@@ -170,8 +189,8 @@
   display: flex;
   align-items: center;
   gap: var(--size-4-1);
-  flex: 1 1 12em;
-  min-width: 10em;
+  flex: 1 1 8em;
+  min-width: 8em;
 }
 .okit-ep-row > .setting-item-control .okit-model-slot select,
 .okit-ep-row > .setting-item-control .okit-model-slot input[type="text"] {

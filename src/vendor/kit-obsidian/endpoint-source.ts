@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.57.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.59.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, type App } from "obsidian";
 import { resolveModelChoice, type ModelHintKey } from "../kit/model-choice";
 import type { EndpointConfig } from "../kit/endpoint_config";
@@ -27,17 +27,26 @@ export function onEndpointManagerChanged(app: App, cb: () => void): () => void {
   try { return api.on("changed", cb); } catch { return () => {}; }
 }
 
-export interface EndpointSourceSectionStrings {
-  managed: string; managedDesc: string; openManager: string;
-  pickEndpoint: string; automatic: string; model: string;
-  importLocal: string; imported(r: ImportResult): string; importFailed: string;
+/** Texte der Modell-Zeile — nur nötig, solange der Baustein sie zeichnet (`modelRow !== false`). */
+export interface EndpointSourceModelStrings {
+  model: string;
   modelHint(key: ModelHintKey): string; savedSuffix: string; refreshModels: string;
+}
+
+/** Die Texte ohne die Modell-Zeile (Basis; Konsumenten mit `modelRow: false` brauchen nur diese). */
+export interface EndpointSourceBaseStrings {
+  managed: string; managedDesc: string; openManager: string;
+  pickEndpoint: string; automatic: string;
+  importLocal: string; imported(r: ImportResult): string; importFailed: string;
   /** Notice bei fehlgeschlagenem `setChoice` (Endpunkt- oder Modellwahl) — Vorbild:
    *  `EndpointListOptions.strings.saveFailed` in `endpoint-list.ts`. */
   saveFailed: string;
 }
 
-export interface EndpointSourceSectionOptions {
+/** Alle Texte — die Form für den Default (mit Modell-Zeile). */
+export interface EndpointSourceSectionStrings extends EndpointSourceBaseStrings, EndpointSourceModelStrings {}
+
+interface EndpointSourceSectionBase {
   app: App;
   containerEl: HTMLElement;
   capability: Capability;
@@ -53,11 +62,27 @@ export interface EndpointSourceSectionOptions {
    *  (`buildEndpointList` mit `app` + `pluginId`): der Import an den Manager trägt dann die
    *  Schlüssel mit, nicht nur `secretId`s, die der Manager nicht auflösen kann. */
   pluginId?: string;
-  strings: EndpointSourceSectionStrings;
   /** Der heutige Listen-Editor des Konsumenten — wird NUR ohne Manager gerufen. */
   renderLocalList(): void;
   rerender(): void;
 }
+
+/** Mit Modell-Zeile (Default) braucht `strings` auch die Modell-Texte; mit `modelRow: false` nicht. */
+export type EndpointSourceSectionOptions = EndpointSourceSectionBase & (
+  | {
+    /** Default `true`. */
+    modelRow?: true;
+    strings: EndpointSourceSectionStrings;
+  }
+  | {
+    /** Opt-out: der Baustein baut die Modell-Zeile gar nicht erst und ruft `api.models` nie —
+     *  für Konsumenten, deren Server das Modell bestimmt (local-image-generator); eine Zeile, die
+     *  `choice.model` setzt, wäre dort eine Attrappe. Vorbild: `contextLength: false` in
+     *  `llm-connection`. */
+    modelRow: false;
+    strings: EndpointSourceBaseStrings & Partial<EndpointSourceModelStrings>;
+  }
+);
 
 /** Settings-Baustein des Konsumenten: Manager da → „Endpunkte kommen vom Manager" + Wahl +
  *  Modell + Import; sonst der lokale Listen-Editor. Der Konsument speichert nur `choice`. */
@@ -87,24 +112,9 @@ export function buildEndpointSourceSection(opts: EndpointSourceSectionOptions): 
     });
   });
 
-  const modelRow = new Setting(opts.containerEl).setName(st.model);
-  const targetId = choice.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : entries[0]?.id;
-  if (targetId) {
-    const entry = entries.find((e) => e.id === targetId);
-    const draw = (models: string[], reachable: boolean): void => {
-      const c = resolveModelChoice({ reachable, models, current: choice.model ?? "", allowEmpty: true });
-      const labelled = { ...c, options: c.options.map((o) => (o.value === "" ? { ...o, label: entry?.defaultModel ? `${st.automatic} (${entry.defaultModel})` : st.automatic } : o)) };
-      renderModelPicker({
-        setting: modelRow, choice: labelled, ariaLabel: st.model, placeholder: "", hint: st.modelHint(c.hintKey), hintAs: "tooltip",
-        savedSuffix: st.savedSuffix, refreshTooltip: st.refreshModels,
-        onPick: (v) => {
-          void opts.setChoice({ ...opts.choice(), model: v || undefined })
-            .catch(() => { new Notice(st.saveFailed); opts.rerender(); });
-        },
-        onRefresh: () => { void api.models(targetId, { force: true }).then(() => opts.rerender()).catch(() => opts.rerender()); },
-      });
-    };
-    void api.models(targetId).then((r) => { if ("error" in r) draw([], false); else draw(r, true); }).catch(() => draw([], false));
+  if (opts.modelRow !== false) {
+    const targetId = choice.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : entries[0]?.id;
+    if (targetId) renderModelRow(opts, opts.strings, api, entries, choice, targetId);
   }
 
   const local = opts.pluginId ? hydrateLocalEndpoints(opts.app, opts.pluginId, opts.local()) : opts.local();
@@ -117,4 +127,31 @@ export function buildEndpointSourceSection(opts: EndpointSourceSectionOptions): 
         .finally(() => { b.buttonEl.disabled = false; });
     }));
   }
+}
+
+/** Die Modell-Zeile: reservierter Platz sofort, gefüllt nach `api.models`. */
+function renderModelRow(
+  opts: EndpointSourceSectionBase,
+  st: EndpointSourceSectionStrings,
+  api: LlmEndpointManagerApi,
+  entries: ReturnType<LlmEndpointManagerApi["list"]>,
+  choice: EndpointChoice,
+  targetId: string,
+): void {
+  const modelRow = new Setting(opts.containerEl).setName(st.model);
+  const entry = entries.find((e) => e.id === targetId);
+  const draw = (models: string[], reachable: boolean): void => {
+    const c = resolveModelChoice({ reachable, models, current: choice.model ?? "", allowEmpty: true });
+    const labelled = { ...c, options: c.options.map((o) => (o.value === "" ? { ...o, label: entry?.defaultModel ? `${st.automatic} (${entry.defaultModel})` : st.automatic } : o)) };
+    renderModelPicker({
+      setting: modelRow, choice: labelled, ariaLabel: st.model, placeholder: "", hint: st.modelHint(c.hintKey), hintAs: "tooltip",
+      savedSuffix: st.savedSuffix, refreshTooltip: st.refreshModels,
+      onPick: (v) => {
+        void opts.setChoice({ ...opts.choice(), model: v || undefined })
+          .catch(() => { new Notice(st.saveFailed); opts.rerender(); });
+      },
+      onRefresh: () => { void api.models(targetId, { force: true }).then(() => opts.rerender()).catch(() => opts.rerender()); },
+    });
+  };
+  void api.models(targetId).then((r) => { if ("error" in r) draw([], false); else draw(r, true); }).catch(() => draw([], false));
 }

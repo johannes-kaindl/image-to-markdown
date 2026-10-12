@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.57.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.59.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -76,7 +76,7 @@ interface Texts {
   preset: string; checkConnection: string;
   secretSaved: string; secretChange: string; secretClear: string; secretUnavailable: string;
   // Anfrage-Abschnitt
-  requestTitle: string; requestHead: string; familyManager: string; familyName: string; familyNone: string;
+  requestTitle: string; requestFamily: string; requestFamilyNone: string; requestBackend: string; requestBackendNone: string; familyManager: string; familyName: string; familyNone: string;
   backendManager: string; backendProbe: string; backendNone: string; unknownFamily: string; jitWarning: string; sentAs: string;
   modes: Record<"agent" | "structured" | "transform" | "grounded" | "companion" | "creative" | "complete", string>;
   fields: Record<"temperature" | "top_p" | "top_k" | "min_p" | "presence_penalty" | "reasoning_effort" | "max_tokens", string>;
@@ -143,8 +143,12 @@ function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
     },
     request: {
       title: x.requestTitle,
-      head: (family, fSource, backend, bSource) =>
-        fmt(x.requestHead, familyLabel(family), familySource(fSource), backendLabel(backend, x.backendNone), backendSource(bSource)),
+      // Unbekannt ist bei einem frisch eingetragenen Endpunkt der Normalfall: kein „— (unknown)“, sondern
+      // „noch nicht erkannt“ ohne Klammer (die Quelle gibt es dann nicht).
+      head: (family, fSource, backend, bSource) => [
+        family === "—" ? x.requestFamilyNone : fmt(x.requestFamily, familyLabel(family), familySource(fSource)),
+        backend === "unknown" ? x.requestBackendNone : fmt(x.requestBackend, backendLabel(backend, x.backendNone), backendSource(bSource)),
+      ].join(" · "),
       unknownFamily: x.unknownFamily,
       jitWarning: (model, def) => fmt(x.jitWarning, model, def),
       sentAs: (model) => fmt(x.sentAs, model),
@@ -189,10 +193,11 @@ const EN: Texts = {
   preset: "Insert the {0} address", checkConnection: "Test connection",
   secretSaved: "saved", secretChange: "Change key", secretClear: "Remove key",
   secretUnavailable: "Secret storage is not available in this Obsidian version.",
-  requestTitle: "Request", requestHead: "Family: {0} ({1}) · Backend: {2} ({3})",
+  requestTitle: "Request", requestFamily: "Family: {0} ({1})", requestFamilyNone: "Family: not detected yet",
+  requestBackend: "Backend: {0} ({1})", requestBackendNone: "Backend: not detected yet",
   familyManager: "from the LLM Endpoint Manager", familyName: "estimated from the name", familyNone: "unknown",
   backendManager: "from the LLM Endpoint Manager", backendProbe: "detected", backendNone: "unknown",
-  unknownFamily: "Model family unknown — only the mode's temperature is sent, the rest comes from the server default.",
+  unknownFamily: "Normal for a freshly added endpoint. Until the model family (the model line, e.g. Qwen or gpt-oss) is known, only the mode's temperature is sent and the rest comes from the server defaults. The LLM Endpoint Manager records family and backend per model — add them there.",
   jitWarning: "This plugin sends model {0}, the endpoint's default is {1}. On LM Studio, every request unloads the other plugins' model.",
   sentAs: "Sent as {0}",
   modes: {
@@ -209,7 +214,7 @@ const EN: Texts = {
     "sent-unproven": "Sent — effect on this backend not proven yet.",
     "not-sent-ignored": "Not sent — measured to have no effect on this backend.",
     "not-sent-unsupported": "Not sent — this backend doesn't support it, or it's unmeasured.",
-    "not-sent-unknown-family": "Not sent — the model family is unknown.",
+    "not-sent-unknown-family": "Not sent yet — waits for the model family (see above).",
     "not-sent-no-value": "Not sent — no value is set for this field.",
   },
   notes: {
@@ -263,10 +268,11 @@ const DE: Texts = {
   preset: "Adresse von {0} eintragen", checkConnection: "Verbindung prüfen",
   secretSaved: "gespeichert", secretChange: "Schlüssel ändern", secretClear: "Schlüssel entfernen",
   secretUnavailable: "Der Schlüsselbund ist in dieser Obsidian-Version nicht verfügbar.",
-  requestTitle: "Anfrage", requestHead: "Familie: {0} ({1}) · Backend: {2} ({3})",
+  requestTitle: "Anfrage", requestFamily: "Familie: {0} ({1})", requestFamilyNone: "Familie: noch nicht erkannt",
+  requestBackend: "Backend: {0} ({1})", requestBackendNone: "Backend: noch nicht erkannt",
   familyManager: "vom LLM Endpoint Manager", familyName: "geschätzt aus dem Namen", familyNone: "unbekannt",
   backendManager: "vom LLM Endpoint Manager", backendProbe: "erkannt", backendNone: "unbekannt",
-  unknownFamily: "Modellfamilie unbekannt — es wird nur die Temperatur des Modus gesendet, der Rest kommt vom Server-Standard.",
+  unknownFamily: "Bei einem frisch eingetragenen Endpunkt ist das normal. Solange die Modellfamilie (die Modellreihe, z. B. Qwen oder gpt-oss) unbekannt ist, wird nur die Temperatur des Modus gesendet, der Rest kommt vom Server-Standard. Familie und Backend hält der LLM Endpoint Manager je Modell fest — trag sie dort ein.",
   jitWarning: "Dieses Plugin sendet Modell {0}, der Standard des Endpunkts ist {1}. Auf LM Studio entlädt jede Anfrage das Modell der anderen Plugins.",
   sentAs: "Gesendet als {0}",
   modes: {
@@ -283,7 +289,7 @@ const DE: Texts = {
     "sent-unproven": "Gesendet — Wirkung auf diesem Backend noch nicht belegt.",
     "not-sent-ignored": "Nicht gesendet — gemessen wirkungslos auf diesem Backend.",
     "not-sent-unsupported": "Nicht gesendet — dieses Backend kennt es nicht, oder es ist ungemessen.",
-    "not-sent-unknown-family": "Nicht gesendet — die Modellfamilie ist unbekannt.",
+    "not-sent-unknown-family": "Noch nicht gesendet — wartet auf die Modellfamilie (siehe oben).",
     "not-sent-no-value": "Nicht gesendet — für dieses Feld ist kein Wert gesetzt.",
   },
   notes: {
