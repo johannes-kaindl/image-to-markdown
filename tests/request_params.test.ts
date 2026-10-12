@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { loadRequestSettings, MODE } from "../src/request_params";
+import { REQUEST_MIGRATIONS, MODE } from "../src/request_params";
+import { loadRequestSettings as kitLoad } from "../src/vendor/kit/sampling-profiles";
+
+const loadRequestSettings = (raw: unknown) => kitLoad(raw, REQUEST_MIGRATIONS);
 
 // Den Request selbst baut seit dem Verbindungs-Tausch die Kit-Verbindung (Modus MODE, kein maxTokens);
 // die goldenen Requests der Profil-Tabelle liegen im Kit, der GESENDETE Body ist im GUI-Smoke (N5) belegt.

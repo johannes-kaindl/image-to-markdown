@@ -6,8 +6,8 @@ import { ENDPOINT_CALLER, sanitizeChoice } from "./resolve_endpoint";
 import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
 import { createLlmConnection, type CompleteHandlers, type LlmConnection, type LlmConnectionSettings } from "./vendor/kit-obsidian/llm-connection";
 import type { ChatWireMessage } from "./vendor/kit-obsidian/chat-client";
-import { onLevelFor, thinkingFor, type FamilyId, type RequestSettings, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
-import { MODE, loadRequestSettings } from "./request_params";
+import { loadRequestSettings, onLevelFor, thinkingFor, type FamilyId, type RequestSettings, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
+import { MODE, REQUEST_MIGRATIONS } from "./request_params";
 import { chatOutOrThrow, type ChatOut } from "./llm_call";
 import { VISION_TEST_PROMPT, isVisionConfirmed } from "./capabilities";
 import { obsidianHttp } from "./http";
@@ -68,7 +68,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     const saved = (await this.loadData()) as Partial<ImageToMarkdownSettings> | null;
     this.settings = mergeSettings(defaultSettings(), saved);
     // Anfrage-Einstellungen: laden, Altfeld `suppressThinking` nachziehen und danach entfernen.
-    const { request, dropped } = loadRequestSettings(saved);
+    const { request, dropped } = loadRequestSettings(saved, REQUEST_MIGRATIONS);
     this.settings.request = request;
     delete (this.settings as { suppressThinking?: unknown }).suppressThinking;
     if (dropped.length > 0) {
