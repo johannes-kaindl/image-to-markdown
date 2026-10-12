@@ -58,11 +58,10 @@
  * die zwei Punkte, die zwingend einen Lauf brauchen, hinter `--with-model`.
  */
 
-import { execFileSync } from "node:child_process";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { argv, cwd, platform } from "node:process";
+import { argv, cwd } from "node:process";
 
 import {
   attachTo,
@@ -72,6 +71,7 @@ import {
   closeExtraLeaves,
   openExisting,
   pollUntil,
+  requireVisible,
 } from "../../tools/obsidian-cdp/cdp.js";
 import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
 import { requireEigenerBuild } from "../../tools/obsidian-cdp/vault.js";
@@ -1312,17 +1312,9 @@ async function main(): Promise<void> {
     instanzHinweis = instanz.hinweis;
     console.log(`  Instanz: ${instanz.hinweis}`);
 
-    await cdp.send("Page.bringToFront");
-    if (platform === "darwin") {
-      try {
-        execFileSync("osascript", ["-e", 'tell application "Obsidian" to activate']);
-        await new Promise((r) => setTimeout(r, 1500));
-      } catch {
-        console.log("  (Hinweis: `osascript activate` schlug fehl — Fenster ggf. von Hand nach vorn holen)");
-      }
-      await cdp.send("Page.bringToFront");
-      await new Promise((r) => setTimeout(r, 600));
-    }
+    // `requireVisible` zielt auf das VERBUNDENE Fenster; `osascript activate` holte die laufende
+    // Instanz (9222) nach vorn statt der Zweitinstanz (gemessen von kl-w19, 2026-10-12).
+    await requireVisible(cdp);
     await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => undefined);
 
     const bereit = await cdp.evaluate<boolean>(

@@ -51,7 +51,7 @@
  * ## Fallstricke, die Zeit kosten, wenn man sie nicht kennt
  *
  * 1. **Chromium drosselt nicht-fokussierte Fenster.** Ohne `Page.bringToFront` (auf macOS
- *    zusaetzlich `osascript activate`) bleibt die View leer und man debuggt ein Phantom.
+ *    dazu `requireVisible`) bleibt die View leer und man debuggt ein Phantom.
  * 2. **Die Einstellungen sind ein EIGENES Fenster** (Obsidian 1.13) — ein Target-Filter
  *    auf `app://obsidian.md` findet sie nicht. Die Bruecke unterscheidet sie ueber
  *    `window.app`, nicht ueber den (lokalisierten) Titel.
@@ -60,10 +60,9 @@
  *    erste Baseline-Lauf am 2026-08-30. `--setup` klappt sie deshalb auf.
  */
 
-import { execFileSync } from "node:child_process";
 import { argv, cwd, exit } from "node:process";
 
-import { attachTo, Cdp, openExisting, pollUntil, setPluginSetting } from "../../tools/obsidian-cdp/cdp.js";
+import { attachTo, Cdp, openExisting, pollUntil, requireVisible, setPluginSetting } from "../../tools/obsidian-cdp/cdp.js";
 import { boxOf, capture, withMetrics, writeShot, type Rect } from "../../tools/obsidian-cdp/shot.js";
 import { buildVault, stagingVaultDir } from "../../tools/obsidian-cdp/vault.js";
 
@@ -240,16 +239,8 @@ async function main(): Promise<void> {
 
   const cdp = await Cdp.attach(port, vault);
   try {
-    await cdp.send("Page.bringToFront");
-    if (process.platform === "darwin") {
-      try {
-        execFileSync("osascript", ["-e", 'tell application "Obsidian" to activate']);
-        await new Promise((r) => setTimeout(r, 1200));
-      } catch {
-        console.log("  (Hinweis: `osascript activate` schlug fehl — Fenster ggf. von Hand nach vorn holen)");
-      }
-      await cdp.send("Page.bringToFront");
-    }
+    // Nicht `osascript activate`: das holt die laufende Instanz statt der Zweitinstanz.
+    await requireVisible(cdp);
 
     if (only === "settings.png") {
       await settingsBild(cdp, port, vault, outDir);
