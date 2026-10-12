@@ -28,7 +28,7 @@ python3 ~/.claude/hooks/obsidian-cdp-lock.py acquire --label image-to-markdown \
 
 `npm run smoke:gui -- --port <port>` fährt die Punkte unten (`--with-model` nimmt die drei Modell-Punkte dazu). Den Vertrauensdialog und den Restricted Mode des frischen Profils erledigt der Treiber selbst (`bereiteInstanzVor`, Befund im Detail von A1). Vault-Aufbau: `npm run shots -- --setup`, Details in `docs/images/README.md`.
 
-**Die Bilanz hat vier Zustände** (CORE-TEST-19): grün · rot · übersprungen · nichts gemessen. Die Soll-Liste (27 Punkte) ist der Nenner. Übersprungen sind nur die Modell-Punkte G1–G3 ohne `--with-model`; wirft ein Punkt, ohne dass sein Gegenstand erreicht wurde, steht er als „nichts gemessen" da und der Lauf endet mit Exit 1, ein Abbruch des Treibers mit Exit 2.
+**Die Bilanz hat vier Zustände** (CORE-TEST-19): grün · rot · übersprungen · nichts gemessen. Die Soll-Liste (28 Punkte) ist der Nenner. Übersprungen sind nur die Modell-Punkte G1–G3 ohne `--with-model`; wirft ein Punkt, ohne dass sein Gegenstand erreicht wurde, steht er als „nichts gemessen" da und der Lauf endet mit Exit 1, ein Abbruch des Treibers mit Exit 2.
 
 **Vor dem Lauf gehört ein Deploy des gebauten Repo-Stands in den Vault, gegen den gemessen
 wird.** Der Treiber erzwingt das seit 2026-09-02 mit `requireEigenerBuild` (zentral in
@@ -66,6 +66,7 @@ bleiben optional.
 | V3 | Nicht-Stream-Weg | `makeImgIO().transcribe` (Befehl, Kontextmenü, Anbieter-API) sendet `stream: false` und liefert den Volltext des Fake-Endpunkts |
 | V4 | Schwärzung (Textpfad) | ein Prompt mit `Bearer …` (≥ 16 Zeichen) geht als Platzhalter (`[redacted-token-1]`) an den Server, im Ergebnis steht das Original wieder. Bildteile werden nie geschwärzt |
 | V5 | Stufenwahl und Host | der Anfrage-Abschnitt in den Einstellungen zeigt „Stufenwahl im Chat“ (`levelPicker: true`), die Hilfe-Zeile bleibt die erste und die Prompt-Zeile nach dem Host ist noch da (`renderSettings` bekommt einen eigenen Host, nicht den Tab) |
+| R1 | Nachbessern mit Verzweigung | gestubbtes `deps.refine` an der echten View, `deps.transcribeStream` liefert `T0`: nachbessern (f1), nachbessern (f2), Rückwahl auf Runde 1 über `selectRefineVersion`, nachbessern (f3) → die dritte Anfrage trägt `[f1]`, nicht `[f1, f2]` (0.30.0, Stand 0.29.0 sendet beide). Der Punkt schreibt nichts und gibt der View das aktive Modell zurück, damit sie die Einstellungen nicht angleicht |
 
 ### Nur mit `--with-model` — **geplant, noch nicht gebaut**
 
@@ -90,6 +91,7 @@ gut aussehen.
 
 | Datum | Obsidian | Ergebnis | Gegenprobe |
 | --- | --- | --- | --- |
+| 2026-10-12 | 1.14.4 | **25 grün · 0 rot · 3 übersprungen (G1–G3) · 0 nichts gemessen von 28** (Kernlauf, frischer Prozess) | Geführt am Treiber-Umbau auf `bilanz.ts` (Welle 19, Baseline vorher 23 grün · 1 rot (B3) von 24 gezählten) und an R1: gegen den Wegwerf-Build von Tag 0.29.0 **rot** (dritte Anfrage trägt `f1, f2`), gegen 0.30.0 grün; Mutation (B2 wirft) → 23 grün · 1 nichts gemessen, Exit 1; ohne `--port` Exit 2 |
 | 2026-10-09 | 1.14.4 | **23/23** (Kernlauf, zwei frische Prozesse) · mit `--with-model` G1–G3 grün | Geführt am Verbindungs-Tausch (Welle 15, Kit 0.51.3): Baseline vorher 18/18, danach 18 umgeschriebene/gleiche Punkte plus V1–V5. V3 und V4 per Mutation rot gemessen (`stream: false` entfernt, `redact: false`), V1 war am echten Befund rot (Backend-Probe ohne Schlüssel). **B3 streut** (in 4 von 8 Läufen rot, auch vor dem Tausch): erst der frische Prozess zählt |
 | 2026-09-02 | 1.13.7 | **9/9** | Geführt am neuen Herkunfts-Guard (`requireEigenerBuild`), beide Ausgänge einzeln belegt: **(a)** ein Byte an die `main.js` im Vault angehängt → der Lauf **bricht ab, bevor ein Prüfpunkt läuft** („im Vault: 2.422.444 Bytes · gebaut: 2.422.443"), zurückgedreht wieder 9/9 und **kein anderer Punkt sprang mit**; **(b)** den frisch gebauten Vergleichsstand entfernt → Ausgang `ungeklaert`, also **Warnung statt Abbruch**, sichtbar oben *und* unter der Schlussbilanz. Im Normalfall ist der Guard still. Nebenbefund: Der Staging-Vault trug noch `manifest.json` 0.20.0, während `main.js` byte-gleich mit dem Repo-Stand war — A1 liest die deployte Datei und hätte das gemeldet; der Guard sieht es nicht, weil er die `main.js` misst. Die beiden Prüfungen ergänzen sich also, ersetzen einander nicht. |
 | 2026-08-30 (spät) | 1.13.7 | **9/9** | Geführt an E1: CSS-Hälfte im Staging-Vault entfernt → rot mit `display=block` und handlungsleitender Meldung, nach dem Zurückdrehen wieder grün, kein anderer Punkt sprang mit. **E1 hat dabei sich selbst korrigiert:** vorher meldete er „Einstellungen in eigenem Fenster — von hier nicht messbar" als *grünen* Punkt; ab Obsidian 1.13 sind die Einstellungen ein eigenes CDP-Target, gemessen wird jetzt über `attachTo("settings", …)`. Nebenbefund des ersten Laufs: `styles.css` war im Staging-Vault **nie deployt** — der alte E1 konnte das nicht sehen. |

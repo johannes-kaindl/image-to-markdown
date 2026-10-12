@@ -108,7 +108,7 @@ let verbindung = { port: 0, vault: "image-to-markdown" };
  *  `PRUEFPUNKTE[].key` faellt am Typ auf. */
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "F1", "F2", "F3",
-  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "G1", "G2", "G3",
+  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "R1", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -920,6 +920,62 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   // Verbindungs-Tausch laufen sie ueber `callLlm` des Plugins (Kit-Verbindung); der Endpunkt wird
   // dafuer VORUEBERGEHEND in die Einstellungen gelegt (`setzeGEndpoint`) und im finally zurueckgestellt.
   // Endpunkt/Modell per Umgebung ueberschreibbar (I2M_SMOKE_ENDPOINT / I2M_SMOKE_MODEL).
+  {
+    key: "R1",
+    titel: "Nachbessern mit Verzweigung: nach der Rueckwahl auf Runde 1 geht die zweite Runde nicht mehr an das Modell (0.30.0)",
+    async run(cdp) {
+      // Gestubbtes `deps.refine`: die View ruft es mit (base, steps, feedback). Aufgezeichnet wird,
+      // was GESENDET wird — der Unit-Test sieht die Karte, dieser Punkt sieht die Anfrage an der
+      // echten View. Die Rueckwahl laeuft ueber `selectRefineVersion`, nicht ueber „Notiz anlegen":
+      // bei vorhandener Transkript-Notiz oeffnet das den Ueberschreiben-Dialog (gewollt) und
+      // blockierte den Punkt.
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      const roh = await cdp.evaluate<string>(`
+        const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+        const deps = view.deps;
+        const orig = { refine: deps.refine, transcribeStream: deps.transcribeStream };
+        const gesendet = [];
+        const model = deps.getModel();   // das aktive Modell zurueckmelden: sonst gleicht die View die Einstellungen an
+        let n = 0;
+        deps.transcribeStream = async (_pfad, _item, onContent) => { onContent("T0"); return { content: "T0", reasoning: "", model }; };
+        deps.refine = async (base, steps, feedback) => {
+          gesendet.push({ base, steps: steps.map((s) => s.feedback + "=" + s.text), feedback });
+          n++;
+          return { content: "R" + n, reasoning: "", model };
+        };
+        try {
+          // Field notes hat schon ein Transkript: das PNG ist nicht vorgewaehlt, also waehlen.
+          const bild = view.state.items.find((i) => i.supported);
+          if (!bild) throw new Error("kein unterstuetztes Bild in der Liste");
+          if (!view.state.isSelected(bild.link)) view.state.toggle(bild.link);
+          await view.run();
+          const karte = () => view.state.cards[0];
+          if (!karte() || karte().status !== "done") throw new Error("Karte nicht fertig: " + (karte() ? karte().status : "keine Karte"));
+          await view.refineCard(0, "f1");
+          await view.refineCard(0, "f2");
+          view.state.selectRefineVersion(0, 1);
+          await view.refineCard(0, "f3");
+          const r = karte().refine;
+          return JSON.stringify({ gesendet, runden: r.rounds.length, aktiv: r.active, text: karte().text, basis: r.rounds.map((x) => x.basedOn) });
+        } finally {
+          deps.refine = orig.refine;
+          deps.transcribeStream = orig.transcribeStream;
+        }
+      `);
+      const d = JSON.parse(roh) as { gesendet: { base: string; steps: string[]; feedback: string }[]; runden: number; aktiv: number; text: string; basis: (number | null)[] };
+      const [a, b, c] = d.gesendet;
+      const ok = d.gesendet.length === 3
+        && a?.base === "T0" && a.steps.length === 0
+        && b?.steps.join() === "f1=R1"
+        && c?.base === "T0" && c.steps.join() === "f1=R1"
+        && d.runden === 4 && d.aktiv === 3 && d.text === "R3";
+      return {
+        ok,
+        detail: `Ketten: ${d.gesendet.map((x) => `[${x.steps.join(", ") || "-"}]+${x.feedback}`).join(" · ")} · `
+          + `Runden ${d.runden}, aktiv ${d.aktiv}, basedOn [${d.basis.join(", ")}] (erwartet: dritte Anfrage [f1=R1]+f3, ohne f2)`,
+      };
+    },
+  },
   {
     key: "G1",
     titel: "Streaming: ein Vision-Aufruf gegen den echten Endpunkt liefert Text in mehreren Stuecken",
