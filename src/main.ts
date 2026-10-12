@@ -2,7 +2,8 @@ import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64
 import { migrateVisionModel, defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
 import { setHttp } from "./vision_client";
-import { ENDPOINT_CALLER, sanitizeChoice } from "./resolve_endpoint";
+import { ENDPOINT_CALLER } from "./resolve_endpoint";
+import { sanitizeChoice } from "./vendor/kit/endpoint-source";
 import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
 import { createLlmConnection, type CompleteHandlers, type LlmConnection, type LlmConnectionSettings } from "./vendor/kit-obsidian/llm-connection";
 import type { ChatWireMessage } from "./vendor/kit-obsidian/chat-client";

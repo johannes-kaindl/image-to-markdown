@@ -6,6 +6,10 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Vendored `obsidian-kit` 0.57.0 (was 0.56.0) and `code-kit` 0.24.0 (was 0.23.0). Nothing changes for you: the skipped kit releases only add build, test and logic pieces (`busy-guard`, `sanitizeBase`, `fetchEndpointContext`, embedding-row text for another plugin).
+- The stored endpoint choice in `data.json` is now cleaned by the kit's `sanitizeChoice` instead of a local copy; it behaves identically (only non-empty `endpointId` and `model` strings survive).
+
 ## [0.30.0] — 2026-10-12
 
 ### Changed

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeChoice } from "../src/resolve_endpoint";
+import { sanitizeChoice } from "../src/vendor/kit/endpoint-source";
 
 describe("sanitizeChoice", () => {
   it("fehlt oder kaputt → leere Wahl", () => {
