@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-10-12
+
 ### Changed
 - **Refining builds on the version you picked.** Before, every refinement sent the original plus all previous rounds, even after you had stepped back to an earlier version. Now the request carries only the chain behind the version you refine: pick round 1 after rounds 1 and 2 and refine, and round 2 is not sent. The new round hangs off the version you picked and becomes the active one; the earlier rounds stay in the log and can still be selected and written.
 - **The endpoint row shows the model's context length again.** Under a reachable row with a model it reads "Context: loaded N · max M tokens", or "Context: max M tokens" / "Context: loaded N tokens" when the server names only one of the two; nothing is shown when it names neither. The lookup asks LM Studio first and Ollama second, and every attempt gives up after 5 s, so a server that accepts the connection and never answers no longer holds the settings.
