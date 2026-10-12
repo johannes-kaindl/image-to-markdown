@@ -187,8 +187,8 @@ npx vitest run tests/<datei>      # eine Test-Datei
 npm run typecheck                 # tsc --noEmit (separat von vitest)
 npm run gate                      # typecheck + typecheck:scripts + test + lint + build (die Abnahme-Schleife)
 npm run shots -- --setup          # Staging-Vault aus dem getrackten Fixture bauen (docs/images/fixture/)
-npm run shots -- --vault image-to-markdown      # Aufnahme gegen ein laufendes Obsidian
-npm run smoke:gui -- --vault image-to-markdown  # GUI-Smoke, Pruefpunkte in docs/SMOKE.md
+npm run shots -- --port <port> --vault image-to-markdown      # Aufnahme in einer Zweitinstanz (Port Pflicht)
+npm run smoke:gui -- --port <port>  # GUI-Smoke in einer Zweitinstanz (Port Pflicht), Pruefpunkte in docs/SMOKE.md
 sh tools/sync-kit.sh              # Vendor-Baum aus ../obsidian-kit erneuern (bzw. $KIT_DIR)
 npm run version-bump 0.3.0        # Version synct package.json/manifest.json/versions.json
 ```

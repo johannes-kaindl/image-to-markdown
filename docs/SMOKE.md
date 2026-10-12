@@ -6,38 +6,29 @@ entsteht, ob `metadataCache` die Backlinks liefert, aus denen die Idempotenz-Anz
 und ob pdf.js mit seinem als Blob-URL eingebetteten Worker im Renderer wirklich lädt. Genau
 dort liegen die Fehler, die einem Nutzer zuerst begegnen.
 
-⚠️ **Zuerst prüfen, wer sonst an Obsidian hängt.** Die laufende Instanz ist geteilte
-Infrastruktur — ein `quit` trifft die Instanz, an der möglicherweise eine andere Session
-arbeitet, und zerstört deren Zustand. Der eigene Lauf ist danach sauber grün; der Schaden
-entsteht woanders und fällt nicht auf.
+⚠️ **Der Smoke läuft in einer Zweitinstanz, nie in der laufenden Instanz.** Die laufende Obsidian-Instanz ist geteilte Infrastruktur — ein `quit` trifft die Instanz, an der möglicherweise eine andere Session arbeitet, und zerstört deren Zustand. Deshalb gibt es keinen Standardport: `--port` ist Pflicht, ohne ihn bricht der Treiber mit Exit 2 ab.
 
 ```bash
-lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null && echo "läuft bereits — NICHT beenden"
-curl -s http://127.0.0.1:9222/json/list   # nennt die Vaults der offenen Fenster
+UD=/tmp/obs-test-image-to-markdown                 # Profil je Repo
+pgrep -f "user-data-dir=$UD"                       # leer, sonst auf ein anderes Profil ausweichen
+lsof -nP -iTCP:<port> -sTCP:LISTEN                 # leer
+cp ~/Library/Application\ Support/obsidian/obsidian-*.asar "$UD"/
+# $UD/obsidian.json: Vault ($STAGING_VAULTS_DIR/image-to-markdown) und "language":"en" eintragen
+/Applications/Obsidian.app/Contents/MacOS/Obsidian --user-data-dir="$UD" --remote-debugging-port=<port> &
 ```
 
-Hört der Port schon, dann **mitnutzen statt neu starten**: ein eigenes Fenster öffnen
-(`obsidian://open?path=<URL-kodierter Pfad einer Datei im Vault>` — das registriert auch einen
-Vault, den Obsidian noch nicht kennt), dann `attachTo("workspace", port, vault)`; der
-Vault-Name wählt, nicht die Reihenfolge. Die Port-Prüfung ersetzt die Frage nicht: sie zeigt
-aktive CDP-Treiber, aber nicht, wer ein Fenster offen hält oder auf den Port wartet.
-
-**Vor dem Lauf den CDP-Lock nehmen** — er ist die Eintrittskarte, nicht die Kür: ohne ihn
-blockt der PreToolUse-Guard jeden Zugriff, auch bei freiem Port.
+**Vor dem Lauf den CDP-Lock für den eigenen Port nehmen** — er ist die Eintrittskarte, nicht die Kür: ohne ihn blockt der PreToolUse-Guard jeden Zugriff.
 
 ```bash
 python3 ~/.claude/hooks/obsidian-cdp-lock.py acquire --label image-to-markdown \
-  --intent "GUI-Smoke" --exclusive focus     # danach: … release
+  --intent "GUI-Smoke" --exclusive focus --port <port> --ttl 300     # danach: … release
 ```
 
-`--exclusive focus`, weil dieser Treiber das Fenster nach vorn holt — ein fremdes `activate`
-würde eine laufende Messung zerschießen, und `quit-reload` deckt den Fokus nicht ab. Am
-2026-09-02 war der Lock von 15:20 bis 17:04 durchgehend von vier fremden Sessions gehalten:
-Wartezeit einplanen, nicht am Lock vorbeiarbeiten.
+`--exclusive focus`, weil dieser Treiber das Fenster nach vorn holt — ein fremdes `activate` würde eine laufende Messung zerschießen. Wer misst, startet je Lauf einen frischen Prozess; der erste Lauf nach der Profilanlage ist ein Aufwärmlauf und zählt nicht.
 
-`npm run smoke:gui -- --vault image-to-markdown` fährt die Punkte unten gegen ein laufendes
-Obsidian (CDP über `--remote-debugging-port`). Voraussetzungen und Vault-Aufbau:
-`npm run shots -- --setup`, Details in `docs/images/README.md`.
+`npm run smoke:gui -- --port <port>` fährt die Punkte unten (`--with-model` nimmt die drei Modell-Punkte dazu). Den Vertrauensdialog und den Restricted Mode des frischen Profils erledigt der Treiber selbst (`bereiteInstanzVor`, Befund im Detail von A1). Vault-Aufbau: `npm run shots -- --setup`, Details in `docs/images/README.md`.
+
+**Die Bilanz hat vier Zustände** (CORE-TEST-19): grün · rot · übersprungen · nichts gemessen. Die Soll-Liste (27 Punkte) ist der Nenner. Übersprungen sind nur die Modell-Punkte G1–G3 ohne `--with-model`; wirft ein Punkt, ohne dass sein Gegenstand erreicht wurde, steht er als „nichts gemessen" da und der Lauf endet mit Exit 1, ein Abbruch des Treibers mit Exit 2.
 
 **Vor dem Lauf gehört ein Deploy des gebauten Repo-Stands in den Vault, gegen den gemessen
 wird.** Der Treiber erzwingt das seit 2026-09-02 mit `requireEigenerBuild` (zentral in

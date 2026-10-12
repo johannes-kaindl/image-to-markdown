@@ -31,22 +31,22 @@
  *
  * ```bash
  * npm run build && npm run shots -- --setup     # Vault aus dem Fixture bauen
- * npm run shots -- --vault image-to-markdown    # aufnehmen (beide Motive)
- * npm run shots -- --only settings.png          # nur ein Motiv (Zweitinstanz: --port <port>)
+ * npm run shots -- --port <port> --vault image-to-markdown   # aufnehmen (beide Motive)
+ * npm run shots -- --port <port> --only settings.png          # nur ein Motiv
  * ```
  *
- * ⚠️ **Vor einem Quit koordinieren — Obsidian ist geteilte Infrastruktur.** Laeuft schon
- * eine Instanz mit offenem Port, wird sie MITBENUTZT: eigenes Fenster per `vault-open`
- * ueber IPC oeffnen, dann `Cdp.attach(port, vault)` — der Vault-Name waehlt, nicht die
- * Reihenfolge. Ein `quit` trifft die Fenster anderer Sessions und zerstoert deren
- * Zustand; der eigene Lauf ist danach sauber gruen, der Schaden faellt nicht auf.
+ * ⚠️ **Aufgenommen wird in einer Zweitinstanz, nie in der laufenden Instanz** (Obsidian ist
+ * geteilte Infrastruktur; ein `quit` trifft die Fenster anderer Sessions). `--port` ist
+ * Pflicht, es gibt keinen Standardport: eigenes Profil (`UD=/tmp/obs-test-image-to-markdown`),
+ * aktuelle `.asar` ins Profil kopieren, Vault und `"language":"en"` in `$UD/obsidian.json`
+ * eintragen, mit `--user-data-dir="$UD" --remote-debugging-port=<port>` starten, den Lock
+ * fuer den Port halten (`obsidian-cdp-lock.py acquire … --exclusive focus --port <port>`).
+ * Vertrauensdialog und Restricted Mode eines frischen Profils erledigt `bereiteInstanzVor`.
  *
  * ```bash
- * lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null && echo "belegt — erst fragen, wem"
+ * lsof -nP -iTCP:<port> -sTCP:LISTEN            # muss leer sein
+ * pgrep -f "user-data-dir=$UD"                  # haelt eine fremde Instanz das Profil: ausweichen
  * ```
- *
- * Die Pruefung ersetzt die Frage nicht: sie zeigt aktive CDP-Treiber, aber nicht, wer ein
- * Fenster offen haelt oder auf den Port wartet.
  *
  * ## Fallstricke, die Zeit kosten, wenn man sie nicht kennt
  *
@@ -137,10 +137,9 @@ function setup(): void {
   console.log(`Vault: ${vaultDir}`);
   for (const zeile of log) console.log(" ·", zeile);
   console.log(
-    "\nJetzt in Obsidian oeffnen (ohne Quit, falls schon eine Instanz laeuft):\n"
-    + "  im Renderer eines offenen Fensters:\n"
-    + `  electron.ipcRenderer.send("vault-open", ${JSON.stringify(vaultDir)}, false)\n`
-    + "Beim ersten Oeffnen fragt Obsidian einmalig nach Vertrauen (Plugins aktivieren).",
+    "\nJetzt in einer Zweitinstanz oeffnen (eigenes --user-data-dir und --remote-debugging-port,\n"
+    + `Vault ${JSON.stringify(vaultDir)} in $UD/obsidian.json eintragen, dann starten;\n`
+    + "Rezept im Kopf dieser Datei). Nie die laufende Instanz quitten.",
   );
 }
 
@@ -231,7 +230,10 @@ async function main(): Promise<void> {
 
   if (args.includes("--setup")) { setup(); return; }
 
-  const port = Number(flag("port") ?? 9222);
+  const port = Number(flag("port"));
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error("--port <1024-65535> ist Pflicht (Port deiner Zweitinstanz) — kein Standardport.");
+  }
   const vault = flag("vault") ?? REPO_NAME;
   const outDir = flag("out") ?? "docs/images";
   const only = flag("only");

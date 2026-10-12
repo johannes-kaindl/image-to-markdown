@@ -10,57 +10,45 @@
  * Die CDP-Bruecke wird IMPORTIERT, nicht kopiert: sie liegt zentral im Dach
  * (`obsidian-plugins/tools/obsidian-cdp/`). Fehlt ihr etwas, wird es DORT ergaenzt.
  *
- * ## Ablauf
+ * ## Ablauf (Zweitinstanz, nie die laufende Instanz)
+ *
+ * Die laufende Obsidian-Instanz ist geteilte Infrastruktur; dieser Treiber quittet sie nicht
+ * und haengt sich nicht ungefragt an sie. Er laeuft gegen eine eigene Instanz mit eigenem
+ * Profil und eigenem Port (`--port` ist Pflicht, es gibt keinen Standardport):
  *
  * ```bash
  * npm run build && npm run shots -- --setup     # Vault aus dem getrackten Fixture
+ * export OBSIDIAN_PLUGIN_DIR="$STAGING_VAULTS_DIR/image-to-markdown/.obsidian/plugins/image-to-markdown"
  * npm run deploy                                # PFLICHT: der Lauf misst den deployten Build
- * npm run smoke:gui -- --vault image-to-markdown
- * npm run smoke:gui -- --vault image-to-markdown --with-model   # + die zwei Modell-Punkte
+ * UD=/tmp/obs-test-image-to-markdown            # Profil je Repo; vorher: pgrep -f "user-data-dir=$UD"
+ * cp ~/Library/Application\ Support/obsidian/obsidian-*.asar "$UD"/   # aktuelle Version, Pflicht
+ * # $UD/obsidian.json: Vault ($STAGING_VAULTS_DIR/image-to-markdown) und "language":"en" eintragen
+ * lsof -nP -iTCP:<port> -sTCP:LISTEN            # muss leer sein
+ * /Applications/Obsidian.app/Contents/MacOS/Obsidian --user-data-dir="$UD" --remote-debugging-port=<port> &
+ * python3 ~/.claude/hooks/obsidian-cdp-lock.py acquire --label image-to-markdown \
+ *   --intent "GUI-Smoke" --exclusive focus --port <port> --ttl 300
+ * npm run smoke:gui -- --port <port>
+ * npm run smoke:gui -- --port <port> --with-model   # + die drei Modell-Punkte
+ * python3 ~/.claude/hooks/obsidian-cdp-lock.py release
  * ```
  *
- * `npm run deploy` ist keine Bequemlichkeit: seit dem Herkunfts-Guard (`requireEigenerBuild`,
- * s. `main()`) bricht der Lauf ab, wenn im Vault ein anderer Build liegt als der gebaute
- * Repo-Stand — eine Store-Installation etwa, die dieselbe Versionsnummer traegt. Ein gruener
- * Lauf gegen fremden Code ist schlimmer als kein Lauf, weil ein gruener Punkt nicht
- * untersucht wird.
+ * Den Vertrauensdialog und den Restricted Mode eines frischen Profils erledigt der Treiber
+ * selbst (`bereiteInstanzVor`); je Messlauf ein frischer Prozess, der erste Lauf nach der
+ * Profilanlage ist ein Aufwaermlauf. `npm run deploy` ist keine Bequemlichkeit: seit dem
+ * Herkunfts-Guard (`requireEigenerBuild`, s. `main()`) bricht der Lauf ab, wenn im Vault ein
+ * anderer Build liegt als der gebaute Repo-Stand — eine Store-Installation etwa, die
+ * dieselbe Versionsnummer traegt. Ein gruener Lauf gegen fremden Code ist schlimmer als kein
+ * Lauf, weil ein gruener Punkt nicht untersucht wird.
  *
- * Obsidian muss mit `--remote-debugging-port=9222` laufen.
+ * Der CDP-Lock ist die Eintrittskarte, nicht die Kuer: ohne ihn blockt der PreToolUse-Guard
+ * jeden Zugriff. `--exclusive focus`, weil dieser Treiber das Fenster nach vorn holt.
  *
- * ⚠️ **Zuerst pruefen, wer sonst an Obsidian haengt.** Die laufende Instanz ist geteilte
- * Infrastruktur — ein `quit` trifft die Instanz, an der moeglicherweise eine andere Session
- * arbeitet, und zerstoert deren Zustand. Der eigene Lauf ist danach sauber gruen; der
- * Schaden entsteht woanders und faellt nicht auf.
+ * ## Bilanz
  *
- * ```bash
- * lsof -nP -iTCP:9222 -sTCP:LISTEN >/dev/null && echo "laeuft bereits — NICHT beenden"
- * ```
- *
- * Hoert der Port schon, dann **mitnutzen statt neu starten**: ein eigenes Fenster per
- * `vault-open` ueber IPC oeffnen, dann `attachTo("workspace", port, vault)` — der Vault-Name
- * waehlt, nicht die Reihenfolge. ⚠️ Die Port-Pruefung ersetzt die Frage nicht: sie zeigt
- * aktive CDP-Treiber, aber nicht, wer ein Fenster offen haelt oder auf den Port wartet.
- * `curl -s http://127.0.0.1:9222/json/list` nennt die Vaults der offenen Fenster und
- * beantwortet damit direkt, wen ein Quit traefe.
- *
- * Zwei Ergaenzungen zum Dach-Baustein, beide am 2026-09-02 in diesem Repo gemessen:
- *
- * 1. **Der CDP-Lock ist die Eintrittskarte, nicht die Kuer.** Ohne ihn blockt der
- *    PreToolUse-Guard jeden Zugriff, auch wenn der Port frei ist:
- *    `python3 ~/.claude/hooks/obsidian-cdp-lock.py acquire --label image-to-markdown
- *    --intent "GUI-Smoke" --exclusive focus` — und danach `release`. `--exclusive focus`,
- *    weil dieser Treiber das Fenster nach vorn holt und ein fremdes `activate` eine
- *    laufende Messung zerschoesse. An dem Tag war der Lock von 15:20 bis 17:04
- *    durchgehend von vier fremden Sessions gehalten; einplanen, nicht ueberrascht sein.
- * 2. **Ein Vault, den Obsidian nicht kennt, ist KEIN Neustart-Grund.**
- *    `obsidian://open?vault=<name>` tut bei einem frischen `buildVault`-Ergebnis nichts;
- *    `open "obsidian://open?path=<URL-kodierter Pfad einer DATEI im Vault>"` oeffnet ihn
- *    als zusaetzliches Fenster derselben Instanz und registriert ihn dabei.
- *
- * Erst wenn nichts laeuft — oder nach Absprache mit dem, der es benutzt — darf gequittet
- * werden. Fuer destruktive Arbeit (Absturz reproduzieren, dutzendfach neu laden) ist die
- * Zweitinstanz der richtige Ort statt einer Nachfrage: eigenes `--user-data-dir` plus
- * eigener `--remote-debugging-port`, Rezept in der Dach-`AGENTS.md`.
+ * Vier Zustaende (CORE-TEST-19): gruen · rot · uebersprungen · nichts gemessen. Die Soll-Liste
+ * `PUNKTE` ist der Nenner. `uebersprungen` heisst „in dieser Lage nicht anwendbar" (die drei
+ * Modell-Punkte ohne `--with-model`); ein Punkt, dessen Gegenstand nicht erreicht wurde (der
+ * Lauf warf), ist „nichts gemessen" und setzt Exit 1. Abbruch des Treibers ist Exit 2.
  *
  * ## Warum der Kernlauf kein Modell braucht
  *
@@ -74,16 +62,18 @@ import { execFileSync } from "node:child_process";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { argv, cwd, exit, platform } from "node:process";
+import { argv, cwd, platform } from "node:process";
 
 import {
   attachTo,
+  bereiteInstanzVor,
   Cdp,
   clickReal,
   closeExtraLeaves,
   openExisting,
   pollUntil,
 } from "../../tools/obsidian-cdp/cdp.js";
+import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
 import { requireEigenerBuild } from "../../tools/obsidian-cdp/vault.js";
 import { MODES, familyFromName } from "../src/vendor/kit/sampling-profiles";
 
@@ -111,10 +101,22 @@ interface Ergebnis {
 /** Verbindungsdaten des Laufs. Zwei Pruefpunkte brauchen ein ZWEITES Fenster (die
  *  Einstellungen sind ab Obsidian 1.13 ein eigenes CDP-Target); `run` bekommt aber nur
  *  das Workspace-`cdp`. Wird in `main()` gesetzt, bevor ein Punkt laeuft. */
-let verbindung = { port: 9222, vault: "image-to-markdown" };
+let verbindung = { port: 0, vault: "image-to-markdown" };
+
+/** Soll-Liste aller Pruefpunkte = der Nenner der Bilanz (CORE-TEST-19). Ein Punkt, der hier
+ *  steht und nie aufgezeichnet wird, zaehlt als „nichts gemessen"; ein Tippfehler in
+ *  `PRUEFPUNKTE[].key` faellt am Typ auf. */
+const PUNKTE = [
+  "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "F1", "F2", "F3",
+  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "G1", "G2", "G3",
+] as const;
+type PunktName = (typeof PUNKTE)[number];
+
+/** Befund von `bereiteInstanzVor` (Vertrauensdialog, Restricted Mode) — gehoert in A1. */
+let instanzHinweis = "";
 
 interface Pruefpunkt {
-  key: string;
+  key: PunktName;
   titel: string;
   /** true = braucht einen erreichbaren Vision-Endpoint (nur mit --with-model). */
   modell?: boolean;
@@ -195,8 +197,11 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       `);
       const d = JSON.parse(roh) as { aktiv: boolean; deployt: string; speicher: string | null };
       return {
-        ok: d.aktiv && /^\d+\.\d+\.\d+/.test(d.deployt),
-        detail: `aktiv=${d.aktiv} · deployt=${d.deployt} · im Speicher=${d.speicher}`,
+        // `speicher === null`: Obsidian kennt das Plugin, hat es aber nicht geladen (frisches
+        // Profil im Restricted Mode). Ohne diese Bedingung stand A1 gruen, waehrend alle
+        // folgenden Punkte ins Leere griffen.
+        ok: d.aktiv && d.speicher !== null && /^\d+\.\d+\.\d+/.test(d.deployt),
+        detail: `aktiv=${d.aktiv} · deployt=${d.deployt} · im Speicher=${d.speicher} · ${instanzHinweis}`,
       };
     },
   },
@@ -1184,14 +1189,17 @@ async function messeEinstellungen(cdp: Cdp): Promise<{ baustein: boolean; zeilen
 }
 
 async function main(): Promise<void> {
-  const args = argv.slice(2);
-  const flag = (name: string): string | undefined => {
-    const i = args.indexOf(`--${name}`);
-    return i === -1 ? undefined : args[i + 1];
-  };
-  const port = Number(flag("port") ?? 9222);
-  const vault = flag("vault") ?? "image-to-markdown";
-  const mitModell = args.includes("--with-model");
+  const args = parseArgs(argv.slice(2));
+  const port = Number(args.value("port"));
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error(
+      "--port <1024-65535> ist Pflicht (Port deiner Zweitinstanz, vom Lock gehalten) — es gibt "
+      + "keinen Standardport, damit der Treiber nie versehentlich die laufende Instanz trifft.",
+    );
+  }
+  const vault = args.value("vault") ?? "image-to-markdown";
+  const mitModell = args.has("--with-model");
+  const bilanz = createBilanz({ punkte: PUNKTE });
 
   verbindung = { port, vault };   // E1 dockt damit ans Einstellungen-Fenster an
   console.log(`GUI-Smoke ${PLUGIN_ID} — Port ${port}, Vault "${vault}"`);
@@ -1200,7 +1208,6 @@ async function main(): Promise<void> {
   // Ausserhalb des try: das finally muss auch nach einem Abbruch mitten im Lauf
   // zurueckschreiben koennen.
   let vorher: string | null = null;
-  const ergebnisse: { punkt: Pruefpunkt; ergebnis: Ergebnis }[] = [];
   /** Der Ausgang `ungeklaert` des Herkunfts-Guards bricht nicht ab, gehoert aber in die
    *  Abschlusszeile: eine Warnung, die nur oben im Protokoll steht, liest niemand mehr,
    *  wenn unten "9/9 gruen" steht. */
@@ -1243,6 +1250,12 @@ async function main(): Promise<void> {
   try {
     // Ohne Fokus drosselt Chromium den Renderer, das DOM bleibt leer und JEDER Punkt
     // waere rot — die Suche begaenne dann am Plugin statt am Fenster.
+    // Frisches Profil: Vertrauensdialog bestaetigen, Restricted Mode aufheben, Plugin laden.
+    // Wirft nicht; der Hinweis steht im Detail von A1.
+    const instanz = await bereiteInstanzVor(cdp, { pluginIds: [PLUGIN_ID], nurVault: vault, sprache: "en" });
+    instanzHinweis = instanz.hinweis;
+    console.log(`  Instanz: ${instanz.hinweis}`);
+
     await cdp.send("Page.bringToFront");
     if (platform === "darwin") {
       try {
@@ -1302,19 +1315,20 @@ async function main(): Promise<void> {
     `);
     await closeExtraLeaves(cdp);
 
+    const doppelt = PRUEFPUNKTE.map((p) => p.key).filter((k, i, alle) => alle.indexOf(k) !== i);
+    if (doppelt.length) throw new Error(`Doppelt vergebene Pruefpunkte: ${doppelt.join(", ")}`);
     for (const punkt of PRUEFPUNKTE) {
       if (punkt.modell && !mitModell) {
-        console.log(`  ○ ${punkt.key}  ${punkt.titel} — uebersprungen (--with-model)`);
+        bilanz.skipped(punkt.key, `${punkt.titel} (--with-model nicht gesetzt)`);
         continue;
       }
       try {
         const ergebnis = await punkt.run(cdp);
-        ergebnisse.push({ punkt, ergebnis });
-        console.log(`  ${ergebnis.ok ? "✓" : "✗"} ${punkt.key}  ${punkt.titel}\n      ${ergebnis.detail}`);
+        bilanz.record(punkt.key, ergebnis.ok, `${punkt.titel}\n      ${ergebnis.detail}`);
       } catch (fehler) {
+        // Ein Wurf heisst: der Gegenstand wurde nicht erreicht — nichts gemessen, nicht rot.
         const detail = `${(fehler as Error).message} · Pruefling meldet: ${await meldungen(cdp).catch(() => "(nicht lesbar)")}`;
-        ergebnisse.push({ punkt, ergebnis: { ok: false, detail } });
-        console.log(`  ✗ ${punkt.key}  ${punkt.titel}\n      ${detail}`);
+        bilanz.unmeasured(punkt.key, `${punkt.titel}\n      ${detail}`);
       }
     }
   } finally {
@@ -1333,10 +1347,8 @@ async function main(): Promise<void> {
     cdp.close();
   }
 
-  const gruen = ergebnisse.filter((e) => e.ergebnis.ok).length;
-  console.log(`\n${gruen}/${ergebnisse.length} Pruefpunkte gruen`);
+  bilanz.abschluss();
   for (const meldung of herkunftWarnungen) console.log(`! ${meldung}`);
-  if (gruen !== ergebnisse.length) exit(1);
 }
 
-await main();
+runDriver(main);
