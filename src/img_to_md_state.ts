@@ -98,6 +98,8 @@ export class ImgToMdState {
 
   appendContent(i: number, t: string): void { const c = this.cards[i]; if (c) c.text += t; }
   appendReasoning(i: number, t: string): void { const c = this.cards[i]; if (c) c.reasoning += t; }
+  /** Der bisher gezeigte Text erwies sich als Denken (Gemma 4 ohne Öffner, Kit `onContentReset`): verwerfen. */
+  resetContent(i: number): void { const c = this.cards[i]; if (c) c.text = ""; }
 
   setDone(i: number, finishReason?: string): void {
     const c = this.cards[i]; if (!c) return;

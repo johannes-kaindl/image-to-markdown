@@ -48,6 +48,14 @@ describe("ImgToMdState — Karten", () => {
     expect(s.cards[0].text).toBe("Hallo");
     expect(s.cards[0].reasoning).toBe("weil");
   });
+  it("resetContent verwirft den gezeigten Text, das Denken bleibt (Gemma 4 ohne Öffner)", () => {
+    const s = new ImgToMdState(); s.setItems(items); s.startCards();
+    s.appendContent(0, "The user wants me to"); s.appendReasoning(0, "weil");
+    s.resetContent(0);
+    s.appendContent(0, "# Titel");
+    expect(s.cards[0].text).toBe("# Titel");
+    expect(s.cards[0].reasoning).toBe("weil");
+  });
   it("setDone: nicht-leer → done, leer → error 'Leeres Transkript'", () => {
     const s = new ImgToMdState(); s.setItems(items); s.startCards();
     s.appendContent(0, "x"); s.setDone(0);

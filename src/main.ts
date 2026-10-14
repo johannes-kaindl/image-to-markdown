@@ -35,8 +35,8 @@ import type { OcrProviderApi, OcrProviderError } from "./vendor/kit/ocr-provider
 import { createOcrProviderApi, shortcutResultToOcr } from "./ocr_provider";
 
 /** Die Handler eines Stream-Aufrufs der View. */
-function streamHandlers(onToken: (t: string) => void, onReasoning: (t: string) => void, signal?: AbortSignal): CompleteHandlers {
-  return { onToken, onReasoning, ...(signal ? { signal } : {}) };
+function streamHandlers(onToken: (t: string) => void, onReasoning: (t: string) => void, signal?: AbortSignal, onContentReset?: () => void): CompleteHandlers {
+  return { onToken, onReasoning, ...(signal ? { signal } : {}), ...(onContentReset ? { onContentReset } : {}) };
 }
 
 export default class ImageToMarkdownPlugin extends Plugin {
@@ -380,7 +380,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         }
         return items;
       },
-      transcribeStream: async (sourcePath, item, onContent, onReasoning, signal, page) => {
+      transcribeStream: async (sourcePath, item, onContent, onReasoning, signal, page, onContentReset) => {
         let filePath: string; let ext: string;
         if (item.selfSource) { filePath = sourcePath; ext = item.ext; }
         else {
@@ -412,7 +412,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
             try { layerText = await extractPdfPageText(bytes, page ?? 1); } catch { layerText = ""; }
             if (countNonWhitespace(layerText) >= PDF_TEXTLAYER_MIN_CHARS) {
               const fmt = t("pdf.textLayerPrompt");
-              return this.callLlm([{ role: "user", content: `${fmt}\n\n${layerText}` }], streamHandlers(onContent, onReasoning, signal), true);
+              return this.callLlm([{ role: "user", content: `${fmt}\n\n${layerText}` }], streamHandlers(onContent, onReasoning, signal, onContentReset), true);
             }
           }
           dataUrl = await renderPdfPage(bytes, page ?? 1, scale);
@@ -420,7 +420,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
           dataUrl = binaryToDataUrl(await this.app.vault.adapter.readBinary(filePath), ext);
         }
         const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
-        return this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal), true);
+        return this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal, onContentReset), true);
       },
       writeTranscripts: async (sourcePath, entries) => {
         const self = classifySource(extOf(sourcePath)) !== null;
@@ -436,7 +436,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
         const { path, body } = await writePdfTranscript(this.makeImgIO(), sourcePath, { raw, link }, pages, this.settings.pdfPageSeparator, overwritePath, embed, { selfSource: self, destDir, range, knownBody, map: this.fmMap() });
         return { path, body };
       },
-      describeStream: async (sourcePath, item, onContent, onReasoning, signal) => {
+      describeStream: async (sourcePath, item, onContent, onReasoning, signal, onContentReset) => {
         let filePath: string; let ext: string;
         if (item.selfSource) { filePath = sourcePath; ext = item.ext; }
         else {
@@ -456,12 +456,12 @@ export default class ImageToMarkdownPlugin extends Plugin {
           dataUrl = binaryToDataUrl(await this.app.vault.adapter.readBinary(filePath), ext);
         }
         const prompt = buildDescribePrompt(this.settings.describeTaxonomy, getLang());
-        const r = await this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal), true);
+        const r = await this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal, onContentReset), true);
         return { raw: r.content, reasoning: r.reasoning, model: r.model, finishReason: r.finishReason };
       },
-      refine: async (base, steps, feedback, onContent, onReasoning, signal) => {
+      refine: async (base, steps, feedback, onContent, onReasoning, signal, onContentReset) => {
         const messages = buildRefineMessages(base, steps, feedback, t("refine.systemPrompt"));
-        return this.callLlm(messages, streamHandlers(onContent, onReasoning, signal), true);
+        return this.callLlm(messages, streamHandlers(onContent, onReasoning, signal, onContentReset), true);
       },
       getTaxonomy: () => this.settings.describeTaxonomy,
       writeDescriptions: async (sourcePath, entries) => {

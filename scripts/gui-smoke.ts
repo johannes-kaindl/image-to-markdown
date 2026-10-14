@@ -920,15 +920,17 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "V7",
-    titel: "Anbieter-API: extractText bittet das Modell, nicht zu denken — ein Modell, das sein Denken in den Inhalt schreibt, liefert nur den Text (Stub)",
+    titel: "Anbieter-API: extractText liefert nur den Text, auch wenn gemma-4 „none“ ignoriert und sein Denken mit `<channel|>` in den Inhalt schreibt (Stub)",
     async run(cdp) {
-      // Der Stub spielt gemma-4 unter LM Studio nach: ohne Unterdrueckung (reasoning_effort „none“) steht der Denktext im Inhalt.
+      // Der Stub spielt gemma-4-e4b unter LM Studio nach, wie es am 2026-10-14 gemessen wurde: `reasoning_effort: "none"`
+      // wird IGNORIERT, der Denktext steht im Inhalt, ohne oeffnendes Tag und mit `<channel|>` als Ende. Gelesen wird die Antwort
+      // erst mit dem Gemma-Kanalformat im think-splitter (code-kit 0.27.2); mit der alten Fassung ist dieser Punkt rot.
       const stub = await startLlmStub({
         models: ["google/gemma-4-e4b"],
-        antwort: (a) => {
-          const effort = (a.json as { reasoning_effort?: unknown } | null)?.reasoning_effort;
-          return { text: effort === "none" ? "Sauberer Text" : "Here's a thinking process to arrive at the Markdown: 1. Analyze the request.\nSauberer Text", model: "google/gemma-4-e4b" };
-        },
+        antwort: () => ({
+          text: "The user wants me to transcribe the image into Markdown.\nI will proceed with the transcription.<channel|>Sauberer Text",
+          model: "google/gemma-4-e4b",
+        }),
       });
       const vor = await verbindungVorher(cdp);
       const methode = await cdp.evaluate<string>(`return app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.ocrMethod;`);

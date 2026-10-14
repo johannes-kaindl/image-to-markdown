@@ -1,4 +1,4 @@
-// vendored from code-kit@0.27.1, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.27.2, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -494,12 +494,14 @@ export function mapTruncated<R extends ChatOutcome>(r: R, policy: TruncatedPolic
 export function checkResponse(ctx: { family: FamilyId | null; thinking: ThinkingLevel }, r: ResponseFacts): Deviation[] {
   if (r.status === 400) return [{ kind: "rejected", affectsResult: true, detail: r.errorText ?? "" }];
   const out: Deviation[] = [];
-  const thought = reasoningHappened(r.content, r.reasoning);
+  const seen = r.responseModel ? familyFromName(r.responseModel) : null;
+  // gemma 4 writes its thought into `content` as `…<channel|>` when `none` is ignored; that is read for the family only.
+  const channel = (ctx.family ?? seen) === "gemma4";
+  const thought = reasoningHappened(r.content, r.reasoning, { channel });
   const canTurnOff = ctx.family ? FAMILIES[ctx.family].canTurnOff : true;
   if (ctx.thinking === "off" && canTurnOff && thought) out.push({ kind: "thinking-despite-off", affectsResult: false });
-  const visible = stripThinkBlocks(r.content).trim();
+  const visible = stripThinkBlocks(r.content, { channel }).trim();
   if (visible === "" && thought && r.finishReason === "length") out.push({ kind: "empty-by-budget", affectsResult: true });
-  const seen = r.responseModel ? familyFromName(r.responseModel) : null;
   if (seen && ctx.family && seen !== ctx.family) out.push({ kind: "family-mismatch", affectsResult: true, detail: seen });
   if (seen && !ctx.family) out.push({ kind: "family-detected", affectsResult: true, detail: seen });
   return out;

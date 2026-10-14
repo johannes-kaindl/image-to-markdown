@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.60.1, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.60.3, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ein Chat-Aufruf gegen `/v1/chat/completions` (OpenAI-kompatibel) — Streaming, Tool-Calls,
  *  Abbruch, Idle-Timeout, Fehlerbody, Fallback ohne Stream. Kein `obsidian`-Import: der Transport
  *  wird injiziert (`chat-transport.ts` liefert XHR und `requestUrl`), die Uhr ebenso. Damit ist
@@ -59,7 +59,8 @@
  *  Ausdruck samt dem Wort „Bearer“. `redactions` zählt verschiedene Werte, nicht Vorkommen.
  *  `redact: false` schaltet alles ab. */
 import { parseSSE, type ToolCallDelta } from "../kit/sse";
-import { ThinkSplitter } from "../kit/think-splitter";
+import { familyFromName } from "../kit/sampling-profiles";
+import { ThinkSplitter, type ThinkSplitResult } from "../kit/think-splitter";
 import { normalizeEndpoint } from "../kit/endpoint";
 import { authHeaders, type EndpointConfig } from "../kit/endpoint_config";
 import { errorMessageFromText } from "../kit/error_body";
@@ -106,6 +107,19 @@ export interface ChatRequest {
   signal?: AbortSignal;
   onToken?: (text: string) => void;
   onReasoning?: (text: string) => void;
+  /** Nimmt zurück, was `onToken` bisher geliefert hat: der Text war das Denken, nicht die Antwort. Feuert höchstens einmal
+   *  und nur mit dem Denkkanal von Gemma 4 (`thinkChannel`), und zwar VOR dem `onToken`, das die Antwort bringt. Gemma
+   *  schreibt bei `reasoning_effort: "none"` das Denken ohne Öffner in `content` und schließt es mit `<channel|>`; bis dahin
+   *  ist es nicht vom Antworttext zu unterscheiden. Der Konsument verwirft, was er gesammelt und gezeigt hat (der
+   *  `StableMarkdownWriter` mit `resetContent()`, ein eigener Puffer mit `text = ""`). Das Denken kommt über `onReasoning`
+   *  nach, in diesem Zug vor dem Reset. Ohne diesen Callback bleibt der Denktext im angezeigten Text stehen, `content` im
+   *  Ergebnis ist trotzdem sauber. */
+  onContentReset?: () => void;
+  /** Gemma-4-Denkkanal (`<|channel>thought\n…<channel|>`, auch ohne Öffner) aus `content` lesen. Default: aus dem Modellnamen
+   *  — `familyFromName(model) === "gemma4"` für das gesendete Modell oder das, das der Server nennt. Wer die Familie anders
+   *  kennt (Alias, Manager-Tabelle: `llm-connection` setzt es aus `source().family`), gibt sie hier ausdrücklich vor.
+   *  `false` schaltet ab. Aus, bleibt `<channel|>` Text: ein anderes Modell kann es in einer Antwort schreiben. */
+  thinkChannel?: boolean;
   /** Feuert einmal je Tool-Call, sobald sein Name feststeht — für die Statuszeile, bevor die
    *  Stille der gepufferten Argumente beginnt. */
   onToolCallHead?: (name: string) => void;
@@ -407,7 +421,10 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
       timer = clock.setTimeout(fire, ms);
     };
 
-    const splitter = new ThinkSplitter();
+    // Der Denkkanal hängt am Modell, und das nennt der Server erst im ersten Chunk: der Splitter entsteht beim ersten Text.
+    let splitterMade: ThinkSplitter | null = null;
+    const splitter = (): ThinkSplitter =>
+      splitterMade ??= new ThinkSplitter({ channel: req.thinkChannel ?? (familyFromName(req.model) === "gemma4" || familyFromName(model ?? "") === "gemma4") });
     const assembler = new ToolCallAssembler();
     const heads = new Set<number>();
     let sawToolCall = false;
@@ -419,15 +436,26 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
 
     // Stream-Token laufen durch einen Restaurierer (ein Platzhalter kann über Chunks verteilt sein);
     // `content`/`reasoning` bleiben der Rohstrom und werden erst am Ende restauriert.
-    const contentBack = session?.restorer();
+    let contentBack = session?.restorer();
     const reasoningBack = session?.restorer();
-    const emit = (c: string, r: string): void => {
-      if (c !== "") { content += c; const o = contentBack ? contentBack.push(c) : c; if (o !== "") req.onToken?.(o); }
-      if (r !== "") { reasoning += r; const o = reasoningBack ? reasoningBack.push(r) : r; if (o !== "") req.onReasoning?.(o); }
+    const emitContent = (c: string): void => { if (c !== "") { content += c; const o = contentBack ? contentBack.push(c) : c; if (o !== "") req.onToken?.(o); } };
+    const emitReasoning = (r: string): void => { if (r !== "") { reasoning += r; const o = reasoningBack ? reasoningBack.push(r) : r; if (o !== "") req.onReasoning?.(o); } };
+    const emit = (s: ThinkSplitResult): void => {
+      if (s.resetContent) {
+        // Der Text bis hierher war das Denken (`reasoning` dieses Zugs trägt ihn): Rohstrom, Rückwandler und Anzeige beginnen neu.
+        emitReasoning(s.reasoning);
+        content = "";
+        contentBack = session?.restorer();
+        req.onContentReset?.();
+        emitContent(s.content);
+        return;
+      }
+      emitContent(s.content);
+      emitReasoning(s.reasoning);
     };
     const drainSplitter = (): void => {
-      const tail = splitter.flush();
-      emit(tail.content, tail.reasoning);
+      const tail = splitterMade?.flush();
+      if (tail) emit(tail);
       const c = contentBack?.flush() ?? "";
       if (c !== "") req.onToken?.(c);
       const r = reasoningBack?.flush() ?? "";
@@ -440,8 +468,8 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
       if (!sawSse && /^\s*data:/m.test(complete)) sawSse = true;
       if (model === undefined && p.model) model = p.model;
       if (finishReason === undefined && p.finishReason) finishReason = p.finishReason;
-      for (const r of p.reasoning) emit("", r);
-      for (const c of p.content) { const s = splitter.push(c); emit(s.content, s.reasoning); }
+      for (const r of p.reasoning) emitReasoning(r);
+      for (const c of p.content) emit(splitter().push(c));
       for (const d of p.toolCalls) {
         assembler.push(d);
         sawToolCall = true;
@@ -505,13 +533,12 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
         return fail(OVERFLOW_RE.test(raw) ? "overflow" : "http", detail, { status, body: raw.slice(0, ERROR_BODY_CAP) });
       }
       streamed = false;
-      const s = splitter.push(done.content);
-      emit(s.content, s.reasoning);
-      if (done.reasoning !== "") emit("", done.reasoning);
+      model = done.model; // vor dem Splitter: der Denkkanal richtet sich nach dem Modell, das der Server nennt
+      emit(splitter().push(done.content));
+      emitReasoning(done.reasoning);
       drainSplitter();
       toolCalls = done.toolCalls;
       finishReason = done.finishReason;
-      model = done.model;
     } else {
       toolCalls = assembler.finish();
     }

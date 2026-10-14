@@ -56,7 +56,7 @@ interface CardRefs {
 export interface ImgToMdViewDeps {
   getActivePath: () => string | null;
   scan: (sourcePath: string) => Promise<ImgItem[]>;
-  transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number) => Promise<{ content: string; reasoning: string; model: string; finishReason?: string }>;
+  transcribeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, page?: number, onContentReset?: () => void) => Promise<{ content: string; reasoning: string; model: string; finishReason?: string }>;
   writeTranscripts: (sourcePath: string, entries: { item: ImgItem; content: string; model: string; knownBody?: string; truncated?: boolean }[]) => Promise<{ path: string | null; body: string | null }[]>;
   writePdf: (sourcePath: string, raw: string, link: string, pages: { page: number; content: string; model: string }[], overwritePath?: string, embed?: boolean, range?: { from: number; to: number }, knownBody?: string) => Promise<{ path: string | null; body: string | null }>;
   /** Modus des „Los"-Buttons (Transkribieren ⇄ Beschreiben). Rein Lauf-Typ-Steuerung — Bild-Auswahl
@@ -67,11 +67,11 @@ export interface ImgToMdViewDeps {
   /** Wie transcribeStream, aber für den Beschreiben-Modus: liefert nur den Rohtext (`raw`) — das
    *  Parsen (CATEGORY:/TAGS:/Prosa) übernimmt die View via parseDescription. Kein page-Parameter
    *  (Beschreiben zielt auf Einzelbilder, nicht auf mehrseitige PDF-Läufe). */
-  describeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ raw: string; reasoning: string; model: string; finishReason?: string }>;
+  describeStream: (sourcePath: string, item: ImgItem, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, onContentReset?: () => void) => Promise<{ raw: string; reasoning: string; model: string; finishReason?: string }>;
   /** Iterative Nachbesserung einer Transkript-Karte (#7): baut (in main.ts) aus base + steps +
    *  feedback das Multi-Turn-Messages-Array und streamt es text-only. Modell/Endpoint/Sampling
    *  kommen aus den Settings — die View gibt nur Verlauf + neues Feedback + Stream-Callbacks. */
-  refine: (base: string, steps: { feedback: string; text: string }[], feedback: string, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal) => Promise<{ content: string; reasoning: string; model: string }>;
+  refine: (base: string, steps: { feedback: string; text: string }[], feedback: string, onContent: (t: string) => void, onReasoning: (t: string) => void, signal: AbortSignal, onContentReset?: () => void) => Promise<{ content: string; reasoning: string; model: string }>;
   getTaxonomy: () => string[];
   writeDescriptions: (sourcePath: string, entries: { item: ImgItem; category: string | null; tags: string[]; prose: string; model: string }[]) => Promise<{ path: string | null }[]>;
   connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;
@@ -779,6 +779,7 @@ export class ImgToMdView extends ItemView {
         (t) => { const d = this.refineDrafts.get(i); if (d) { d.text += t; this.updateCard(i); } },
         (t) => { const d = this.refineDrafts.get(i); if (d) { d.reasoning += t; this.updateCard(i); } },
         signal,
+        () => { const d = this.refineDrafts.get(i); if (d) { d.text = ""; this.updateCard(i); } },
       );
       if (!signal.aborted) {
         if (r.content.trim()) { card.model = r.model; this.state.commitRefineRound(i, fb, r.content, r.reasoning); }
@@ -816,6 +817,7 @@ export class ImgToMdView extends ItemView {
             (t) => { this.state.appendContent(i, t); this.updateCard(i); },
             (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
             signal,
+            () => { this.state.resetContent(i); this.updateCard(i); },
           );
           const parsed = parseDescription(r.raw, this.deps.getTaxonomy());
           this.state.setDescribed(i, parsed, r.model, r.finishReason);
@@ -826,6 +828,7 @@ export class ImgToMdView extends ItemView {
             (t) => { this.state.appendContent(i, t); this.updateCard(i); },
             (t) => { this.state.appendReasoning(i, t); this.updateCard(i); },
             signal, card.page,
+            () => { this.state.resetContent(i); this.updateCard(i); },
           );
           card.model = r.model;
           this.state.setDone(i, r.finishReason);
