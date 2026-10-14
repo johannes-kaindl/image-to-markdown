@@ -63,12 +63,14 @@ import { argv, cwd } from "node:process";
 
 import {
   attachTo,
+  beimAbbruch,
   bereiteInstanzVor,
   Cdp,
   clickReal,
   closeExtraLeaves,
   entferneFakeManager,
   installFakeManager,
+  istAbgebrochen,
   openExisting,
   pollUntil,
   requireVisible,
@@ -1225,39 +1227,36 @@ async function main(): Promise<void> {
    *  wenn unten "9/9 gruen" steht. */
   const herkunftWarnungen: string[] = [];
 
-  // Dieselbe Aufraeumarbeit wie im `finally` unten — als eigene Funktion, damit der
-  // SIGINT/SIGTERM-Handler sie aufrufen kann, ohne Code zu duplizieren. Ein Ctrl-C mitten
-  // im Lauf ueberspringt das `finally` NICHT (try/catch-Semantik), sondern beendet den
-  // Node-Prozess sofort — ohne eigenen Handler blieben zusaetzliche Leaves offen und der
-  // CDP-Socket haengt. Dieser Treiber schreibt sonst nichts Persistentes (kein
-  // `vault.create`/`modify`/`delete` — reiner Lesezugriff plus geoeffnete Notizen/Sidebar),
-  // deshalb entfaellt ein Leftover-Pruefpunkt (Regel: Handler Pflicht, Pruefpunkt entfaellt,
-  // wenn nichts im `finally` steckt, das ihn rechtfertigt).
-  const cleanupState = async (): Promise<void> => {
-    if (vorher && vorher !== "null") {
-      const gleich = await cdp.evaluate<boolean>(`
-        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-        return JSON.stringify(p?.settings ?? null) === ${JSON.stringify(vorher)};
-      `).catch(() => false);
-      console.log(`  Einstellungen nach dem Lauf: ${gleich ? "byte-gleich" : "ABWEICHUNG — von Hand pruefen"}`);
-    }
+  // EIN Schritt raeumt zurueck, was dieser Lauf am Wirt aendert: der Normalweg im `finally` (`zustand.schliesse()`),
+  // Ctrl-C/SIGTERM ueber das Abbruch-Modul der Bruecke (Hauptzweig gesperrt, Schritt darf noch senden, danach Bilanz,
+  // Exit 130). Idempotent und ohne Warten. Angelegt wird: Fake-Manager im Plugin-Slot (F), echter Endpunkt in den
+  // Einstellungen (G), Verbindungs-Einstellungen samt Schluesselbund-Eintraegen (V), zusaetzliche Leaves. Die
+  // Einstellungen kommen aus dem Schnappschuss `vorher` zurueck, wenn sie abweichen (das schliesst G und V ein).
+  const zustandZurueck = async (): Promise<void> => {
     await entferneManager(cdp).catch(() => undefined);
+    if (vorher && vorher !== "null") {
+      const gleich = await cdp.evaluate<boolean | null>(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        if (!p) return null;
+        const vor = ${JSON.stringify(vorher)};
+        if (JSON.stringify(p.settings ?? null) === vor) return true;
+        const soll = JSON.parse(vor);
+        const sollIds = new Set((soll.visionEndpoints ?? []).map((e) => e.secretId).filter(Boolean));
+        for (const e of p.settings.visionEndpoints ?? []) {
+          if (e.secretId && !sollIds.has(e.secretId)) { try { app.secretStorage.setSecret(e.secretId, ""); } catch { /* nichts gesetzt */ } }
+        }
+        for (const k of Object.keys(p.settings)) delete p.settings[k];
+        Object.assign(p.settings, soll);
+        await p.saveSettings();
+        p.llm.invalidate();
+        return false;
+      `).catch(() => null);
+      console.log(`  Einstellungen nach dem Lauf: ${gleich === true ? "byte-gleich" : gleich === false ? "ABWEICHUNG — aus dem Schnappschuss zurueckgesetzt" : "nicht lesbar — von Hand pruefen"}`);
+    }
     await closeExtraLeaves(cdp).catch(() => 0);
   };
-
-  let signalCleanupRunning = false;
-  const onAbortSignal = (signal: NodeJS.Signals) => {
-    if (signalCleanupRunning) return;
-    signalCleanupRunning = true;
-    void (async () => {
-      console.log(`\n\nAbbruch durch ${signal} — raeume Smoke-Zustand auf...`);
-      await cleanupState();
-      cdp.close();
-      process.exit(130);
-    })();
-  };
-  process.on("SIGINT", onAbortSignal);
-  process.on("SIGTERM", onAbortSignal);
+  // Vor der ersten Mutation anmelden: `bereiteInstanzVor` laedt das Plugin, F/G/V legen danach Zustand an.
+  const zustand = beimAbbruch(zustandZurueck, "Wirt-Zustand zuruecksetzen");
 
   try {
     // Ohne Fokus drosselt Chromium den Renderer, das DOM bleibt leer und JEDER Punkt
@@ -1271,7 +1270,6 @@ async function main(): Promise<void> {
     // `requireVisible` zielt auf das VERBUNDENE Fenster; `osascript activate` holte die laufende
     // Instanz (9222) nach vorn statt der Zweitinstanz (gemessen von kl-w19, 2026-10-12).
     await requireVisible(cdp);
-    await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => undefined);
 
     const bereit = await cdp.evaluate<boolean>(
       `return document.hasFocus() && document.visibilityState === "visible";`,
@@ -1338,16 +1336,14 @@ async function main(): Promise<void> {
   } finally {
     // Der Lauf oeffnet Notizen und die Sidebar, er schreibt keine. Zurueckgesetzt wird
     // trotzdem, was er anfassen KOENNTE — und das Ergebnis kommt ins Protokoll, nicht
-    // ins Vertrauen. Dieselbe Funktion wie der SIGINT/SIGTERM-Handler oben — kein
-    // Doppelcode.
+    // ins Vertrauen. Derselbe Schritt wie beim Abbruch (`beimAbbruch` oben) — kein Doppelcode.
     //
     // Was NICHT zurueckgesetzt wird: der Zustand des rechten Splits und das Blatt-Layout.
     // Beides liegt in `workspace.json` des Staging-Vaults, und die entfernt `buildVault`
     // bei jedem `--setup` ohnehin — der Vault ist Wegwerfware. Im Produktivvault waere
     // dieselbe Zeile ein Eingriff; deshalb steht sie hier begruendet und nicht beilaeufig.
-    process.off("SIGINT", onAbortSignal);
-    process.off("SIGTERM", onAbortSignal);
-    await cleanupState();
+    await zustand.schliesse();
+    if (istAbgebrochen()) return;   // das Modul druckt die Bilanz und beendet den Prozess selbst
     cdp.close();
   }
 
