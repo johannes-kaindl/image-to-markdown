@@ -14,6 +14,8 @@ and versioning follows [SemVer](https://semver.org/).
 - **The connection line in the sidebar has an accessible name and a tooltip** ("Check the connection again") and can be reached and triggered with the keyboard. The "Stop" button label is translated ("Stopp" in German).
 
 ### Fixed
+- **The warning about discarded request settings lists them sorted** instead of in the order they were stored (obsidian-kit 0.60.1, code-kit 0.27.1).
+- **The thinking button has a visible gap between icon and label** and uses the theme sizes of the kit (`THINKING_CONTROL_CSS`); the "off" state is muted instead of faint, so it stays readable.
 - **`extractText` of the provider API no longer returns the model's thinking.** Some backends (gemma-4 under LM Studio) write the thought process into the answer text; the provider call now asks the model not to think. The sidebar's thinking level is unchanged.
 
 ## [0.30.1] — 2026-10-12

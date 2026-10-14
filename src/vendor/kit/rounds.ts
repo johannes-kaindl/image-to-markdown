@@ -1,4 +1,4 @@
-// vendored from code-kit@0.24.0, src/ts/pure/rounds.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.27.1, src/ts/pure/rounds.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** History of several LLM rounds with step-back. Each round is whatever the caller stores
  *  (input, output, model, ...); this module only knows the list and which round is active.
  *

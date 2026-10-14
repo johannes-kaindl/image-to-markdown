@@ -78,10 +78,16 @@
 .img2md-model-status { display: inline-flex; align-items: center; color: var(--text-faint); flex: 0 0 auto; }
 .img2md-model-status.is-loaded { color: var(--text-success); }
 .img2md-think { flex: 0 0 auto; }
-.img2md-think .okit-thinking-toggle.clickable-icon { display: inline-flex; align-items: center; gap: 0.25em; padding: 2px 6px; height: auto; width: auto; font-size: 12px; color: var(--text-muted); }
-.img2md-think .okit-thinking-toggle.clickable-icon svg { width: 14px; height: 14px; }
-.img2md-think .okit-thinking-toggle.is-off { color: var(--text-faint); }
-.img2md-think select { font-size: 12px; }
+/* Denk-Knopf: Kit-Baustein (THINKING_CONTROL_CSS, wortgleich kopiert — Kit-Vertrag). */
+.okit-thinking-control { display: inline-flex; align-items: center; }
+.okit-thinking-toggle {
+  display: inline-flex; align-items: center; gap: var(--size-2-1);
+  height: auto; font-size: var(--font-ui-small); white-space: nowrap;
+}
+.okit-thinking-toggle.is-off { color: var(--text-muted); }
+.okit-thinking-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.okit-thinking-toggle svg { width: var(--icon-xs); height: var(--icon-xs); }
+.okit-thinking-control select { font-size: var(--font-ui-small); }
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }

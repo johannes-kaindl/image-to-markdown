@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.59.1, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.60.1, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -28,6 +28,7 @@
  *  über dem Default, je Abschnitt ein Feld genau. */
 import { BACKENDS, FAMILIES, type FamilyId, type BackendId, type Deviation } from "../kit/sampling-profiles";
 import type { EndpointSourceSectionStrings } from "./endpoint-source";
+import type { ApiErrorCode } from "../kit/endpoint-source";
 import type { EndpointListStrings } from "./endpoint-list";
 import type { RequestSectionStrings } from "./request-section";
 import { endpointStatusText, endpointWarningText } from "./endpoint-status-text";
@@ -49,6 +50,9 @@ export interface LlmConnectionStrings {
   /** Text für ein lokales `kind: "no-endpoint"`. Optional, damit ein volles Bündel ohne dieses Feld
    *  weiter übersetzt; das Default-Bündel trägt es immer. */
   noEndpoint?: string;
+  /** Text je Grund, den der LLM Endpoint Manager nennt (`NoEndpointResult.detail`, `EndpointSourceResult.reason`).
+   *  NICHT `noEndpoint`: das ist der lokale Fall. Optional wie `noEndpoint`; `managerErrorText` liest es. */
+  managerErrors?: Record<ApiErrorCode, string>;
   /** `endpointSource.managedDesc` für `managerOnly`, ohne den Satz über die lokale Liste. */
   managedDescManagerOnly: string;
   request: RequestSectionStrings;
@@ -95,6 +99,8 @@ interface Texts {
   noManager: string;
   /** Text für ein lokales `kind: "no-endpoint"` (kein Endpunkt erreichbar). */
   noEndpoint: string;
+  /** Texte je Grund des Managers; jeder nennt die Stelle, an der der Nutzer es behebt. */
+  managerErrors: Record<ApiErrorCode, string>;
   /** `managedDesc` für `managerOnly`: ohne den Satz über die lokale Liste. */
   managedDescManagerOnly: string;
 }
@@ -114,6 +120,7 @@ function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
     redactedNote: (n) => fmt(n === 1 ? x.redactedOne : x.redactedMany, String(n)),
     noManager: x.noManager,
     noEndpoint: x.noEndpoint,
+    managerErrors: x.managerErrors,
     managedDescManagerOnly: x.managedDescManagerOnly,
     endpointSource: {
       managed: x.managed, managedDesc: x.managedDesc, openManager: x.openManager, pickEndpoint: x.pickEndpoint,
@@ -243,6 +250,13 @@ const EN: Texts = {
   noManager: "No LLM Endpoint Manager found. Install and enable it to choose an endpoint.",
   noEndpoint: "No endpoint reachable. Check the endpoint list in the settings — the test button says which one answers.",
   managedDescManagerOnly: "This plugin uses the endpoints configured in the LLM Endpoint Manager plugin.",
+  managerErrors: {
+    "no-endpoint": "The LLM Endpoint Manager has no usable endpoint. Add or switch on one there, and check its API key and that its server is running.",
+    "not-found": "The endpoint chosen in this plugin no longer exists in the LLM Endpoint Manager. Pick another one in this plugin's settings.",
+    "disabled": "The chosen endpoint is switched off in the LLM Endpoint Manager. Switch it on there, or pick another one in this plugin's settings.",
+    "secret-missing": "The endpoint chosen in the LLM Endpoint Manager needs an API key that isn't stored yet. Enter it in the manager's settings, not in this plugin.",
+    "unreachable": "The LLM Endpoint Manager did not answer. Check that the plugin is enabled and its secret storage is unlocked, or reload Obsidian.",
+  },
 };
 
 const DE: Texts = {
@@ -318,6 +332,13 @@ const DE: Texts = {
   noManager: "Kein LLM Endpoint Manager gefunden. Installiere und aktiviere ihn, um einen Endpunkt zu wählen.",
   noEndpoint: "Kein Endpunkt erreichbar. Prüf die Endpunkt-Liste in den Einstellungen — der Testknopf sagt, welcher antwortet.",
   managedDescManagerOnly: "Dieses Plugin nutzt die Endpunkte aus dem Plugin LLM Endpoint Manager.",
+  managerErrors: {
+    "no-endpoint": "Der LLM Endpoint Manager hat keinen nutzbaren Endpunkt. Leg dort einen an oder schalte einen ein, und prüf seinen API-Schlüssel und ob sein Server läuft.",
+    "not-found": "Der in diesem Plugin gewählte Endpunkt existiert im LLM Endpoint Manager nicht mehr. Wähl in den Einstellungen dieses Plugins einen anderen.",
+    "disabled": "Der gewählte Endpunkt ist im LLM Endpoint Manager abgeschaltet. Schalte ihn dort ein oder wähl in den Einstellungen dieses Plugins einen anderen.",
+    "secret-missing": "Der im LLM Endpoint Manager gewählte Endpunkt braucht einen API-Schlüssel, der noch nicht hinterlegt ist. Trag ihn in den Einstellungen des Managers ein, nicht in diesem Plugin.",
+    "unreachable": "Der LLM Endpoint Manager antwortet nicht. Prüf, ob das Plugin aktiviert und sein Schlüsselbund entsperrt ist, oder lade Obsidian neu.",
+  },
 };
 
 export const LLM_CONNECTION_STRINGS_EN: LlmConnectionStrings = build(EN, "en");
@@ -333,6 +354,8 @@ export interface LlmConnectionStringsOverride {
   redactedNote?: (n: number) => string;
   noManager?: string;
   noEndpoint?: string;
+  /** Einzelne Manager-Gründe überschreiben; die übrigen bleiben Default. */
+  managerErrors?: Partial<Record<ApiErrorCode, string>>;
   /** Label dieser Liste für `ariaUrl`/`ariaAdd` („Chat endpoints: Endpoint address“) — nötig, sobald zwei
    *  Listen auf einem Tab stehen und die Beschriftungen sonst gleich lauten. Ohne Angabe wie bisher. */
   listAriaLabel?: string;
@@ -340,6 +363,11 @@ export interface LlmConnectionStringsOverride {
   endpointSource?: Partial<LlmConnectionStrings["endpointSource"]>;
   endpointList?: Partial<LlmConnectionStrings["endpointList"]>;
   request?: Partial<LlmConnectionStrings["request"]>;
+}
+
+/** Nur die gesetzten Felder: ein ausdrückliches `undefined` im Override überschriebe sonst den Default. */
+function definedOnly<T extends object>(o: T | undefined): Partial<T> {
+  return Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
 /** `ariaUrl`/`ariaAdd` mit vorangestelltem Listen-Label; ohne Label nichts. */
@@ -359,9 +387,39 @@ export function resolveLlmConnectionStrings(override?: LlmConnectionStringsOverr
     redactedNote: override.redactedNote ?? base.redactedNote,
     noManager: override.noManager ?? base.noManager,
     noEndpoint: override.noEndpoint ?? base.noEndpoint,
+    ...(base.managerErrors ? { managerErrors: { ...base.managerErrors, ...definedOnly(override.managerErrors) } } : {}),
     managedDescManagerOnly: override.managedDescManagerOnly ?? base.managedDescManagerOnly,
     endpointSource: { ...base.endpointSource, ...override.endpointSource },
     endpointList: { ...base.endpointList, ...labelled(base.endpointList, override.listAriaLabel), ...override.endpointList },
     request: { ...base.request, ...override.request },
   };
+}
+
+const MANAGER_CODES: readonly string[] = ["no-endpoint", "not-found", "disabled", "secret-missing", "unreachable"];
+
+/** Text zu einem Grund des Managers (`NoEndpointResult.detail` bei `source.kind === "manager"`,
+ *  `EndpointSourceResult.reason`). **Jeder der fünf Codes hat einen eigenen Text, weil jeder an einer anderen
+ *  Stelle zu beheben ist:** `no-endpoint` im Manager einen Endpunkt anlegen oder einschalten, `not-found` und
+ *  `disabled` im eigenen Plugin einen anderen wählen (bzw. im Manager einschalten), `secret-missing` den Schlüssel
+ *  im Manager eintragen, `unreachable` den Manager selbst starten. Die drei Vorlagen (lingotuner, obsidian-transmute,
+ *  json-editor) trennten nur `secret-missing` ab und schickten alles andere an die lokale Liste — die falsche Stelle
+ *  für vier der fünf. `unreachable` heißt dabei, dass die Manager-API nicht antwortete (`resolveEndpointSource`
+ *  fängt eine werfende Methode), nicht, dass ein Endpunkt-Server aus ist.
+ *
+ *  **Wo welcher Text ankommt:** bei `config === null` liefert `resolveEndpointSource` nur `no-endpoint`, `disabled`, `secret-missing` und
+ *  `unreachable`. `not-found` erreicht den Nutzer als Begleit-`reason`, wenn eine verwaiste Wahl auf ein anderes Ziel ausgewichen ist
+ *  (`config` nicht null), und als Antwort von `materialize`/`models` — wer nur den Fehlerzweig bedient, braucht ihn nicht.
+ *
+ *  Ein unbekannter Code (neuere Manager-Version) und ein Bündel ohne `managerErrors` fallen auf den Text zu `no-endpoint`, danach auf
+ *  `noEndpoint`; nie auf den leeren String. **`NoEndpointResult.detail` kann auch die Konfigurationsmeldung einer Ausnahme sein**
+ *  (`llm-connection`, `chatClientFor`): wer sie nicht durch den Text zu `no-endpoint` ersetzen will, prüft vorher mit
+ *  `isManagerErrorCode(detail)`. */
+export function isManagerErrorCode(detail: string): detail is ApiErrorCode {
+  return MANAGER_CODES.includes(detail);
+}
+
+export function managerErrorText(strings: Pick<LlmConnectionStrings, "managerErrors" | "noEndpoint">, detail: string): string {
+  const map = strings.managerErrors;
+  if (map && isManagerErrorCode(detail)) return map[detail];
+  return map?.["no-endpoint"] ?? strings.noEndpoint ?? LLM_CONNECTION_STRINGS_EN.managerErrors?.["no-endpoint"] ?? "";
 }
