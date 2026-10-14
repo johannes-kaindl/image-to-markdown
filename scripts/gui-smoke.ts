@@ -496,7 +496,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       const sicht = await attachTo("settings", verbindung.port, verbindung.vault).catch(() => null);
       if (!sicht) {
         await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
-        return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+        throw new Error("kein Einstellungen-Fenster am Port");
       }
       try {
         const roh = await sicht.evaluate<string>(`
@@ -524,7 +524,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       await installiereManager(cdp);
       try {
         const m = await messeEinstellungen(cdp);
-        if (!m) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+        if (!m) throw new Error("kein Einstellungen-Fenster am Port");
         return {
           ok: m.baustein && m.zeilen === 0 && m.modellZeilen === 0,
           detail: `Baustein ${m.baustein ? "da" : "FEHLT"} · ${m.zeilen} lokale Zeile(n) sichtbar · eigene Modell-Zeilen: ${m.modellZeilen} (Modell-Zeilen sichtbar: ${m.modellSichtbar}, davon eine im Baustein)`,
@@ -557,7 +557,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     titel: "Endpunkt-Quelle: Manager aus — lokale Liste zurueck, weiterhin keine eigene Modell-Zeile (Gegenprobe zu F1/F2)",
     async run(cdp) {
       const m = await messeEinstellungen(cdp);
-      if (!m) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      if (!m) throw new Error("kein Einstellungen-Fenster am Port");
       const r = await aufloesung(cdp);
       return {
         ok: !m.baustein && m.zeilen > 0 && m.modellZeilen === 0 && r.url !== MGR_URL,
@@ -574,7 +574,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     titel: "Anfrage: Abschnitt „Anfrage“/„Request“ in den Einstellungen klappt auf und wieder zu",
     async run(cdp) {
       const sicht = await oeffneEinstellungen(cdp);
-      if (!sicht) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      if (!sicht) throw new Error("kein Einstellungen-Fenster am Port");
       try {
         // Der Auf/Zu-Zustand lebt im Prozess (Kit-Fallback ohne `collapsedStorage`) und ueberlebt
         // das Schliessen der Einstellungen — der Ausgangszustand ist also nicht vorhersagbar.
@@ -602,7 +602,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     async run(cdp) {
       const vorher = await cdp.evaluate<string>(`return JSON.stringify(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.request);`);
       const sicht = await oeffneEinstellungen(cdp);
-      if (!sicht) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      if (!sicht) throw new Error("kein Einstellungen-Fenster am Port");
       try {
         const r = await sicht.evaluate<string>(`
           const warte = (ms) => new Promise((x) => setTimeout(x, ms));
@@ -862,7 +862,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     titel: "Einstellungen: der Anfrage-Abschnitt bietet die „Stufenwahl im Chat“ an (levelPicker: true) — in einem Host, ohne den Tab zu leeren",
     async run(cdp) {
       const sicht = await oeffneEinstellungen(cdp);
-      if (!sicht) return { ok: false, detail: "kein Einstellungen-Fenster am Port — nichts gemessen" };
+      if (!sicht) throw new Error("kein Einstellungen-Fenster am Port");
       try {
         const r = await sicht.evaluate<string>(`
           const wurzel = document.querySelector(".modal.mod-settings") ?? document.body;
@@ -901,10 +901,11 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         `);
         const z2 = JSON.parse(zweiter) as Array<string | null>;
         const m = await messeEinstellungen(cdp);
+        if (m === null) throw new Error("kein Einstellungen-Fenster am Port");
         const zeileOk = d.zeilen[0] === "alt-modell" && d.zeilen[1] === "eigenes-modell" && !d.speicher && !d.platte && JSON.stringify(z2) === JSON.stringify(d.zeilen);
         return {
-          ok: zeileOk && m !== null && m.modellZeilen === 0,
-          detail: `Zeilen-Modelle: ${JSON.stringify(d.zeilen)} (erwartet ["alt-modell","eigenes-modell"]) · visionModel im Speicher: ${d.speicher}, auf der Platte: ${d.platte} · zweiter Lauf gleich: ${JSON.stringify(z2) === JSON.stringify(d.zeilen)} · Zeile „Vision model“: ${m ? m.modellZeilen : "nicht gemessen"}`,
+          ok: zeileOk && m.modellZeilen === 0,
+          detail: `Zeilen-Modelle: ${JSON.stringify(d.zeilen)} (erwartet ["alt-modell","eigenes-modell"]) · visionModel im Speicher: ${d.speicher}, auf der Platte: ${d.platte} · zweiter Lauf gleich: ${JSON.stringify(z2) === JSON.stringify(d.zeilen)} · Zeile „Vision model“: ${m.modellZeilen}`,
         };
       } finally {
         await cdp.evaluate(`
