@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { defaultSettings, migrateEndpoints, migrateVisionModel, applyListEdit, applyTaxonomyEdit, fmMapFromSettings } from "../src/settings";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
+import { setLang } from "../src/i18n";
+import { mergeSettings } from "../src/vendor/kit/settings";
 
 describe("defaultSettings — OCR-Weg (Baustein B)", () => {
   it("Default ist der bestehende Vision-Weg, mit sinnvollen OCR-Defaults daneben", () => {
@@ -113,11 +115,26 @@ describe("defaultSettings", () => {
     const a = defaultSettings(); a.request.thinking.transform = "high";
     expect(defaultSettings().request.thinking.transform).toBeUndefined();
   });
-  it("liefert eine sinnvolle Taxonomie und das Standard-Frontmatter-Mapping", () => {
+  it("liefert eine sinnvolle Taxonomie (englisch) und das Standard-Frontmatter-Mapping", () => {
+    setLang("en");
     const s = defaultSettings();
-    expect(s.describeTaxonomy).toContain("Diagramm");
-    expect(s.describeTaxonomy).toEqual(["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"]);
+    expect(s.describeTaxonomy).toContain("Diagram");
+    expect(s.describeTaxonomy).toEqual(["Photo", "Diagram", "Screenshot", "Handwriting", "Whiteboard", "Table", "Other"]);
     expect(s.frontmatterMap).toEqual(DEFAULT_FM_MAP);
+  });
+  it("die Taxonomie folgt der Sprache beim Anlegen", () => {
+    setLang("de");
+    try {
+      expect(defaultSettings().describeTaxonomy).toEqual(["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"]);
+    } finally { setLang("en"); }
+  });
+  it("eine gespeicherte Liste bleibt, auch wenn die Sprache eine andere Vorgabe hat", () => {
+    setLang("en");
+    const geladen = mergeSettings(defaultSettings(), { describeTaxonomy: ["Foto", "Eigene"] });
+    expect(geladen.describeTaxonomy).toEqual(["Foto", "Eigene"]);
+  });
+  it("liefert den LM-Studio-Port als Endpunkt-Vorgabe (Referenzserver des Dachs)", () => {
+    expect(defaultSettings().visionEndpoints).toEqual([{ url: "http://localhost:1234" }]);
   });
 });
 

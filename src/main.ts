@@ -239,7 +239,9 @@ export default class ImageToMarkdownPlugin extends Plugin {
     try {
       const dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(vaultPath))}`;
       const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
-      const { content } = await this.callLlm(this.imageMessages(dataUrl, prompt), { stream: false });
+      // Ohne Denken: ein Konsument (Koda read_image) will den Text, nicht den Gedankengang — manche Backends (gemma-4 unter LM Studio)
+      // schreiben ihn sonst in den Inhalt. Die Stufe der Sidebar bleibt unberuehrt (nur dieser Aufruf).
+      const { content } = await this.callLlm(this.imageMessages(dataUrl, prompt), { stream: false, thinking: "off" });
       return content;
     } catch (e) {
       return { error: "failed", message: e instanceof Error ? e.message : String(e) };

@@ -223,7 +223,7 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
   bekannten Server, der dadurch aus der Auswahl fiele.
 - **HEIC/HEIF** (iOS-Default) werden von Vision-Modellen abgelehnt → übersprungen + Warnung.
 - **LM Studio ignoriert das `model`-Feld** → tatsächliches Modell aus `response.model` lesen.
-- **Vision-Endpoint-Default `:8080`** (MLX) ≠ LM Studio `:1234`.
+- **Vision-Endpoint-Default `:1234`** (LM Studio, Referenzserver des Dachs; bis 0.30.1 war es `:8080`, MLX — gemessen 2026-10-14: 6 von 8 Vergleichsplugins nutzen `:1234`). Ein MLX-Server hört auf `:8080`; eine gespeicherte Liste bleibt.
 - **Nicht in-place** (anders als vault-rag): nach Build `main.js`/`manifest.json`/`styles.css` ins
   Vault-Plugin-Verzeichnis kopieren, dann reloaden.
 - **Release-CI ist GitHub-only:** `.github/workflows/release.yml` läuft auf dem **GitHub-Mirror**

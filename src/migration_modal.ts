@@ -2,6 +2,7 @@
 import { App, Modal } from "obsidian";
 import { DiffLine, diffLines } from "./vendor/kit/diff";
 import { t } from "./i18n";
+import { confirmAction } from "./vendor/kit-obsidian/confirm";
 import { MigrationPlan, NotePlan, MappingChange } from "./fm_migration";
 
 /** Frei entscheidbares Ergebnis der Migrations-Vorschau. */
@@ -17,7 +18,7 @@ function frontmatterBlock(content: string): string {
 /** Zeigt den Migrationsplan (Task 5: planMigration) vor der Ausführung: Zusammenfassung,
  *  Mapping-Änderungen, Konflikte und je Notiz einen read-only Frontmatter-Diff. Drei Wege
  *  (migrieren+anwenden / nur anwenden / abbrechen); „Migrieren & anwenden“ verlangt eine
- *  zweite, modal-interne Bestätigung (kein window.confirm — blockiert die Obsidian-Event-Loop).
+ *  zweite Bestätigung über das Kit-Modal `confirmAction` (kein window.confirm — blockiert die Obsidian-Event-Loop).
  *  DOM ausschließlich via createEl/createDiv (UI-STANDARD §2). */
 export class MigrationModal extends Modal {
   private decided = false;
@@ -72,7 +73,7 @@ export class MigrationModal extends Modal {
       text: t("migration.migrateApply"),
       cls: "mod-cta img2md-migration-btn-migrate",
     });
-    migrate.addEventListener("click", () => { this.renderConfirm(); });
+    migrate.addEventListener("click", () => { void this.confirmMigrate(); });
   }
 
   private renderNote(parent: HTMLElement, note: NotePlan): void {
@@ -90,22 +91,16 @@ export class MigrationModal extends Modal {
     line.createSpan({ cls: "img2md-diff-text", text: d.text });
   }
 
-  /** Zweite Bestätigung vor dem irreversiblen Umschreiben — modal-intern, kein window.confirm. */
-  private renderConfirm(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("p", {
-      text: t("migration.confirm", String(this.plan.migrations.length)),
-      cls: "img2md-migration-confirm-text",
+  /** Zweite Bestaetigung vor dem irreversiblen Umschreiben: das Kit-Bestaetigungs-Modal (destruktiv), kein window.confirm.
+   *  „Abbrechen“ dort bricht wie bisher die ganze Migration ab. */
+  private async confirmMigrate(): Promise<void> {
+    const ok = await confirmAction(this.app, {
+      title: t("migration.title"),
+      message: t("migration.confirm", String(this.plan.migrations.length)),
+      confirmLabel: t("migration.migrateApply"),
+      cancelLabel: t("migration.cancel"),
     });
-    const actions = contentEl.createDiv({ cls: "img2md-diff-actions" });
-    const cancel = actions.createEl("button", { text: t("migration.cancel"), cls: "img2md-migration-btn-cancel" });
-    cancel.addEventListener("click", () => { this.finish("cancel"); });
-    const confirm = actions.createEl("button", {
-      text: t("migration.migrateApply"),
-      cls: "mod-cta img2md-migration-btn-confirm",
-    });
-    confirm.addEventListener("click", () => { this.finish("migrate"); });
+    this.finish(ok ? "migrate" : "cancel");
   }
 
   private finish(choice: MigrationChoice): void {

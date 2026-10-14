@@ -13,7 +13,7 @@ Each entry starts with what you see — the wording is the plugin's own English 
 | Connection refused — server not running or wrong port. | The server is off, or the port in the address is wrong. |
 | Unknown host — typo in the address? | The host name does not resolve. |
 | Timed out — network unreachable. | The machine is not reachable from here. |
-| Answers, but is not an OpenAI-compatible endpoint. | Something answers, but it does not return a model list. Check the address — LM Studio listens on `:1234`, an MLX server on `:8080` (the default). |
+| Answers, but is not an OpenAI-compatible endpoint. | Something answers, but it does not return a model list. Check the address — LM Studio listens on `:1234`, an MLX server on `:8080`. |
 | Access denied — API key missing or invalid. | The server wants an API key. Enter it on that row. |
 
 **Fix:** start the server and load a vision model, then press **Test connection** under **Settings → Image to Markdown**. Enter the base address only, for example `http://localhost:1234`, without a trailing `/v1`. A row that says "Address needs http:// or https://" or "Local LLM servers almost always need a port (e.g. :1234)" is telling you what is missing.

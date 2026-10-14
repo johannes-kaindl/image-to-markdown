@@ -89,6 +89,8 @@ const EN: Dict = {
   "settings.fmMap.kindKey": "Kind key",
   "settings.fmMap.kindTranscript": "Kind value: transcript",
   "settings.fmMap.kindDescription": "Kind value: description",
+  // Die sieben Kategorien des Beschreibungs-Modus beim Anlegen der Einstellungen; getrennt mit „|“.
+  "taxonomy.default": "Photo|Diagram|Screenshot|Handwriting|Whiteboard|Table|Other",
   "prompt.default":
     "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, " +
     "**emphasis**, lists and tables. Output only the Markdown, no comments.",
@@ -168,6 +170,8 @@ const EN: Dict = {
   "view.open": "open",
   "view.overwriteHint": "re-transcribing overwrites it",
   "view.refreshModels": "Refresh models",
+  "view.recheck": "Check the connection again",
+  "view.stop": "Stop",
   "view.modelChanged": "Model changed to {0}",
   "view.modelLoaded": "Selected model is loaded",
   "view.modelNotLoaded": "Selected model is not loaded",
@@ -293,6 +297,7 @@ const DE: Dict = {
   "settings.fmMap.kindKey": "Key: Art",
   "settings.fmMap.kindTranscript": "Wert für Art: Transkript",
   "settings.fmMap.kindDescription": "Wert für Art: Beschreibung",
+  "taxonomy.default": "Foto|Diagramm|Screenshot|Handschrift|Whiteboard|Tabelle|Sonstiges",
   "prompt.default":
     "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, " +
     "**Hervorhebungen**, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare.",
@@ -372,6 +377,8 @@ const DE: Dict = {
   "view.open": "öffnen",
   "view.overwriteHint": "erneut transkribieren überschreibt",
   "view.refreshModels": "Modelle aktualisieren",
+  "view.recheck": "Verbindung erneut prüfen",
+  "view.stop": "Stopp",
   "view.modelChanged": "Modell gewechselt zu {0}",
   "view.modelLoaded": "Ausgewähltes Modell ist geladen",
   "view.modelNotLoaded": "Ausgewähltes Modell ist nicht geladen",

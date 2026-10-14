@@ -111,7 +111,7 @@ let verbindung = { port: 0, vault: "image-to-markdown" };
  *  `PRUEFPUNKTE[].key` faellt am Typ auf. */
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "F1", "F2", "F3",
-  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "R1", "G1", "G2", "G3",
+  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "R1", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -915,6 +915,40 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
           ${ladeNeu}
           return true;
         `).catch(() => undefined);
+      }
+    },
+  },
+  {
+    key: "V7",
+    titel: "Anbieter-API: extractText bittet das Modell, nicht zu denken — ein Modell, das sein Denken in den Inhalt schreibt, liefert nur den Text (Stub)",
+    async run(cdp) {
+      // Der Stub spielt gemma-4 unter LM Studio nach: ohne Unterdrueckung (reasoning_effort „none“) steht der Denktext im Inhalt.
+      const stub = await startLlmStub({
+        models: ["google/gemma-4-e4b"],
+        antwort: (a) => {
+          const effort = (a.json as { reasoning_effort?: unknown } | null)?.reasoning_effort;
+          return { text: effort === "none" ? "Sauberer Text" : "Here's a thinking process to arrive at the Markdown: 1. Analyze the request.\nSauberer Text", model: "google/gemma-4-e4b" };
+        },
+      });
+      const vor = await verbindungVorher(cdp);
+      const methode = await cdp.evaluate<string>(`return app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.ocrMethod;`);
+      try {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.ocrMethod = "vision";
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(stub.url)}, model: "google/gemma-4-e4b" }]; p.settings.choice = {};
+          p.settings.request = { ...p.settings.request, thinking: { ...p.settings.request.thinking, transform: "low" } };
+          p.llm.invalidate();
+          const out = await p.api.extractText("field-notes.png");
+          return JSON.stringify({ out });
+        `);
+        const d = JSON.parse(r) as { out: unknown };
+        const effort = (stub.anfragen().filter((a) => a.route === "chat").at(-1)?.json as { reasoning_effort?: unknown } | null)?.reasoning_effort;
+        return { ok: d.out === "Sauberer Text", detail: `Ergebnis ${JSON.stringify(d.out)} · Server sah reasoning_effort=${JSON.stringify(effort)} (Nutzerstufe low)` };
+      } finally {
+        await stub.stop();
+        await cdp.evaluate(`app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.ocrMethod = ${JSON.stringify(methode)}; return true;`).catch(() => undefined);
+        await stelleVerbindungWieder(cdp, vor);
       }
     },
   },

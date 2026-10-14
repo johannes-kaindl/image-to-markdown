@@ -134,14 +134,14 @@ Open **Settings → Community plugins → Image to Markdown**. The settings live
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Vision endpoints** | Ordered list of OpenAI-compatible servers, each with an optional API key (stored in Obsidian's keychain). The plugin pings them in order and uses the first reachable one; a row can be moved to the front with **"Try this endpoint first"**. | `[{"url": "http://localhost:8080"}]` (the MLX default — note that LM Studio uses `:1234`) |
+| **Vision endpoints** | Ordered list of OpenAI-compatible servers, each with an optional API key (stored in Obsidian's keychain). The plugin pings them in order and uses the first reachable one; a row can be moved to the front with **"Try this endpoint first"**. | `[{"url": "http://localhost:1234"}]` (LM Studio's port; an MLX server listens on `:8080`) |
 | **Vision prompt** | The instruction sent to the vision model; freely editable text area. The shipped default is localized (English or German, following Obsidian). | "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, **emphasis**, lists and tables. Output only the Markdown, no comments." |
 | **PDF max. pages per run** | Safety cap on the number of transcribed PDF pages per run — larger PDFs must be narrowed via the page range. Hard-capped at 500. | `25` |
 | **PDF render scale** | Render resolution of PDF pages before OCR (1.0–4.0 slider, step 0.5). Low = faster, less memory; high = sharper page images & better OCR on small text (2.0 ≈ 144 dpi). On mobile it is clamped to 1.5 to protect against OOM. | `2.0` |
 | **PDF page separator** | How pages are separated in the merged transcript note. Five options: Obsidian comment `%% Page N %%` (hidden in reading view), heading `## Page N`, horizontal rule `---`, page break (HTML, for export), or none (seamless text). | Obsidian comment `%% Page N %%` |
 | **Use embedded PDF text** | For born-digital PDF pages with a real text layer, send the exact text to the model to format as Markdown instead of OCR-ing a rendered image — faster and without OCR errors. Scan/figure pages fall back to the vision model. | On |
 | **Expand thinking by default** | Whether each refinement round's thinking (reasoning) block starts expanded. Off = it collapses once the model finishes thinking (you can still open it by hand). | Off |
-| **Description categories** | The fixed set of categories offered to the model in Describe mode (one per field, add/remove like the endpoint list). | A built-in list, editable |
+| **Description categories** | The fixed set of categories offered to the model in Describe mode (one per field, add/remove like the endpoint list). | A built-in list in the interface language of the time you installed (Photo, Diagram, Screenshot, Handwriting, Whiteboard, Table, Other), editable; a saved list is never rewritten |
 | **Frontmatter mapping** | Remap every frontmatter key written into generated notes — and the `type` value — to your own vault schema (e.g. `kind` → `type`), consistently across transcript, PDF and description notes. Changing a key later offers a **vault-wide migration** of existing notes (per-note diff preview + double confirmation). | The plugin's default keys |
 
 <img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/frontmatter-mapping.png" width="820" alt="The “Frontmatter mapping” section of the settings tab with one text field per frontmatter key and the two kind values">
@@ -166,7 +166,7 @@ Sent to the model: **PNG, JPG, JPEG, WebP, GIF.** Recognized but **skipped** (wi
 
 - **The `/v1` footgun:** an endpoint with a trailing `/v1` used to produce `…/v1/v1/chat/completions`. LM Studio answers wrong paths with HTTP 200 plus an error body (not a real HTTP error) → `res.ok` is true, the stream is empty → a silently empty transcript. Fixed by `normalizeEndpoint()` (strips a trailing `/v1` plus slashes).
 - **LM Studio ignores the request's `model` field** and uses whatever model is loaded — the model actually used is read from `response.model` and lands in the transcript note's `transcribed_by` frontmatter.
-- **Vision endpoint default `:8080` (MLX) ≠ LM Studio's `:1234`.**
+- **Vision endpoint default is `:1234` (LM Studio); an MLX server listens on `:8080`.** Only a fresh install gets the default; a saved list is never touched.
 
 ## Documentation
 

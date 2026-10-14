@@ -1,4 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
+import { neutralizeModelMarkdown } from "./vendor/kit/safe-markdown";
+import { renderMarkdownGuarded } from "./vendor/kit-obsidian/dom-guard";
 import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, refineRequest } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
@@ -27,6 +29,8 @@ interface CardRefs {
   reasoningLbl?: HTMLElement;
   reasoningBody?: HTMLElement;
   textEl?: HTMLElement;
+  /** Der Text, der gerade als Markdown in `textEl` gezeichnet ist — damit ein erneutes Zeichnen ihn nicht noch einmal rendert. */
+  renderedMd?: string;
   errorEl?: HTMLElement;
   truncatedEl?: HTMLElement;
   writtenEl?: HTMLElement;
@@ -131,7 +135,13 @@ export class ImgToMdView extends ItemView {
     this.statusEl = c.createDiv({ cls: "img2md-status" });
     this.statusIconEl = this.statusEl.createSpan({ cls: "img2md-status-icon" });
     this.statusLabelEl = this.statusEl.createSpan({ cls: "img2md-status-label" });
+    // Die Statuszeile ist selbst der Knopf zum Neupruefen: Name und Tooltip sagen es, die Tastatur erreicht sie.
+    this.statusEl.setAttribute("role", "button");
+    this.statusEl.setAttribute("tabindex", "0");
+    this.statusEl.setAttribute("aria-label", t("view.recheck"));
+    this.statusEl.setAttribute("title", t("view.recheck"));
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
+    this.statusEl.addEventListener("keydown", (ev: KeyboardEvent) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); void this.refreshStatus(); } });
     // Zeile 1: Modell (volle Breite für lange Namen) + Status + Refresh.
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
@@ -253,6 +263,14 @@ export class ImgToMdView extends ItemView {
   /** Zeichnet die Denk-Steuerung neu (Modell oder Familie hat gewechselt, Stufe wurde in den
    *  Einstellungen geaendert). Leichter als `refresh()`: kein neuer Scan der Notiz. */
   refreshThinking(): void { this.thinkCtl?.refresh(); }
+
+  /** Modell-Text als Markdown zeigen: erst neutralisieren (keine Bilder, keine Codeblock-Prozessoren), dann mit DOM-Waechter
+   *  rendern; scheitert der Renderer, bleibt der Rohtext. Kopieren und Notiz anlegen lesen weiter den Rohtext, nie das DOM. */
+  private showMarkdown(el: HTMLElement, text: string): void {
+    el.empty();
+    void renderMarkdownGuarded(this.app, neutralizeModelMarkdown(text), el, "", this)
+      .catch(() => { el.empty(); el.setText(text); });
+  }
 
   /** Label des „Los"-Buttons — folgt dem aktuellen Modus (nicht dem "Stop"-Zustand während des Laufs,
    *  der wird separat in runIndices() gesetzt). */
@@ -431,7 +449,13 @@ export class ImgToMdView extends ItemView {
     const shownText = (card.refine || draft) ? (card.refine?.rounds[0].text ?? card.text) : card.text;
     if (shownText) {
       if (!refs.textEl) refs.textEl = cardEl.createDiv({ cls: "img2md-text" });
-      refs.textEl.setText(shownText);
+      if (card.status === "done") {
+        // Fertig: als Markdown zeigen (Tabellen, Listen); waehrend des Stroms bleibt es Rohtext, ein Render je Token waere teurer als der Lauf.
+        if (refs.renderedMd !== shownText) { refs.renderedMd = shownText; this.showMarkdown(refs.textEl, shownText); }
+      } else {
+        refs.renderedMd = undefined;
+        refs.textEl.setText(shownText);
+      }
     }
     // Abschneide-Hinweis (lazy, bei card.truncated): das Modell hat am Token-Limit aufgehört.
     // Kein Fehler — der Teiltext ist gueltig und anlegbar; ohne diese Zeile endete der Lauf still
@@ -631,7 +655,7 @@ export class ImgToMdView extends ItemView {
         sum.createSpan({ cls: "img2md-reasoning-lbl", text: t("view.thoughts") });
         det.createDiv({ cls: "img2md-reasoning-body" }).setText(r.reasoning);
       }
-      round.createDiv({ cls: "img2md-refine-version", text: r.text });
+      this.showMarkdown(round.createDiv({ cls: "img2md-refine-version" }), r.text);
       const { writeBtn, writeLbl } = this.addVersionActions(round, i, k + 1);   // Runde k → Version k+1
       entries.push({ entryEl: round, writeBtn, writeLbl });
     }
@@ -743,7 +767,7 @@ export class ImgToMdView extends ItemView {
     const fb = feedback.trim();
     if (!fb) return;
     this.refineErrors.delete(i);
-    this.running = true; this.runBtn?.setText("Stop");
+    this.running = true; this.runBtn?.setText(t("view.stop"));
     this.controller = new AbortController();
     const signal = this.controller.signal;
     const { base, steps: rounds } = refineRequest(card);
@@ -775,7 +799,7 @@ export class ImgToMdView extends ItemView {
    *  Bei isRetry werden die Ziel-Karten zuvor zurückgesetzt (State + DOM in-place); sonst laufen
    *  frische Karten aus startCards. */
   private async runIndices(path: string, indices: number[], isRetry: boolean): Promise<void> {
-    this.running = true; this.runBtn?.setText("Stop");
+    this.running = true; this.runBtn?.setText(t("view.stop"));
     this.controller = new AbortController();
     const signal = this.controller.signal;
     const defaultDescribing = this.deps.getMode() === "describe";

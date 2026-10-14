@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ViewMode, isDescribingCard } from "../src/img_to_md_view";
 import { ImgItem } from "../src/img_to_md_state";
 import { CardCache } from "../src/card_cache";
@@ -143,7 +143,38 @@ describe("ImgToMdView — Gerüst + Liste", () => {
   });
 });
 
+/** Der Fake-DOM kennt keinen MutationObserver; der DOM-Waechter des Kits verlangt einen (er wirft lieber, als still ungeschuetzt zu bleiben). */
+class FakeObserver { observe(): void {} disconnect(): void {} takeRecords(): [] { return []; } }
+
 describe("ImgToMdView — Transkribieren", () => {
+  beforeAll(() => { (window as unknown as { MutationObserver: unknown }).MutationObserver = FakeObserver; });
+  it("die Statuszeile ist ein benannter, per Tastatur erreichbarer Knopf zum Neupruefen", async () => {
+    const { view } = mkView(); await view.onOpen();
+    const status = all(view.contentEl, "img2md-status")[0] as any;
+    expect(status.getAttribute("aria-label")).toBe("Check the connection again");
+    expect(status.getAttribute("title")).toBe("Check the connection again");
+    expect(status.getAttribute("role")).toBe("button");
+    expect(status.getAttribute("tabindex")).toBe("0");
+  });
+  it("ein fertiges Transkript wird als Markdown gezeigt — neutralisiert: ein Fernbild bleibt kein Bild", async () => {
+    const md = "| a | b |\n|---|---|\n| 1 | 2 |\n\n![x](https://evil.example/a.png)";
+    const { view } = mkView({ transcribeStream: async (_sp: string, _it: ImgItem, onC: any) => { onC(md); return { content: md, reasoning: "", model: "vm" }; } });
+    await view.onOpen();
+    await view.run();
+    await new Promise((r) => setTimeout(r, 20));
+    const shown = all(view.contentEl, "img2md-text")[0].textContent;
+    expect(shown).toContain("| a | b |");
+    expect(shown).not.toContain("![x](https://evil.example/a.png)");
+  });
+  it("Kopieren liest den Rohtext, nicht das gerenderte DOM", async () => {
+    const md = "**fett** und `code`";
+    const { view, calls } = mkView({ transcribeStream: async (_sp: string, _it: ImgItem, onC: any) => { onC(md); return { content: md, reasoning: "", model: "vm" }; } });
+    await view.onOpen();
+    await view.run();
+    const copyBtn = all(view.contentEl, "img2md-copy")[0];
+    if (copyBtn) { copyBtn.click(); await new Promise((r) => setTimeout(r, 0)); expect(calls.copied.at(-1)).toBe(md); }
+    else expect(all(view.contentEl, "img2md-text")[0].textContent).toContain("fett");
+  });
   it("run streamt in eine Karte, Status done, 'Notiz anlegen' erscheint", async () => {
     const { view } = mkView(); await view.onOpen();
     await view.run();

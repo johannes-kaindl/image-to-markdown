@@ -6,6 +6,16 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **A finished transcript and the refinement versions are shown as formatted Markdown** (tables, lists, bold) instead of plain text. While the answer streams in it stays plain text. Links and images in model output are neutralised first; "Copy" and "Create note" still use the raw text.
+- **The migration dialog asks its second question in the kit's confirm dialog.** "Migrate & apply" now opens the standard confirmation (cancelling there still cancels the whole migration).
+- **The default categories of the describe mode follow the interface language** when the settings are created (English: Photo, Diagram, Screenshot, Handwriting, Whiteboard, Table, Other). An existing list is never rewritten.
+- **The default vision endpoint is now `http://localhost:1234`** (LM Studio, the reference server of the other plugins) instead of `:8080` (MLX). Only a fresh install gets it; a saved endpoint list is never changed.
+- **The connection line in the sidebar has an accessible name and a tooltip** ("Check the connection again") and can be reached and triggered with the keyboard. The "Stop" button label is translated ("Stopp" in German).
+
+### Fixed
+- **`extractText` of the provider API no longer returns the model's thinking.** Some backends (gemma-4 under LM Studio) write the thought process into the answer text; the provider call now asks the model not to think. The sidebar's thinking level is unchanged.
+
 ## [0.30.1] — 2026-10-12
 
 ### Changed

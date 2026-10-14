@@ -84,7 +84,7 @@ export interface ImageToMarkdownSettings {
 /** Default-Settings zur Aufrufzeit (nach setLang) — der Default-Prompt folgt der UI-Sprache. */
 export function defaultSettings(): ImageToMarkdownSettings {
   return {
-    visionEndpoints: [{ url: "http://localhost:8080" }],
+    visionEndpoints: [{ url: "http://localhost:1234" }],
     choice: {},
     visionPrompt: defaultVisionPrompt(),
     promptPreset: "default",
@@ -94,7 +94,8 @@ export function defaultSettings(): ImageToMarkdownSettings {
     pdfUseTextLayer: true,
     request: structuredClone(DEFAULT_REQUEST_SETTINGS),
     reasoningExpanded: false,
-    describeTaxonomy: ["Foto", "Diagramm", "Screenshot", "Handschrift", "Whiteboard", "Tabelle", "Sonstiges"],
+    // Folgt der Sprache beim Anlegen; eine gespeicherte Liste bleibt, wie sie ist (mergeSettings: gespeichert schlaegt Default).
+    describeTaxonomy: t("taxonomy.default").split("|"),
     frontmatterMap: { ...DEFAULT_FM_MAP },
     exportFolder: "",
     mode: "transcribe",

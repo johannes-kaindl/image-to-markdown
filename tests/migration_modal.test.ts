@@ -5,6 +5,9 @@ import { MappingChange } from "../src/fm_migration";
 import { makeFakeApp } from "./__mocks__/obsidian";
 import { setLang } from "../src/i18n";
 
+const confirmMock = vi.hoisted(() => vi.fn<[unknown, unknown], Promise<boolean>>());
+vi.mock("../src/vendor/kit-obsidian/confirm", () => ({ confirmAction: confirmMock }));
+
 // Läuft rekursiv über contentEl.children und sammelt alle Nodes mit gegebener Klasse
 // (kein DOM/querySelectorAll im obsidian-Mock — Muster aus tests/img_to_md_view.test.ts).
 function all(el: any, cls: string): any[] {
@@ -78,30 +81,36 @@ describe("MigrationModal", () => {
     expect(onResolve).toHaveBeenCalledWith("cancel");
   });
 
-  it("„Migrieren & anwenden“ zeigt ERST eine zweite Bestätigung, löst NICHT sofort aus", () => {
+  it("„Migrieren & anwenden“ fragt ERST über das Kit-Bestätigungs-Modal nach, löst NICHT sofort aus", async () => {
+    confirmMock.mockReset();
+    confirmMock.mockImplementation(() => new Promise<boolean>(() => undefined));   // Frage bleibt offen
     const { modal, onResolve } = mkModal();
     modal.onOpen();
     all(modal.contentEl, "img2md-migration-btn-migrate")[0].click();
+    await Promise.resolve();
     expect(onResolve).not.toHaveBeenCalled();
-    // Bestätigungstext mit Notiz-Anzahl sichtbar, kein window.confirm.
-    expect(all(modal.contentEl, "img2md-migration-confirm-text")[0].textContent).toContain("1");
+    expect(confirmMock).toHaveBeenCalledOnce();
+    // Der Text nennt die Notiz-Anzahl; kein window.confirm.
+    expect(JSON.stringify(confirmMock.mock.calls[0]?.[1])).toContain("1");
   });
 
-  it("zweite Bestätigung: Klick auf den Bestätigen-Button löst erst dann onResolve('migrate') aus", () => {
+  it("zweite Bestätigung: Bestätigen löst erst dann onResolve('migrate') aus", async () => {
+    confirmMock.mockReset();
+    confirmMock.mockResolvedValue(true);
     const { modal, onResolve } = mkModal();
     modal.onOpen();
     all(modal.contentEl, "img2md-migration-btn-migrate")[0].click();
-    all(modal.contentEl, "img2md-migration-btn-confirm")[0].click();
-    expect(onResolve).toHaveBeenCalledWith("migrate");
+    await vi.waitFor(() => expect(onResolve).toHaveBeenCalledWith("migrate"));
     expect(onResolve).toHaveBeenCalledTimes(1);
   });
 
-  it("zweite Bestätigung: Abbrechen dort löst onResolve('cancel') aus (kein migrate)", () => {
+  it("zweite Bestätigung: Abbrechen dort löst onResolve('cancel') aus (kein migrate)", async () => {
+    confirmMock.mockReset();
+    confirmMock.mockResolvedValue(false);
     const { modal, onResolve } = mkModal();
     modal.onOpen();
     all(modal.contentEl, "img2md-migration-btn-migrate")[0].click();
-    all(modal.contentEl, "img2md-migration-btn-cancel")[0].click();
-    expect(onResolve).toHaveBeenCalledWith("cancel");
+    await vi.waitFor(() => expect(onResolve).toHaveBeenCalledWith("cancel"));
     expect(onResolve).toHaveBeenCalledTimes(1);
   });
 

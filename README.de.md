@@ -222,7 +222,7 @@ Setting-Heading in Obsidian: **„Vision (Image → Markdown)"**.
 
 | Einstellung | Default | Hinweis |
 |---|---|---|
-| **Vision-Endpunkte** | `["http://localhost:8080"]` | Geordnete Liste OpenAI-kompatibler Server, jede Zeile mit ihrem **Modell** (Vision-fähig, z.B. Qwen2-VL; Dropdown aus dem Endpunkt, Textfeld solange er offline ist) und API-Schlüssel (im Schlüsselbund von Obsidian). Das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren; eine Zeile lässt sich mit „Diesen Endpunkt zuerst probieren“ nach vorn schieben. MLX-Default — **LM Studio nutzt `:1234`** (häufigste Fehlkonfiguration). |
+| **Vision-Endpunkte** | `["http://localhost:1234"]` | Geordnete Liste OpenAI-kompatibler Server, jede Zeile mit ihrem **Modell** (Vision-fähig, z.B. Qwen2-VL; Dropdown aus dem Endpunkt, Textfeld solange er offline ist) und API-Schlüssel (im Schlüsselbund von Obsidian). Das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren; eine Zeile lässt sich mit „Diesen Endpunkt zuerst probieren“ nach vorn schieben. Default ist der Port von LM Studio (`:1234`); ein MLX-Server hört auf `:8080`. |
 | **Vision-Prompt** | Markdown-Transkription (siehe unten) | Anweisung an das Vision-Modell, frei editierbar (Text-Area). |
 | **PDF max. Seiten pro Lauf** | `25` | Schutzgrenze für die Zahl transkribierter PDF-Seiten pro Lauf — größere PDFs über den Seitenbereich einschränken. Harte Obergrenze 500. |
 | **PDF-Render-Auflösung** | `2.0` | Render-Auflösung der PDF-Seiten vor der OCR (Slider 1.0–4.0, Schritt 0.5). Niedrig = schneller, weniger Speicher; hoch = schärfere Seitenbilder & bessere OCR bei kleinem Text (2.0 ≈ 144 dpi). Mobil auf 1.5 begrenzt (OOM-Schutz). |
@@ -276,7 +276,7 @@ Architektur- und Modul-Layout stehen in [AGENTS.md](https://github.com/johannes-
 - **LM Studio ignoriert das `model`-Feld** im Request und nutzt das geladene Modell → das
   tatsächlich genutzte Modell wird aus `response.model` gelesen und landet im
   `transcribed_by`-Frontmatter der Transkript-Notiz.
-- **Vision-Endpoint-Default `:8080` (MLX) ≠ LM Studio `:1234`.**
+- **Vision-Endpoint-Default ist `:1234` (LM Studio); ein MLX-Server hört auf `:8080`.** Nur eine Neuinstallation bekommt den Default, eine gespeicherte Liste bleibt unberührt.
 
 ## Dokumentation
 
