@@ -25,7 +25,7 @@ describe("Hilfe-Zeile in den Settings", () => {
 
   it("öffnet Doku-Index und Issues dieses Repos", () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
-    const first = makeTab().getSettingDefinitions()[0] as { render: (s: Setting) => void };
+    const first = makeTab().getSettingDefinitions()[0] as unknown as { render: (s: Setting) => void };
     const setting = new Setting({ createDiv: () => ({}) } as never);
     first.render(setting);
     const [docsBtn, bugBtn] = (setting as unknown as { components: Array<{ textValue?: string; iconName?: string; tooltip?: string; clickCB: () => void }> }).components;

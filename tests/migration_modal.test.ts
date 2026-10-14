@@ -23,7 +23,7 @@ const plan: MigrationPlan = {
 const changes: MappingChange[] = [{ field: "kindKey", from: "kind", to: "type" }];
 
 function mkModal(over: { plan?: MigrationPlan; changes?: MappingChange[] } = {}) {
-  const onResolve = vi.fn<(choice: MigrationChoice) => void>();
+  const onResolve = vi.fn<[MigrationChoice], void>();
   const modal = new MigrationModal(makeFakeApp(), over.plan ?? plan, over.changes ?? changes, onResolve);
   return { modal, onResolve };
 }

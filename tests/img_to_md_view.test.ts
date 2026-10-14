@@ -266,7 +266,7 @@ describe("ImgToMdView — Transkribieren", () => {
     const { view } = mkView({ transcribeStream });
     await view.onOpen();
     const p = view.run();          // startet die (hängende) Transkription
-    view.onRunClick();             // läuft → Stop → controller.abort()
+    (view as unknown as { onRunClick(): void }).onRunClick();             // läuft → Stop → controller.abort()
     await p;
     const errs = all(view.contentEl, "img2md-error");
     expect(errs.length).toBe(1);
