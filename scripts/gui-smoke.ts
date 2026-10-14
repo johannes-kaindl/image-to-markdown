@@ -1073,7 +1073,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
 // Der Manager wird als FAKE-API in den Slot `llm-endpoint-manager` gelegt (Form-Pruefung
 // `isLlmEndpointManagerApi`), mit einer URL, die die lokale Liste nicht traegt — zwei verschiedene
 // Werte im Protokoll sind der Beleg, dass gemessen wurde. Zurueckgesetzt wird in `finally` UND im
-// Abbruch-Handler (cleanupState): ein liegen gebliebener Fake wuerde die echte Registrierung
+// Abbruch-Schritt (zustandZurueck): ein liegen gebliebener Fake wuerde die echte Registrierung
 // eines installierten Managers ueberschreiben.
 /** Oeffnet die Einstellungen des Plugins und dockt ans eigene Fenster an (ab Obsidian 1.13 ein
  *  eigenes CDP-Target). `null`, wenn kein Fenster erscheint. */
