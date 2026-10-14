@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.1] — 2026-10-14
+
 ### Fixed
 - **Text extraction for other plugins no longer returns the model's thinking with Gemma 4.** 0.31.0 asked the model not to think, but `google/gemma-4-e4b` under LM Studio ignores that and writes its reasoning into the answer, ended by a `<channel|>` marker; the result began with "The user wants me to transcribe …". The kit now reads that format (obsidian-kit 0.60.3, code-kit 0.27.2) and the reasoning goes to the thinking part. Checked against the real model: the result is the Markdown only.
 - **In the sidebar, text that turns out to be thinking disappears from the card** while the answer streams in (the card is cleared when the marker arrives).
