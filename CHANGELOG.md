@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-10-14
+
 ### Changed
 - **A finished transcript and the refinement versions are shown as formatted Markdown** (tables, lists, bold) instead of plain text. While the answer streams in it stays plain text. Links and images in model output are neutralised first; "Copy" and "Create note" still use the raw text.
 - **The migration dialog asks its second question in the kit's confirm dialog.** "Migrate & apply" now opens the standard confirmation (cancelling there still cancels the whole migration).
