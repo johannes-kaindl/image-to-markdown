@@ -2,7 +2,8 @@
 // bekommt: Ergebnis oder Fehler mit nutzersichtbarem Satz. Der Kit-Client liefert nur `kind` + Servermeldung;
 // den Satz baut das Plugin (UI-STANDARD §10). Reiner Kern ohne obsidian-Import.
 import type { LlmResult } from "./vendor/kit-obsidian/llm-connection";
-import { t } from "./i18n";
+import { managerErrorText, resolveLlmConnectionStrings } from "./vendor/kit-obsidian/llm-connection-strings";
+import { getLang, t } from "./i18n";
 
 export interface ChatOut { content: string; reasoning: string; model: string; finishReason?: string }
 
@@ -19,7 +20,11 @@ export function chatOutOrThrow(r: LlmResult): ChatOut {
   // Abbruch bleibt ein `AbortError`: die View unterscheidet ihn über `signal.aborted`, aber ein Nutzer
   // von `transcribeStream` darf sich weiter auf den Namen verlassen.
   if (r.kind === "aborted") { const e = new Error(r.detail); e.name = "AbortError"; throw e; }
-  if (r.kind === "no-endpoint") throw new Error(t("error.noEndpoint", r.detail));
+  // Mit Manager nennt die Meldung den Grund, den der Manager meldet (Kit-Text je Code: Schluessel fehlt, abgeschaltet, Wahl weg, …);
+  // ohne ihn der eigene Satz mit der Konfigurationsmeldung der lokalen Liste.
+  if (r.kind === "no-endpoint") {
+    throw new Error(r.source.kind === "manager" ? managerErrorText(resolveLlmConnectionStrings({ lang: getLang() }), r.detail) : t("error.noEndpoint", r.detail));
+  }
   if (r.kind === "timeout") throw new Error(t("chat.err.timeout", r.detail));
   if (r.kind === "network") throw new Error(t("chat.err.network", r.detail));
   if (r.kind === "overflow") throw new Error(t("chat.err.overflow", r.detail));

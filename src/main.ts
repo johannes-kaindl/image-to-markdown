@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, arrayBufferToBase64, getLanguage, Platform } from "obsidian";
+import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, getLanguage, Platform } from "obsidian";
 import { migrateVisionModel, defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
 import { setHttp } from "./vision_client";
@@ -20,6 +20,8 @@ import { ImgItem } from "./img_to_md_state";
 import { buildDescribePrompt } from "./describe";
 import { buildRefineMessages } from "./refine";
 import { setLang, pickLang, t, getLang } from "./i18n";
+import { binaryToDataUrl } from "./vendor/kit/data-url";
+import { localDate } from "./vendor/kit/local-stamp";
 import { pdfPageCount, renderPdfPage, extractPdfPageText } from "./pdf_render";
 import { writePdfTranscript, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "./pdf_to_md";
 import { DiffModal } from "./diff_modal";
@@ -217,8 +219,6 @@ export default class ImageToMarkdownPlugin extends Plugin {
     }
   }
 
-  private mimeOf(ext: string): string { const e = ext.toLowerCase(); return e === "jpg" ? "jpeg" : e; }
-
   /** Backend-Auswahl der Anbieter-API (Spec Baustein 4/D): abstrahiert über die WEGE
    *  (Kurzbefehl mobil, Vision-LLM desktop), nie über die Brücke — ein Konsument des `api`
    *  merkt den Unterschied nie. v1 ohne PDF (Spec § Nicht-Ziele): eine PDF-Quelle ist "unsupported". */
@@ -237,7 +237,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
     if (!SUPPORTED_EXTS.includes(ext)) return { error: "unsupported", message: `Dateityp nicht unterstützt: .${ext}` };
     if (!(await this.llm.resolve()).config) return { error: "backend-unavailable", message: "kein Vision-Endpunkt erreichbar" };
     try {
-      const dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(vaultPath))}`;
+      const dataUrl = binaryToDataUrl(await this.app.vault.adapter.readBinary(vaultPath), ext);
       const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
       // Ohne Denken: ein Konsument (Koda read_image) will den Text, nicht den Gedankengang — manche Backends (gemma-4 unter LM Studio)
       // schreiben ihn sonst in den Inhalt. Die Stufe der Sidebar bleibt unberuehrt (nur dieser Aufruf).
@@ -303,7 +303,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
   private makeImgIO(): ImgToMdIO {
     return {
-      date: () => new Date().toISOString().slice(0, 10),
+      date: () => localDate(new Date()),
       readNote: (p) => this.app.vault.adapter.read(p),
       writeNote: async (p, c) => {
         const f = this.app.vault.getAbstractFileByPath(p);
@@ -312,7 +312,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       createNote: async (p, c) => { await this.app.vault.create(p, c); },
       noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
-      readImageDataUrl: async (p, ext) => `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(p))}`,
+      readImageDataUrl: async (p, ext) => binaryToDataUrl(await this.app.vault.adapter.readBinary(p), ext),
       // Ohne Stream (Befehl „Transcribe active note“, Kontextmenü): die Fristen bleiben die der Volltext-Antwort.
       transcribe: (dataUrl) => this.callLlm(this.imageMessages(dataUrl, resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt)), { stream: false }),
       notify: (m) => { new Notice(m); },
@@ -417,7 +417,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
           }
           dataUrl = await renderPdfPage(bytes, page ?? 1, scale);
         } else {
-          dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
+          dataUrl = binaryToDataUrl(await this.app.vault.adapter.readBinary(filePath), ext);
         }
         const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
         return this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal), true);
@@ -453,7 +453,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
           const bytes = await this.app.vault.adapter.readBinary(filePath);
           dataUrl = await renderPdfPage(bytes, item.range?.from ?? 1, scale);
         } else {
-          dataUrl = `data:image/${this.mimeOf(ext)};base64,${arrayBufferToBase64(await this.app.vault.adapter.readBinary(filePath))}`;
+          dataUrl = binaryToDataUrl(await this.app.vault.adapter.readBinary(filePath), ext);
         }
         const prompt = buildDescribePrompt(this.settings.describeTaxonomy, getLang());
         const r = await this.callLlm(this.imageMessages(dataUrl, prompt), streamHandlers(onContent, onReasoning, signal), true);

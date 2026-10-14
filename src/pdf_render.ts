@@ -1,6 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { PDF_WORKER_SRC } from "./pdf-worker-src.generated";
 import { reconstructPdfText } from "./pdf_to_md";
+import { base64ToBytes } from "./vendor/kit/data-url";
 
 let workerReady = false;
 
@@ -64,10 +65,9 @@ export async function pdfSmokeTest(): Promise<boolean> {
     "Ymo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlw" +
     "ZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgOTkgOTldPj5lbmRvYmoKdHJhaWxlcjw8" +
     "L1Jvb3QgMSAwIFI+Pg==";
-  const bin = atob(MINIMAL_PDF_BASE64);
-  const buf = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-  const pages = await pdfPageCount(buf.buffer);
-  const png = await renderPdfPage(buf.buffer, 1, 1.0);
+  // base64ToBytes liefert einen Puffer, der genau diese Bytes besitzt (kein Teilstueck eines groesseren).
+  const buf = base64ToBytes(MINIMAL_PDF_BASE64).buffer as ArrayBuffer;
+  const pages = await pdfPageCount(buf);
+  const png = await renderPdfPage(buf, 1, 1.0);
   return pages === 1 && png.startsWith("data:image/png;base64,");
 }

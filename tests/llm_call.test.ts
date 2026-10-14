@@ -33,8 +33,17 @@ describe("chatOutOrThrow — Fehler mit nutzersichtbarem Satz", () => {
   it("Abbruch bleibt ein AbortError (die Namen-Prüfung der Aufrufer hängt daran)", () => {
     try { chatOutOrThrow(fail("aborted")); expect.unreachable(); } catch (e) { expect((e as Error).name).toBe("AbortError"); }
   });
-  it("kein Endpunkt: eigener Satz mit dem Grund des Managers", () => {
+  it("kein Endpunkt in der lokalen Liste: eigener Satz mit der Konfigurationsmeldung", () => {
     expect(() => chatOutOrThrow(fail("no-endpoint", { detail: "disabled" }))).toThrow("No vision endpoint is available (disabled).");
+  });
+  it("kein Endpunkt beim Manager: der Kit-Text zum gemeldeten Code (Schluessel fehlt, abgeschaltet)", () => {
+    const manager = { ...(source as object), kind: "manager" } as unknown as LlmResult["source"];
+    expect(() => chatOutOrThrow(fail("no-endpoint", { detail: "secret-missing", source: manager }))).toThrow("needs an API key that isn't stored yet");
+    expect(() => chatOutOrThrow(fail("no-endpoint", { detail: "disabled", source: manager }))).toThrow("switched off in the LLM Endpoint Manager");
+  });
+  it("kein Endpunkt beim Manager mit unbekanntem Code: der Text zu „no-endpoint“, nie ein leerer Satz", () => {
+    const manager = { ...(source as object), kind: "manager" } as unknown as LlmResult["source"];
+    expect(() => chatOutOrThrow(fail("no-endpoint", { detail: "irgendwas Neues", source: manager }))).toThrow("has no usable endpoint");
   });
   it("Timeout nennt die Kit-Meldung, keine einstellbare Sekundenzahl des Plugins", () => {
     expect(() => chatOutOrThrow(fail("timeout", { detail: "no chunk for 120 s" }))).toThrow("stopped responding (no chunk for 120 s)");
