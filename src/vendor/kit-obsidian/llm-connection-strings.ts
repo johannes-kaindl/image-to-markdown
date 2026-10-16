@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.60.3, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.61.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -28,7 +28,7 @@
  *  über dem Default, je Abschnitt ein Feld genau. */
 import { BACKENDS, FAMILIES, type FamilyId, type BackendId, type Deviation } from "../kit/sampling-profiles";
 import type { EndpointSourceSectionStrings } from "./endpoint-source";
-import type { ApiErrorCode } from "../kit/endpoint-source";
+import type { ApiErrorCode, SourceKind } from "../kit/endpoint-source";
 import type { EndpointListStrings } from "./endpoint-list";
 import type { RequestSectionStrings } from "./request-section";
 import { endpointStatusText, endpointWarningText } from "./endpoint-status-text";
@@ -81,7 +81,7 @@ interface Texts {
   secretSaved: string; secretChange: string; secretClear: string; secretUnavailable: string;
   // Anfrage-Abschnitt
   requestTitle: string; requestFamily: string; requestFamilyNone: string; requestBackend: string; requestBackendNone: string; familyManager: string; familyName: string; familyNone: string;
-  backendManager: string; backendProbe: string; backendNone: string; unknownFamily: string; jitWarning: string; sentAs: string;
+  backendManager: string; backendProbe: string; backendNone: string; unknownFamily: string; unrecognisedBackend: string; unrecognisedFamily: string; jitWarning: string; sentAs: string;
   modes: Record<"agent" | "structured" | "transform" | "grounded" | "companion" | "creative" | "complete", string>;
   fields: Record<"temperature" | "top_p" | "top_k" | "min_p" | "presence_penalty" | "reasoning_effort" | "max_tokens", string>;
   states: Record<"sent-effective" | "sent-unproven" | "not-sent-ignored" | "not-sent-unsupported" | "not-sent-unknown-family" | "not-sent-no-value", string>;
@@ -157,6 +157,10 @@ function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
         backend === "unknown" ? x.requestBackendNone : fmt(x.requestBackend, backendLabel(backend, x.backendNone), backendSource(bSource)),
       ].join(" · "),
       unknownFamily: x.unknownFamily,
+      unrecognised: (u) => [
+        u.backend !== undefined ? fmt(x.unrecognisedBackend, u.backend) : "",
+        u.family !== undefined ? fmt(x.unrecognisedFamily, u.family) : "",
+      ].filter((t) => t !== "").join(" "),
       jitWarning: (model, def) => fmt(x.jitWarning, model, def),
       sentAs: (model) => fmt(x.sentAs, model),
       modeHeading: (m) => x.modes[m],
@@ -205,6 +209,8 @@ const EN: Texts = {
   familyManager: "from the LLM Endpoint Manager", familyName: "estimated from the name", familyNone: "unknown",
   backendManager: "from the LLM Endpoint Manager", backendProbe: "detected", backendNone: "unknown",
   unknownFamily: "Normal for a freshly added endpoint. Until the model family (the model line, e.g. Qwen or gpt-oss) is known, only the mode's temperature is sent and the rest comes from the server defaults. The LLM Endpoint Manager records family and backend per model — add them there.",
+  unrecognisedBackend: "The backend \"{0}\" is not in this plugin's table yet (a newer manager than this plugin): only the standard fields are sent.",
+  unrecognisedFamily: "The model family \"{0}\" is not in this plugin's table yet (a newer manager than this plugin): no family-specific values are sent.",
   jitWarning: "This plugin sends model {0}, the endpoint's default is {1}. On LM Studio, every request unloads the other plugins' model.",
   sentAs: "Sent as {0}",
   modes: {
@@ -228,7 +234,7 @@ const EN: Texts = {
     "raised-to-reserve": "Raised to the family's reserve so thinking can't eat the whole budget.",
     "raised-to-thinking-floor": "Raised to the family's floor while thinking (the vendor warns against greedy decoding).",
     "below-thinking-floor": "Below the family's thinking floor — your value wins anyway.",
-    "off-not-possible": "This family can't fully turn thinking off; the lowest available level is sent.",
+    "off-not-possible": "Thinking can't be fully turned off here; the lowest available level is sent.",
   },
   topPHint: " For near-deterministic answers use temperature 0 or top_k 1 instead of a very small top_p.",
   reset: "Reset", thinkingLevel: "Thinking level", levels: { off: "off", low: "low", medium: "medium", high: "high" },
@@ -287,6 +293,8 @@ const DE: Texts = {
   familyManager: "vom LLM Endpoint Manager", familyName: "geschätzt aus dem Namen", familyNone: "unbekannt",
   backendManager: "vom LLM Endpoint Manager", backendProbe: "erkannt", backendNone: "unbekannt",
   unknownFamily: "Bei einem frisch eingetragenen Endpunkt ist das normal. Solange die Modellfamilie (die Modellreihe, z. B. Qwen oder gpt-oss) unbekannt ist, wird nur die Temperatur des Modus gesendet, der Rest kommt vom Server-Standard. Familie und Backend hält der LLM Endpoint Manager je Modell fest — trag sie dort ein.",
+  unrecognisedBackend: "Das Backend „{0}“ steht in der Tabelle dieses Plugins noch nicht (ein neuerer Manager als das Plugin): gesendet werden nur die Standardfelder.",
+  unrecognisedFamily: "Die Modellfamilie „{0}“ steht in der Tabelle dieses Plugins noch nicht (ein neuerer Manager als das Plugin): es werden keine familienspezifischen Werte gesendet.",
   jitWarning: "Dieses Plugin sendet Modell {0}, der Standard des Endpunkts ist {1}. Auf LM Studio entlädt jede Anfrage das Modell der anderen Plugins.",
   sentAs: "Gesendet als {0}",
   modes: {
@@ -310,7 +318,7 @@ const DE: Texts = {
     "raised-to-reserve": "Angehoben auf die Reserve der Familie, damit das Denken nicht das ganze Budget aufbraucht.",
     "raised-to-thinking-floor": "Beim Denken auf die Untergrenze der Familie angehoben (der Hersteller warnt vor Greedy Decoding).",
     "below-thinking-floor": "Unter der Denk-Untergrenze der Familie — dein Wert gewinnt trotzdem.",
-    "off-not-possible": "Diese Familie lässt sich nicht ganz abschalten; die niedrigste verfügbare Stufe wird gesendet.",
+    "off-not-possible": "Das Denken lässt sich hier nicht ganz abschalten; die niedrigste verfügbare Stufe wird gesendet.",
   },
   topPHint: " Für fast feste Antworten Temperatur 0 oder top_k 1 statt sehr kleinem top_p verwenden.",
   reset: "Zurücksetzen", thinkingLevel: "Denkstufe", levels: { off: "aus", low: "niedrig", medium: "mittel", high: "hoch" },
@@ -398,7 +406,9 @@ export function resolveLlmConnectionStrings(override?: LlmConnectionStringsOverr
 const MANAGER_CODES: readonly string[] = ["no-endpoint", "not-found", "disabled", "secret-missing", "unreachable"];
 
 /** Text zu einem Grund des Managers (`NoEndpointResult.detail` bei `source.kind === "manager"`,
- *  `EndpointSourceResult.reason`). **Jeder der fünf Codes hat einen eigenen Text, weil jeder an einer anderen
+ *  `EndpointSourceResult.reason`) — **nur für die Quelle Manager**: bei einer lokalen Endpunkt-Liste liest der Nutzer sonst „Der LLM Endpoint
+ *  Manager hat keinen nutzbaren Endpunkt“. Wer `LlmResult.source` hat, ruft `noEndpointText(strings, source, detail)`, das die Quelle
+ *  mitnimmt. **Jeder der fünf Codes hat einen eigenen Text, weil jeder an einer anderen
  *  Stelle zu beheben ist:** `no-endpoint` im Manager einen Endpunkt anlegen oder einschalten, `not-found` und
  *  `disabled` im eigenen Plugin einen anderen wählen (bzw. im Manager einschalten), `secret-missing` den Schlüssel
  *  im Manager eintragen, `unreachable` den Manager selbst starten. Die drei Vorlagen (lingotuner, obsidian-transmute,
@@ -422,4 +432,22 @@ export function managerErrorText(strings: Pick<LlmConnectionStrings, "managerErr
   const map = strings.managerErrors;
   if (map && isManagerErrorCode(detail)) return map[detail];
   return map?.["no-endpoint"] ?? strings.noEndpoint ?? LLM_CONNECTION_STRINGS_EN.managerErrors?.["no-endpoint"] ?? "";
+}
+
+/** Der Text zu einem fehlenden Endpunkt, **passend zur Quelle** — die Funktion, die ein Konsument ruft, wenn er `LlmResult.source` zur Hand hat.
+ *
+ *  `managerErrorText` ist nur für die Quelle Manager richtig: dort sind `no-endpoint`, `disabled` & Co. Aussagen über den Manager („Der LLM
+ *  Endpoint Manager hat keinen nutzbaren Endpunkt“). Bei einem lokalen Endpunkt-Verzeichnis liest der Nutzer sie als falsche Stelle zum
+ *  Beheben (gemessen im kuro-Test, Welle 22). Diese Funktion trennt: Quelle `manager` → `managerErrorText(strings, detail)`; Quelle `local` →
+ *  der lokale Text `noEndpoint` (englischer Default, wenn das Bündel keinen trägt), `detail` wird dort nicht gelesen.
+ *
+ *  Eine Konfigurationsmeldung einer Ausnahme in `detail` (`NoEndpointResult.detail`) ersetzt sie bei Quelle `manager` weiter durch den Text
+ *  zu `no-endpoint`; wer sie zeigen will, prüft vorher mit `isManagerErrorCode(detail)` (siehe `managerErrorText`). */
+export function noEndpointText(
+  strings: Pick<LlmConnectionStrings, "managerErrors" | "noEndpoint">,
+  source: { kind: SourceKind },
+  detail: string,
+): string {
+  if (source.kind === "manager") return managerErrorText(strings, detail);
+  return strings.noEndpoint ?? LLM_CONNECTION_STRINGS_EN.noEndpoint ?? "";
 }

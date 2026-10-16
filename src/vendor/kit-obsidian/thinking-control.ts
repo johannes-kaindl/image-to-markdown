@@ -1,6 +1,6 @@
-// vendored from obsidian-kit@0.60.3, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.61.0, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { DropdownComponent, setIcon } from "obsidian";
-import { FAMILIES, THINKING_LEVELS, type FamilyId, type ThinkingLevel } from "../kit/sampling-profiles";
+import { THINKING_LEVELS, familyThinking, type BackendId, type FamilyId, type ThinkingLevel } from "../kit/sampling-profiles";
 
 /** Denk-Steuerung im Chat. Standard: Zustands-Knopf nach UI-STANDARD §8 (Ist-Zustand im
  *  Label, `aria-pressed`, Icon `brain` ↔ `brain-cog`), schaltet zwischen `off` und `onLevel()`.
@@ -14,6 +14,9 @@ export interface ThinkingControlStrings {
 export interface ThinkingControlOptions {
   containerEl: HTMLElement;
   family(): FamilyId | null;
+  /** Seit 0.61.0, optional: das Backend der Quelle. Ob „aus“ möglich ist, hängt an Familie UND Backend (gemma 4 lässt sich auf LM Studio nicht
+   *  abschalten, anderswo schon). Fehlt es, gilt die Familie als solche. */
+  backend?(): BackendId | undefined;
   current(): ThinkingLevel;
   onLevel(): ThinkingLevel;
   setLevel(l: ThinkingLevel): Promise<void>;
@@ -27,7 +30,7 @@ export function buildThinkingControl(opts: ThinkingControlOptions): { refresh():
     root.empty();
     const level = opts.current();
     const fam = opts.family();
-    const offNotPossible = level === "off" && fam !== null && !FAMILIES[fam].canTurnOff;
+    const offNotPossible = level === "off" && fam !== null && !familyThinking(fam, opts.backend?.()).canTurnOff;
     if (opts.levelPicker()) {
       const dd = new DropdownComponent(root);
       dd.selectEl.setAttribute("aria-label", opts.strings.pickerLabel);

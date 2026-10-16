@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.60.3, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.61.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, setIcon } from "obsidian";
 import { collapsibleSection, type CollapsibleStorage } from "./collapsible";
 import { copyToClipboard } from "./clipboard";
@@ -29,6 +29,9 @@ export interface RequestSectionStrings {
   title: string;
   head(family: string, familySource: string, backend: string, backendSource: string): string;
   unknownFamily: string;
+  /** Seit 0.61.0, optional: Hinweis, wenn die Tabelle Backend oder Familie nicht kennt (`ResolvedRequest.unrecognised`, ein neuerer Manager als das
+   *  Plugin). Fehlt er, bleibt die Ansicht stumm, die Anfrage ist dieselbe. */
+  unrecognised?(u: { backend?: string; family?: string }): string;
   jitWarning(model: string, defaultModel: string): string;
   sentAs(model: string): string;
   modeHeading(mode: ModeId): string;
@@ -131,6 +134,13 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
     body.createDiv({ cls: "okit-request-warning mod-warning", text: st.jitWarning(state.sentModel, state.defaultModel) });
   }
   if (state.sentModel !== state.model) body.createDiv({ cls: "okit-request-note", text: st.sentAs(state.sentModel) });
+
+  // 2b. Backend oder Familie unbekannt (neuerer Manager als diese Tabelle): ehrlich zeigen, was daraus wurde.
+  const firstMode = opts.modes[0];
+  if (firstMode !== undefined && st.unrecognised) {
+    const probe = resolveRequestParams({ family: state.family, mode: firstMode, backend: state.backend, thinking: thinkingFor(settings, firstMode) });
+    if (probe.unrecognised) body.createDiv({ cls: "okit-request-warning mod-warning", text: st.unrecognised(probe.unrecognised) });
+  }
 
   // 3. Je Modus
   for (const mode of opts.modes) {

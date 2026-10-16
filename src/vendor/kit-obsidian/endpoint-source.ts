@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.60.3, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.61.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, type App } from "obsidian";
 import { resolveModelChoice, type ModelHintKey } from "../kit/model-choice";
 import type { EndpointConfig } from "../kit/endpoint_config";
@@ -16,15 +16,58 @@ export function findEndpointManager(app: App): LlmEndpointManagerApi | null {
   return isLlmEndpointManagerApi(api) ? api : null;
 }
 
-/** Abonniert Änderungen am Manager; ohne Manager ein dauerhaftes No-op (Plan-konform — lädt der
- *  Manager erst NACH dem Konsumenten, bleibt das Abo für die gesamte Session wirkungslos, weil
- *  Obsidians Plugin-Ladereihenfolge nicht garantiert ist). Konsumenten sollten das Abo deshalb
- *  idealerweise erst nach `app.workspace.onLayoutReady(...)` setzen, nicht direkt in `onload()` —
- *  das verringert (behebt aber nicht) das Risiko, den Manager zu verpassen. */
+/** Abonniert Änderungen am Manager und gibt die Abmeldung zurück.
+ *
+ *  **Manager schon da:** `api.on("changed", cb)` sofort.
+ *
+ *  **Manager noch nicht da (seit 0.61.0):** Obsidians Ladereihenfolge der Plugins ist nicht garantiert, und ein Nutzer kann den
+ *  Manager auch erst später einschalten. Statt für die Sitzung wirkungslos zu bleiben, versucht die Funktion es erneut — bei
+ *  Layout-Ready und bei jedem `layout-change` (Obsidian hat kein Ereignis „Plugin eingeschaltet“; das nächste Layout-Ereignis
+ *  nach dem Einschalten ist die frühste verlässliche Stelle). Sobald der Manager da ist, hängt sich das Abo an, die
+ *  Workspace-Listener werden entfernt und `cb` wird **einmal** gerufen: aus „kein Manager“ wurde „Manager“, also ist die Quelle
+ *  des Konsumenten eine andere (`invalidate` und Oberfläche neu zeichnen). Danach meldet `api.on` jede Änderung.
+ *
+ *  **Grenze:** zwischen Einschalten und dem nächsten Layout-Ereignis bleibt das Abo still. Wer die Quelle vorher braucht, liest
+ *  sie ohnehin frisch (`findEndpointManager` bei jedem `resolve`). Die Abmeldung ist idempotent und gilt auch, bevor der
+ *  Manager je da war. */
 export function onEndpointManagerChanged(app: App, cb: () => void): () => void {
-  const api = findEndpointManager(app);
-  if (!api) return () => {};
-  try { return api.on("changed", cb); } catch { return () => {}; }
+  let off: (() => void) | null = null;
+  let stopped = false;
+  const refs: unknown[] = [];
+
+  const attach = (): boolean => {
+    const api = findEndpointManager(app);
+    if (!api) return false;
+    try { off = api.on("changed", cb); } catch { off = () => {}; }
+    return true;
+  };
+  const unwatch = (): void => {
+    const ws = app.workspace as unknown as { offref?(ref: unknown): void };
+    for (const ref of refs.splice(0)) { try { ws.offref?.(ref); } catch { /* ein Fremd-Workspace ohne offref */ } }
+  };
+  const retry = (): void => {
+    if (stopped || off !== null) return;
+    if (!attach()) return;
+    unwatch();
+    try { cb(); } catch { /* die Meldung ist ein Hinweis; ein Fehler des Konsumenten stört das Abo nicht */ }
+  };
+
+  if (!attach()) {
+    const ws = app.workspace as unknown as {
+      on?(name: string, fn: () => void): unknown;
+      onLayoutReady?(fn: () => void): void;
+    };
+    try { const ref = ws.on?.("layout-change", retry); if (ref !== undefined) refs.push(ref); } catch { /* kein Workspace-Ereignis */ }
+    try { ws.onLayoutReady?.(retry); } catch { /* ebenso */ }
+  }
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    unwatch();
+    const o = off;
+    off = null;
+    try { o?.(); } catch { /* schon abgemeldet */ }
+  };
 }
 
 /** Texte der Modell-Zeile — nur nötig, solange der Baustein sie zeichnet (`modelRow !== false`). */

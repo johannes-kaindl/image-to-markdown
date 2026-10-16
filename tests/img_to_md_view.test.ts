@@ -773,6 +773,22 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control)", () => {
     expect(btn.textContent).toContain("Thinking: always on");
   });
 
+  it("gemma4 auf LM Studio auf 'off' → der Knopf sagt, dass es sich nicht ganz abschalten lässt (Kit 0.61.0, backend)", async () => {
+    setLang("en");
+    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", backend: "lmstudio", level: "off", onLevel: "low", levelPicker: false }) });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "okit-thinking-toggle");
+    expect(btn.textContent).toContain("always on");
+  });
+
+  it("gemma4 ohne Backend (Familie allein) bleibt abschaltbar: 'Thinking: off'", async () => {
+    setLang("en");
+    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", level: "off", onLevel: "low", levelPicker: false }) });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "okit-thinking-toggle");
+    expect(btn.textContent).toContain("Thinking: off");
+  });
+
   it("Deutsch: Label folgt der Oberflächensprache", async () => {
     setLang("de");
     const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "high", onLevel: "high", levelPicker: false }) });

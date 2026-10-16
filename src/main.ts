@@ -7,7 +7,7 @@ import { sanitizeChoice } from "./vendor/kit/endpoint-source";
 import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
 import { createLlmConnection, type CompleteHandlers, type LlmConnection, type LlmConnectionSettings } from "./vendor/kit-obsidian/llm-connection";
 import type { ChatWireMessage } from "./vendor/kit-obsidian/chat-client";
-import { loadRequestSettings, onLevelFor, thinkingFor, type FamilyId, type RequestSettings, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
+import { loadRequestSettings, onLevelFor, thinkingFor, type BackendId, type FamilyId, type RequestSettings, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { MODE, REQUEST_MIGRATIONS } from "./request_params";
 import { chatOutOrThrow, type ChatOut } from "./llm_call";
 import { VISION_TEST_PROMPT, isVisionConfirmed } from "./capabilities";
@@ -208,9 +208,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
     await this.saveRequestSettings(next);
   }
 
-  thinkingState(): { family: FamilyId | null; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean } {
+  thinkingState(): { family: FamilyId | null; backend: BackendId; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean } {
     const r = this.settings.request;
-    return { family: this.llm.source().family, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE), levelPicker: r.levelPickerInChat };
+    const src = this.llm.source();
+    return { family: src.family, backend: src.backend, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE), levelPicker: r.levelPickerInChat };
   }
 
   private refreshThinkingControls(): void {

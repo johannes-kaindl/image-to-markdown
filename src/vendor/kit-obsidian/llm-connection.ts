@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.60.3, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.61.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -446,7 +446,7 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
     });
 
     const facts = responseFactsOf(raw);
-    const deviations = facts ? checkResponse({ family: src.family, thinking }, facts) : [];
+    const deviations = facts ? checkResponse({ family: src.family, thinking, backend: src.backend }, facts) : [];
     session.report(deviations);
 
     const mapped = mapTruncated(raw, policy);

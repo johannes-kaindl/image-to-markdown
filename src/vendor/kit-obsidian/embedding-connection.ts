@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.60.3, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.61.0, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Embedding-Anbindung eines Fachplugins (`createLlmConnection({ capability: "embedding" })`): Endpunkt-Quelle (Manager oder
  *  lokale Liste mit Schlüsselbund), gemerkte Auflösung mit Index-Passung, Modellliste, ein `Embedder` (code-kit) und der
  *  Settings-Abschnitt für Quelle und Liste. Schmaler als die Chat-Verbindung: kein Modus, kein Anfrage-Abschnitt, kein Streaming,
@@ -11,8 +11,12 @@
  *  3. sonst die erste erreichbare ohne Modell (`no-model`; sie ist nie `active`, ein leeres Modell würde `embedding_model: ""`
  *     stempeln und den Modell-Guard abschalten);
  *  4. sonst keine (`no-endpoint`).
- *  Mit Manager entscheidet der Manager auch über „kein Endpunkt“ (kein Rückfall auf die lokale Liste); `accept` wirkt dort
- *  nur als Zustand, nicht als Kandidatenwahl (ein Eintrag).
+ *  Mit Manager entscheidet der Manager auch über „kein Endpunkt“ (kein Rückfall auf die lokale Liste). Der Manager liefert ein
+ *  Standardmodell je Endpunkt; lehnt `accept` es ab (`skipped-model`) und trägt die Wahl des Nutzers **kein Modell**, sucht die
+ *  Verbindung (seit 0.61.0) in Listenreihenfolge den ersten erreichbaren Manager-Endpunkt, der ein Modell anbietet, das `accept`
+ *  annimmt — Modelle aus der Tabelle des Eintrags (mit Alias, `accept` sieht die gesendete Schreibweise), ohne Tabelle aus
+ *  `api.models`. Eine ausdrückliche Modellwahl wird nie überstimmt, eine ausdrückliche Endpunktwahl begrenzt die Suche auf diesen
+ *  Endpunkt. Findet sich nichts, bleibt es bei `skipped-model` auf dem Standard. `skipped` nennt weiter, was der Standard ablehnte.
  *
  *  `accept(cfg, model)` ist eine Closure des Plugins über den Index-Stand (`manifest.embedding_model`): das Kit kennt den
  *  Index nicht. `model` ist das Modell der Zeile bzw. beim Manager die aufgelöste Schreibweise (`sentModel`, nie `config.model`
@@ -33,7 +37,7 @@ import type { EndpointConfig } from "../kit/endpoint_config";
 import { createModelListCache, type ModelListResult } from "../kit/model-list-cache";
 import { createEmbeddingClient, EmbeddingError, type EmbedTransport, type Embedder } from "../kit/embeddings-client";
 import type { TimeoutTimers } from "../kit/timeout";
-import { resolveEndpointSource, type EndpointChoice, type EndpointSourceResult, type LlmEndpointManagerApi } from "../kit/endpoint-source";
+import { describeModel, resolveEndpointSource, type EndpointChoice, type EndpointSourceResult, type LlmEndpointManagerApi } from "../kit/endpoint-source";
 import { realClock, type ClockPort } from "./clock";
 import { buildEndpointList } from "./endpoint-list";
 import { prepareLocalEndpoints } from "./endpoint-secrets";
@@ -149,9 +153,45 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
       return { source: { ...src, config: null, reason: "unreachable" }, state: "no-endpoint", skipped: [] };
     }
     const verdict = accepts(src.config, model);
-    return verdict === true
-      ? { source: src, state: "active", skipped: [] }
-      : { source: src, state: "skipped-model", skipped: [{ cfg: src.config, model, reason: verdict.skip }] };
+    if (verdict === true) return { source: src, state: "active", skipped: [] };
+    const skipped: EmbeddingSkipped[] = [{ cfg: src.config, model, reason: verdict.skip }];
+    // Der Manager liefert nur EIN Standardmodell je Endpunkt. Trägt der Nutzer keine Modellwahl, sucht die Verbindung das Index-Modell
+    // bei den Manager-Endpunkten, statt in `skipped-model` zu enden (Entscheidung Johannes 2026-09-25).
+    const found = s.choice?.model ? null : await findIndexModel(manager, s, skipped);
+    return found ?? { source: src, state: "skipped-model", skipped };
+  }
+
+  /** Der erste Manager-Endpunkt (Listenreihenfolge), der ein Modell anbietet, das `accept` annimmt, und erreichbar ist.
+   *  Gesucht wird nur ohne ausdrückliche Modellwahl; eine ausdrückliche Endpunktwahl begrenzt die Suche auf diesen Endpunkt.
+   *  Modelle des Endpunkts: die Tabelle des Eintrags (`models`, mit Alias), sonst die Liste des Endpunkts (`api.models`).
+   *  `accept` sieht die gesendete Schreibweise (`sentModel`, wie beim Standardmodell). Wirft nie: ein Fehler des Managers beendet nur die Suche. */
+  async function findIndexModel(manager: LlmEndpointManagerApi, s: EmbeddingConnectionSettings, skipped: EmbeddingSkipped[]): Promise<EmbeddingResolution | null> {
+    try {
+      const wanted = s.choice?.endpointId;
+      const candidates = manager.list({ capability: "embedding" }).filter((e) => e.enabled && (!wanted || e.id === wanted));
+      const opts = { caller: o.caller };
+      for (const entry of candidates) {
+        const mat = await manager.materialize(entry.id, opts).catch(() => null);
+        if (!mat || "error" in mat) continue;
+        let ids = (mat.models ?? entry.models ?? []).map((m) => m.id);
+        const fits = (id: string): boolean => accepts(mat.config, describeModel(id, mat.models ?? entry.models).sentModel) === true;
+        let hit = ids.find(fits);
+        if (hit === undefined && ids.length === 0) {
+          const live = await manager.models(entry.id).catch(() => null);
+          ids = Array.isArray(live) ? live : [];
+          hit = ids.find(fits);
+        }
+        if (hit === undefined) continue;
+        if (!(await probeOf(mat.config).catch(() => false))) continue;
+        const src = await resolveEndpointSource({
+          manager, local: [], capability: "embedding", caller: o.caller, choice: { endpointId: entry.id, model: hit },
+        }, () => Promise.resolve(false));
+        if (!src.config) continue;
+        lastManagerEntry = entry.id;
+        return { source: src, state: "active", skipped };
+      }
+    } catch { /* bleibt beim Standard */ }
+    return null;
   }
 
   async function resolveLocal(s: EmbeddingConnectionSettings): Promise<EmbeddingResolution> {

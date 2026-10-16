@@ -6,6 +6,13 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Vendored `obsidian-kit` 0.61.0 (was 0.60.3) and `code-kit` 0.28.0 (was 0.27.2). You will notice two things:
+- With Gemma 4 in LM Studio and "thinking off" the plugin now sends the lowest thinking level, because LM Studio ignores "none" for this model. The model still thinks a little (a few more tokens and a bit more time). The transcript and the description stay clean: the thinking sits in the card's collapsible thinking block. The thinking button in the sidebar now says so ("always on") instead of offering "off", and the "Request" section in the settings shows the same note.
+- A backend or model family that this version does not know yet no longer makes a request fail; the "Request" section names it and sends only the standard fields.
+- Nothing else is visible: the other kit changes concern other plugins (Endpoint Manager subscription, Claude profile, index guard).
+
 ## [0.31.1] — 2026-10-14
 
 ### Fixed

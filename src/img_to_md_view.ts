@@ -5,7 +5,7 @@ import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRe
 import { truncateMiddle } from "./img_to_md";
 import { t } from "./i18n";
 import { buildThinkingControl } from "./vendor/kit-obsidian/thinking-control";
-import type { FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
+import type { BackendId, FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { CardCache } from "./card_cache";
 import { parseDescription } from "./describe";
 
@@ -82,7 +82,7 @@ export interface ImgToMdViewDeps {
   getPreset: () => string;
   setPreset: (id: string) => void;
   /** Stand der Denk-Steuerung: Familie der aufgeloesten Quelle, aktuelle und Ein-Stufe, Stufenwahl an/aus. */
-  thinkingState: () => { family: FamilyId | null; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean };
+  thinkingState: () => { family: FamilyId | null; backend?: BackendId | undefined; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean };
   /** Ob Denkprozess-Blöcke im Nachbesserungs-Verlauf standardmäßig aufgeklappt starten. */
   getReasoningExpanded: () => boolean;
   setThinkingLevel: (l: ThinkingLevel) => Promise<void>;
@@ -162,6 +162,7 @@ export class ImgToMdView extends ItemView {
     this.thinkCtl = buildThinkingControl({
       containerEl: thinkHost,
       family: () => this.deps.thinkingState().family,
+      backend: () => this.deps.thinkingState().backend,
       current: () => this.deps.thinkingState().level,
       onLevel: () => this.deps.thinkingState().onLevel,
       setLevel: (l) => this.deps.setThinkingLevel(l),
