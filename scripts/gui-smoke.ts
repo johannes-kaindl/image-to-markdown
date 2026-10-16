@@ -58,7 +58,9 @@
  * die zwei Punkte, die zwingend einen Lauf brauchen, hinter `--with-model`.
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { boxAround, capture } from "../../tools/obsidian-cdp/shot.js";
 import { argv, cwd } from "node:process";
 
 import {
@@ -109,6 +111,23 @@ let verbindung = { port: 0, vault: "image-to-markdown" };
 /** Soll-Liste aller Pruefpunkte = der Nenner der Bilanz (CORE-TEST-19). Ein Punkt, der hier
  *  steht und nie aufgezeichnet wird, zaehlt als „nichts gemessen"; ein Tippfehler in
  *  `PRUEFPUNKTE[].key` faellt am Typ auf. */
+/** Optional: mit `SHOT_DIR=<ordner>` nimmt der Lauf die Flaeche nach dem Gemma-Punkt auf (Sichtpruefung des Denkblocks). Aufnahmen gehoeren
+ *  unter `--exclusive focus`: unter einem Port-Lock haengt `Page.captureScreenshot` bei verdecktem Fenster. */
+async function haltePanelBild(cdp: Cdp, name: string, selector: string): Promise<void> {
+  const dir = process.env.SHOT_DIR;
+  if (dir === undefined || dir === "") return;
+  try {
+    mkdirSync(dir, { recursive: true });
+    await cdp.evaluate(`const d = document.querySelector(".okit-stream-reasoning, .img2md-reasoning"); if (d) d.open = true; const k = document.querySelector(".img2md-card"); if (k) k.scrollIntoView({ block: "center" }); await new Promise((r) => setTimeout(r, 400)); return true;`);
+    const r = await boxAround(cdp, [selector], 4);
+    const png = await capture(cdp, r ?? undefined, 1, {});
+    writeFileSync(join(dir, `${name}.png`), png);
+    console.log(`  · Bild: ${join(dir, `${name}.png`)}`);
+  } catch (e) {
+    console.log(`  · Bild ${name} nicht aufgenommen: ${(e as Error).message}`);
+  }
+}
+
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "F1", "F2", "F3",
   "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "G1", "G2", "G3",
@@ -987,6 +1006,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
           const d = document.querySelector(${JSON.stringify(SIDEBAR + " .img2md-reasoning-body")});
           return text.includes("Sauber") ? { text, denk: d ? (d.textContent || "") : "" } : null;`, 20_000, 100);
         if (m === null) return { ok: false, detail: "die Antwort nach dem Kanal-Ende erschien nicht auf der Karte (20 s)" };
+        await haltePanelBild(cdp, "gemma-denkblock", SIDEBAR + " .img2md-card");
         const sauber = !m.text.includes("The user wants") && !m.text.includes("<channel");
         const imBlock = m.denk.includes("The user wants");
         return { ok: sauber && imBlock, detail: `Karte ${JSON.stringify(m.text.slice(0, 60))} · Denkblock ${imBlock ? "traegt das Denken" : "LEER oder ohne Denken"} (${m.denk.length} Zeichen)` };
