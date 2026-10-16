@@ -111,7 +111,7 @@ let verbindung = { port: 0, vault: "image-to-markdown" };
  *  `PRUEFPUNKTE[].key` faellt am Typ auf. */
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "F1", "F2", "F3",
-  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "R1", "G1", "G2", "G3",
+  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -948,6 +948,56 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const effort = (stub.anfragen().filter((a) => a.route === "chat").at(-1)?.json as { reasoning_effort?: unknown } | null)?.reasoning_effort;
         return { ok: d.out === "Sauberer Text", detail: `Ergebnis ${JSON.stringify(d.out)} · Server sah reasoning_effort=${JSON.stringify(effort)} (Nutzerstufe low)` };
       } finally {
+        await stub.stop();
+        await cdp.evaluate(`app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.ocrMethod = ${JSON.stringify(methode)}; return true;`).catch(() => undefined);
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
+  {
+    key: "V8",
+    titel: "Anzeige: bei gemma-4 steht nach dem Kanal-Ende nur die Antwort auf der Karte, der Denktext im Denkblock (Stub, Strom bleibt offen)",
+    async run(cdp) {
+      // Wie V7, aber gemessen wird der ANZEIGETEXT der Karte, waehrend der Aufruf noch laeuft: der Stub haelt den Strom nach der Antwort
+      // offen (`nachlaufMs`). Am Ende zeichnet die Karte ohnehin das Ergebnis; ohne `onContentReset` stuende der Denktext bis dahin
+      // als Antwort auf der Karte. Gegenprobe: das Abklemmen von `resetContent` in der View macht diesen Punkt rot.
+      const stub = await startLlmStub({
+        models: ["google/gemma-4-e4b"],
+        standard: { text: "The user wants me to transcribe the image into Markdown.\nI will proceed.<channel|>Sauberer Text", laenge: 14, takt: 120, nachlaufMs: 6000, model: "google/gemma-4-e4b" },
+      });
+      const vor = await verbindungVorher(cdp);
+      const methode = await cdp.evaluate<string>(`return app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.ocrMethod;`);
+      try {
+        await zeigeNotiz(cdp, NOTIZ.bilder);
+        await cdp.evaluate(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.ocrMethod = "vision";
+          p.settings.visionEndpoints = [{ url: ${JSON.stringify(stub.url)}, model: "google/gemma-4-e4b" }]; p.settings.choice = {};
+          p.llm.invalidate();
+          const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+          const bild = view.state.items.find((i) => i.supported);
+          if (!bild) throw new Error("kein unterstuetztes Bild in der Liste");
+          if (!view.state.isSelected(bild.link)) view.state.toggle(bild.link);
+          window.__i2mLauf = view.run();
+          return true;
+        `);
+        const m = await pollUntil<{ text: string; denk: string }>(cdp, `
+          const t = document.querySelector(${JSON.stringify(SIDEBAR + " .img2md-card .img2md-text")});
+          const text = t ? (t.textContent || "").trim() : "";
+          const d = document.querySelector(${JSON.stringify(SIDEBAR + " .img2md-reasoning-body")});
+          return text.includes("Sauber") ? { text, denk: d ? (d.textContent || "") : "" } : null;`, 20_000, 100);
+        if (m === null) return { ok: false, detail: "die Antwort nach dem Kanal-Ende erschien nicht auf der Karte (20 s)" };
+        const sauber = !m.text.includes("The user wants") && !m.text.includes("<channel");
+        const imBlock = m.denk.includes("The user wants");
+        return { ok: sauber && imBlock, detail: `Karte ${JSON.stringify(m.text.slice(0, 60))} · Denkblock ${imBlock ? "traegt das Denken" : "LEER oder ohne Denken"} (${m.denk.length} Zeichen)` };
+      } finally {
+        await cdp.evaluate(`
+          const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0]?.view;
+          if (view && view.running) view.controller?.abort();
+          try { await window.__i2mLauf; } catch { /* abgebrochen */ }
+          delete window.__i2mLauf;
+          return true;
+        `).catch(() => undefined);
         await stub.stop();
         await cdp.evaluate(`app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.ocrMethod = ${JSON.stringify(methode)}; return true;`).catch(() => undefined);
         await stelleVerbindungWieder(cdp, vor);
