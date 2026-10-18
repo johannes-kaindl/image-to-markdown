@@ -163,19 +163,34 @@ async function meldungen(cdp: Cdp): Promise<string> {
  *  uebergebenen Body — an Fixture-Notizen ist das fatal (gemessen 2026-08-15 in
  *  3d-codeblocks: drei Fixture-Notizen auf 0 Bytes). */
 async function zeigeNotiz(cdp: Cdp, pfad: string): Promise<void> {
-  await openExisting(cdp, pfad, "preview");
+  // ⚠️ Das Oeffnen kann im ersten Lauf nach Deploy und frischem Prozess ins Leere gehen
+  // (gemessen 2026-10-18, Welle 24: `Reading list.md` wurde in 10 s nicht aktiv, B3 stand
+  // auf „nichts gemessen", in den Folgelaeufen am selben Prozess nie). Die Mutation
+  // (Oeffnen) wird deshalb bis zu dreimal wiederholt, jeweils mit eigener Wartephase;
+  // die Meldung nennt am Ende, WAS stattdessen aktiv war.
+  const VERSUCHE = 3;
+  let aktiv: string | null = null;
+  for (let versuch = 1; versuch <= VERSUCHE && !aktiv; versuch++) {
+    await openExisting(cdp, pfad, "preview");
 
-  // ⚠️ Nicht auf "Liste ODER Empty-State steht" warten: beides steht schon von der
-  // VORHERIGEN Notiz da, die Bedingung ist also sofort erfuellt und die Messung greift
-  // den alten Zustand ab. Gemessen am 2026-08-30 beim ersten Lauf — die Zeilenliste kam
-  // leer zurueck, obwohl die Sidebar zwei Zeilen zeigte. Das ist die Falle "der
-  // Pruefpunkt wartet auf eine andere Bedingung, als er behauptet", und sie ist teurer
-  // als ein dauerhaft roter Punkt, weil sie nur manchmal zuschlaegt.
-  const aktiv = await pollUntil<string>(cdp, `
-    const f = app.workspace.getActiveFile();
-    return f && f.path === ${JSON.stringify(pfad)} ? f.path : null;
-  `, 10_000, 200);
-  if (!aktiv) throw new Error(`"${pfad}" wurde nicht zur aktiven Datei`);
+    // ⚠️ Nicht auf "Liste ODER Empty-State steht" warten: beides steht schon von der
+    // VORHERIGEN Notiz da, die Bedingung ist also sofort erfuellt und die Messung greift
+    // den alten Zustand ab. Gemessen am 2026-08-30 beim ersten Lauf — die Zeilenliste kam
+    // leer zurueck, obwohl die Sidebar zwei Zeilen zeigte. Das ist die Falle "der
+    // Pruefpunkt wartet auf eine andere Bedingung, als er behauptet", und sie ist teurer
+    // als ein dauerhaft roter Punkt, weil sie nur manchmal zuschlaegt.
+    aktiv = await pollUntil<string>(cdp, `
+      const f = app.workspace.getActiveFile();
+      return f && f.path === ${JSON.stringify(pfad)} ? f.path : null;
+    `, 5_000, 200);
+  }
+  if (!aktiv) {
+    const stattdessen = await cdp.evaluate<string>(`
+      const f = app.workspace.getActiveFile();
+      return \`aktiv ist "\${f?.path ?? "(keine)"}", Datei im Vault: \${app.vault.getAbstractFileByPath(${JSON.stringify(pfad)}) ? "ja" : "nein"}\`;
+    `);
+    throw new Error(`"${pfad}" wurde nach ${VERSUCHE} Oeffnungsversuchen nicht zur aktiven Datei (${stattdessen})`);
+  }
 
   // Und dann auf den Marker der VIEW warten, nicht auf einen DOM-Zustand: `aktive Datei`
   // wechselt, bevor die View reagiert hat, und ein blosses "Liste steht still" ist in
