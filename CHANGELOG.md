@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.3] — 2026-10-18
+
 ### Changed
 
 - Vendored `obsidian-kit` 0.63.0 (was 0.61.0) and `code-kit` 0.31.0 (was 0.28.0). You will notice three things:
