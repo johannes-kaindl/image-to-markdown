@@ -1,10 +1,10 @@
 {
   "sources": {
     "obsidian-kit": {
-      "ref": "0.61.0"
+      "ref": "0.63.0"
     },
     "code-kit": {
-      "ref": "0.28.0"
+      "ref": "0.31.0"
     }
   },
   "targets": [
@@ -13,9 +13,11 @@
       "source": "obsidian-kit",
       "from": "src/pure",
       "modules": [
-        "endpoint-source",
+        "anthropic-wire",
         "endpoint-secret-hook",
-        "ocr-provider"
+        "endpoint-source",
+        "ocr-provider",
+        "override-guard"
       ],
       "rewrite": [
         [
@@ -91,6 +93,7 @@
       "source": "obsidian-kit",
       "from": "src/obsidian",
       "modules": [
+        "anthropic-transport",
         "backend-probe",
         "chat-client",
         "clipboard",
@@ -106,6 +109,7 @@
         "llm-connection",
         "llm-connection-strings",
         "model-picker",
+        "plugin-api",
         "request-section",
         "request-session",
         "secrets",

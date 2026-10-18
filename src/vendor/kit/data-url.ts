@@ -1,4 +1,4 @@
-// vendored from code-kit@0.28.0, src/ts/pure/data-url.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.31.0, src/ts/pure/data-url.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // Origin: koda-agent `src/core/tools/images.ts` (header: "taken over from slide-deck/src/adapter.ts, 2026-09-30") and
 // slide-deck `src/adapter.ts` — the same 8 lines twice, differing only in the table (koda-agent leaves out SVG). Also
 // replaces the inline versions in obsidian-letterhead (`src/obsidian/main.ts:238`), local-image-generator

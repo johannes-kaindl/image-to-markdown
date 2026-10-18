@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/collapsible.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/collapsible.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { setIcon } from "obsidian";
 
 /** Optionaler Persistenz-Callback für den Auf-/Zu-Zustand. Der Consumer verdrahtet ihn

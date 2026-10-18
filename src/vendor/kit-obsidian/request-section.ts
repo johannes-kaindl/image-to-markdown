@@ -1,8 +1,9 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, setIcon } from "obsidian";
 import { collapsibleSection, type CollapsibleStorage } from "./collapsible";
 import { copyToClipboard } from "./clipboard";
 import type { RequestSession } from "./request-session";
+import { isModelLoaded, type LoadedModel } from "../kit/capabilities";
 import {
   FAMILY_IDS, THINKING_LEVELS, resolveRequestParams, thinkingFor, validateOverride,
   type BackendId, type FamilyId, type FamilyKey, type FieldExplain, type FieldId, type ModeId, type ModelFamilyId,
@@ -33,9 +34,13 @@ export interface RequestSectionStrings {
    *  Plugin). Fehlt er, bleibt die Ansicht stumm, die Anfrage ist dieselbe. */
   unrecognised?(u: { backend?: string; family?: string }): string;
   jitWarning(model: string, defaultModel: string): string;
+  /** Seit 0.63.0, optional: Warnung zur Laufzeit — das gesendete Modell ist nicht geladen, aber andere sind (`loaded` = deren Schlüssel). Die Anfrage
+   *  lädt es per JIT und kann ein geladenes verdrängen. Fehlt der Text, bleibt die Zeile weg. */
+  jitRuntimeWarning?: (model: string, loaded: string[]) => string;
   sentAs(model: string): string;
   modeHeading(mode: ModeId): string;
-  fieldName(field: FieldId): string;
+  /** `backend` (seit 0.63.0): der Wire-Name in der Klammer hängt am Backend — die Messages-API kennt `effort`, nicht `reasoning_effort`. */
+  fieldName(field: FieldId, backend?: BackendId): string;
   fieldDesc(e: FieldExplain): string;
   reset: string;
   thinkingLevel: string;
@@ -51,6 +56,9 @@ export interface RequestSectionStrings {
   deviationsOk: string;
   deviationsWarn(n: number): string;
   deviation(kind: DeviationKind, count: number, detail?: string): string;
+  /** Seit 0.63.0, optional: Beschriftung des Knopfs am Hinweis „Familie erkannt“ (`family-detected`), der die Einstellungen des
+   *  Managers öffnet. Der Knopf erscheint nur mit diesem Text UND `openManager`. */
+  setFamily?: string;
   /** Notice und Status-Text, wenn `save` zurückweist. Optional, damit Konsumenten mit eigenen
    *  `strings` nicht brechen; fehlt es, gilt `SAVE_FAILED_FALLBACK`. */
   saveFailed?: string;
@@ -66,6 +74,13 @@ export interface RequestSectionOptions {
   strings: RequestSectionStrings;
   collapsedStorage?: CollapsibleStorage;
   rerender(): void;
+  /** Öffnet die Einstellungen des LLM Endpoint Managers — für den Knopf „Familie im Manager setzen“ am Hinweis `family-detected`.
+   *  `createLlmConnection` reicht `openEndpointManagerSettings(app)`. Die Familie wird nicht aus der Antwort gelernt und nicht gesetzt: der Knopf
+   *  führt nur an die Stelle, an der der Nutzer sie einträgt (Entscheidung 2026-10-17, Manager schickt keine Anfragen). */
+  openManager?: () => void;
+  /** Seit 0.63.0: was der Endpunkt gerade geladen hat (`fetchLoadedModelsAt`); `null` = unbekannt (anderes Backend, altes Schema, Fehler). Gerufen
+   *  nur bei Backend `lmstudio`, einmal je Aufbau des Abschnitts; die Warnzeile erscheint, wenn es antwortet, ohne den Aufbau aufzuhalten. */
+  loadedModels?: () => Promise<readonly LoadedModel[] | null>;
   /** Phase 2 (Systemprompt): der Konsument hängt hier sein Kapitel ein. */
   promptSlot?(el: HTMLElement): void;
   /** Zeigt den Schalter „Stufenwahl im Chat“. Default `false`: er wirkt nur dort, wo das Plugin
@@ -134,6 +149,17 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
     body.createDiv({ cls: "okit-request-warning mod-warning", text: st.jitWarning(state.sentModel, state.defaultModel) });
   }
   if (state.sentModel !== state.model) body.createDiv({ cls: "okit-request-note", text: st.sentAs(state.sentModel) });
+  // 2a. Laufzeitwarnung: das gesendete Modell ist nicht geladen, andere sind — die Anfrage verdrängt dann eines (JIT). Unbekannt (`null`) und
+  // „nichts geladen“ warnen nicht: im ersten Fall wüsste die Zeile nichts, im zweiten wird nichts verdrängt.
+  if (state.backend === "lmstudio" && opts.loadedModels !== undefined && st.jitRuntimeWarning !== undefined && state.sentModel !== "") {
+    // Ein leerer Platzhalter hält die Stelle im Abschnitt; die Zeile entsteht erst, wenn die Antwort da ist (ein leeres Div hat keine Höhe).
+    const slot = body.createDiv({ cls: "okit-request-jit-slot" });
+    const text = st.jitRuntimeWarning;
+    void opts.loadedModels().then((loaded) => {
+      if (loaded === null || loaded.length === 0 || isModelLoaded(loaded, state.sentModel)) return;
+      slot.createDiv({ cls: "okit-request-warning mod-warning", text: text(state.sentModel, [...new Set(loaded.map((l) => l.model))]) });
+    }, () => { /* unbekannt: keine Warnung */ });
+  }
 
   // 2b. Backend oder Familie unbekannt (neuerer Manager als diese Tabelle): ehrlich zeigen, was daraus wurde.
   const firstMode = opts.modes[0];
@@ -153,7 +179,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
       overrides: ov,
     });
     for (const e of resolved.explain) {
-      const s = new Setting(body).setName(st.fieldName(e.field)).setDesc(st.fieldDesc(e));
+      const s = new Setting(body).setName(st.fieldName(e.field, state.backend)).setDesc(st.fieldDesc(e));
       const own = ov[e.field];
       const notSent = e.state.startsWith("not-sent") && own === undefined;
       s.addText((t) => {
@@ -241,7 +267,14 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
   const icon = status.createSpan();
   setIcon(icon, devs.length === 0 ? "circle-check" : "alert-triangle");
   status.createSpan({ text: label });
-  for (const d of devs) body.createDiv({ cls: "okit-request-deviation", text: st.deviation(d.kind, d.count, d.detail) });
+  for (const d of devs) {
+    const line = body.createDiv({ cls: "okit-request-deviation", text: st.deviation(d.kind, d.count, d.detail) });
+    if (d.kind === "family-detected" && opts.openManager !== undefined && st.setFamily !== undefined) {
+      const open = opts.openManager;
+      line.createEl("button", { cls: "okit-request-deviation-action", text: st.setFamily, attr: { type: "button" } })
+        .addEventListener("click", () => { open(); });
+    }
+  }
 
   // 7. Platz für den Systemprompt (Phase 2)
   if (opts.promptSlot) opts.promptSlot(body.createDiv({ cls: "okit-request-prompt" }));
@@ -256,5 +289,6 @@ export const REQUEST_SECTION_CSS = `
 .okit-request-status.is-ok { color: var(--text-success); }
 .okit-request-status.is-warning { color: var(--text-warning); }
 .okit-request-status.is-error { color: var(--text-error); }
+.okit-request-deviation-action { margin-inline-start: var(--size-4-2); }
 .okit-request-deviation { color: var(--text-muted); font-size: var(--font-ui-small); padding-left: var(--size-4-6); }
 `;

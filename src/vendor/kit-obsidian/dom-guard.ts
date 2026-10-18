@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { MarkdownRenderer, type App, type Component } from "obsidian";
 import { realClock, type ClockPort } from "./clock";
 import { neutralizeRemoteResourcesInTree, type RemovedResource, type RemoteResourcesOptions } from "../kit/remote-resources";

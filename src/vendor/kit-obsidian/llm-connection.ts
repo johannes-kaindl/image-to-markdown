@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -38,7 +38,7 @@ import type { RedactRules } from "../kit/redact";
 import { type EndpointConfig } from "../kit/endpoint_config";
 import { createModelListCache, type ModelListResult } from "../kit/model-list-cache";
 import {
-  checkResponse, mapTruncated, resolveRequestParams, responseFactsOf, thinkingFor, DEFAULT_REQUEST_SETTINGS,
+  checkResponse, mapTruncated, overrideDroppedDeviation, resolveRequestParams, responseFactsOf, thinkingFor, DEFAULT_REQUEST_SETTINGS,
   type BackendId, type Deviation, type FamilyKey, type ModeId, type RequestSettings, type ResponseFacts, type ThinkingLevel, type TruncatedPolicy,
 } from "../kit/sampling-profiles";
 import {
@@ -49,14 +49,17 @@ import {
   createChatClient, JIT_FIRST_CHUNK_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS,
   type ChatClient, type ChatResult, type ChatTiming, type ChatWireMessage, type SseTransport,
 } from "./chat-client";
-import { requestUrlTransport, transportFor, xhrSseTransport } from "./chat-transport";
+import { requestUrlTransport, transportFor, TransportMissingError, xhrSseTransport } from "./chat-transport";
+import { splitCallOverrides } from "../kit/override-guard";
+import { createAnthropicChatTransport, createAnthropicState, type AnthropicState } from "./anthropic-transport";
 import { realClock, type ClockPort } from "./clock";
-import { createObsidianBackendProbe } from "./backend-probe";
+import { createObsidianBackendProbe, fetchLoadedModelsAt } from "./backend-probe";
+import type { LoadedModel } from "../kit/capabilities";
 import { buildEndpointList } from "./endpoint-list";
 import { prepareLocalEndpoints } from "./endpoint-secrets";
 import { createEndpointPlumbing } from "./endpoint-plumbing";
 import { createEmbeddingConnection, type EmbeddingConnection, type EmbeddingConnectionOptions } from "./embedding-connection";
-import { buildEndpointSourceSection, findEndpointManager } from "./endpoint-source";
+import { buildEndpointSourceSection, findEndpointManager, openEndpointManagerSettings } from "./endpoint-source";
 import { buildRequestSection, type RequestSectionState } from "./request-section";
 import { createRequestSession, type RequestSession } from "./request-session";
 import { LLM_CONNECTION_STRINGS_DE, LLM_CONNECTION_STRINGS_EN, resolveLlmConnectionStrings, type LlmConnectionStrings, type LlmConnectionStringsOverride } from "./llm-connection-strings";
@@ -85,6 +88,10 @@ export interface LlmConnectionTransports {
   httpFallback?: SseTransport;
   /** Transport für Endpunkte mit `transport: "shortcuts"` — fertig oder aus der Kurzbefehl-Konfiguration gebaut. */
   shortcuts?: SseTransport | ((shortcut: ShortcutTransportConfig) => SseTransport);
+  /** Opt-in für Endpunkte mit `transport: "anthropic"` (native Messages-API, Welle 23): `true` verdrahtet den Kit-Transport
+   *  (`createAnthropicChatTransport` über `http`/`httpFallback`), ein `SseTransport` ersetzt ihn. Ohne Opt-in fragt die
+   *  Verbindung den Manager nicht nach solchen Endpunkten (`list`/`resolve` ohne `"anthropic"` in `transports`). */
+  anthropic?: boolean | SseTransport;
   /** `"auto"` (Default): nach einem Netzfehler im Stream einmal ohne Stream wiederholen; `"none"` (koda):
    *  ein CORS-Block soll sichtbar bleiben. */
   fallback?: "auto" | "none";
@@ -109,6 +116,9 @@ export interface LlmConnectionOptions {
   /** Backend des Endpunkts, wenn der Manager es nicht nennt. Default: `createObsidianBackendProbe()`
    *  (je Verbindung ein eigener 30-s-Zwischenspeicher); überschreibbar. */
   backendOf?: (cfg: EndpointConfig) => Promise<BackendId | null>;
+  /** Welche Modelle der Endpunkt gerade geladen hat — für die Warnung im Anfrage-Abschnitt, wenn die Anfrage ein anderes per JIT laden und ein
+   *  geladenes verdrängen würde (nur LM Studio). Default: `fetchLoadedModelsAt` (`GET /api/v1/models`, nur lesend). `null` = unbekannt. */
+  loadedModels?: (cfg: EndpointConfig) => Promise<readonly LoadedModel[] | null>;
   managerOnly?: boolean;
   transports?: LlmConnectionTransports;
   timeouts?: LlmConnectionTimeouts;
@@ -160,6 +170,11 @@ export interface NoEndpointResult {
   kind: "no-endpoint";
   /** Grund des Managers (`no-endpoint`, `disabled`, …) oder die Konfigurationsmeldung. */
   detail: string;
+  /** Seit 0.63.0: `"transport-missing"`, wenn der Endpunkt einen Transport verlangt, den das Plugin nicht bereitstellt (Vertragsverletzung des
+   *  Managers oder fehlendes Opt-in) — dann nennt `transport` ihn. Kein Fehler des Kurzbefehls, auch wenn `transport` `"shortcuts"` ist, nur dort
+   *  ist es die fehlende Brücke. Text: `transportMissingText(strings, transport)`. */
+  reason?: "transport-missing";
+  transport?: "shortcuts" | "anthropic";
   partial: string;
   reasoning: string;
   timing: ChatTiming;
@@ -265,6 +280,17 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
   const modelCache = createModelListCache();
   const settingsCache = createModelListCache();
 
+  /** Die Transport-Wahl, die `list()` und `resolve()` des Managers sehen: ohne Opt-in nur `http` (ältere Manager-Fassungen
+   *  ignorieren das Feld). */
+  /** Für `resolve()` und die Eintragswahl nur `anthropic` zusätzlich: ein Apple-Endpunkt wird nie automatisch gewählt,
+   *  nur über `choice` (Welle 13), und das bleibt so. */
+  const anthropicTransports = (): ("http" | "anthropic")[] | undefined => (o.transports?.anthropic ? ["http", "anthropic"] : undefined);
+  const optInTransports = (): ("http" | "shortcuts" | "anthropic")[] | undefined => {
+    const t = o.transports;
+    if (!t?.shortcuts && !t?.anthropic) return undefined;
+    return ["http", ...(t.shortcuts ? ["shortcuts" as const] : []), ...(t.anthropic ? ["anthropic" as const] : [])];
+  };
+
   // ── Auflösung ──────────────────────────────────────────────────────────────────────────────
   let pending: Promise<EndpointSourceResult> | null = null;
   let last: EndpointSourceResult | null = null;
@@ -286,6 +312,7 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
       });
     const r = await resolveEndpointSource({
       manager, local, capability: o.capability, caller: o.caller,
+      ...(anthropicTransports() ? { transports: anthropicTransports() } : {}),
       ...(manager && s.choice ? { choice: s.choice } : {}),
       backendOf,
     }, async (cfg) => (o.managerOnly ? false : probeOf(cfg)));
@@ -294,7 +321,7 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
   }
 
   function managerEntryId(api: LlmEndpointManagerApi, choice: EndpointChoice | undefined): string | undefined {
-    const entries = api.list({ capability: o.capability });
+    const entries = api.list({ capability: o.capability, ...(anthropicTransports() ? { transports: anthropicTransports() } : {}) });
     return choice?.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : entries[0]?.id;
   }
 
@@ -365,17 +392,29 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
 
   // ── Anfrage ────────────────────────────────────────────────────────────────────────────────
   let client: { key: string; chat: ChatClient } | null = null;
-
+  let anthropicState: AnthropicState | null = null;
   function chatClientFor(src: EndpointSourceResult): ChatClient {
     const cfg = src.config as EndpointConfig;
     const key = `${normalizeEndpoint(cfg.url)}\n${cfg.apiKey ?? ""}\n${src.transport ?? "http"}\n${src.shortcut?.name ?? ""}`;
     if (client && client.key === key) return client.chat;
     const t = o.transports ?? {};
     const shortcuts = typeof t.shortcuts === "function" ? (src.shortcut ? t.shortcuts(src.shortcut) : undefined) : t.shortcuts;
+    const http = t.http ?? xhrSseTransport;
+    const httpFallback = fallback === "auto" ? (t.httpFallback ?? requestUrlTransport) : undefined;
+    let anthropic: { primary: SseTransport; fallback?: SseTransport } | undefined;
+    if (t.anthropic === true) {
+      // Zustand (Denkblöcke je Werkzeug-Id, Modell-Liste) teilen sich Stream und Rückfall; er lebt so lange wie die Verbindung.
+      const state = anthropicState ??= createAnthropicState();
+      anthropic = {
+        primary: createAnthropicChatTransport({ http, state, clock }),
+        ...(httpFallback ? { fallback: createAnthropicChatTransport({ http: httpFallback, state, clock }) } : {}),
+      };
+    } else if (t.anthropic) anthropic = { primary: t.anthropic };
     const choice = transportFor(src, {
-      http: t.http ?? xhrSseTransport,
-      ...(fallback === "auto" ? { httpFallback: t.httpFallback ?? requestUrlTransport } : {}),
+      http,
+      ...(httpFallback ? { httpFallback } : {}),
       ...(shortcuts ? { shortcuts } : {}),
+      ...(anthropic ? { anthropic } : {}),
     });
     const to = o.timeouts ?? {};
     // Ein Kurzbefehl braucht seine eigene Frist (+10 s Luft), sonst bricht der Client vor ihm ab.
@@ -408,15 +447,18 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
       const { displayFamily: _drop, ...rest } = resolved0;
       src = { ...rest, model: wanted, family: d.family, familySource: d.familySource, sentModel: d.sentModel, ...(d.displayFamily ? { displayFamily: d.displayFamily } : {}) };
     }
-    const fail = (kind: "no-endpoint", detail: string): LlmResult => {
+    const fail = (kind: "no-endpoint", detail: string, extra: Pick<NoEndpointResult, "reason" | "transport"> = {}): LlmResult => {
       const now = clock.now();
-      return { ok: false, kind, detail, partial: "", reasoning: "", timing: { startedAt: now, endedAt: now }, redactions: 0, facts: null, deviations: [], source: src };
+      return { ok: false, kind, detail, ...extra, partial: "", reasoning: "", timing: { startedAt: now, endedAt: now }, redactions: 0, facts: null, deviations: [], source: src };
     };
     if (!src.config) return fail("no-endpoint", src.reason ?? "no-endpoint");
 
     let chat: ChatClient;
     try { chat = chatClientFor(src); }
-    catch (e) { return fail("no-endpoint", e instanceof Error ? e.message : String(e)); }
+    catch (e) {
+      if (e instanceof TransportMissingError) return fail("no-endpoint", e.message, { reason: "transport-missing", transport: e.transport });
+      return fail("no-endpoint", e instanceof Error ? e.message : String(e));
+    }
 
     const mode = h.mode ?? o.mode;
     const settings = o.getSettings().request ?? DEFAULT_REQUEST_SETTINGS;
@@ -428,8 +470,13 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
       ...(budget !== undefined ? { maxTokens: budget } : {}),
       overrides: settings.overrides[mode]?.[famKey] ?? {},
     });
-    const params: Record<string, unknown> = { ...resolved.params, ...(h.overrides ?? {}) };
+    // Werte je Aufruf, die das Profil nicht annimmt (Claude: temperature), gehen nicht raus und werden gemeldet.
+    const call = splitCallOverrides(h.overrides, { family: src.family, backend: src.backend });
+    const params: Record<string, unknown> = { ...resolved.params, ...call.kept };
+    const dropped = overrideDroppedDeviation(call.dropped);
+    const dropNotice: Deviation[] = dropped ? [dropped] : [];
     session.recordRequest(params);
+    session.report(dropNotice);
 
     const messages = req.messages ?? req.buildMessages?.(src) ?? [];
     const wantStream = h.stream ?? o.stream;
@@ -446,8 +493,9 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
     });
 
     const facts = responseFactsOf(raw);
-    const deviations = facts ? checkResponse({ family: src.family, thinking, backend: src.backend }, facts) : [];
-    session.report(deviations);
+    const checked = facts ? checkResponse({ family: src.family, thinking, backend: src.backend }, facts) : [];
+    session.report(checked);
+    const deviations = [...dropNotice, ...checked];
 
     const mapped = mapTruncated(raw, policy);
     const result: ChatResult = mapped === raw ? raw : {
@@ -472,7 +520,7 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
     let saved: Promise<void> = Promise.resolve();
     buildEndpointSourceSection({
       app: o.app, containerEl, capability: o.capability, caller: o.caller, pluginId: o.pluginId,
-      ...(o.transports?.shortcuts ? { transports: ["http", "shortcuts"] as ("http" | "shortcuts")[] } : {}),
+      ...(optInTransports() ? { transports: optInTransports() } : {}),
       choice: () => o.getSettings().choice ?? {},
       setChoice: async (c) => { await persist({ choice: c }); invalidate(); },
       local: () => (o.managerOnly ? [] : o.getSettings().endpoints),
@@ -502,6 +550,12 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
       save: (s) => persist({ request: s }),
       maxTokens: maxTokensFor,
       session, strings: strings.request, rerender,
+      openManager: () => { openEndpointManagerSettings(o.app); },
+      loadedModels: () => {
+        const cfg = (shown ?? last)?.config;
+        if (!cfg) return Promise.resolve(null);
+        return (o.loadedModels ?? ((c: EndpointConfig) => fetchLoadedModelsAt(c.url, c.apiKey, { timers: clock })))(cfg);
+      },
       ...(o.levelPicker !== undefined ? { levelPicker: o.levelPicker } : {}),
     });
   }

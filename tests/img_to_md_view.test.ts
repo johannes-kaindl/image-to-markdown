@@ -765,12 +765,12 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control)", () => {
     expect(String(after.className)).not.toContain("is-off");
   });
 
-  it("Familie ohne Aus-Stellung (gpt-oss) auf 'off' → 'Thinking: always on'", async () => {
+  it("Familie ohne Aus-Stellung (gpt-oss) auf 'off' → 'Thinking: lowest level'", async () => {
     setLang("en");
     const { view } = mkView({ thinkingState: () => ({ family: "gpt-oss", level: "off", onLevel: "low", levelPicker: false }) });
     await view.onOpen();
     const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("Thinking: always on");
+    expect(btn.textContent).toContain("Thinking: lowest level");
   });
 
   it("gemma4 auf LM Studio auf 'off' → der Knopf sagt, dass es sich nicht ganz abschalten lässt (Kit 0.61.0, backend)", async () => {
@@ -778,7 +778,17 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control)", () => {
     const { view } = mkView({ thinkingState: () => ({ family: "gemma4", backend: "lmstudio", level: "off", onLevel: "low", levelPicker: false }) });
     await view.onOpen();
     const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("always on");
+    expect(btn.textContent).toContain("lowest level");
+  });
+
+  it("'aus nicht möglich' auf Deutsch: Beschriftung und Grund im Tooltip kommen aus dem Kit", async () => {
+    setLang("de");
+    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", backend: "lmstudio", level: "off", onLevel: "low", levelPicker: false }) });
+    await view.onOpen();
+    const [btn] = all(view.contentEl, "okit-thinking-toggle");
+    expect(btn.textContent).toContain("Denken: niedrigste Stufe");
+    expect(btn.getAttribute("aria-label")).toContain("nicht ganz abschalten");
+    setLang("en");
   });
 
   it("gemma4 ohne Backend (Familie allein) bleibt abschaltbar: 'Thinking: off'", async () => {
@@ -821,7 +831,7 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control)", () => {
     const scans = scan.mock.calls.length;
     expect(all(view.contentEl, "okit-thinking-toggle")[0].textContent).toContain("Thinking: off");
     family = "gpt-oss"; view.refreshThinking();
-    expect(all(view.contentEl, "okit-thinking-toggle")[0].textContent).toContain("Thinking: always on");
+    expect(all(view.contentEl, "okit-thinking-toggle")[0].textContent).toContain("Thinking: lowest level");
     expect(scan.mock.calls.length).toBe(scans);
   });
 });

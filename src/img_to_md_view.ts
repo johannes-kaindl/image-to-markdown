@@ -3,8 +3,8 @@ import { neutralizeModelMarkdown } from "./vendor/kit/safe-markdown";
 import { renderMarkdownGuarded } from "./vendor/kit-obsidian/dom-guard";
 import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, refineRequest } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
-import { t } from "./i18n";
-import { buildThinkingControl } from "./vendor/kit-obsidian/thinking-control";
+import { getLang, t } from "./i18n";
+import { buildThinkingControl, thinkingOffTexts } from "./vendor/kit-obsidian/thinking-control";
 import type { BackendId, FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { CardCache } from "./card_cache";
 import { parseDescription } from "./describe";
@@ -168,9 +168,11 @@ export class ImgToMdView extends ItemView {
       setLevel: (l) => this.deps.setThinkingLevel(l),
       levelPicker: () => this.deps.thinkingState().levelPicker,
       strings: {
-        button: (level, offNotPossible) => level === "off"
-          ? t(offNotPossible ? "think.button.offNotPossible" : "think.button.off")
+        button: (level) => level === "off"
+          ? t("think.button.off")
           : t("think.button.on", t(`request.level.${level}`)),
+        // „aus“ nicht möglich (Gemma 4 auf LM Studio, Claude): Kit-Text mit Grund im Tooltip.
+        offNotPossible: thinkingOffTexts(getLang()),
         level: (l) => t(`think.level.${l}`),
         pickerLabel: t("think.pickerLabel"),
       },

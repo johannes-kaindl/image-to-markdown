@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/pure/ocr-provider.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/pure/ocr-provider.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Öffentlicher Vertrag des Fähigkeits-Besitzers `image-to-markdown` (OCR) — Muster
  *  `pure/endpoint-source.ts`: EINE Quelle, der Besitzer re-exportiert sie, Konsumenten vendoren.
  *  Fehler sind Werte (`OcrProviderError`), Methoden fangen selbst — nie werfen. Form-Guard statt
@@ -8,6 +8,8 @@
  *  bestehende Vision-LLM-Weg) — ein Konsument merkt den Unterschied nie. v1 ohne PDF (die werden
  *  erst gerendert; Spec § Nicht-Ziele). */
 export const OCR_PROVIDER_API_VERSION = 1;
+/** Plugin-ID des Besitzers (`image-to-markdown`): dort liegt die API unter `app.plugins.plugins[id].api`; gelesen mit `readOcrApi`. */
+export const OCR_PLUGIN_ID = "image-to-markdown";
 
 export type OcrProviderErrorCode = "backend-unavailable" | "not-found" | "timeout" | "busy" | "unsupported" | "failed";
 export interface OcrProviderError { error: OcrProviderErrorCode; message: string }

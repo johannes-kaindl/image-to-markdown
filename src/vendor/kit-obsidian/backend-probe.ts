@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Backend-Erkennung für Obsidian: der `requestUrl`-Adapter für die pure Probe aus code-kit
  *  (`vendor/code-kit/pure/backend-probe`). Die Kopier-Kette, die hier endet, hieß in zehn
  *  Konsumenten `cachedProbe(url, model)` (Herkunft lingotuner `obsidian/http.ts`); der Adapter ist
@@ -8,7 +8,8 @@
 import { requestUrl } from "obsidian";
 import { createBackendProbe, type BackendProbeOptions } from "../kit/backend-probe";
 import type { BackendId } from "../kit/sampling-profiles";
-import type { CapabilityFetch } from "../kit/capabilities";
+import { fetchLoadedModels, probeBaseUrl, type CapabilityFetch, type LoadedModel } from "../kit/capabilities";
+import { withTimeout } from "../kit/timeout";
 import { authHeaders } from "../kit/endpoint_config";
 import { normalizeEndpoint } from "../kit/endpoint";
 import { fetchModelContext, type ModelContext } from "../kit/model-context";
@@ -66,4 +67,30 @@ export function fetchEndpointContext(
     model.trim(),
     { timers: opts?.timers ?? realClock, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) },
   );
+}
+
+/** Welche Modelle LM Studio gerade geladen hat (`GET /api/v1/models`, nur lesend: ein Abruf lädt und entlädt nichts) — Grundlage der Warnung
+ *  vor einer Anfrage, die ein Modell per JIT laden und dabei ein geladenes verdrängen würde (llm-setup 2026-09-20: laufende Anfragen
+ *  brechen dann mit `Model unloaded.` ab). Mit `requestUrl` als Transport und dem Schlüssel als `Authorization: Bearer`.
+ *
+ *  `null` heißt **unbekannt**, nicht „nichts geladen“: ein anderes Backend, ein altes Schema, ein Fehler, kein Antwort in `timeoutMs`
+ *  (Default 4 s; `requestUrl` kennt keinen Abbruch, die laufende Anfrage verfällt nur). Ein leeres Array heißt: nativer Server, nichts geladen.
+ *  Wirft nie. Ohne `timers` gelten die Fenster-Timer (in einem Node-Test `timers` übergeben). */
+export async function fetchLoadedModelsAt(
+  url: string,
+  apiKey?: string,
+  opts?: { timers?: TimeoutTimers; timeoutMs?: number; fetch?: CapabilityFetch },
+): Promise<LoadedModel[] | null> {
+  const base = opts?.fetch ?? requestUrlCapabilityFetch;
+  const auth = authHeaders(apiKey);
+  try {
+    const r = await withTimeout(
+      fetchLoadedModels((req) => base({ ...req, headers: { ...auth, ...(req.headers ?? {}) } }), probeBaseUrl(normalizeEndpoint(url))),
+      opts?.timeoutMs ?? 4000,
+      opts?.timers ?? realClock,
+    );
+    return r.timedOut ? null : r.value;
+  } catch {
+    return null;
+  }
 }

@@ -6,6 +6,14 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Vendored `obsidian-kit` 0.63.0 (was 0.61.0) and `code-kit` 0.31.0 (was 0.28.0). You will notice three things:
+- **Thinking button:** when "off" is not possible (Gemma 4 in LM Studio, Claude), the button now reads "Thinking: lowest level" (German: "Denken: niedrigste Stufe") and its tooltip explains why. It said "Thinking: always on" before.
+- **Thinking and vision from the model's metadata:** with LM Studio the plugin now reads whether a model can think or see from the server's own model data instead of guessing from the name, so the thinking button can appear for more models.
+- **Request section:** next to "Model family detected" there is a "Set family in the manager" button that opens the LLM Endpoint Manager settings. If the request would make LM Studio load another model and unload a running one, a warning line names the loaded models. For Claude the field reads "Thinking effort (effort)".
+- Nothing else is visible: the Claude transport, the new text-field menu and the other kit changes are not used by this plugin.
+
 ## [0.31.2] — 2026-10-16
 
 ### Changed

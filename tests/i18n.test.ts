@@ -67,11 +67,9 @@ describe("i18n", () => {
     setLang("en");
     expect(t("think.button.off")).toBe("Thinking: off");
     expect(t("think.button.on", "low")).toBe("Thinking: low");
-    expect(t("think.button.offNotPossible")).toBe("Thinking: always on");
     expect(t("think.level.high")).toBe("Thinking: high");
     setLang("de");
     expect(t("think.button.off")).toBe("Thinking: aus");
-    expect(t("think.button.offNotPossible")).toBe("Thinking: immer an");
     expect(t("think.level.medium")).toBe("Thinking: mittel");
     expect(t("think.pickerLabel")).toBe("Denkstufe");
     setLang("en");

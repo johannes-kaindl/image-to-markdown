@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { DropdownComponent, setIcon } from "obsidian";
 import { THINKING_LEVELS, familyThinking, type BackendId, type FamilyId, type ThinkingLevel } from "../kit/sampling-profiles";
 
@@ -8,9 +8,28 @@ import { THINKING_LEVELS, familyThinking, type BackendId, type FamilyId, type Th
  *  weil `aria-pressed` nur zwei kennt (Spec § 5.2). */
 export interface ThinkingControlStrings {
   button(level: ThinkingLevel, offNotPossible: boolean): string;
+  /** Seit 0.63.0, optional: Beschriftung und Hinweis für „aus“, wenn „aus“ hier nicht möglich ist (die niedrigste Stufe wird gesendet).
+   *  Gesetzt, ersetzt es `button(…, true)` — lingotuner zeigte „Thinking: off (can't fully turn off)“, settings-assistant „Thinking: lowest level“,
+   *  beides für denselben Zustand (gemma4 × LM Studio). Die Kit-Fassung ist `thinkingOffTexts(lang)`. */
+  offNotPossible?: ThinkingOffTexts;
   level(l: ThinkingLevel): string;
   pickerLabel: string;
 }
+/** Text des Knopfs im Zustand „aus nicht möglich“: kurze Beschriftung, dazu der Grund als Hinweis (Tooltip und Screenreader). */
+export interface ThinkingOffTexts { label: string; hint: string }
+export const THINKING_OFF_TEXTS_EN: ThinkingOffTexts = {
+  label: "Thinking: lowest level",
+  hint: "Thinking can't be fully turned off here; the lowest available level is sent.",
+};
+export const THINKING_OFF_TEXTS_DE: ThinkingOffTexts = {
+  label: "Denken: niedrigste Stufe",
+  hint: "Das Denken lässt sich hier nicht ganz abschalten; die niedrigste verfügbare Stufe wird gesendet.",
+};
+/** Die Kit-Fassung für `ThinkingControlStrings.offNotPossible`; `lang` beginnt mit `de` → Deutsch, sonst Englisch. */
+export function thinkingOffTexts(lang: string): ThinkingOffTexts {
+  return lang.toLowerCase().startsWith("de") ? THINKING_OFF_TEXTS_DE : THINKING_OFF_TEXTS_EN;
+}
+
 export interface ThinkingControlOptions {
   containerEl: HTMLElement;
   family(): FamilyId | null;
@@ -44,7 +63,10 @@ export function buildThinkingControl(opts: ThinkingControlOptions): { refresh():
     btn.toggleClass("is-off", !on);
     const icon = btn.createSpan();
     setIcon(icon, on ? "brain-cog" : "brain");
-    btn.createSpan({ text: opts.strings.button(level, offNotPossible) });
+    const offText = offNotPossible ? opts.strings.offNotPossible : undefined;
+    btn.createSpan({ text: offText !== undefined ? offText.label : opts.strings.button(level, offNotPossible) });
+    // Der Grund steht im Namen des Knopfs (Obsidian zeigt `aria-label` als Tooltip); die sichtbare Beschriftung bleibt sein Anfang.
+    if (offText !== undefined) btn.setAttribute("aria-label", `${offText.label}. ${offText.hint}`);
     btn.addEventListener("click", () => { void opts.setLevel(on ? "off" : opts.onLevel()).then(render); });
   };
   render();

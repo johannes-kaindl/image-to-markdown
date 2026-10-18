@@ -34,7 +34,7 @@ or, when you transcribed from the command palette: `Empty transcript: <image>`
 
 **Cause:** a reasoning model used its whole token budget on thinking before it wrote the first character.
 
-**Fix:** switch thinking off with the **Thinking: on** toggle next to the model picker in the sidebar. A model that shows **Thinking: always on** cannot be switched off — use another model or raise its token limit in the server.
+**Fix:** switch thinking off with the **Thinking: on** toggle next to the model picker in the sidebar. A model that shows **Thinking: lowest level** cannot be switched off (the lowest available level is sent) — use another model or raise its token limit in the server.
 
 ## The transcript is cut off
 

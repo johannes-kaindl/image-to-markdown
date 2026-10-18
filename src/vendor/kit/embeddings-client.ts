@@ -1,4 +1,4 @@
-// vendored from code-kit@0.28.0, src/ts/pure/embeddings-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.31.0, src/ts/pure/embeddings-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus vault-rag/src/embedder.ts (nur embed()), 2026-10-11 (Änderungen: Transport injiziert statt requestUrl, Frist und Abbruch neu, Embedder-Interface; Anfrage, Batchgröße 32 und die beiden Fehlertexte unverändert)
 /** Client for `POST <endpoint>/v1/embeddings` (OpenAI-compatible: Ollama, LM Studio, llama.cpp), over an injected transport.
  *

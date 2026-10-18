@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, type App } from "obsidian";
 import { resolveModelChoice, type ModelHintKey } from "../kit/model-choice";
 import type { EndpointConfig } from "../kit/endpoint_config";
@@ -8,12 +8,11 @@ import {
 } from "../kit/endpoint-source";
 import { renderModelPicker } from "./model-picker";
 import { hydrateLocalEndpoints } from "./endpoint-secrets";
+import { readPluginApi } from "./plugin-api";
 
 /** Bei JEDEM Aufruf frisch lesen — das Plugin kann jederzeit deaktiviert werden. */
 export function findEndpointManager(app: App): LlmEndpointManagerApi | null {
-  const a = app as unknown as { plugins?: { plugins?: Record<string, { api?: unknown }> } };
-  const api = a.plugins?.plugins?.[LLM_ENDPOINT_MANAGER_PLUGIN_ID]?.api;
-  return isLlmEndpointManagerApi(api) ? api : null;
+  return readPluginApi(app, LLM_ENDPOINT_MANAGER_PLUGIN_ID, isLlmEndpointManagerApi);
 }
 
 /** Abonniert Änderungen am Manager und gibt die Abmeldung zurück.
@@ -127,6 +126,14 @@ export type EndpointSourceSectionOptions = EndpointSourceSectionBase & (
   }
 );
 
+/** Öffnet die Einstellungen des LLM Endpoint Managers (Obsidians Einstellungsfenster, Tab des Plugins). Ohne Einstellungsfenster
+ *  (Test, Mobil ohne `app.setting`) ohne Wirkung. Der „Manager-Einstellungen öffnen“-Knopf und „Familie im Manager setzen“ nutzen sie. */
+export function openEndpointManagerSettings(app: unknown): void {
+  const setting = (app as { setting?: { open(): void; openTabById(id: string): void } }).setting;
+  setting?.open();
+  setting?.openTabById(LLM_ENDPOINT_MANAGER_PLUGIN_ID);
+}
+
 /** Settings-Baustein des Konsumenten: Manager da → „Endpunkte kommen vom Manager" + Wahl +
  *  Modell + Import; sonst der lokale Listen-Editor. Der Konsument speichert nur `choice`. */
 export function buildEndpointSourceSection(opts: EndpointSourceSectionOptions): void {
@@ -136,10 +143,7 @@ export function buildEndpointSourceSection(opts: EndpointSourceSectionOptions): 
   const choice = opts.choice();
 
   const head = new Setting(opts.containerEl).setName(st.managed).setDesc(st.managedDesc);
-  head.addButton((b) => b.setButtonText(st.openManager).onClick(() => {
-    const setting = (opts.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
-    setting?.open(); setting?.openTabById(LLM_ENDPOINT_MANAGER_PLUGIN_ID);
-  }));
+  head.addButton((b) => b.setButtonText(st.openManager).onClick(() => { openEndpointManagerSettings(opts.app); }));
 
   const entries = api.list(opts.transports ? { capability: opts.capability, transports: opts.transports } : { capability: opts.capability });
   new Setting(opts.containerEl).setName(st.pickEndpoint).addDropdown((d) => {

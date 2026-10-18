@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -26,7 +26,7 @@
  *
  *  Überschreiben: `renderSettings(el, { lang: "de", request: { title: "…" } })` — ein Teil-Merge
  *  über dem Default, je Abschnitt ein Feld genau. */
-import { BACKENDS, FAMILIES, type FamilyId, type BackendId, type Deviation } from "../kit/sampling-profiles";
+import { BACKENDS, FAMILIES, type FamilyId, type BackendId, type Deviation, type DeviationKind } from "../kit/sampling-profiles";
 import type { EndpointSourceSectionStrings } from "./endpoint-source";
 import type { ApiErrorCode, SourceKind } from "../kit/endpoint-source";
 import type { EndpointListStrings } from "./endpoint-list";
@@ -50,6 +50,8 @@ export interface LlmConnectionStrings {
   /** Text für ein lokales `kind: "no-endpoint"`. Optional, damit ein volles Bündel ohne dieses Feld
    *  weiter übersetzt; das Default-Bündel trägt es immer. */
   noEndpoint?: string;
+  /** Text für `NoEndpointResult.reason === "transport-missing"`; bekommt den verlangten Transport. Optional wie `noEndpoint`. */
+  transportMissing?: (transport: string) => string;
   /** Text je Grund, den der LLM Endpoint Manager nennt (`NoEndpointResult.detail`, `EndpointSourceResult.reason`).
    *  NICHT `noEndpoint`: das ist der lokale Fall. Optional wie `noEndpoint`; `managerErrorText` liest es. */
   managerErrors?: Record<ApiErrorCode, string>;
@@ -81,16 +83,20 @@ interface Texts {
   secretSaved: string; secretChange: string; secretClear: string; secretUnavailable: string;
   // Anfrage-Abschnitt
   requestTitle: string; requestFamily: string; requestFamilyNone: string; requestBackend: string; requestBackendNone: string; familyManager: string; familyName: string; familyNone: string;
-  backendManager: string; backendProbe: string; backendNone: string; unknownFamily: string; unrecognisedBackend: string; unrecognisedFamily: string; jitWarning: string; sentAs: string;
+  backendManager: string; backendProbe: string; backendNone: string; unknownFamily: string; unrecognisedBackend: string; unrecognisedFamily: string; jitWarning: string; jitRuntimeWarning: string; sentAs: string;
   modes: Record<"agent" | "structured" | "transform" | "grounded" | "companion" | "creative" | "complete", string>;
   fields: Record<"temperature" | "top_p" | "top_k" | "min_p" | "presence_penalty" | "reasoning_effort" | "max_tokens", string>;
+  /** `fields.reasoning_effort` mit dem Wire-Namen der Messages-API: Backend `anthropic` sendet `effort`. */
+  effortAnthropic: string;
   states: Record<"sent-effective" | "sent-unproven" | "not-sent-ignored" | "not-sent-unsupported" | "not-sent-unknown-family" | "not-sent-no-value", string>;
   notes: Record<"raised-to-reserve" | "raised-to-thinking-floor" | "below-thinking-floor" | "off-not-possible", string>;
   topPHint: string;
   reset: string; thinkingLevel: string; levels: Record<"off" | "low" | "medium" | "high", string>;
   levelPicker: string; levelPickerDesc: string; requestSaveFailed: string; dormant: string; deleteDormant: string;
   lastRequest: string; lastRequestNone: string; copy: string; copied: string; deviationsOk: string; deviationsWarn: string;
-  deviations: Record<"thinking-despite-off" | "empty-by-budget" | "family-mismatch" | "family-detected" | "rejected", string>;
+  /** Knopf am Hinweis „Familie erkannt“: öffnet die Manager-Einstellungen. */
+  setFamily: string;
+  deviations: Record<DeviationKind, string>;
   /** Zweiter Satz der Abweichungs-Notice; `{0}` = Titel des Abschnitts „Anfrage“. */
   seeSettings: string;
   /** Hinweiszeile unter einer Vorschau des gesendeten Textes; `{0}` = Zahl der geschwärzten Werte. */
@@ -99,6 +105,7 @@ interface Texts {
   noManager: string;
   /** Text für ein lokales `kind: "no-endpoint"` (kein Endpunkt erreichbar). */
   noEndpoint: string;
+  transportMissing: string;
   /** Texte je Grund des Managers; jeder nennt die Stelle, an der der Nutzer es behebt. */
   managerErrors: Record<ApiErrorCode, string>;
   /** `managedDesc` für `managerOnly`: ohne den Satz über die lokale Liste. */
@@ -120,6 +127,7 @@ function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
     redactedNote: (n) => fmt(n === 1 ? x.redactedOne : x.redactedMany, String(n)),
     noManager: x.noManager,
     noEndpoint: x.noEndpoint,
+    transportMissing: (transport) => fmt(x.transportMissing, transport),
     managerErrors: x.managerErrors,
     managedDescManagerOnly: x.managedDescManagerOnly,
     endpointSource: {
@@ -162,9 +170,10 @@ function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
         u.family !== undefined ? fmt(x.unrecognisedFamily, u.family) : "",
       ].filter((t) => t !== "").join(" "),
       jitWarning: (model, def) => fmt(x.jitWarning, model, def),
+      jitRuntimeWarning: (model, loaded) => fmt(x.jitRuntimeWarning, model, loaded.join(", ")),
       sentAs: (model) => fmt(x.sentAs, model),
       modeHeading: (m) => x.modes[m],
-      fieldName: (f) => x.fields[f],
+      fieldName: (f, backend) => (f === "reasoning_effort" && backend === "anthropic" ? x.effortAnthropic : x.fields[f]),
       fieldDesc: (e) => {
         let s = x.states[e.state];
         if (e.note) s += ` ${x.notes[e.note]}`;
@@ -177,6 +186,7 @@ function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
       deleteDormant: x.deleteDormant, lastRequest: x.lastRequest, lastRequestNone: x.lastRequestNone,
       copy: x.copy, copied: x.copied, deviationsOk: x.deviationsOk,
       deviationsWarn: (n) => fmt(x.deviationsWarn, String(n)),
+      setFamily: x.setFamily,
       deviation: (kind, count, detail) => `${fmt(pick(x.deviations, kind), detail ?? "")} (${count}×)`,
     },
   };
@@ -212,6 +222,7 @@ const EN: Texts = {
   unrecognisedBackend: "The backend \"{0}\" is not in this plugin's table yet (a newer manager than this plugin): only the standard fields are sent.",
   unrecognisedFamily: "The model family \"{0}\" is not in this plugin's table yet (a newer manager than this plugin): no family-specific values are sent.",
   jitWarning: "This plugin sends model {0}, the endpoint's default is {1}. On LM Studio, every request unloads the other plugins' model.",
+  jitRuntimeWarning: "{0} is not loaded; loaded now: {1}. LM Studio loads it on this request and may unload one of them, so a request that is still running there ends with \"Model unloaded.\".",
   sentAs: "Sent as {0}",
   modes: {
     transform: "Transform", agent: "Agent", structured: "Structured", grounded: "Grounded chat", companion: "Companion",
@@ -222,6 +233,7 @@ const EN: Texts = {
     min_p: "Minimum probability (min_p)", presence_penalty: "Presence penalty (presence_penalty)",
     reasoning_effort: "Thinking effort (reasoning_effort)", max_tokens: "Token budget (max_tokens)",
   },
+  effortAnthropic: "Thinking effort (effort)",
   states: {
     "sent-effective": "Sent — measured to work on this backend.",
     "sent-unproven": "Sent — effect on this backend not proven yet.",
@@ -243,18 +255,20 @@ const EN: Texts = {
   requestSaveFailed: "Could not save the request settings.",
   dormant: "Own values for {0}, not active right now", deleteDormant: "Delete",
   lastRequest: "Last request", lastRequestNone: "No request sent yet this session.", copy: "Copy", copied: "Copied",
-  deviationsOk: "No deviations this session.", deviationsWarn: "{0} deviation(s) this session.",
+  deviationsOk: "No deviations this session.", deviationsWarn: "{0} deviation(s) this session.", setFamily: "Set family in the manager",
   deviations: {
     "thinking-despite-off": "The model thought even though thinking is off.",
     "empty-by-budget": "Empty answer: thinking used up the token budget.",
     "family-mismatch": "The answer came from a different model family ({0}).",
     "family-detected": "Model family detected: {0}. Set it in the LLM Endpoint Manager.",
     "rejected": "The server rejected the request: {0}",
+    "override-dropped": "Request values not sent, the model does not accept them: {0}.",
   },
   seeSettings: "Details in the settings under “{0}”.",
   redactedOne: "{0} passage redacted", redactedMany: "{0} passages redacted",
   noManager: "No LLM Endpoint Manager found. Install and enable it to choose an endpoint.",
   noEndpoint: "No endpoint reachable. Check the endpoint list in the settings — the test button says which one answers.",
+  transportMissing: "The endpoint needs a connection type this plugin does not support ({0}).",
   managedDescManagerOnly: "This plugin uses the endpoints configured in the LLM Endpoint Manager plugin.",
   managerErrors: {
     "no-endpoint": "The LLM Endpoint Manager has no usable endpoint. Add or switch on one there, and check its API key and that its server is running.",
@@ -296,6 +310,7 @@ const DE: Texts = {
   unrecognisedBackend: "Das Backend „{0}“ steht in der Tabelle dieses Plugins noch nicht (ein neuerer Manager als das Plugin): gesendet werden nur die Standardfelder.",
   unrecognisedFamily: "Die Modellfamilie „{0}“ steht in der Tabelle dieses Plugins noch nicht (ein neuerer Manager als das Plugin): es werden keine familienspezifischen Werte gesendet.",
   jitWarning: "Dieses Plugin sendet Modell {0}, der Standard des Endpunkts ist {1}. Auf LM Studio entlädt jede Anfrage das Modell der anderen Plugins.",
+  jitRuntimeWarning: "{0} ist nicht geladen; geladen ist: {1}. LM Studio lädt es mit dieser Anfrage und entlädt dabei womöglich eines davon — eine dort noch laufende Anfrage endet dann mit „Model unloaded.“.",
   sentAs: "Gesendet als {0}",
   modes: {
     transform: "Umformen", agent: "Agent", structured: "Strukturiert", grounded: "Chat mit Quellen", companion: "Begleiter",
@@ -306,6 +321,7 @@ const DE: Texts = {
     min_p: "Mindestwahrscheinlichkeit (min_p)", presence_penalty: "Präsenz-Strafe (presence_penalty)",
     reasoning_effort: "Denkaufwand (reasoning_effort)", max_tokens: "Token-Budget (max_tokens)",
   },
+  effortAnthropic: "Denkaufwand (effort)",
   states: {
     "sent-effective": "Gesendet — gemessen wirksam auf diesem Backend.",
     "sent-unproven": "Gesendet — Wirkung auf diesem Backend noch nicht belegt.",
@@ -327,18 +343,20 @@ const DE: Texts = {
   requestSaveFailed: "Die Anfrage-Einstellungen konnten nicht gespeichert werden.",
   dormant: "Eigene Werte für {0}, gerade nicht aktiv", deleteDormant: "Löschen",
   lastRequest: "Letzte Anfrage", lastRequestNone: "In dieser Sitzung noch keine Anfrage gesendet.", copy: "Kopieren", copied: "Kopiert",
-  deviationsOk: "Keine Abweichungen in dieser Sitzung.", deviationsWarn: "{0} Abweichung(en) in dieser Sitzung.",
+  deviationsOk: "Keine Abweichungen in dieser Sitzung.", deviationsWarn: "{0} Abweichung(en) in dieser Sitzung.", setFamily: "Familie im Manager setzen",
   deviations: {
     "thinking-despite-off": "Das Modell hat gedacht, obwohl Denken aus war.",
     "empty-by-budget": "Leere Antwort: das Denken hat das Tokenbudget verbraucht.",
     "family-mismatch": "Die Antwort kam von einer anderen Modellfamilie ({0}).",
     "family-detected": "Modellfamilie erkannt: {0}. Im LLM Endpoint Manager setzen.",
     "rejected": "Der Server hat die Anfrage abgelehnt: {0}",
+    "override-dropped": "Anfragewerte nicht gesendet, das Modell nimmt sie nicht an: {0}.",
   },
   seeSettings: "Details in den Einstellungen unter „{0}“.",
   redactedOne: "{0} Stelle geschwärzt", redactedMany: "{0} Stellen geschwärzt",
   noManager: "Kein LLM Endpoint Manager gefunden. Installiere und aktiviere ihn, um einen Endpunkt zu wählen.",
   noEndpoint: "Kein Endpunkt erreichbar. Prüf die Endpunkt-Liste in den Einstellungen — der Testknopf sagt, welcher antwortet.",
+  transportMissing: "Der Endpunkt braucht eine Verbindungsart, die dieses Plugin nicht unterstützt ({0}).",
   managedDescManagerOnly: "Dieses Plugin nutzt die Endpunkte aus dem Plugin LLM Endpoint Manager.",
   managerErrors: {
     "no-endpoint": "Der LLM Endpoint Manager hat keinen nutzbaren Endpunkt. Leg dort einen an oder schalte einen ein, und prüf seinen API-Schlüssel und ob sein Server läuft.",
@@ -362,6 +380,7 @@ export interface LlmConnectionStringsOverride {
   redactedNote?: (n: number) => string;
   noManager?: string;
   noEndpoint?: string;
+  transportMissing?: (transport: string) => string;
   /** Einzelne Manager-Gründe überschreiben; die übrigen bleiben Default. */
   managerErrors?: Partial<Record<ApiErrorCode, string>>;
   /** Label dieser Liste für `ariaUrl`/`ariaAdd` („Chat endpoints: Endpoint address“) — nötig, sobald zwei
@@ -395,6 +414,7 @@ export function resolveLlmConnectionStrings(override?: LlmConnectionStringsOverr
     redactedNote: override.redactedNote ?? base.redactedNote,
     noManager: override.noManager ?? base.noManager,
     noEndpoint: override.noEndpoint ?? base.noEndpoint,
+    transportMissing: override.transportMissing ?? base.transportMissing,
     ...(base.managerErrors ? { managerErrors: { ...base.managerErrors, ...definedOnly(override.managerErrors) } } : {}),
     managedDescManagerOnly: override.managedDescManagerOnly ?? base.managedDescManagerOnly,
     endpointSource: { ...base.endpointSource, ...override.endpointSource },
@@ -450,4 +470,10 @@ export function noEndpointText(
 ): string {
   if (source.kind === "manager") return managerErrorText(strings, detail);
   return strings.noEndpoint ?? LLM_CONNECTION_STRINGS_EN.noEndpoint ?? "";
+}
+
+/** Der Text zu `NoEndpointResult.reason === "transport-missing"`: „Der Endpunkt braucht eine Verbindungsart, die dieses Plugin nicht unterstützt (anthropic).“
+ *  Ein Konsument ruft sie, bevor er `noEndpointText` fragt — das Ergebnis ist kein Fehler des Managers und keiner des Kurzbefehls. */
+export function transportMissingText(strings: Pick<LlmConnectionStrings, "transportMissing">, transport: string): string {
+  return (strings.transportMissing ?? LLM_CONNECTION_STRINGS_EN.transportMissing)?.(transport) ?? "";
 }

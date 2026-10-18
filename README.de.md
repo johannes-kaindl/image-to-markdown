@@ -27,7 +27,7 @@
 - **Eigenständige Dateien** — eine PDF oder ein Bild direkt in Obsidian öffnen, und die Sidebar behandelt *diese Datei* als Quelle — keine umgebende Notiz nötig
 - **Prompt-Presets** — ein Wähler neben dem Modell in der Sidebar: ein „Standard"-Preset (dein editierbarer Prompt) plus feste Modi für Tabellen → Markdown, Handschrift, Mathe → LaTeX und Quellcode; die Wahl bleibt erhalten. Bei einem lokalen Vision-Modell ist der Prompt der wichtigste Qualitätshebel. (Bildbeschreibung gewünscht? Dafür gibt es jetzt den Beschreiben-Modus oben.)
 - **Endpoint-Fallback-Liste** — eine geordnete Liste von Vision-Endpunkten konfigurieren (API-Schlüssel optional, im Schlüsselbund von Obsidian statt in der `data.json`); das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren automatisch — eine einzige gesyncte Config funktioniert auf allen Geräten und Netzen
-- **Thinking-Toggle** — ein Schalter neben der Modellauswahl schaltet das Nachdenken (Reasoning) von Hybrid-Modellen ab, um Wartezeit zu sparen; bleibt erhalten (Default: an); Modelle, die sich nicht abschalten lassen, zeigen „immer an"
+- **Thinking-Toggle** — ein Schalter neben der Modellauswahl schaltet das Nachdenken (Reasoning) von Hybrid-Modellen ab, um Wartezeit zu sparen; bleibt erhalten (Default: an); Modelle, die sich nicht abschalten lassen, zeigen „Denken: niedrigste Stufe"
 - **Konfigurierbares Frontmatter-Mapping** — jeder Frontmatter-Schlüssel der erzeugten Notizen (und der `type`-Wert) lässt sich auf dein eigenes Vault-Schema anpassen — einheitlich für Transkript-, PDF- und Beschreibungs-Notizen
 
 ### Screenshots
@@ -142,7 +142,7 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
   „Thinking: an" / „Thinking: aus") schaltet das Nachdenken (Reasoning) von Hybrid-Modellen ab —
   praktisch, wenn ein großes Reasoning-Modell sonst lange denkt, bevor du das Ergebnis bekommst. Der
   Zustand bleibt erhalten (Standard: an). Modelle, die sich nicht abschalten lassen (z. B.
-  gpt-oss/harmony), zeigen „Thinking: immer an" und bleiben unverändert.
+  gpt-oss/harmony), zeigen „Denken: niedrigste Stufe"; der Tooltip nennt den Grund (die niedrigste verfügbare Stufe wird gesendet).
 - **Konfigurierbares Frontmatter-Mapping.** Alle Frontmatter-Schlüssel der erzeugten Notizen — plus
   der `type`-Wert selbst — lassen sich unter „Frontmatter-Mapping" in den Einstellungen an dein
   eigenes Vault-Schema anpassen (z. B. `kind` → `type`) — einheitlich für Transkript-, PDF- und

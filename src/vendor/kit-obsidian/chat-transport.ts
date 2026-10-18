@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/chat-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/chat-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die zwei Transporte für `chat-client`: XHR für den Stream, `requestUrl` für die Anfrage ohne
  *  Stream (Fallback). Beide erfüllen `SseTransport`.
  *
@@ -188,6 +188,16 @@ export function createShortcutsChatTransport(opts: ShortcutsChatTransportOptions
   };
 }
 
+/** Ein aufgelöster Endpunkt verlangt einen Transport, den der Konsument nicht bereitgestellt hat (Bridge nicht verbaut, Opt-in fehlt).
+ *  Eine eigene Klasse statt einer bloßen `Error`-Meldung, damit `createLlmConnection` ihn als „Transport fehlt“ melden kann und nicht
+ *  als allgemeinen Fehler. Der Text bleibt wie bisher. */
+export class TransportMissingError extends Error {
+  constructor(readonly transport: "shortcuts" | "anthropic") {
+    super(`resolved endpoint requires transport "${transport}", but none was provided`);
+    this.name = "TransportMissingError";
+  }
+}
+
 export interface TransportChoice { primary: SseTransport; fallback?: SseTransport }
 
 /** Wählt den Transport (samt HTTP-Fallback) für einen aufgelösten Endpunkt — kein Konsument baut
@@ -196,12 +206,16 @@ export interface TransportChoice { primary: SseTransport; fallback?: SseTranspor
  *  verbaut) und wirft — das ist ehrlicher als still auf HTTP zurückzufallen und gegen die falsche
  *  URL zu feuern (Spec § Baustein 2, Vertragsentscheidung). */
 export function transportFor(
-  resolved: { transport?: "http" | "shortcuts" },
-  opts: { http: SseTransport; httpFallback?: SseTransport; shortcuts?: SseTransport },
+  resolved: { transport?: "http" | "shortcuts" | "anthropic" },
+  opts: { http: SseTransport; httpFallback?: SseTransport; shortcuts?: SseTransport; anthropic?: TransportChoice },
 ): TransportChoice {
   if (resolved.transport === "shortcuts") {
-    if (!opts.shortcuts) throw new Error("resolved endpoint requires transport \"shortcuts\", but none was provided");
+    if (!opts.shortcuts) throw new TransportMissingError("shortcuts");
     return { primary: opts.shortcuts };
+  }
+  if (resolved.transport === "anthropic") {
+    if (!opts.anthropic) throw new TransportMissingError("anthropic");
+    return opts.anthropic;
   }
   return opts.httpFallback ? { primary: opts.http, fallback: opts.httpFallback } : { primary: opts.http };
 }

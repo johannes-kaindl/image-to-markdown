@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.61.0, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.63.0, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ein Chat-Aufruf gegen `/v1/chat/completions` (OpenAI-kompatibel) — Streaming, Tool-Calls,
  *  Abbruch, Idle-Timeout, Fehlerbody, Fallback ohne Stream. Kein `obsidian`-Import: der Transport
  *  wird injiziert (`chat-transport.ts` liefert XHR und `requestUrl`), die Uhr ebenso. Damit ist
@@ -214,8 +214,9 @@ export const DEFAULT_NON_STREAM_TIMEOUT_MS = 900_000;
 const ERROR_BODY_CAP = 2048;
 const DETAIL_CAP = 200;
 // übernommen aus vault-crews/src/core/chat-response.ts (via koda-agent/src/core/llm/chat-error.ts),
-// 2026-09-25 — bewusst nicht in code-kit (Kopf von error_body.ts: eigene Zählung).
-const OVERFLOW_RE = /context (length|window)|too many tokens|maximum context length/i;
+// 2026-09-25 — bewusst nicht in code-kit (Kopf von error_body.ts: eigene Zählung). `prompt is too long`: Anthropic
+// („prompt is too long: 213461 tokens > 200000 maximum“, Welle 23).
+const OVERFLOW_RE = /context (length|window)|too many tokens|maximum context length|prompt is too long/i;
 const RESERVED = new Set(["model", "messages", "stream", "tools"]);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -519,7 +520,10 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
     drainSplitter();
 
     if (status < 200 || status >= 300) {
-      const detail = errorMessageFromText(raw) ?? (oneLine(raw) || `HTTP ${status}`);
+      // Der Fehlerkörper steht in der LETZTEN Zeile, wenn vorher Strom kam: Anthropic meldet `overloaded_error` und Co. als
+      // Ereignis mitten im Strom, der Transport hängt es als JSON-Zeile an (Welle 23).
+      const lastLine = raw.trimEnd().split(/\r\n|\n|\r/).at(-1) ?? "";
+      const detail = errorMessageFromText(raw) ?? (lastLine !== raw.trim() ? errorMessageFromText(lastLine) : null) ?? (oneLine(raw) || `HTTP ${status}`);
       return fail(OVERFLOW_RE.test(raw) ? "overflow" : "http", detail, { status, body: raw.slice(0, ERROR_BODY_CAP) });
     }
 
