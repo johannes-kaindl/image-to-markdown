@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.4] — 2026-10-23
+
 ### Fixed
 
 - Switching quickly between notes could leave the sidebar showing the image list of the previous note instead of the empty state of the new one, when scanning the earlier note finished last. The sidebar now ignores a scan that a newer note switch has overtaken.
