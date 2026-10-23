@@ -119,6 +119,8 @@ export class ImgToMdView extends ItemView {
   private controller: AbortController | null = null;
   private running = false;
   private cardsSourcePath: string | null = null;
+  /** Laufende Nummer des jüngsten `rescan()`; eine ältere Antwort wird verworfen. */
+  private scanFolge = 0;
   /** Notizen-Pfade, die diese Session bereits selbst geschrieben hat, gemappt auf den zuletzt
    *  geschriebenen Transkript-Body — Diff-Confirm-Gate feuert beim ERSTEN Override einer aus dem
    *  Scan vorgefundenen (fremden) Notiz UND erneut, wenn der on-disk-Body inzwischen vom zuletzt
@@ -299,11 +301,16 @@ export class ImgToMdView extends ItemView {
     this.renderList();
   }
 
-  async rescan(): Promise<void> {
+  /** Scannt die aktive Notiz neu. `false`, wenn ein neuerer Scan die Antwort überholt hat: dann
+   *  bleibt die Liste unberührt (ein langsamer Scan der alten Notiz darf die neue nicht überschreiben). */
+  async rescan(): Promise<boolean> {
+    const folge = ++this.scanFolge;
     const path = this.deps.getActivePath();
     const items = path ? await this.deps.scan(path) : [];
+    if (folge !== this.scanFolge) return false;
     this.state.setItems(items);
     this.renderList();
+    return true;
   }
 
   /** Aktive Notiz gewechselt → Karten der alten Notiz sichern, verwerfen + neu scannen,
@@ -321,7 +328,7 @@ export class ImgToMdView extends ItemView {
     this.resetCards();
     this.refineErrors.clear();
     this.refineDrafts.clear();
-    await this.rescan();
+    if (!(await this.rescan())) return;   // ein neuerer Wechsel hat übernommen
     this.restoreCardsFor(this.deps.getActivePath());
   }
 

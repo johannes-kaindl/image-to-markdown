@@ -1355,3 +1355,45 @@ describe("refresh — kein Reset bei Sidebar-Fokus (0.15.1)", () => {
     expect((view as any).state.cards.length).toBe(1);
   });
 });
+
+describe("refresh — überlappende Notizwechsel (B3-Rennfall)", () => {
+  /** Scan, dessen Antwort je Pfad von außen freigegeben wird. */
+  function gesteuerterScan() {
+    const offen = new Map<string, (items: ImgItem[]) => void>();
+    const scan = vi.fn((p: string) => new Promise<ImgItem[]>((res) => { offen.set(p, res); }));
+    return { scan, gib: (p: string, items: ImgItem[]) => offen.get(p)!(items) };
+  }
+
+  it("ein langsamer Scan der älteren Notiz überschreibt die Liste der neueren nicht", async () => {
+    let active = "q.md";
+    const ctl = gesteuerterScan();
+    const { view } = mkView({ getActivePath: () => active, scan: (p: string) => (p === "q.md" ? Promise.resolve(ITEMS.map(i => ({ ...i }))) : ctl.scan(p)) });
+    await view.onOpen();
+    active = "slow.md"; const a = view.refresh();      // Scan der alten Notiz hängt
+    active = "leer.md"; const b = view.refresh();       // Wechsel auf eine Notiz ohne Bilder
+    ctl.gib("leer.md", []);
+    await b;
+    ctl.gib("slow.md", ITEMS.map(i => ({ ...i })));     // der ältere Scan kommt zuletzt zurück
+    await a;
+    expect(all(view.contentEl, "img2md-empty").length).toBe(1);
+    expect(all(view.contentEl, "img2md-item").length).toBe(0);
+    expect((view as any).state.items.length).toBe(0);
+    expect((view as any).cardsSourcePath).toBe("leer.md");
+  });
+
+  it("die ältere Anfrage legt Karten und Quelle auch nicht vor dem neueren Scan fest", async () => {
+    let active = "q.md";
+    const ctl = gesteuerterScan();
+    const { view } = mkView({ getActivePath: () => active, scan: (p: string) => (p === "q.md" ? Promise.resolve(ITEMS.map(i => ({ ...i }))) : ctl.scan(p)) });
+    await view.onOpen();
+    active = "slow.md"; const a = view.refresh();
+    active = "leer.md"; const b = view.refresh();
+    ctl.gib("slow.md", ITEMS.map(i => ({ ...i })));     // die ältere Antwort kommt zuerst
+    await a;
+    expect((view as any).cardsSourcePath).not.toBe("leer.md");   // die neuere Notiz ist noch nicht gescannt
+    ctl.gib("leer.md", []);
+    await b;
+    expect(all(view.contentEl, "img2md-empty").length).toBe(1);
+    expect((view as any).cardsSourcePath).toBe("leer.md");
+  });
+});
