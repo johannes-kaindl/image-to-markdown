@@ -76,6 +76,7 @@ import {
   openExisting,
   pollUntil,
   requireVisible,
+  schliesseEinstellungen,
 } from "../../tools/obsidian-cdp/cdp.js";
 import { echoText, startLlmStub } from "../../tools/obsidian-cdp/llm-stub.js";
 import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
@@ -478,7 +479,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       const sicht = await attachTo("settings", verbindung.port, verbindung.vault)
         .catch(() => null);
       if (!sicht) {
-        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+        await schliesseEinstellungen(cdp);
         return {
           ok: false,
           detail: `Tab "${tab}", aber am Port haengt kein Einstellungen-Fenster — Einstellungen gingen nicht auf`,
@@ -513,7 +514,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         };
       } finally {
         sicht.close?.();
-        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+        await schliesseEinstellungen(cdp);
       }
     },
   },
@@ -529,7 +530,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
       `);
       const sicht = await attachTo("settings", verbindung.port, verbindung.vault).catch(() => null);
       if (!sicht) {
-        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+        await schliesseEinstellungen(cdp);
         throw new Error("kein Einstellungen-Fenster am Port");
       }
       try {
@@ -547,7 +548,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         return { ok, detail: `erste Zeile "${d.name ?? "—"}", Knoepfe ${JSON.stringify(d.knoepfe)}, Bug-Icon: ${d.bug}` };
       } finally {
         sicht.close?.();
-        await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+        await schliesseEinstellungen(cdp);
       }
     },
   },
@@ -627,7 +628,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         `);
         const d = JSON.parse(r) as { da: boolean; s0: boolean; s1: boolean; s2: boolean };
         return { ok: d.da && d.s1 === !d.s0 && d.s2 === d.s0, detail: d.da ? `offen: ${d.s0} → ${d.s1} → ${d.s2}` : "kein .okit-collapsible-header mit „Anfrage“/„Request“ gefunden" };
-      } finally { await schliesseEinstellungen(cdp, sicht); }
+      } finally { await schliesseEinstellungenMitSicht(cdp, sicht); }
     },
   },
   {
@@ -666,7 +667,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const ok = d.nachSetzen.eigen && d.nachSetzen.offen && d.nachSetzen.wert === "0.9" && d.reset === true && !d.nachReset.eigen && d.nachReset.offen;
         return { ok, detail: `nach Setzen: eigener Wert=${d.nachSetzen.eigen}, Wert=${d.nachSetzen.wert}, offen=${d.nachSetzen.offen} · nach Zuruecksetzen: eigener Wert=${d.nachReset.eigen}, offen=${d.nachReset.offen}` };
       } finally {
-        await schliesseEinstellungen(cdp, sicht);
+        await schliesseEinstellungenMitSicht(cdp, sicht);
         await cdp.evaluate(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
           p.settings.request = JSON.parse(${JSON.stringify(vorher)});
@@ -905,7 +906,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         `);
         const d = JSON.parse(r) as { stufenwahl: boolean; hilfeErste: boolean; prompt: boolean; anzahl: number };
         return { ok: d.stufenwahl && d.hilfeErste && d.prompt, detail: `Stufenwahl-Zeile: ${d.stufenwahl} · Hilfe-Zeile zuerst: ${d.hilfeErste} · Prompt-Zeile (nach dem Host) noch da: ${d.prompt} · ${d.anzahl} Zeilen` };
-      } finally { await schliesseEinstellungen(cdp, sicht); }
+      } finally { await schliesseEinstellungenMitSicht(cdp, sicht); }
     },
   },
   {
@@ -1207,12 +1208,12 @@ async function oeffneEinstellungen(cdp: Cdp): Promise<Cdp | null> {
     return true;
   `);
   const sicht = await attachTo("settings", verbindung.port, verbindung.vault).catch(() => null);
-  if (!sicht) await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+  if (!sicht) await schliesseEinstellungen(cdp);
   return sicht;
 }
-async function schliesseEinstellungen(cdp: Cdp, sicht: Cdp): Promise<void> {
+async function schliesseEinstellungenMitSicht(cdp: Cdp, sicht: Cdp): Promise<void> {
   sicht.close?.();
-  await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+  await schliesseEinstellungen(cdp);
 }
 
 /** Ein aufgezeichneter Aufruf des Fake-Endpunkts. */
@@ -1299,7 +1300,7 @@ async function messeEinstellungen(cdp: Cdp): Promise<{ baustein: boolean; zeilen
     return true;
   `);
   const sicht = await attachTo("settings", verbindung.port, verbindung.vault).catch(() => null);
-  if (!sicht) { await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined); return null; }
+  if (!sicht) { await schliesseEinstellungen(cdp); return null; }
   try {
     return await sicht.evaluate(`
       const wurzel = document.querySelector(".modal.mod-settings") ?? document.body;
@@ -1320,7 +1321,7 @@ async function messeEinstellungen(cdp: Cdp): Promise<{ baustein: boolean; zeilen
     `);
   } finally {
     sicht.close?.();
-    await cdp.evaluate(`app.setting.close(); return true;`).catch(() => undefined);
+    await schliesseEinstellungen(cdp);
   }
 }
 
