@@ -1,6 +1,6 @@
 # Reference
 
-Dry, exhaustive reference for **Image to Markdown** (plugin id `image-to-markdown`, version 0.3.0, minimum Obsidian 1.11.4, Desktop and Mobile). For the source-level architecture and module layout, see [AGENTS.md](../../AGENTS.md).
+Dry, exhaustive reference for **Image to Markdown** (plugin id `image-to-markdown`, version 0.3.0, minimum Obsidian 1.11.4, Desktop and Mobile). For the source-level architecture and module layout, see [architecture.md](../internal/architecture.md).
 
 The plugin's user-facing strings follow Obsidian's display language: **English is canonical**, with a **German** translation. This reference quotes the English strings verbatim, with the German equivalent in parentheses where it helps. A small set of brand and control strings ("Image → Markdown", "IMG → MD", "Stop") is intentionally left unlocalized. See [UI language & localization](#ui-language--localization) for how the language is detected and what is and is not translated.
 
@@ -163,4 +163,4 @@ The plugin's interface is bilingual. **English is the canonical language; German
 
 ---
 
-For the architecture, module layout, and contribution conventions, see [AGENTS.md](../../AGENTS.md). Licensing: code under [AGPL-3.0-or-later](../../LICENSE), documentation under [CC BY-SA 4.0](../../LICENSE-DOCS).
+For the architecture and module layout, see [architecture.md](../internal/architecture.md); for the contribution conventions, see [AGENTS.md](../../AGENTS.md). Licensing: code under [AGPL-3.0-or-later](../../LICENSE), documentation under [CC BY-SA 4.0](../../LICENSE-DOCS).

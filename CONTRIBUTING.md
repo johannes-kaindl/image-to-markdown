@@ -2,7 +2,7 @@
 
 Thanks for your interest in improving **Image to Markdown** — an Obsidian plugin that transcribes the images in a note to Markdown with a local vision LLM, fully offline and non-destructive.
 
-Contributions of all sizes are welcome: bug reports, fixes, docs, and features. Before you start, please skim [`AGENTS.md`](AGENTS.md) in the repo root — it holds the architecture, module layout, and the detailed engineering conventions. This document is the contributor-facing summary. The conventions below follow the workspace's leading **comply-or-explain** convention: deviate when you have a good reason, and say why in the PR.
+Contributions of all sizes are welcome: bug reports, fixes, docs, and features. Before you start, please skim [`AGENTS.md`](AGENTS.md) in the repo root — it holds the detailed engineering conventions — and [`docs/internal/architecture.md`](docs/internal/architecture.md) for the architecture and module layout. This document is the contributor-facing summary. The conventions below follow the workspace's leading **comply-or-explain** convention: deviate when you have a good reason, and say why in the PR.
 
 ## Branch model
 
@@ -45,7 +45,7 @@ All user-facing strings (UI labels, commands, notices) go through the i18n modul
 
 - File issues and open pull requests on **Forgejo**: <https://git.jkaindl.de/jkaindl/image-to-markdown>. (GitHub is a mirror, not the place for contributions.)
 - For larger features, work through **brainstorm → spec → plan → TDD**, and keep the resulting artefacts outside the repository (the maintainer keeps them in a private vault). Smaller fixes can go straight to a `feat/<name>` branch with tests.
-- The detailed conventions, architecture, and module layout live in [`AGENTS.md`](AGENTS.md).
+- The detailed conventions live in [`AGENTS.md`](AGENTS.md); the architecture and module layout live in [`docs/internal/architecture.md`](docs/internal/architecture.md).
 
 ## License of contributions
 

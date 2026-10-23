@@ -257,7 +257,7 @@ Modell wirklich Bilder lesen kann — Details im [Handbuch](https://github.com/j
   `transcribed_by`-Frontmatter (Modell aus `response.model`) und ersetzt den Bild-Embed in der
   Quellnotiz durch einen Embed der neuen Notiz. Nicht-destruktiv, idempotent.
 
-Architektur- und Modul-Layout stehen in [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md).
+Architektur- und Modul-Layout stehen in [docs/internal/architecture.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/internal/architecture.md).
 
 ## Unterstützte Formate
 

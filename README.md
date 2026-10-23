@@ -156,7 +156,7 @@ For each selected image, the plugin builds a multimodal chat-completions request
 
 For PDFs, each page is rendered to a canvas by the bundled pdf.js (offline, no CDN; worker embedded as a Blob URL), converted to a PNG data URL, and sent to the same vision endpoint as a regular image. Pages stream as individual cards in the sidebar, and one transcript note is produced for the whole PDF.
 
-The architecture and module layout are documented in [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md).
+The architecture and module layout are documented in [docs/internal/architecture.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/docs/internal/architecture.md).
 
 ## Supported image formats
 

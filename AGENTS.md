@@ -2,177 +2,23 @@
 
 Orientierung für KI-Agenten (Claude Code, Codex, …) und Mitwirkende an diesem Repository.
 
-> **Workspace-Standards (maintainer-lokal):** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md`
-> im Multi-Projekt-Workspace des Maintainers, `../../workspace/_docs` relativ zu diesem Repo — nicht Teil dieses Repos,
-> ignorieren falls im Klon nicht vorhanden. Modell comply-or-explain.
+> **Workspace-Standards (maintainer-lokal):** Die verbindliche Leitkonvention steht in `_docs/CONVENTIONS.md` im Multi-Projekt-Workspace des Maintainers, `../../workspace/_docs` relativ zu diesem Repo — nicht Teil dieses Repos, ignorieren falls im Klon nicht vorhanden. Modell comply-or-explain.
 
 **Profil:** `ts-node` · `obsidian-plugin`.
 
 ## Project character
 
-**Projekt:** `image-to-markdown` (Plugin-id) — Obsidian-Plugin, das die **Bilder einer Notiz**
-per **lokalem Vision-LLM** nach Markdown transkribiert. Komplett offline, ohne Cloud. Autor: Johannes Kaindl.
+**Projekt:** `image-to-markdown` (Plugin-id) — Obsidian-Plugin, das die **Bilder einer Notiz** (und PDFs) per **lokalem Vision-LLM** nach Markdown transkribiert. Komplett offline, ohne Cloud. Autor: Johannes Kaindl. Ausgegliedert aus `vault-rag` 0.2.0 (2026-06-21): Bild-Transkription ist kein RAG. Das Warum: `docs/internal/decisions.md`.
 
-**Warum es existiert:** Ausgegliedert aus [`vault-rag`](https://git.jkaindl.de/jkaindl/vault-rag) 0.2.0
-(2026-06-21). Bild-Transkription ist **kein RAG** — sie teilte mit vault-rag nur den SSE-Transport,
-nicht den Index/Retrieval-Kern. Als eigenes Plugin bleibt vault-rag ein schlanker RAG-Kern und
-`image-to-markdown` ein fokussiertes Werkzeug mit eigener Registry-/Feedback-Fläche.
-
-**Bewusste Designentscheidungen:**
-- **Nicht-destruktiv & idempotent:** pro Bild eine Transkript-Notiz; der Bild-Embed in der Quellnotiz
-  wird durch einen Embed der neuen Notiz ersetzt — nie der Originaltext überschrieben.
-- **Offline-first:** spricht einen konfigurierbaren OpenAI-kompatiblen Vision-Endpoint (LM Studio,
-  MLX, Ollama) — keine Cloud, kein VPN.
-- **Streamend:** die Transkription läuft live in die Sidebar (inkl. Reasoning-Block bei
-  Reasoning-Modellen), abbrechbar.
+- **Nicht-destruktiv und idempotent:** pro Bild eine Transkript-Notiz; der Bild-Embed in der Quellnotiz wird durch einen Embed der neuen Notiz ersetzt — nie der Originaltext überschrieben.
+- **Offline-first:** spricht einen konfigurierbaren OpenAI-kompatiblen Vision-Endpoint (LM Studio, MLX, Ollama).
+- **Streamend:** die Transkription läuft live in die Sidebar (inkl. Reasoning-Block), abbrechbar.
 
 ## Architecture principles
 
-Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`,
-`llm_call.ts`, `capabilities.ts`, `i18n.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`,
-`describe.ts`, `prompts.ts`, `request_params.ts`, `card_cache.ts`, `frontmatter_map.ts`,
-`fm_migration.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`,
-`settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und die
-vendorte Schicht `vendor/kit-obsidian/*` importieren `obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten
-über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
-
-### Modul-Layout (`src/`)
-
-```
-img_to_md.ts        reiner Kern: findImageEmbeds · buildTranscriptNote · replaceEmbed ·
-                    writeTranscripts (batched, read-once/write-once) · runImgToMd · ImgToMdIO.
-                    Etappe-3-Helfer: classifySource (Dateiext → image/pdf/null) ·
-                    buildSelfSourceItem (erzeugt das einzelne ImgItem wenn die aktive Datei
-                    selbst die Quelle ist); ImgItem hat dafür ein neues Feld selfSource: true.
-img_to_md_state.ts  ImgToMdState — Bild-Auswahl + Ergebnis-Karten (kein DOM/I/O).
-                    `card.refine` ist `Rounds<RefineRound>` (code-kit `rounds`): rounds[0] = Original, jede Runde trägt
-                    `basedOn`; `refineRequest` schickt nur die Kette vom aktiven Stand zurück, nicht alle Runden.
-img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-Liste, streamende Karten,
-                    PDF-Seitenbereichs-Auswahl. Idempotenz-Anzeige je Liste-Zeile: bei vorhandenem
-                    Transkript „✓ transcript exists" + „open"-Link (springt zur Notiz), Zeilen-Titel
-                    „re-transcribing overwrites it" — erneut transkribieren überschreibt (kein Block).
-pdf_render.ts       Obsidian/DOM-Schicht für pdf.js: lädt PDF per Vault-Adapter, rendert Seiten auf
-                    OffscreenCanvas/Canvas → PNG-Data-URL. Importiert den gebündelten pdf.js-Worker
-                    (Blob-URL aus pdf-worker-src.generated.ts). Enthält pdfSmokeTest (Dev-Util).
-pdf_to_md.ts        Reiner Kern: seitenweise PDF-Transkription — nimmt RenderPage-Callback + VisionClient,
-                    streamt Karten je Seite, schreibt eine Transkript-Notiz pro PDF, ersetzt den
-                    PDF-Embed. Obsidian-frei, vollständig unit-testbar.
-backlinks.ts        Reiner Kern: Backlink-Idempotenz-Lookup — `findExistingTranscript` (prüft
-                    `resolvedLinks` + `frontmatterLinks` mit `source_pdf`/`source_image`-Filter;
-                    der Frontmatter-Filter ist load-bearing: Body-Embeds allein reichen nicht).
-                    Interface `BacklinkLookup` (von der Obsidian-Schicht injiziert, obsidian-frei
-                    testbar). Verwendet von `img_to_md_state.ts` via Scan.
-vision_client.ts    Schmale Hilfsklasse `VisionClient(endpoint, apiKey?)` NUR für die passive Fähigkeits-Anzeige
-                    der Settings (`visionConfidence`, über HttpFetch/setHttp). Chat, Ping, Modellliste, Transport
-                    und Fristen sind seit Welle 15 (Verbindungs-Tausch) die Kit-Verbindung `createLlmConnection`
-                    (`plugin.llm`). Der Schlüssel kommt aus `(await llm.resolve()).config`, nicht aus den Settings:
-                    er liegt im Obsidian-Schlüsselbund. Reiner Kern, obsidian-frei.
-llm_call.ts         `chatOutOrThrow(LlmResult)`: übersetzt das Ergebnis der Verbindung in `ChatOut`
-                    {content, reasoning, model, finishReason?} oder wirft den Fehler mit dem nutzersichtbaren Satz
-                    (`t("chat.err.*")`, `error.noEndpoint`; Abbruch bleibt ein `AbortError`). Reiner Kern.
-http.ts             Obsidian-Schicht: requestUrl-Adapter (obsidianHttp) → via setHttp in den Kern injiziert (nur noch
-                    für die Fähigkeits-Probe der Settings).
-capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projiziert): asJsonFetch
-                    (übersetzt HttpFetch → CapabilityFetch) · fetchVisionCapability · resolveVision ·
-                    visionDisplay · aktiver Vision-Test (VISION_TEST_TOKEN/VISION_TEST_PROMPT/
-                    isVisionConfirmed). Reiner Kern, DOM-frei.
-diff_modal.ts       DiffModal (Modal): Zeilen-Diff alt↔neu mit Checkbox pro Hunk (Default: alle an),
-                    liefert den gemergten Body zurück. Obsidian-abhängig.
-refine.ts           Reiner Kern: buildRefineMessages — Multi-Turn-Chat-Messages für die iterative
-                    Nachbesserung (Original + Feedback-Verlauf + neues Feedback).
-describe.ts         Beschreiben-Modus: buildDescribePrompt (festes CATEGORY/TAGS/---/Prosa-Format,
-                    Taxonomie-Auswahl) + Parsing nach ParsedDescription. Reiner Kern.
-prompts.ts          Prompt-Presets (default/tables/handwriting/math/code): PROMPT_PRESETS ·
-                    isPromptPreset · normalizePreset · Preset-Auflösung. Reiner Kern.
-request_params.ts   `MODE` (Sampling-Modus `transform`) · `REQUEST_MIGRATIONS` (die Migration des Altfelds
-                    `suppressThinking`: true → Stufe „aus“, false → Ein-Stufe; geladen wird mit `loadRequestSettings` aus dem
-                    Kit, `sampling-profiles`). Den Request baut die Kit-Verbindung (kein `maxTokens`: i2m hat kein Budget). Reiner Kern.
-card_cache.ts       CardCache: In-Session-Cache der Sidebar-Ergebnis-Karten pro Quelldatei
-                    (Plugin-Ebene, überlebt View-Close; kein Disk-Persist). Reiner Kern.
-frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskriminator-Werte aller
-                    i2m-Notizen (Setup-Zeit-Entscheidung). Reiner Kern. Seit 0.23.0 auch
-                    `truncated` (Default `truncated`) — geschrieben NUR bei `true`: Abwesenheit
-                    heisst „vollstaendig ODER unbekannt", weil Alt-Notizen den Key nicht kennen.
-                    `rewriteTranscript` kennt dafuer drei Zustaende (true setzt, false entfernt,
-                    undefined laesst in Ruhe); writeTranscripts normalisiert beim Override auf
-                    `=== true`, weil `card.truncated` nie `false` ist, sondern `undefined`.
-fm_migration.ts     Frontmatter-Mapping-Migration: diffMappings + Migrationsplan
-                    (MigrationPlan/NotePlan) über bestehende i2m-Notizen. Reiner Kern.
-migration_modal.ts  MigrationModal (Modal): Vorschau der Frontmatter-Migration (read-only
-                    Frontmatter-Diff, migrate/apply/cancel). Obsidian-abhängig.
-i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t() (Fallback lang→en→key,
-                    {0}-Interpolation) · pickLang · setLang/getLang · defaultVisionPrompt. EN kanonisch.
-settings.ts         ImageToMarkdownSettings (enthält `visionEndpoints: EndpointConfig[]` — je Eintrag
-                    URL + `id`/`secretId`; der Schlüssel liegt im Schlüsselbund) · migrateEndpoints (überführt beide Alt-Stände aus
-                    data.json — Einzelfeld `visionEndpoint` und String-Liste — via Kit-`migrateEndpointList`
-                    auf Configs) · applyListEdit (String-Listen, Basis für applyTaxonomyEdit; Endpunkte
-                    nutzen das Kit-`applyEndpointEdit` mit Feld-Diskriminator) · defaultSettings()
-                    (Prompt sprachabhängig) · SettingTab: Endpunkt-Quelle, lokale Liste und Abschnitt „Anfrage“
-                    zeichnet `llm.renderSettings(host, { lang })` in EINEM Host (Hatch `renderConnection`),
-                    `hide()` ruft `llm.hideSettings()` · Modell (Dropdown aus `llm.models`) + „Vision-Fähigkeit"
-                    (visionConfidence + aktiver „Vision testen" über `plugin.testVision`) · Prompt (große Textarea) ·
-                    PDF-Einstellungen (pdfMaxPages, pdfRenderScale, pdfPageSeparator) ·
-                    makeVisionTestImage (Canvas, DOM-Schicht).
-main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setLang) beim onload,
-                    View/Ribbon/Command/Kontextmenü/SettingTab. Hält `llm` (= `createLlmConnection`, Fähigkeit
-                    `vision`, Modus `transform`, `levelPicker: true`; `persist` bildet endpoints→visionEndpoints,
-                    model→aktive Zeile synchron ab, `llm.setModel`) + `callLlm` (ein Aufruf mit `messages`, optional EIN Retry nach
-                    `invalidate()`, nie nach Abbruch oder bereits gestreamtem Text) + `testVision` + `reconnect`.
-pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
-                    gebündelten pdf.js-Worker als eingebetteten String (Blob-URL-Quelle). Nicht
-                    manuell editieren; wird bei `npm run build` neu erzeugt.
-vendor/kit/         Aus obsidian-kit vendored — obsidian-freie Schicht (`obsidian-kit/src/pure/*`).
-                    Pin steht in `vendor/kit/VENDOR.json`, Herkunft zusätzlich je Datei-Header;
-                    erneuert wird ausschließlich über `tools/sync-kit.sh`, nie von Hand:
-  endpoint.ts       normalizeEndpoint + Endpoint-Fallback-Auflösung.
-  reasoning.ts      Reasoning-Unterdrückung (suppressParams) + isAlwaysOnThinker.
-  settings.ts       mergeSettings (Defaults-Merge mit Referenz-Schutz).
-  sse.ts            parseSSE (OpenAI-SSE-Delta-Parser, content + reasoning_content).
-  think-splitter.ts ThinkSplitter (inline <think>-Tags; früher src/think_splitter.ts, bis Welle 11 lokal als think.ts — chat-client importiert den Kit-Namen).
-  endpoint_config.ts EndpointConfig (url + optionaler apiKey/model) · authHeaders · migrateEndpointList ·
-                    applyEndpointEdit (Feld-Diskriminator) · resolveActiveEndpointConfig.
-  capabilities.ts   guessFromName (Namens-Heuristik Vision+Thinking) · parse* (Ollama/LM Studio
-                    v0/v1) · mergeCapability/resolveCapabilities · fetchCapabilities, Typ
-                    CapabilityFetch.
-  diff.ts           Reiner Zeilen-Diff (LCS): diffLines · groupHunks · applySelection. Bis 0.27.0
-                    lokal als src/diff.ts — dieses Repo ist die kanonische Quelle der Kit-Fassung.
-                    ⚠️ Die Literale "ctx"|"add"|"del" sind load-bearing: diff_modal.ts und
-                    migration_modal.ts bauen daraus die CSS-Klasse `img2md-diff-${kind}` gegen
-                    styles.css. Eine Umbenennung im Kit bräche das Styling still.
-  error_body.ts     errorMessageFromBody/errorMessageFromText — Fehlermeldung aus einem
-                    JSON-Fehlerkörper. Konsument ist der Kit-Chat-Client.
-  clipboard.ts      writeClipboard (obsidian-frei) — Abhängigkeit von kit-obsidian/clipboard.ts.
-vendor/kit-obsidian/ Aus obsidian-kit vendored — obsidian-abhängige Schicht
-                    (`obsidian-kit/src/obsidian/*`), eigener Pin in `VENDOR.json`:
-  llm-connection.ts createLlmConnection (Welle 15): die ganze LLM-Anbindung (Quelle, gemerkte Auflösung, Modellliste, Profil, Client, Schwärzung, Antwortprüfung, Settings-Abschnitte); zieht backend-probe, endpoint-secrets, secrets, llm-connection-strings mit. Alle Module stehen auf EINER Ref (kit-sync.json).
-  chat-client.ts    createChatClient: Streaming, Idle-/Erst-Chunk-Frist, Abbruch, Fehlerkörper, Fallback ohne Stream. Obsidian-frei (Transport injiziert) — von der Verbindung genutzt. Querimporte auf code-kit sind wie bei clipboard.ts auf `../kit/` umgeschrieben.
-  chat-transport.ts xhrSseTransport (Stream) + requestUrlTransport (Fallback ohne Stream). Importiert `obsidian`; die Verbindung wählt sie selbst (`transportFor`).
-  clock.ts          Uhr-Port für chat-client (Tests injizieren eine Fake-Uhr).
-  request-section.ts / request-session.ts / thinking-control.ts / collapsible.ts  Sampling-Plan-Bausteine (Abschnitt „Anfrage“, Sitzung, Denk-Knopf der Sidebar); CSS verbatim in `styles.css`.
-  clipboard.ts      copyToClipboard: Zwischenablage mit Notice-Quittung. Genutzt von main.ts
-                    (copyText in ImgToMdViewDeps). ⚠️ Nicht-verbatim (wie endpoint-list.ts, model-picker.ts, endpoint-source.ts): die
-                    kit-internen Importe `../pure/` heißen hier `../kit/` (Vendor-Layout). Der
-                    Umschrieb ist mechanisch, wird von sync-kit.sh reproduziert und ist in Zeile 2
-                    der Datei sowie im note-Feld der VENDOR.json deklariert.
-  folder-suggest.ts FolderSuggest (Ordner-Autovervollständigung in Settings-Feldern).
-  settings_walker.ts Deklarative Settings-Zeilen (Settings-Tab).
-```
-
-**pdf.js-Worker-Build:** `scripts/build-pdf-worker.mjs` bündelt `pdfjs-dist/build/pdf.worker.mjs`
-via esbuild zu einem Single-File-Bundle, das als Template-Literal in
-`pdf-worker-src.generated.ts` eingebettet wird. Zur Laufzeit erzeugt `pdf_render.ts` daraus
-eine Blob-URL — kein CDN, kein Netz, kein Import-Assertion-Trick.
-
-**Geteilter Code ist vendored, nicht als Package geteilt:** die mit den Schwester-Plugins
-gemeinsamen Teile liegen als Kopien aus `obsidian-kit` unter `src/vendor/kit/` (obsidian-frei,
-aus `obsidian-kit/src/pure/`) und `src/vendor/kit-obsidian/` (obsidian-abhängig, aus
-`obsidian-kit/src/obsidian/`) — Kit-first-Regel des Dachs. Die Trennung ist Vertrag, nicht
-Geschmack: ein obsidian-importierendes Modul unter `vendor/kit/` fällt in den Nachbar-Repos
-durch deren `check:pure`. Erneuert wird über `tools/sync-kit.sh` (`sh tools/sync-kit.sh`,
-liest `../obsidian-kit` bzw. `$KIT_DIR`), nie von Hand; die beiden `VENDOR.json` tragen den Pin.
-Der Chat-Weg läuft seit Welle 15 (0.28.0) über die Kit-Verbindung `createLlmConnection` (`plugin.llm`); vorher über `createChatClient` mit eigenem `VisionClient`. Fristen sind die des Kits und statisch: Idle 120 s, erster Chunk 600 s (JIT-ladendes Modell, großes Bild), ohne Stream 900 s; die Nicht-Stream-Aufrufe (Befehl, Kontextmenü, Anbieter-API, Vision-Test) laufen mit `stream: false`. Die Fehlertexte baut `llm_call.ts::chatOutOrThrow` aus `kind` über `t("chat.err.*")`. Die Verbindung schwärzt Geheimnisse vor dem Senden (umkehrbar, Bildteile nie). Das Anfrage-Profil (Modus `transform`) und der Abschnitt „Anfrage“ kommen ebenfalls aus der Verbindung.
-
-**Die Endpunkt-QUELLE gehört dem LLM Endpoint Manager, sobald er installiert ist (Welle 8, 2026-09-25; seit Welle 15 über die Verbindung):** `plugin.llm.resolve()` löst Endpunkt UND Modell auf — Manager zuerst (bei JEDEM Aufruf frisch gefunden, nie gemerkt), sonst `visionEndpoints` (Modell je Zeile, lokal gemerkt bis `invalidate()`); `plugin.model` ist das Modell für jeden Aufruf (`llm.modelInUse()`, mit Manager nach `invalidate()` aus `choice.model`; das globale Feld `visionModel` ist seit Welle 17 abgeschafft, `migrateVisionModel` verteilt den Altwert einmal auf die Zeilen, die Panel-Wahl schreibt über `llm.setModel` in die aktive Zeile), `settings.choice` hält die Wahl gegenüber dem Manager und gilt nur mit Manager (ein Modellname ist an seinen Endpunkt gebunden). Eine eigene Modell-Zeile gibt es nicht mehr (Welle 17); die Fähigkeits-Anzeige folgt über `onResolved` dem Modell der Zeile — **nur bei geändertem Modell**, sonst ruft ihre Probe die Auflösung im Kreis (gemessen: Renderer hing, F1–V1 Zeitüberschreitung). Ein Manager ohne Endpunkt ergibt KEINEN lokalen Rückfall (Kit-Vertrag). GUI-Smoke F1–F3 legen einen Fake-Manager in den Plugin-Slot und stellen den Slot im `finally` und im Abbruch-Handler zurück; V1–V5 prüfen Schlüssel, Schlüsselbund, Nicht-Stream, Schwärzung und Stufenwahl gegen einen Fake-Endpunkt.
+- **Reiner Kern ohne `obsidian`-Imports, testbar in Node ohne DOM-Mock (PROF-OBS-03/04).** Nur `main.ts`, `settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und `vendor/kit-obsidian/*` importieren `obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten über injizierte Closures (`ImgToMdViewDeps`) → headless testbar. Das Modul-Layout: `docs/internal/architecture.md`.
+- **Geteilter Code ist vendored, nicht als Package geteilt** (Kit-first-Regel des Dachs): `src/vendor/kit/` (obsidian-frei) und `src/vendor/kit-obsidian/` (obsidian-abhängig), Pin in den `VENDOR.json`. Erneuert wird nur mit `sh tools/sync-kit.sh`, nie von Hand.
+- **Die LLM-Anbindung ist die Kit-Verbindung `createLlmConnection` (`plugin.llm`);** die Endpunkt-Quelle gehört dem LLM Endpoint Manager, sobald er installiert ist. Details: `.claude/rules/llm-verbindung.md`.
 
 ## Commands
 
@@ -196,68 +42,40 @@ npm run version-bump 0.3.0        # Version synct package.json/manifest.json/ver
 ## Conventions
 
 - **TS strict + `noImplicitAny`** — keine `any`-Casts für neue Typen.
-- **Tests:** vitest + happy-dom; Obsidian-Mock unter `tests/__mocks__/obsidian.ts`. Nach jeder
-  Änderung müssen **alle Tests grün** bleiben. `npx tsc --noEmit` separat laufen (vitest ≠ tsc).
-- **Commits:** Conventional Commits, deutsche Beschreibung erlaubt. **Nur berührte Dateien stagen.**
-  Trailer bei substanziellem AI-Beitrag: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
-- **i18n:** nutzersichtbare Strings via `t()` aus `i18n.ts` (EN kanonisch, EN/DE nach App-Sprache) — Workspace-Standard
-  PROF-OBS-07 (`_docs/docs/obsidian-i18n.md`). Keine Muttersprachen-Literale in der UI; Marken-/Steuer-Strings (`Image → Markdown`, `Stop`) bleiben literal.
+- **Tests:** vitest + happy-dom; Obsidian-Mock unter `tests/__mocks__/obsidian.ts`. Nach jeder Änderung müssen **alle Tests grün** bleiben. `npx tsc --noEmit` separat laufen (vitest ≠ tsc).
+- **Commits:** Conventional Commits, deutsche Beschreibung erlaubt. **Nur berührte Dateien stagen.** Trailer bei substanziellem AI-Beitrag: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
+- **i18n:** nutzersichtbare Strings via `t()` aus `i18n.ts` (EN kanonisch, EN/DE nach App-Sprache) — Workspace-Standard PROF-OBS-07 (`_docs/docs/obsidian-i18n.md`). Keine Muttersprachen-Literale in der UI; Marken-/Steuer-Strings (`Image → Markdown`, `Stop`) bleiben literal.
 
 ## Gotchas
 
-- **pdf.js-Worker-Bundling:** `pdfjs-dist` ist auf **4.10.38** gepinnt. v5/v6 externalisieren den
-  WASM-Kern und brechen das Single-File-Bundle (Blob-URL-Strategie funktioniert dann nicht mehr).
-  Vor einem Upgrade die Worker-Blob-Strategie re-validieren. Der Worker wird via
-  `scripts/build-pdf-worker.mjs` (separater esbuild-Lauf, vor dem Haupt-Build) gebündelt und als
-  eingebetteter String in `pdf-worker-src.generated.ts` gespeichert — diese Datei wird im Haupt-Build
-  mitgebundelt. `pdfjs-dist` ist eine **runtime-`dependency`** (nicht `devDependency`): `src/pdf_render.ts` importiert `pdfjs-dist/legacy/build/pdf.mjs`, sodass sowohl das pdf.js-Hauptmodul als auch der Worker in `main.js` gebündelt werden — das ist der Hauptgrund für das größere Bundle (~2,2 MB).
-- **`data.json`** ist die von Obsidian persistierte Plugin-Konfig — git-ignored, nicht committen.
-- **`main.js`** ist Build-Artefakt (gitignored) — nie von Hand editieren.
-- **Endpoint mit `/v1`-Suffix:** `normalizeEndpoint()` strippt ein trailing `/v1`, sonst baute der
-  Client `…/v1/v1/chat/completions`. **LM Studio antwortet auf falsche Pfade mit HTTP 200 + Fehler-Body**
-  (kein echter Fehler) → `res.ok` true, Stream leer → still leeres Transkript. (Genau dieser Bug beim
-  ersten Smoke-Test.) **Seit 0.22.0 fällt so ein Endpunkt aus der Auflösung**, weil `ping()` die
-  Modell-Listen-Form verlangt — der Footgun ist damit strukturell abgefangen, nicht nur angezeigt.
-  Belegt vor der Umstellung: LM Studio (live, `n=9`), Ollama (live), MLX (`mlx_lm/server.py`) und
-  llama.cpp (`tools/server/server-models.cpp`) liefern alle ein `data`-Array — es gibt also keinen
-  bekannten Server, der dadurch aus der Auswahl fiele.
-- **HEIC/HEIF** (iOS-Default) werden von Vision-Modellen abgelehnt → übersprungen + Warnung.
-- **LM Studio ignoriert das `model`-Feld** → tatsächliches Modell aus `response.model` lesen.
-- **Vision-Endpoint-Default `:1234`** (LM Studio, Referenzserver des Dachs; bis 0.30.1 war es `:8080`, MLX — gemessen 2026-10-14: 6 von 8 Vergleichsplugins nutzen `:1234`). Ein MLX-Server hört auf `:8080`; eine gespeicherte Liste bleibt.
-- **Nicht in-place** (anders als vault-rag): nach Build `main.js`/`manifest.json`/`styles.css` ins
-  Vault-Plugin-Verzeichnis kopieren, dann reloaden.
-- **Release-CI ist GitHub-only:** `.github/workflows/release.yml` läuft auf dem **GitHub-Mirror**
-  (Forgejo ignoriert `.github/`). SemVer-Tag pushen → Mirror trägt ihn zu GitHub → Pipeline
-  baut + attestiert (`actions/attest-build-provenance`) + legt das GitHub-Release an. Das **Forgejo**-Release
-  (kanonisch) bleibt manuell via Forgejo-API (siehe Memory `codeberg-release-gotcha`).
+- **`data.json`** ist die von Obsidian persistierte Plugin-Konfig — git-ignored, nicht committen. **`main.js`** ist Build-Artefakt (gitignored) — nie von Hand editieren.
+- **Das Plugin läuft nicht in-place** (anders als vault-rag): nach dem Build `main.js`/`manifest.json`/`styles.css` ins Vault-Plugin-Verzeichnis kopieren (`npm run deploy`), dann reloaden.
+- **`pdfjs-dist` bleibt auf 4.10.38 gepinnt** (v5/v6 brechen das Single-File-Bundle) und ist eine runtime-`dependency`. Vor einem Upgrade: `.claude/rules/pdf.md`.
+- **Nie im Repo: absolute Pfade außerhalb des Repos** (`/Users/…`, Vault-Pfade) — Platzhalter nutzen (`$VAULT/…`, `~/…`, repo-relativ). Herkunftsnachweise als Repo-Name + `Datei:Zeile` sind erwünscht. Gate: `scripts/check-no-abs-paths.mjs` (Teil von `npm test`).
+- **Ein Release fährt der Master** (CORE-AGENT-14), über `npm run release` im Dach-Tooling; Regeln: `../.claude/rules/release-und-store.md`.
+
+## Context index
+
+- Bevor du `src/main.ts`, `src/settings.ts`, `src/img_to_md.ts` oder eine andere Datei der LLM-Anbindung (`vision_client.ts`, `llm_call.ts`, `capabilities.ts`, `request_params.ts`) liest oder änderst: `.claude/rules/llm-verbindung.md` (Endpunkt-Quelle, Verbindung, Server-Eigenheiten).
+- Bevor du unter `src/vendor/` liest oder änderst oder das Kit neu vendorst: `.claude/rules/vendor-kit.md`.
+- Bevor du den PDF-Weg (`src/pdf_*.ts`) oder `scripts/build-pdf-worker.mjs` änderst: `.claude/rules/pdf.md`.
+- Vor Änderungen an Modulstruktur oder Dateinamen: `docs/internal/architecture.md`.
+- Bevor du eine Entscheidung „bewusst so“ übernimmst: `docs/internal/decisions.md`.
+- Bevor du den GUI-Smoke fährst oder änderst: `docs/SMOKE.md`, `../.claude/rules/gui-smoke-treiber.md`, `../.claude/rules/obsidian-instanz.md`, `../.claude/rules/cdp-lock.md`, `../.claude/rules/staging-vaults.md`.
+- Bevor du README-Bilder aufnimmst: `../.claude/rules/readme-shots.md`, Skill `readme-shots`.
+- Bevor du `styles.css` oder UI änderst: `../.claude/rules/store-css.md`, `../.claude/rules/ui-bausteine.md`, `../UI-STANDARD.md`.
+- Vor einem Release oder einer Store-Einreichung: `../.claude/rules/release-und-store.md`, Skills `plugin-release-setup` und `store-rescan`.
 
 ## Memory
 
-- **SDD-Artefakte (seit 2026-07-16): Cockpit, nicht Repo** — Specs/Plans/Task-Reports leben im
-  Coding-Cockpit des Maintainers (`$VAULT/25_Coding/image-to-markdown/_SDD/`, CORE-META-14, maintainer-lokal).
-  Sie tragen Arbeitskontext (Vault-Pfade, Schwester-Repo-Interna), der in einem public Repo niemandem nützt.
-  Das Repo behält die Design-Essenz in dieser Datei + `CHANGELOG.md`.
-- **Specs und Pläne liegen im Vault-Cockpit unter `_SDD/` (CORE-META-14);** der frühere Ordner `docs/superpowers/` ist dorthin umgezogen (2026-10-03) und existiert im Repo nicht mehr.
-- **Nie im Repo:** absolute Pfade außerhalb des Repos (`/Users/…`, Vault-Pfade) — Platzhalter nutzen
-  (`$VAULT/…`, `~/…`, repo-relativ). Herkunftsnachweise als Repo-Name + `Datei:Zeile` sind dagegen erwünscht.
-  Gate: `scripts/check-no-abs-paths.mjs` (Teil von `npm test`).
-- **Projekt-Memory:** verwandtes Wissen im vault-rag-Memory
-  (`~/.claude/projects/-Users-Shared-code-vault-rag/memory/`), insbesondere die Ausgliederungs-Spec/-Plan
-  im vault-rag-Cockpit `25_Coding/vault-rag/_SDD/<datei>`.
+- **SDD-Artefakte (seit 2026-07-16): Cockpit, nicht Repo** — Specs/Plans/Task-Reports leben im Coding-Cockpit des Maintainers (`$VAULT/25_Coding/image-to-markdown/_SDD/`, CORE-META-14, maintainer-lokal). Sie tragen Arbeitskontext (Vault-Pfade, Schwester-Repo-Interna), der in einem public Repo niemandem nützt. Das Repo behält die Design-Essenz in `docs/internal/decisions.md` und `CHANGELOG.md`.
+- **Projekt-Memory** liegt unter `~/.claude/projects/<slug>/memory/` mit `MEMORY.md`-Index.
 
 ## Abweichungen von der Leitkonvention
 
-Stand: siehe `CHANGELOG.md` / `manifest.json` (dort steht die maßgebliche Version — hier bewusst
-keine, damit dieser Block nicht durch Zeitablauf falsch wird). Verbleibende bewusste, begründete
-Abweichungen (comply-or-explain):
+Stand: siehe `CHANGELOG.md` / `manifest.json` (dort steht die maßgebliche Version — hier bewusst keine, damit dieser Block nicht durch Zeitablauf falsch wird). Verbleibende bewusste, begründete Abweichungen (comply-or-explain):
 
-- **CORE-META-07** — `LICENSE` (AGPL-3.0) + `LICENSE-DOCS` (CC BY-SA 4.0) vorhanden; separate `LICENSING.md`/`CLA.md` (Dual-License-Option) noch nicht. *Grund:* rechtliche Entscheidung, bei Bedarf — CONTRIBUTING nennt „commercial dual-license on request".
-- **PROF-OBS-06** — Settings-Tab nutzt noch `display()` (deklarative `getSettingDefinitions`-API ist 1.13-Enhancement). *Grund:* Recommendation, kein Blocker; eigener Zyklus.
-- **PROF-TS-04** — kein `tsconfig.build.json`-Split (ein `tsconfig.json` + `vitest.config.ts` reicht). *Grund:* klein genug.
-
-Erfüllt seit der Doku-/Release-Readiness-Session (2026-06-21): CORE-META-04 (Diátaxis-Manual `docs/manual/`), CORE-META-06 (`CONTRIBUTING.md`/`SECURITY.md`), CORE-META-09 (`README.de.md`), PROF-OBS-02 (`npm run deploy`), PROF-OBS-07 (UI-Lokalisierung EN/DE). Forgejo-`origin` + GitHub-Push-Mirror aktiv (CORE-GIT-01).
-
-Erfüllt mit 0.3.0 (2026-06-23): CORE-META-02/03 (Badge-Zeile/Hero + Feature-Screenshots) — README mit Badge 1.8.7, Aufnahme-Vertrag (Screenshots) auf aktuellen Stand (PDF-/Idempotenz-Shots, EN-UI, Slider).
+- **PROF-TS-04** — kein `tsconfig.build.json`-Split (`tsconfig.json`, `tsconfig.test.json` und `tsconfig.scripts.json` reichen). *Grund:* klein genug.
 
 ## UI-Abweichungen
 

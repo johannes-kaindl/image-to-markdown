@@ -475,4 +475,4 @@ Good to know:
 ---
 
 For the architecture and module layout behind all of this, see
-[AGENTS.md](../../AGENTS.md) in the repository root.
+[docs/internal/architecture.md](../internal/architecture.md).

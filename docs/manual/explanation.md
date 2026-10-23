@@ -218,7 +218,7 @@ to talk about across languages.
 
 This page deliberately stays out of the code. If you want the module layout — which files are
 pure and testable, which touch Obsidian, how the transport and the view fit together — that
-lives in [`../../AGENTS.md`](../../AGENTS.md) at the repository root, written for contributors
+lives in [`../internal/architecture.md`](../internal/architecture.md), written for contributors
 and AI agents rather than end users.
 
 ---

@@ -22,7 +22,7 @@ The manual is written in English. The plugin's interface, however, is bilingual 
 
 ### [Explanation](explanation.md)
 
-*Understanding-oriented.* The design and rationale behind the plugin: why transcription is non-destructive and idempotent (one transcript note per image or PDF; the source embed is replaced by an embed of the new note), why the endpoint is normalized so a trailing `/v1` does not become `…/v1/v1/…`, and why nothing ever leaves your machine. Module and source layout live in [AGENTS.md](../../AGENTS.md), not here.
+*Understanding-oriented.* The design and rationale behind the plugin: why transcription is non-destructive and idempotent (one transcript note per image or PDF; the source embed is replaced by an embed of the new note), why the endpoint is normalized so a trailing `/v1` does not become `…/v1/v1/…`, and why nothing ever leaves your machine. Module and source layout live in [architecture.md](../internal/architecture.md), not here.
 
 ## Not sure where to start?
 
