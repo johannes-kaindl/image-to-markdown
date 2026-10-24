@@ -191,7 +191,7 @@ npm run build   # prod bundle → main.js
 npm test        # vitest
 ```
 
-Contributions are welcome. Please read [CONTRIBUTING.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) is a mirror.
+Contributions are welcome. Please read [CONTRIBUTING.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/CONTRIBUTING.md) for the workflow (test-driven, `main` always green, feature work in `feat/<name>`, Conventional Commits) and [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md) for the architecture and module conventions. The canonical repository lives on [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) only receives the branch and tag when a release is published.
 
 ## Security
 

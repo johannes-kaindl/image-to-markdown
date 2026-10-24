@@ -299,6 +299,8 @@ npm test        # vitest
 Konventionen (Branch-Modell, Conventional Commits, Qualitäts-Gates vor Commit) stehen in
 [AGENTS.md](https://github.com/johannes-kaindl/image-to-markdown/blob/main/AGENTS.md).
 
+Das kanonische Repository liegt auf [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown); GitHub (`johannes-kaindl/image-to-markdown`) bekommt Branch und Tag nur bei einem Release.
+
 ## Sicherheit
 
 Bilddaten werden ausschließlich an den vom Nutzer konfigurierten **lokalen** Endpoint gesendet —

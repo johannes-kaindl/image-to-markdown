@@ -27,13 +27,13 @@ Contributions of all sizes are welcome: bug reports, fixes, docs, and features. 
 
 - Releases are tagged with [SemVer](https://semver.org/) **without** a `v` prefix — e.g. `1.2.3`, not `v1.2.3`.
 - [Forgejo](https://git.jkaindl.de/jkaindl/image-to-markdown) is the canonical, primary remote (`origin`).
-- The [GitHub repository](https://github.com/johannes-kaindl/image-to-markdown) is a **mirror** only (used for the community plugin registry and release CI). Open your contributions against Forgejo.
+- The [GitHub repository](https://github.com/johannes-kaindl/image-to-markdown) only receives the branch and tag when a release is published (used for the community plugin registry and release CI). Open your contributions against Forgejo.
 
 ## Quality gate
 
 Run these locally before you commit, and make sure they're green:
 
-- **Tests:** `npm test` — the suite is test-driven and currently has 111 tests (Vitest).
+- **Tests:** `npm test` — the suite is test-driven (Vitest).
 - **Typecheck:** `npx tsc --noEmit` — must be clean.
 - **Pre-commit hooks:** let them run; don't skip them with `--no-verify`.
 
@@ -43,7 +43,7 @@ All user-facing strings (UI labels, commands, notices) go through the i18n modul
 
 ## Where to work
 
-- File issues and open pull requests on **Forgejo**: <https://git.jkaindl.de/jkaindl/image-to-markdown>. (GitHub is a mirror, not the place for contributions.)
+- File issues and open pull requests on **Forgejo**: <https://git.jkaindl.de/jkaindl/image-to-markdown>. (GitHub only receives releases, it is not the place for contributions.)
 - For larger features, work through **brainstorm → spec → plan → TDD**, and keep the resulting artefacts outside the repository (the maintainer keeps them in a private vault). Smaller fixes can go straight to a `feat/<name>` branch with tests.
 - The detailed conventions live in [`AGENTS.md`](AGENTS.md); the architecture and module layout live in [`docs/internal/architecture.md`](docs/internal/architecture.md).
 
