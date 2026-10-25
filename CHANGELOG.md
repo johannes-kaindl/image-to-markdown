@@ -20,6 +20,7 @@ and versioning follows [SemVer](https://semver.org/).
 
 ### Changed
 
+- The settings tab rebuilds every time it is opened (last request, deviations from the profile), not only the first time after the plugin was loaded.
 - The README and CONTRIBUTING no longer call the GitHub repository a mirror: Forgejo is canonical, GitHub only receives the branch and tag when a release is published. The German README now says so too.
 
 ## [0.31.4] — 2026-10-23

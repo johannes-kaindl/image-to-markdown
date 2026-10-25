@@ -151,7 +151,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   /** Von der Capability-Hatch gesetzt; das Modell-Dropdown ruft sie nach einem Wechsel. */
   private showCaps: (model: string) => void = () => { /* bis die Capability-Zeile gerendert ist */ };
 
-  private uninstallRefresh: () => void = () => { /* bis der Konstruktor es setzt */ };
+  private removeRefreshHook: () => void = () => { /* bis der Konstruktor es setzt */ };
 
   constructor(app: App, private plugin: ImageToMarkdownPlugin) {
     super(app, plugin);
@@ -159,7 +159,7 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
     // Der volle Rebuild ist `renderFallback()`, NICHT `refresh()`: `refresh()` ruft in Obsidian >= 1.13 das
     // native `update()`, das `renderTab()` aufruft — und das ist hier der Hook selbst (Rekursionsschutz),
     // der Tab bliebe beim ersten Oeffnen leer (Smoke E1, Kaltstart).
-    this.uninstallRefresh = installTabRefreshOnOpen(this, () => { this.renderFallback(); });
+    this.removeRefreshHook = installTabRefreshOnOpen(this, () => { this.renderFallback(); });
   }
 
   /** Vertragspflicht der Kit-Verbindung: `hideSettings()` verwirft die Modell-Listen des Tabs. Ohne
@@ -169,9 +169,11 @@ export class ImageToMarkdownSettingTab extends PluginSettingTab {
   hide(): void {
     this.plugin.llm.hideSettings();
     this.plugin.onSourceResolved = undefined;
-    this.uninstallRefresh();
-    super.hide();
+    super.hide();   // der Öffnen-Haken bleibt installiert: das Öffnen ruft renderTab(), und ohne Haken baute der Tab nur beim ersten Mal neu auf
   }
+
+  /** Nimmt den Öffnen-Haken ab. Gehört in `onunload` des Plugins, nicht in `hide()` (Kit-Vertrag `installTabRefreshOnOpen`). */
+  dispose(): void { this.removeRefreshHook(); }
 
   /** Probe der Settings-UI (Fähigkeits-Anzeige): gegen den aufgelösten Endpunkt, GANZE Config, weil
    *  der Schlüssel nach dem Schlüsselbund-Umzug nicht mehr in den Settings steht, sondern nur in

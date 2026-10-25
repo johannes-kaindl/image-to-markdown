@@ -59,11 +59,16 @@ export default class ImageToMarkdownPlugin extends Plugin {
    *  gesetzt (Muster lingotuner): sobald das Plugin-Objekt sichtbar ist, soll `api` da sein. */
   api!: OcrProviderApi;
   private shortcutsBridge!: ShortcutsBridge;
+  private settingTab?: ImageToMarkdownSettingTab;
 
   private openPath = (p: string): void => {
     const f = this.app.vault.getAbstractFileByPath(p);
     if (f instanceof TFile) void this.app.workspace.getLeaf(false).openFile(f);
   };
+
+  onunload(): void {
+    this.settingTab?.dispose();   // der Öffnen-Haken des Tabs wird erst hier abgenommen, nicht in hide()
+  }
 
   async onload() {
     setHttp(obsidianHttp);   // nur noch für die Fähigkeits-Probe der Settings
@@ -111,6 +116,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
     if (folded.changed) await this.saveSettings();
     void this.llm.resolve().then(() => { this.refreshThinkingControls(); }).catch(() => { /* source() bleibt neutral */ });
 
+    // Der Manager kommt, geht oder wechselt den Endpunkt: neu auflösen, die Modellzeile der Sidebar lädt ihre Liste neu.
+    this.register(onEndpointManagerChanged(this.app, () => { void this.reconnect().then(() => { this.reloadModelBars(); }); }));
     this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });
     this.api = createOcrProviderApi({ extractText: (p) => this.extractTextViaOcr(p) });
 
