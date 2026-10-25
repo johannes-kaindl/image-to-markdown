@@ -153,12 +153,12 @@ Changes take effect on the next transcription run. The text area edits the
 
 ## Switch the prompt preset
 
-The sidebar has a preset picker next to the model dropdown. With a local vision
+The sidebar has a preset picker below the model row. With a local vision
 model the prompt is the main quality lever, so switching the preset switches the
 transcription mode without editing any text.
 
 1. Open the **"IMG → MD"** sidebar (`scan-text` ribbon icon).
-2. Use the **preset dropdown** next to the model dropdown to pick a mode:
+2. Use the **preset dropdown** below the model row to pick a mode:
    - **Default** — your editable prompt (the text area in settings, see above).
    - **Tables → Markdown** — render tables as GitHub-Flavored Markdown tables.
    - **Handwriting** — transcribe handwritten notes; illegible words marked `[?]`.
@@ -243,13 +243,16 @@ Good to know:
   `response.model` — so the note always reflects the real model, not just what
   you selected.
 - If an external process swaps the model your backend has loaded, click the
-  **"Refresh models"** ("Modelle aktualisieren") icon (`refresh-cw`) next to
-  the model dropdown — in the sidebar and in the endpoint row — to re-fetch the model
-  list. If the previously selected model is no longer loaded, the selection is
-  automatically aligned to the first available model. After each transcription
-  run, the sidebar also performs an automatic post-sync: if `response.model`
-  differs from the current selection, the selection follows the real model and
-  a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …") is shown.
+  **"Reload models"** ("Modelle neu laden") icon (`refresh-cw`) in the model row of the
+  sidebar — or the **"Refresh models"** ("Modelle aktualisieren") icon in the endpoint row
+  of the settings — to re-fetch the model list. The sidebar says how many models it found.
+  If the model you selected is no longer loaded, it stays selected and is marked
+  "(saved)" ("(gespeichert)"); the plugin does not swap it for another one by itself.
+  **"Automatic"** ("Automatisch") is always in the list and leaves the choice to the server.
+  After each transcription run, the sidebar also performs an automatic post-sync: if
+  `response.model` differs from the current selection, the selection follows the real
+  model and a notice naming the new model ("Model changed to …" / "Modell gewechselt zu …")
+  is shown.
 
 ---
 

@@ -103,7 +103,7 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 | `sidebar-streaming.png` | `README.md`, `README.de.md` (Features) | A single transcription card with the **finished** Markdown (headings, bullet list, GFM table), the collapsed **thinking block** and the **copy button**. ⚠️ The name says streaming, the image shows the **result** — deliberately: the live stream is already carried by `hero.png` and `pdf-streaming.png`, and this shot's job is to show what comes out. Renaming it would break the URLs in both READMEs for no gain. |
 | `describe-mode.png` | `README.md`, `README.de.md` (Features) | The sidebar's mode switch **"Transcribe"** / **"Describe"** (with **"Describe"** active) plus a finished description card: image + description text, an editable **Category** field (with taxonomy suggestions) and free-form **Tags**, and the **"Save description"** button. |
 | `refine.png` | `README.md`, `README.de.md` (Features) | A transcript card mid-refinement: the **"Refine"** feedback field, a scrollable history with the original transcription plus at least one refinement round, a per-round expandable **thinking** block, a **[Copy] [Create note]** action pair on each version, and the sidebar footer's **"Discard results"** / **"Apply"** buttons. |
-| `thinking-toggle.png` | `README.md`, `README.de.md` (Features) | The sidebar's preset row with the **Thinking toggle** (brain icon) visible, showing one of **"Thinking: off"**, **"Thinking: low"** / **"medium"** / **"high"**, or **"Thinking: lowest level"** (Kit control since 0.27.0; the recipe captures the switched-on state). Reproducible: `npm run shots -- --only thinking-toggle.png`. |
+| `thinking-toggle.png` | `README.md`, `README.de.md` (Features) | The sidebar's model row (model dropdown, reload icon) with the **Thinking toggle** (brain icon) visible, showing one of **"Thinking: off"**, **"Thinking: low"** / **"medium"** / **"high"**, or **"Thinking: lowest level"** (Kit control since 0.27.0; the recipe captures the switched-on state). Reproducible: `npm run shots -- --only thinking-toggle.png`. |
 | `settings.png` | `README.md`, `README.de.md` (Configuration) | The settings tab under **"Vision (Image → Markdown)"**: the **"Vision endpoints"** list (per-entry reachability icon, active endpoint marked, **"Test connection"**), the model of each endpoint row, **"Vision capability"** / **"Test vision"**, **"Vision prompt"**, the PDF settings — **"PDF max. pages per run"**, **"PDF render scale"** (a **slider**, 1–4), **"PDF page separator"** (dropdown), **"Use embedded PDF text"** toggle, **"Expand thinking by default"** toggle — and, further down the same page, the **"Description categories"** section (taxonomy fields). Reproducible: `npm run shots -- --only settings.png` (the recipe sets the endpoint to the local server on `:1234`, the model, English categories, and presses **"Test vision"**; the page ends before **"Frontmatter mapping"**, which is its own image). |
 | `frontmatter-mapping.png` | `README.md`, `README.de.md` (Configuration / Features) | The settings tab's **"Frontmatter mapping"** section: the per-key text fields (source image/PDF/note key, category key, tags key, transcribed-by key, described-by key, created key, pages key, kind key, and the two kind values for transcript/description). |
 | `tutorial-lmstudio.png` | `docs/manual/tutorial.md` (step 1) | A local server (e.g. LM Studio) with a **vision-capable model loaded**, listening on its port (LM Studio uses `:1234`). |
@@ -196,11 +196,11 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 
 ### `thinking-toggle.png`
 
-- **Shows:** the sidebar's preset row (preset dropdown + the Thinking toggle button side by side) with
+- **Shows:** the sidebar's model row (model dropdown, reload icon and the Thinking toggle button, one row) with
   the toggle clearly showing its brain icon and one of its three label states — **"Thinking: on"**
   (default), **"Thinking: off"**, or (with a model that cannot be suppressed, e.g. gpt-oss/harmony)
   **"Thinking: lowest level"**. Prefer capturing the "on" state, optionally a second close-up for "off".
-- **Frame:** crop to the preset row. Width ~600–900 px.
+- **Frame:** crop to the model row (`.img2md-model-row`). Width ~600–900 px.
 
 ### `settings.png`
 
@@ -318,7 +318,7 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 5. **Reasoning model** (for `hero.png`, `sidebar-streaming.png`, `thinking-block.png`,
    `refine.png`, `thinking-toggle.png`): load a model that emits `reasoning_content` / inline
    `<think>` tags, otherwise the thinking block does not appear. Capture `thinking-toggle.png` in
-   the sidebar's preset row once this model is selected (its default **"Thinking: on"** state);
+   the sidebar's model row once this model is selected (its default **"Thinking: on"** state);
    optionally toggle it off for a second close-up.
 
 6. **Image shots.** Open the sidebar (command **"Open sidebar"** or the `scan-text` ribbon). With
@@ -383,7 +383,7 @@ Verified against `src/i18n.ts` (`STRINGS.en`) — do not guess these, quote them
 - Refine: input placeholder **"Feedback, e.g. tables as GFM"** · submit button **"Refine"** ·
   history entry headings: **"Original"** (first block) and **"You: `<feedback>`"** (each round,
   `{0}` is the feedback text verbatim) · empty-result notice: **"No revision returned"**
-- Thinking toggle (brain icon, next to the preset dropdown): **"Thinking: on"** /
+- Thinking toggle (brain icon, in the model row next to the model dropdown): **"Thinking: on"** /
   **"Thinking: off"** / **"Thinking: lowest level"** (models that cannot suppress reasoning)
 - Diff modal (shown before the plugin's one destructive operation, an opt-in overwrite of an
   existing transcript note): title **"Overwrite `<file>`?"** · per-hunk checkbox aria-label

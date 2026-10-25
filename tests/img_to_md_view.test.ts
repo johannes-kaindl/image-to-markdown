@@ -12,13 +12,29 @@ function all(el: any, cls: string): any[] {
   walk(el); return out;
 }
 
+const tick = () => new Promise<void>((r) => setTimeout(r, 0));
+
 const ITEMS: ImgItem[] = [
   { raw: "![[a.png]]", link: "a.png", ext: "png", supported: true, kind: "image" },
   { raw: "![[b.heic]]", link: "b.heic", ext: "heic", supported: false, kind: "image" },
 ];
 
+/** Fake der Kit-Verbindung für die Modellzeile (`ModelBarConnection`: models, setModel, modelInUse, source). */
+function mkLlm(init: { models?: string[]; model?: string; defaultModel?: string; reachable?: boolean } = {}) {
+  const st = { model: init.model ?? "vm", models: init.models ?? ["vm"], reachable: init.reachable ?? true, defaultModel: init.defaultModel };
+  const llm = {
+    st,
+    models: vi.fn(async (_o?: { force?: boolean }) => ({ models: [...st.models], reachable: st.reachable })),
+    setModel: vi.fn(async (m: string) => { st.model = m; }),
+    modelInUse: () => st.model,
+    source: () => (st.defaultModel === undefined ? {} : { defaultModel: st.defaultModel }),
+  };
+  return llm;
+}
+
 function mkView(over: any = {}) {
   const calls: any = { written: [], copied: [], opened: [] };
+  const llm = over.llm ?? mkLlm();
   let mode: ViewMode = over.initialMode ?? "transcribe";
   const deps = {
     getActivePath: over.getActivePath ?? (() => "q.md"),
@@ -37,9 +53,8 @@ function mkView(over: any = {}) {
     getTaxonomy: over.getTaxonomy ?? (() => ["Foto", "Diagramm"]),
     writeDescriptions: over.writeDescriptions ?? (async (_sp: string, entries: any[]) => { calls.written.push(entries); return entries.map((_e: any, i: number) => ({ path: `desc-${i}.md` })); }),
     connectionStatus: over.connectionStatus ?? (async () => ({ ok: true, endpoint: "http://localhost:1234" })),
-    listModels: over.listModels ?? (async () => []),
-    getModel: over.getModel ?? (() => "vm"),
-    setModel: over.setModel ?? vi.fn(),
+    llm,
+    getModel: over.getModel ?? (() => llm.modelInUse()),
     listPresets: over.listPresets ?? (() => [{ id: "default", label: "Default" }, { id: "math", label: "Math → LaTeX" }]),
     getPreset: over.getPreset ?? (() => "default"),
     setPreset: over.setPreset ?? vi.fn(),
@@ -52,7 +67,7 @@ function mkView(over: any = {}) {
     activeElement: over.activeElement ?? (() => null),
   };
   const view = new ImgToMdView({ app: makeFakeApp() } as any, deps);
-  return { view, calls, deps };
+  return { view, calls, deps, llm };
 }
 
 describe("isDescribingCard", () => {
@@ -127,14 +142,14 @@ describe("ImgToMdView — Gerüst + Liste", () => {
     (sel._listeners["change"] ?? []).forEach((cb: any) => cb());
     expect(setPreset).toHaveBeenCalledWith("default");
   });
-  it("Modell-Switcher ruft setModel bei Auswahl", async () => {
-    const setModel = vi.fn();
-    const { view } = mkView({ setModel, listModels: async () => ["x", "y"] });
+  it("Modell-Switcher (Kit-Modellzeile) ruft llm.setModel bei Auswahl", async () => {
+    const { view, llm } = mkView({ llm: mkLlm({ models: ["x", "y"], model: "x" }) });
     await view.onOpen();
-    const sel = all(view.contentEl, "img2md-model")[0];
+    const sel = all(view.contentEl, "okit-model-bar-select")[0];
     sel.value = "y";
     (sel._listeners["change"] ?? []).forEach((cb: any) => cb());
-    expect(setModel).toHaveBeenCalledWith("y");
+    await tick();
+    expect(llm.setModel).toHaveBeenCalledWith("y");
   });
   it("ohne aktive Notiz: leere Liste, Hinweis", async () => {
     const { view } = mkView({ getActivePath: () => null });
@@ -524,73 +539,187 @@ const PDF_ITEMS: ImgItem[] = [
   { raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 2, range: { from: 1, to: 2 } },
 ];
 
-describe("ImgToMdView — Modell-Refresh", () => {
-  it("Refresh-Icon ruft listModels erneut", async () => {
-    let calls = 0;
-    const { view } = mkView({ listModels: async () => { calls++; return ["vm"]; }, getModel: () => "vm" });
+describe("ImgToMdView — Modellzeile (Kit model-bar)", () => {
+  const optionTexts = (sel: any): string[] => (sel.children ?? []).map((o: any) => o.textContent);
+
+  it("eine Zeile im Kopf: Dropdown mit den Modellen des Endpunkts, \"Automatisch\" und dem gewählten Modell; der Eigenbau ist weg", async () => {
+    setLang("en");
+    const { view } = mkView({ llm: mkLlm({ models: ["a", "b"], model: "b", defaultModel: "a" }) });
     await view.onOpen();
-    const before = calls;
-    const btn = all(view.contentEl, "img2md-model-refresh");
+    expect(all(view.contentEl, "okit-model-bar").length).toBe(1);
+    const sel = all(view.contentEl, "okit-model-bar-select")[0];
+    expect(optionTexts(sel)).toEqual(expect.arrayContaining(["Automatic (a)", "a", "b"]));
+    expect(sel.value).toBe("b");
+    expect(all(view.contentEl, "img2md-model").length).toBe(0);
+    expect(all(view.contentEl, "img2md-model-refresh").length).toBe(0);
+  });
+  it("das Dropdown trägt einen Namen (aria-label) und \"Automatisch\" ist immer wählbar", async () => {
+    setLang("en");
+    const { view, llm } = mkView({ llm: mkLlm({ models: ["a"], model: "a" }) });
+    await view.onOpen();
+    const sel = all(view.contentEl, "okit-model-bar-select")[0];
+    expect(sel.getAttribute("aria-label")).toBeTruthy();
+    expect(Array.from(sel.children ?? []).some((o: any) => o.getAttribute("value") === "")).toBe(true);
+    sel.value = "";
+    (sel._listeners["change"] ?? []).forEach((cb: any) => cb());
+    await tick();
+    expect(llm.setModel).toHaveBeenCalledWith("");
+  });
+  it("Neu-laden fragt den Endpunkt erneut (force) und sagt die Zahl an (aria-live)", async () => {
+    setLang("en");
+    const { view, llm } = mkView({ llm: mkLlm({ models: ["vm", "other"] }) });
+    await view.onOpen();
+    llm.models.mockClear();
+    const btn = all(view.contentEl, "okit-model-bar-refresh");
     expect(btn.length).toBe(1);
     btn[0].click();
-    await new Promise(r => setTimeout(r, 0));
-    expect(calls).toBe(before + 1);
+    await tick();
+    expect(llm.models).toHaveBeenCalledWith({ force: true });
+    expect(all(view.contentEl, "okit-model-bar-status")[0].textContent).toContain("2 models loaded");
   });
-  it("refreshModels gleicht eine nicht mehr geladene Auswahl an ein geladenes Modell an", async () => {
-    const setModel = vi.fn();
-    const { view } = mkView({ getModel: () => "gone-model", setModel, listModels: async () => ["loaded-model"] });
+  it("ein gewähltes, nicht mehr geladenes Modell bleibt gewählt und steht als gespeichert da (kein stilles Angleichen)", async () => {
+    setLang("en");
+    const { view, llm } = mkView({ llm: mkLlm({ models: ["loaded-model"], model: "gone-model" }) });
     await view.onOpen();
-    expect(setModel).toHaveBeenCalledWith("loaded-model");
+    expect(llm.setModel).not.toHaveBeenCalled();
+    const sel = all(view.contentEl, "okit-model-bar-select")[0];
+    expect(sel.value).toBe("gone-model");
+    expect(optionTexts(sel).some((x: string) => x.includes("gone-model") && x.includes("saved"))).toBe(true);
   });
-  it("run() gleicht die Auswahl an das real verwendete Modell an (Post-Sync)", async () => {
-    const setModel = vi.fn();
-    const { view } = mkView({
-      getModel: () => "vm", setModel, listModels: async () => ["vm"],
-      transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "other-model" }; },
-    });
+  it("die Denk-Steuerung steht in der Zeile, der alte Host entfällt", async () => {
+    setLang("en");
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "off", onLevel: "low", levelPicker: false }) });
     await view.onOpen();
-    await view.run();
-    expect(setModel).toHaveBeenCalledWith("other-model");
+    const bar = all(view.contentEl, "okit-model-bar")[0];
+    expect(all(bar, "okit-thinking-toggle").length).toBe(1);
+    expect(all(view.contentEl, "img2md-think").length).toBe(0);
   });
-  it("run() ohne Abweichung ruft setModel nicht (kein unnötiges Reconnect)", async () => {
-    const setModel = vi.fn();
-    const { view } = mkView({
-      getModel: () => "vm", setModel, listModels: async () => ["vm"],
-      transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "vm" }; },
-    });
+  it("die Zeile ist während eines Laufs gesperrt und danach wieder frei (disabled als Funktion des Laufzustands)", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => { release = r; });
+    let seenDuring: boolean | null = null;
+    let view!: ReturnType<typeof mkView>["view"];
+    ({ view } = mkView({
+      transcribeStream: async (_sp: string, _it: any, onC: any) => {
+        seenDuring = all(view.contentEl, "okit-model-bar-select")[0].disabled === true && all(view.contentEl, "okit-model-bar-refresh")[0].disabled === true;
+        await gate; onC("x"); return { content: "x", reasoning: "", model: "vm" };
+      },
+    }));
     await view.onOpen();
-    await view.run();
-    expect(setModel).not.toHaveBeenCalled();
+    expect(all(view.contentEl, "okit-model-bar-select")[0].disabled).toBe(false);
+    const running = view.run();
+    await tick();
+    release();
+    await running;
+    expect(seenDuring).toBe(true);
+    expect(all(view.contentEl, "okit-model-bar-select")[0].disabled).toBe(false);
   });
-  it("zeigt den grünen Haken, wenn die Auswahl im Backend geladen ist", async () => {
-    const { view } = mkView({ getModel: () => "vm", listModels: async () => ["vm", "other"] });
+  it("refreshThinking() zeichnet die Zeile aus dem Zustand neu (Modell wurde in den Einstellungen gewechselt), ohne neuen Scan", async () => {
+    const scan = vi.fn(async () => ITEMS.map(i => ({ ...i })));
+    const { view, llm } = mkView({ scan, llm: mkLlm({ models: ["a", "b"], model: "a" }) });
     await view.onOpen();
-    expect(all(view.contentEl, "img2md-model-status")[0].className).toContain("is-loaded");
+    const scans = scan.mock.calls.length;
+    llm.st.model = "b";
+    view.refreshThinking();
+    expect(all(view.contentEl, "okit-model-bar-select")[0].value).toBe("b");
+    expect(scan.mock.calls.length).toBe(scans);
   });
-  it("kein Haken, wenn die Auswahl nicht geladen ist (offline/leere Liste)", async () => {
-    const { view } = mkView({ getModel: () => "vm", listModels: async () => [] });
+  it("onClose meldet die Zeile ab: ein spätes models()-Ergebnis zeichnet nichts mehr, die Wurzel ist entfernt, das Status-Symbol bleibt", async () => {
+    let finish: (r: { models: string[]; reachable: boolean }) => void = () => {};
+    const llm = mkLlm({ models: ["a"], model: "b" });
+    const v = mkView({ llm });
+    await v.view.onOpen();
+    const late = new Promise<{ models: string[]; reachable: boolean }>((r) => { finish = r; });
+    llm.models.mockImplementation(() => late);
+    all(v.view.contentEl, "okit-model-bar-refresh")[0].click();
+    const sel = all(v.view.contentEl, "okit-model-bar-select")[0];
+    const before = optionTexts(sel);
+    expect(all(v.view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+    await v.view.onClose();
+    finish({ models: ["b", "zzz-late"], reachable: true });   // jetzt stünde "b" in der Liste: das Symbol würde auf „geladen“ kippen
+    await tick();
+    expect(all(v.view.contentEl, "okit-model-bar").length).toBe(0);
+    expect(optionTexts(sel)).toEqual(before);
+    expect(all(v.view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+  });
+  it("öffnen, schließen, wieder öffnen baut genau eine Zeile (kein Rest der alten)", async () => {
+    const { view } = mkView();
     await view.onOpen();
-    expect(all(view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+    await view.onClose();
+    await view.onOpen();
+    expect(all(view.contentEl, "okit-model-bar").length).toBe(1);
   });
-  it("Modell-Status unterscheidet geladen/nicht-geladen per Icon-Form (nicht nur Farbe)", async () => {
-    const okV = mkView({ getModel: () => "vm", listModels: async () => ["vm", "other"] });
-    await okV.view.onOpen();
-    const okIcon = all(okV.view.contentEl, "img2md-model-status")[0].getAttribute("data-icon");
+  it("ein Wurf aus setModel ist nicht still: die Ansage der Zeile nennt den Fehler, das Dropdown zeigt wieder das geltende Modell", async () => {
+    setLang("en");
+    const llm = mkLlm({ models: ["x", "y"], model: "x" });
+    llm.setModel.mockImplementation(async () => { throw new Error("boom"); });
+    const { view } = mkView({ llm });
+    await view.onOpen();
+    const sel = all(view.contentEl, "okit-model-bar-select")[0];
+    sel.value = "y";
+    (sel._listeners["change"] ?? []).forEach((cb: any) => cb());
+    await tick();
+    expect(all(view.contentEl, "okit-model-bar-status")[0].textContent).toContain("boom");
+    expect(all(view.contentEl, "img2md-status")[0].textContent).toContain("boom");   // auch sichtbar, nicht nur angesagt
+    expect(sel.value).toBe("x");
+  });
 
-    const offV = mkView({ getModel: () => "vm", listModels: async () => [] });
-    await offV.view.onOpen();
-    const offIcon = all(offV.view.contentEl, "img2md-model-status")[0].getAttribute("data-icon");
-
-    expect(okIcon).toBeTruthy();
-    expect(offIcon).toBeTruthy();      // nicht-geladen hat jetzt eine eigene Form statt "leer"
-    expect(okIcon).not.toBe(offIcon);  // farbunabhängig unterscheidbar
+  describe("Post-Sync nach dem Lauf (das real verwendete Modell, response.model)", () => {
+    it("run() wählt das real verwendete Modell über llm.setModel und sagt es in der Statuszeile", async () => {
+      setLang("en");
+      const { view, llm } = mkView({
+        llm: mkLlm({ models: ["vm", "other-model"], model: "vm" }),
+        transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "other-model" }; },
+      });
+      await view.onOpen();
+      await view.run();
+      expect(llm.setModel).toHaveBeenCalledWith("other-model");
+      expect(all(view.contentEl, "okit-model-bar-select")[0].value).toBe("other-model");
+      expect(all(view.contentEl, "img2md-status")[0].textContent).toContain("other-model");
+    });
+    it("run() ohne Abweichung ruft setModel nicht (kein unnötiges Reconnect)", async () => {
+      const { view, llm } = mkView({
+        transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "vm" }; },
+      });
+      await view.onOpen();
+      await view.run();
+      expect(llm.setModel).not.toHaveBeenCalled();
+    });
   });
-  it("manueller Refresh zeigt die Modell-Anzahl in der Statuszeile (Klick-Feedback)", async () => {
-    const { view } = mkView({ getModel: () => "vm", listModels: async () => ["vm", "other"] });
-    await view.onOpen();
-    all(view.contentEl, "img2md-model-refresh")[0].click();
-    await new Promise(r => setTimeout(r, 0));
-    expect(all(view.contentEl, "img2md-status")[0].textContent).toContain("2");
+
+  describe("Status-Symbol \"Modell geladen\" (bleibt Sache des Plugins, folgt der Liste der Zeile)", () => {
+    it("zeigt den Haken, wenn die Auswahl im Backend geladen ist", async () => {
+      const { view } = mkView({ llm: mkLlm({ models: ["vm", "other"], model: "vm" }) });
+      await view.onOpen();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).toContain("is-loaded");
+    });
+    it("kein Haken, wenn die Auswahl nicht geladen ist (offline/leere Liste)", async () => {
+      const { view } = mkView({ llm: mkLlm({ models: [], model: "vm", reachable: false }) });
+      await view.onOpen();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+    });
+    it("unterscheidet geladen/nicht-geladen per Icon-Form (nicht nur Farbe)", async () => {
+      const okV = mkView({ llm: mkLlm({ models: ["vm", "other"], model: "vm" }) });
+      await okV.view.onOpen();
+      const okIcon = all(okV.view.contentEl, "img2md-model-status")[0].getAttribute("data-icon");
+      const offV = mkView({ llm: mkLlm({ models: [], model: "vm", reachable: false }) });
+      await offV.view.onOpen();
+      const offIcon = all(offV.view.contentEl, "img2md-model-status")[0].getAttribute("data-icon");
+      expect(okIcon).toBeTruthy();
+      expect(offIcon).toBeTruthy();
+      expect(okIcon).not.toBe(offIcon);
+    });
+    it("folgt einem Wechsel in der Zeile (Haken weg, wenn das gewählte Modell nicht geladen ist)", async () => {
+      const llm = mkLlm({ models: ["vm"], model: "vm" });
+      const { view } = mkView({ llm });
+      await view.onOpen();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).toContain("is-loaded");
+      const sel = all(view.contentEl, "okit-model-bar-select")[0];
+      sel.value = "";
+      (sel._listeners["change"] ?? []).forEach((cb: any) => cb());
+      await tick();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+    });
   });
 });
 
@@ -739,8 +868,6 @@ describe("ImgToMdView — Diff-Confirm + Content-aware Gate (v1.1)", () => {
 });
 
 describe("ImgToMdView — Denk-Steuerung (Kit thinking-control)", () => {
-  const tick = () => new Promise<void>((r) => setTimeout(r, 0));
-
   it("Profil-Vorgabe 'off' → Label 'Thinking: off', is-off, aria-pressed=false", async () => {
     setLang("en");
     const { view } = mkView();
@@ -1134,6 +1261,22 @@ describe("Refine-Zeile (#7)", () => {
     ]);
     expect(rf.active).toBe(1);
     expect((view as any).state.cards[0].text).toBe("VERBESSERT");
+  });
+
+  it("die Modellzeile ist auch während des Nachbesserns gesperrt und danach wieder frei", async () => {
+    let seenDuring: boolean | null = null;
+    let viewRef: any = null;
+    const { view } = await runToDone({
+      refine: async (_b: string, _r: any[], _fb: string, onContent: any) => {
+        seenDuring = all(viewRef.contentEl, "okit-model-bar-select")[0].disabled === true;
+        onContent("V"); return { content: "V", reasoning: "", model: "vm" };
+      },
+    });
+    viewRef = view;
+    expect(all((view as any).contentEl, "okit-model-bar-select")[0].disabled).toBe(false);
+    await (view as any).refineCard(0, "mehr Struktur");
+    expect(seenDuring).toBe(true);
+    expect(all((view as any).contentEl, "okit-model-bar-select")[0].disabled).toBe(false);
   });
 
   it("nachbessern baut auf dem aktiven Stand auf: nach Zurückspringen geht die übersprungene Runde nicht mit", async () => {

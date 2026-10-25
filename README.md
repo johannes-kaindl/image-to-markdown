@@ -61,7 +61,7 @@
 
 **Thinking toggle** — skip a big reasoning model's wait when you don't need it:
 
-<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="The sidebar preset row with the thinking toggle reading “Thinking: on”">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="The sidebar model row with the model dropdown and the thinking toggle reading “Thinking: on”">
 
 ### In detail
 

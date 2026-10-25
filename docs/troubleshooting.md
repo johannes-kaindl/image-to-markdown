@@ -26,7 +26,7 @@ or, when you transcribed from the command palette: `Empty transcript: <image>`
 
 **Cause:** the server answered, but returned no text — usually because the loaded model cannot read images.
 
-**Fix:** under **Vision capability** press **Test vision**. "No vision" means the model cannot see; load a vision-capable model (for example Qwen2-VL) and press **Refresh models**.
+**Fix:** under **Vision capability** press **Test vision**. "No vision" means the model cannot see; load a vision-capable model (for example Qwen2-VL) and press **Reload models** in the sidebar's model row.
 
 ## The model spent its budget on thinking
 

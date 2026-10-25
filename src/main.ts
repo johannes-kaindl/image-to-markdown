@@ -4,7 +4,7 @@ import { mergeSettings } from "./vendor/kit/settings";
 import { setHttp } from "./vision_client";
 import { ENDPOINT_CALLER } from "./resolve_endpoint";
 import { sanitizeChoice } from "./vendor/kit/endpoint-source";
-import { findEndpointManager } from "./vendor/kit-obsidian/endpoint-source";
+import { findEndpointManager, onEndpointManagerChanged } from "./vendor/kit-obsidian/endpoint-source";
 import { createLlmConnection, type CompleteHandlers, type LlmConnection, type LlmConnectionSettings } from "./vendor/kit-obsidian/llm-connection";
 import type { ChatWireMessage } from "./vendor/kit-obsidian/chat-client";
 import { loadRequestSettings, onLevelFor, thinkingFor, type BackendId, type FamilyId, type RequestSettings, type ThinkingLevel } from "./vendor/kit/sampling-profiles";
@@ -109,19 +109,21 @@ export default class ImageToMarkdownPlugin extends Plugin {
         if (patch.choice !== undefined) this.settings.choice = patch.choice;
         if (patch.request !== undefined) this.settings.request = patch.request;
         const saved = this.saveSettings();
-        if (patch.request !== undefined) this.refreshThinkingControls();
+        // Modell, Endpunkt oder Denkstufe haben sich geändert (auch aus dem Settings-Tab): die Modellzeile der Sidebar zieht nach.
+        this.refreshThinkingControls();
         return saved;
       },
     });
     if (folded.changed) await this.saveSettings();
     void this.llm.resolve().then(() => { this.refreshThinkingControls(); }).catch(() => { /* source() bleibt neutral */ });
-
     // Der Manager kommt, geht oder wechselt den Endpunkt: neu auflösen, die Modellzeile der Sidebar lädt ihre Liste neu.
     this.register(onEndpointManagerChanged(this.app, () => { void this.reconnect().then(() => { this.reloadModelBars(); }); }));
+
     this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });
     this.api = createOcrProviderApi({ extractText: (p) => this.extractTextViaOcr(p) });
 
-    this.addSettingTab(new ImageToMarkdownSettingTab(this.app, this));
+    this.settingTab = new ImageToMarkdownSettingTab(this.app, this);
+    this.addSettingTab(this.settingTab);
     this.registerView(VIEW_TYPE_IMGMD, (leaf: WorkspaceLeaf) => new ImgToMdView(leaf, this.makeImgViewDeps()));
     this.addRibbonIcon("scan-text", "Image → Markdown", () => this.activateImgMdView());
     this.addCommand({ id: "open-sidebar", name: t("cmd.openSidebar"), callback: () => this.activateImgMdView() });
@@ -221,9 +223,17 @@ export default class ImageToMarkdownPlugin extends Plugin {
     return { family: src.family, backend: src.backend, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE), levelPicker: r.levelPickerInChat };
   }
 
+  /** Zeichnet die Modellzeile samt Denk-Steuerung jeder offenen Sidebar aus dem Zustand neu (ohne Abruf). */
   private refreshThinkingControls(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_IMGMD)) {
       if (leaf.view instanceof ImgToMdView) leaf.view.refreshThinking();
+    }
+  }
+
+  /** Lädt die Modellliste jeder offenen Modellzeile neu (der Endpunkt hat gewechselt). */
+  private reloadModelBars(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_IMGMD)) {
+      if (leaf.view instanceof ImgToMdView) leaf.view.reloadModels();
     }
   }
 
@@ -491,10 +501,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
         return { ok: src.config !== null, endpoint: src.config?.url ?? null };
       },
       // Mit Manager gibt es keinen lokalen Rückfall — ohne aufgelösten Endpunkt bleibt die Liste leer.
-      listModels: async () => (await this.llm.models({ force: true })).models,
+      // Die Modellzeile (Kit model-bar) spricht die Verbindung direkt an. Mit Manager gehört das Modell zur Wahl (choice.model),
+      // ohne Manager zur aktiven Zeile — beides macht die Verbindung.
+      llm: this.llm,
       getModel: () => this.model,
-      // Mit Manager gehört das Modell zur Wahl (choice.model), ohne Manager zur aktiven Zeile — beides macht die Verbindung.
-      setModel: (m: string) => { void this.llm.setModel(m).then(() => { this.refreshThinkingControls(); }); },
       listPresets: () => PROMPT_PRESETS.map(id => ({ id, label: promptPresetLabel(id) })),
       getPreset: () => this.settings.promptPreset,
       setPreset: (id: string) => { this.settings.promptPreset = isPromptPreset(id) ? id : "default"; void this.saveSettings(); },

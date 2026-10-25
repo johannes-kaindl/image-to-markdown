@@ -11,16 +11,22 @@ and versioning follows [SemVer](https://semver.org/).
 - Vendored `obsidian-kit` 0.70.0 (was 0.63.0) and `code-kit` 0.37.5 (was 0.31.0). You will notice two things:
 - **Links in rendered transcripts:** an `obsidian://` link in a transcript, a description or a refine version loses its target and stays as plain text; `file:` and `app:` targets go too. Web, mail and note links are unchanged, and Markdown images were already turned into text before.
 - **Vision hint in the settings:** a model id that starts with `claude-` is now shown as "probably vision-capable" instead of unknown.
+- The sidebar's model row is now the shared model row: the model dropdown, a "Reload models" icon and the thinking toggle sit in one row (the toggle moved up from the preset row), and the row wraps instead of cutting off in a narrow sidebar.
+- A model you selected that is no longer loaded stays selected and is marked "(saved)". Before, the plugin silently replaced it with the first loaded model.
+- "Automatic" is always in the model list and leaves the choice to the server for the run. After a run the sidebar still selects the model the server reports (`response.model`), as before.
+- Reloading the models announces the count to screen readers ("2 models loaded") instead of writing it into the status line; "Model changed to …" still appears after a run that used another model than the selected one.
+- The model row is locked while a run or a refine is in progress.
+- A warning sign next to the dropdown says when the endpoint does not answer or returns no model list. With the LLM Endpoint Manager installed, the last entry "Other endpoint …" opens the manager's settings.
 
 ### Fixed
 
+- The settings tab rebuilds every time it is opened (last request, deviations from the profile), not only the first time after the plugin was loaded.
 - The "from" and "to" page fields of a PDF row keep the focus and the typed value when the list is redrawn, for example after a note was written. Before, the cursor jumped out of the field mid-typing.
 
 ## [0.31.5] — 2026-10-25
 
 ### Changed
 
-- The settings tab rebuilds every time it is opened (last request, deviations from the profile), not only the first time after the plugin was loaded.
 - The README and CONTRIBUTING no longer call the GitHub repository a mirror: Forgejo is canonical, GitHub only receives the branch and tag when a release is published. The German README now says so too.
 
 ## [0.31.4] — 2026-10-23

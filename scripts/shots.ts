@@ -263,17 +263,17 @@ async function main(): Promise<void> {
     `, 15_000, 250);
     if (!bereit) throw new Error("Sidebar verarbeitete \"Field notes.md\" nicht");
 
-    // Zuschnitt auf die Preset-Zeile mit dem Denk-Knopf (Kit-Baustein „Thinking: …“).
+    // Zuschnitt auf die Modellzeile mit dem Denk-Knopf (Kit-Bausteine `model-bar` und „Thinking: …“).
     const denkBild = async (): Promise<void> => {
       // Der Vertrag bevorzugt den eingeschalteten Zustand; steht er auf „off“, einmal umschalten.
       await cdp.evaluate(`
-        const k = document.querySelector(${JSON.stringify(SIDEBAR + " .img2md-think .okit-thinking-toggle")});
+        const k = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar .okit-thinking-toggle")});
         if (k && /off/.test(k.textContent || "")) k.click();
         await new Promise((r) => setTimeout(r, 600));
         return true;
       `);
-      const zeile = await boxOf(cdp, `${SIDEBAR} .img2md-preset-row`, 4);
-      if (!zeile) throw new Error("thinking-toggle.png — keine Preset-Zeile in der Sidebar");
+      const zeile = await boxOf(cdp, `${SIDEBAR} .img2md-model-row`, 4);
+      if (!zeile) throw new Error("thinking-toggle.png — keine Modellzeile in der Sidebar");
       const png = await capture(cdp, zeile, 2);
       console.log(`  ${await writeShot(cdp, "thinking-toggle.png", png, { outDir, captureWidth: 900, thumbWidth: 450 })}`);
     };

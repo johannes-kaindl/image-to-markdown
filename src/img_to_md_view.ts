@@ -4,7 +4,8 @@ import { renderMarkdownGuarded } from "./vendor/kit-obsidian/dom-guard";
 import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, refineRequest } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { getLang, t } from "./i18n";
-import { buildThinkingControl, thinkingOffTexts } from "./vendor/kit-obsidian/thinking-control";
+import { thinkingOffTexts } from "./vendor/kit-obsidian/thinking-control";
+import { buildModelBar, type ModelBar, type ModelBarConnection } from "./vendor/kit-obsidian/model-bar";
 import type { BackendId, FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { CardCache } from "./card_cache";
 import { parseDescription } from "./describe";
@@ -88,9 +89,10 @@ export interface ImgToMdViewDeps {
   getTaxonomy: () => string[];
   writeDescriptions: (sourcePath: string, entries: { item: ImgItem; category: string | null; tags: string[]; prose: string; model: string }[]) => Promise<{ path: string | null }[]>;
   connectionStatus: () => Promise<{ ok: boolean; endpoint: string | null }>;
-  listModels: () => Promise<string[]>;
+  /** Die Verbindung für die Modellzeile (Kit `model-bar`): `models`, `setModel`, `modelInUse`, `source`. */
+  llm: ModelBarConnection;
+  /** Das Modell, das ein Lauf jetzt benutzt (mit Manager auch die Wahl der Quelle): Vergleichswert des Post-Sync. */
   getModel: () => string;
-  setModel: (m: string) => void;
   listPresets: () => { id: string; label: string }[];
   getPreset: () => string;
   setPreset: (id: string) => void;
@@ -112,11 +114,14 @@ export class ImgToMdView extends ItemView {
   private statusEl: HTMLElement | null = null;
   private statusIconEl: HTMLElement | null = null;
   private statusLabelEl: HTMLElement | null = null;
-  private modelSel: HTMLSelectElement | null = null;
   private presetSel: HTMLSelectElement | null = null;
   private modelStatusEl: HTMLElement | null = null;
-  private refreshBtn: HTMLElement | null = null;
-  private thinkCtl: { refresh(): void } | null = null;
+  /** Die Kit-Modellzeile (Dropdown, Neu-laden, Denk-Steuerung); `null` vor `onOpen` und nach `onClose`. */
+  private modelBar: ModelBar | null = null;
+  /** Zählt Öffnen und Schließen: ein spätes Listen-Ergebnis einer früheren Zeile fasst das Status-Symbol nicht an. */
+  private barGen = 0;
+  /** Die Modelle der letzten Antwort von `llm.models()` — das Status-Symbol „geladen“ vergleicht die Wahl damit. */
+  private loadedModels: string[] = [];
   private listEl: HTMLElement | null = null;
   /** Die Seitenfelder (Von/Bis) der PDF-Zeilen des letzten `renderList`, je mit dem Link ihrer Zeile — nicht dem Index, ein Scan kann umsortieren. */
   private pdfFields = new Map<Element, { link: string; which: "from" | "to" }>();
@@ -162,41 +167,18 @@ export class ImgToMdView extends ItemView {
     this.statusEl.setAttribute("title", t("view.recheck"));
     this.statusEl.addEventListener("click", () => void this.refreshStatus());
     this.statusEl.addEventListener("keydown", (ev: KeyboardEvent) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); void this.refreshStatus(); } });
-    // Zeile 1: Modell (volle Breite für lange Namen) + Status + Refresh.
+    // Zeile 1: Modellzeile des Kits (Dropdown, Neu-laden, Denk-Steuerung) + das Status-Symbol „Modell geladen“ des Plugins.
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
-    this.modelSel = modelRow.createEl("select", { cls: "img2md-model dropdown" });
-    this.modelSel.addEventListener("change", () => { this.deps.setModel(this.modelSel?.value ?? ""); this.refreshThinking(); });
+    const barHost = modelRow.createDiv({ cls: "img2md-model-bar-host" });
     this.modelStatusEl = modelRow.createSpan({ cls: "img2md-model-status" });
-    this.refreshBtn = modelRow.createEl("button", { cls: "img2md-model-refresh clickable-icon", attr: { "aria-label": t("view.refreshModels"), title: t("view.refreshModels") } });
-    setIcon(this.refreshBtn, "refresh-cw");
-    this.refreshBtn.addEventListener("click", () => void this.refreshModels(true));
-    // Zeile 2: Preset + Thinking-Toggle (teilen sich die Breite → Sidebar bleibt schmal).
+    this.modelBar = this.buildBar(barHost);
+    this.updateModelStatus();
+    // Zeile 2: Preset.
     const presetRow = c.createDiv({ cls: "img2md-preset-row" });
     this.presetSel = presetRow.createEl("select", { cls: "img2md-preset dropdown" });
     for (const p of this.deps.listPresets()) { const o = this.presetSel.createEl("option", { text: p.label }); o.value = p.id; }
     this.presetSel.value = this.deps.getPreset();
     this.presetSel.addEventListener("change", () => this.deps.setPreset(this.presetSel?.value ?? "default"));
-    // Denk-Steuerung: Kit-Baustein (Zustands-Knopf nach UI-STANDARD §8, optional Stufenwahl).
-    // Die Familie kommt aus der Endpunkt-Aufloesung, nicht aus dem Modellnamen.
-    const thinkHost = presetRow.createDiv({ cls: "img2md-think" });
-    this.thinkCtl = buildThinkingControl({
-      containerEl: thinkHost,
-      family: () => this.deps.thinkingState().family,
-      backend: () => this.deps.thinkingState().backend,
-      current: () => this.deps.thinkingState().level,
-      onLevel: () => this.deps.thinkingState().onLevel,
-      setLevel: (l) => this.deps.setThinkingLevel(l),
-      levelPicker: () => this.deps.thinkingState().levelPicker,
-      strings: {
-        button: (level) => level === "off"
-          ? t("think.button.off")
-          : t("think.button.on", t(`request.level.${level}`)),
-        // „aus“ nicht möglich (Gemma 4 auf LM Studio, Claude): Kit-Text mit Grund im Tooltip.
-        offNotPossible: thinkingOffTexts(getLang()),
-        level: (l) => t(`think.level.${l}`),
-        pickerLabel: t("think.pickerLabel"),
-      },
-    });
     // Modus-Umschalter (Segmented-Control): steuert nur den Lauf-Typ des „Los"-Buttons — Bild-Auswahl/
     // Karten bleiben unverändert, ein Wechsel mitten im Lauf ist gesperrt (this.running-Guard in setMode).
     const modeRow = c.createDiv({ cls: "img2md-mode-row" });
@@ -227,7 +209,6 @@ export class ImgToMdView extends ItemView {
       this.updateAllCards();
     });
     await this.refreshStatus();
-    await this.refreshModels();
     await this.rescan();
     this.restoreCardsFor(this.deps.getActivePath());
   }
@@ -250,42 +231,69 @@ export class ImgToMdView extends ItemView {
     else { root.addClass("is-error"); setIcon(icon, "circle-x"); label.setText(t("view.offline")); }
   }
 
-  private async refreshModels(userTriggered = false): Promise<void> {
-    const sel = this.modelSel; if (!sel) return;
-    this.refreshBtn?.addClass("is-loading");   // Klick-Feedback: Lade-Zustand
-    let cur = this.deps.getModel();
-    const models = await this.deps.listModels();
-    let realigned = false;
-    if (cur && models.length && !models.includes(cur)) {   // Auswahl nicht mehr geladen → angleichen
-      cur = models[0];
-      this.deps.setModel(cur);
-      this.statusLabelEl?.setText(t("view.modelChanged", cur));
-      realigned = true;
-    }
-    sel.empty();
-    const list = models.includes(cur) || !cur ? models : [cur, ...models];
-    for (const m of list) { const o = sel.createEl("option", { text: m }); o.value = m; }
-    sel.value = cur;
-    this.updateModelStatus(models, cur);
-    this.refreshBtn?.removeClass("is-loading");
-    // Bei manuellem Refresh ohne Modellwechsel ein kurzes „N Modelle geladen" — sonst bliebe der Klick unsichtbar.
-    if (userTriggered && !realigned) this.statusLabelEl?.setText(t("view.modelsLoaded", models.length));
-    this.refreshThinking();
+  /** Baut die Modellzeile. Das Status-Symbol „Modell geladen“ bleibt Sache des Plugins und folgt der Liste der Zeile über einen
+   *  Adapter um `llm.models()` (das Kit hat keinen Rückruf nach dem Laden); der Adapter fragt nur die echte Verbindung und löst nichts aus. */
+  private buildBar(host: HTMLElement): ModelBar {
+    const gen = ++this.barGen;
+    const { llm } = this.deps;
+    const adapter: ModelBarConnection = {
+      models: async (o) => {
+        const r = await llm.models(o);
+        if (gen === this.barGen) { this.loadedModels = r.models; this.updateModelStatus(); }
+        return r;
+      },
+      setModel: (m) => llm.setModel(m),
+      modelInUse: () => llm.modelInUse(),
+      source: () => llm.source(),
+    };
+    return buildModelBar({
+      app: this.app,
+      containerEl: host,
+      llm: adapter,
+      strings: { lang: getLang() },
+      // Eine Pfeilfunktion statt `this.running`: die Zeile liest den Laufzustand bei jedem `update()` neu.
+      disabled: () => this.running,
+      onChange: () => { this.updateModelStatus(); },
+      onError: (e) => { this.statusLabelEl?.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); },
+      // Denk-Steuerung in derselben Zeile (Zustands-Knopf nach UI-STANDARD §8, optional Stufenwahl).
+      // Die Familie kommt aus der Endpunkt-Aufloesung, nicht aus dem Modellnamen.
+      thinking: {
+        family: () => this.deps.thinkingState().family,
+        backend: () => this.deps.thinkingState().backend,
+        current: () => this.deps.thinkingState().level,
+        onLevel: () => this.deps.thinkingState().onLevel,
+        setLevel: (l) => this.deps.setThinkingLevel(l),
+        levelPicker: () => this.deps.thinkingState().levelPicker,
+        strings: {
+          button: (level) => level === "off"
+            ? t("think.button.off")
+            : t("think.button.on", t(`request.level.${level}`)),
+          // „aus“ nicht möglich (Gemma 4 auf LM Studio, Claude): Kit-Text mit Grund im Tooltip.
+          offNotPossible: thinkingOffTexts(getLang()),
+          level: (l) => t(`think.level.${l}`),
+          pickerLabel: t("think.pickerLabel"),
+        },
+      },
+    });
   }
 
-  /** Status-Icon neben dem Dropdown. Die Form (circle-check vs. circle-slash) trägt die
+  /** Status-Icon neben der Modellzeile. Die Form (circle-check vs. circle-slash) trägt die
    *  Bedeutung, Farbe nur sekundär — lesbar auch bei Farbsehschwäche (WCAG 1.4.1). */
-  private updateModelStatus(models: string[], cur: string): void {
+  private updateModelStatus(): void {
     const el = this.modelStatusEl; if (!el) return;
+    const cur = this.deps.llm.modelInUse();
     el.empty();
-    const loaded = !!cur && models.includes(cur);
+    const loaded = !!cur && this.loadedModels.includes(cur);
     if (loaded) { el.addClass("is-loaded"); setIcon(el, "circle-check"); el.setAttribute("title", t("view.modelLoaded")); }
     else { el.removeClass("is-loaded"); setIcon(el, "circle-slash"); el.setAttribute("title", t("view.modelNotLoaded")); }
   }
 
-  /** Zeichnet die Denk-Steuerung neu (Modell oder Familie hat gewechselt, Stufe wurde in den
-   *  Einstellungen geaendert). Leichter als `refresh()`: kein neuer Scan der Notiz. */
-  refreshThinking(): void { this.thinkCtl?.refresh(); }
+  /** Zeichnet die Modellzeile samt Denk-Steuerung aus dem Zustand neu (Modell, Familie oder Stufe hat sich außerhalb der Zeile
+   *  geändert, etwa in den Einstellungen). Ohne Abruf und ohne neuen Scan der Notiz. */
+  refreshThinking(): void { this.modelBar?.update(); this.updateModelStatus(); }
+
+  /** Lädt die Modellliste der Zeile neu (der Endpunkt hat gewechselt). */
+  reloadModels(): void { void this.modelBar?.refresh(); }
 
   /** Modell-Text als Markdown zeigen: erst neutralisieren (keine Bilder, keine Codeblock-Prozessoren), dann mit DOM-Waechter
    *  rendern; scheitert der Renderer, bleibt der Rohtext. Kopieren und Notiz anlegen lesen weiter den Rohtext, nie das DOM. */
@@ -810,7 +818,7 @@ export class ImgToMdView extends ItemView {
     const fb = feedback.trim();
     if (!fb) return;
     this.refineErrors.delete(i);
-    this.running = true; this.runBtn?.setText(t("view.stop"));
+    this.running = true; this.runBtn?.setText(t("view.stop")); this.modelBar?.update();
     this.controller = new AbortController();
     const signal = this.controller.signal;
     const { base, steps: rounds } = refineRequest(card);
@@ -832,7 +840,7 @@ export class ImgToMdView extends ItemView {
       if (!signal.aborted) this.refineErrors.set(i, e instanceof Error ? e.message : String(e));
     } finally {
       this.refineDrafts.delete(i);
-      this.running = false; this.runBtn?.setText(this.runLabel());
+      this.running = false; this.runBtn?.setText(this.runLabel()); this.modelBar?.update();
       this.controller = null;
       this.updateAllCards();
     }
@@ -843,7 +851,7 @@ export class ImgToMdView extends ItemView {
    *  Bei isRetry werden die Ziel-Karten zuvor zurückgesetzt (State + DOM in-place); sonst laufen
    *  frische Karten aus startCards. */
   private async runIndices(path: string, indices: number[], isRetry: boolean): Promise<void> {
-    this.running = true; this.runBtn?.setText(t("view.stop"));
+    this.running = true; this.runBtn?.setText(t("view.stop")); this.modelBar?.update();
     this.controller = new AbortController();
     const signal = this.controller.signal;
     const defaultDescribing = this.deps.getMode() === "describe";
@@ -884,15 +892,13 @@ export class ImgToMdView extends ItemView {
     }
     // Nach Abbruch: noch laufende Karten kennzeichnen (bei Retry sind nur die Ziel-Karten betroffen).
     for (let i = 0; i < this.state.cards.length; i++) if (this.state.cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
-    this.running = false; this.runBtn?.setText(this.runLabel());
+    this.running = false; this.runBtn?.setText(this.runLabel()); this.modelBar?.update();
     this.controller = null;
     // Post-Sync: das real verwendete Modell (response.model) → Auswahl angleichen
     const actual = actualModel(this.state.cards);
     if (actual && actual !== this.deps.getModel()) {
-      this.deps.setModel(actual);
-      await this.refreshModels();
-      // refreshModels kann im atypischen Fall (actual nicht in /v1/models) selbst auf ein anderes Modell
-      // angleichen und den Hinweis setzen; den eigenen Hinweis nur überschreiben, wenn actual gewonnen hat.
+      try { await this.deps.llm.setModel(actual); } catch (e) { this.statusLabelEl?.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); }
+      await this.modelBar?.refresh({ force: true });   // ein JIT geladenes Modell steht jetzt in der Liste
       if (this.deps.getModel() === actual) this.statusLabelEl?.setText(t("view.modelChanged", actual));
     }
     this.updateAllCards();
@@ -987,6 +993,9 @@ export class ImgToMdView extends ItemView {
   async onClose(): Promise<void> {
     this.persistCards();
     this.controller?.abort();
+    this.barGen++;   // ein spätes Listen-Ergebnis der Zeile fasst das Status-Symbol nicht mehr an
+    this.modelBar?.destroy();
+    this.modelBar = null;
     this.cardEls = [];
     this.contentEl.removeClass("img2md-root");
   }

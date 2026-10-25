@@ -61,7 +61,7 @@
 
 **Thinking-Schalter** — die Wartezeit großer Reasoning-Modelle überspringen:
 
-<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="Die Preset-Zeile der Sidebar mit dem Thinking-Schalter auf „Thinking: on“">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="Die Modellzeile der Sidebar mit Modell-Dropdown und dem Thinking-Schalter auf „Thinking: on“">
 
 ### Im Detail
 

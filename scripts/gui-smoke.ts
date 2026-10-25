@@ -138,8 +138,8 @@ async function haltePanelBild(cdp: Cdp, name: string, selector: string): Promise
 }
 
 const PUNKTE = [
-  "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "F1", "F2", "F3",
-  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
+  "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3",
+  "N1", "N2", "N3", "N4", "N5", "ML1", "ML2", "ML3", "ML4", "ML5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -611,6 +611,43 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     },
   },
   {
+    key: "E3",
+    titel: "Einstellungen: jedes Oeffnen baut den Tab neu auf, auch das zweite und dritte (der Oeffnen-Haken bleibt nach hide() installiert)",
+    async run(cdp) {
+      // Kit-Vertrag `installTabRefreshOnOpen` (Obsidian 1.14.5): das Oeffnen ruft `renderTab()`, nicht `display()`. Wer den Haken in `hide()` abbaut,
+      // baut nur beim ersten Oeffnen auf. Gemessen wird, wie oft der VOLLE Aufbau des Plugins (`renderFallback`, der Rueckruf des Hakens) laeuft: ein
+      // Zaehler auf der Instanz, drei Mal oeffnen und schliessen, der Zaehler muss bei jedem Oeffnen steigen. (Eine Marke im Tab-Container reichte nicht:
+      // auch die native Fassung leert ihn, der Punkt blieb mit abgebautem Haken gruen — gemessen 2026-10-25 an der Mutation.)
+      const zaehler: number[] = [];
+      try {
+        for (let i = 1; i <= 3; i++) {
+          const roh = await cdp.evaluate<string>(`
+            app.setting.open();
+            app.setting.openTabById(${JSON.stringify(PLUGIN_ID)});
+            await new Promise((r) => setTimeout(r, 900));
+            const tab = app.setting.activeTab;
+            if (!tab || tab.id !== ${JSON.stringify(PLUGIN_ID)}) return JSON.stringify({ fehler: "Tab ging nicht auf" });
+            if (!tab.__w27Aufbauten) {
+              tab.__w27Aufbauten = 0;
+              const orig = tab.renderFallback.bind(tab);
+              tab.renderFallback = () => { tab.__w27Aufbauten++; return orig(); };
+            }
+            return JSON.stringify({ n: tab.__w27Aufbauten });
+          `);
+          const d = JSON.parse(roh) as { n?: number; fehler?: string };
+          if (d.fehler) return { ok: false, detail: `Oeffnen ${i}: ${d.fehler}` };
+          zaehler.push(d.n ?? 0);
+          await schliesseEinstellungen(cdp);
+        }
+      } finally {
+        await schliesseEinstellungen(cdp).catch(() => undefined);
+      }
+      // Der Zaehler haengt nach dem ersten Aufbau ein: gezaehlt werden die Aufbauten ab dem zweiten Oeffnen, jedes muss ihn erhoehen.
+      const ok = zaehler.length === 3 && zaehler[1]! > zaehler[0]! && zaehler[2]! > zaehler[1]!;
+      return { ok, detail: `Aufbauten nach dem 1./2./3. Oeffnen: ${zaehler.join(" / ")} (je Oeffnen muss er steigen; mit abgebautem Haken bleibt er stehen)` };
+    },
+  },
+  {
     key: "F1",
     titel: "Endpunkt-Quelle: Manager an — Settings zeigen den Baustein statt der lokalen Liste, keine eigene Modell-Zeile",
     async run(cdp) {
@@ -832,6 +869,170 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
           p.llm.invalidate();
           return true;
         `).catch(() => undefined);
+      }
+    },
+  },
+  // ── ML: Modellzeile (Kit model-bar, Welle 27) — am echten DOM, gegen einen Fake-Endpunkt mit zwei Modellen ──────
+  {
+    key: "ML1",
+    titel: "Modellzeile: eine Zeile in der Sidebar, das Dropdown traegt „Automatisch“ und BEIDE Modelle des Endpunkts, hat einen Namen; Neu laden sagt die Zahl an",
+    async run(cdp) {
+      const A = "i2m-fake-a", B = "i2m-fake-b";
+      const zwei = await startFakeChat({ models: [A, B] });
+      const eins = await startFakeChat({ models: [A] });
+      const vor = await verbindungVorher(cdp);
+      try {
+        await zeigeNotiz(cdp, NOTIZ.bilder);
+        await setzeFakeEndpunkt(cdp, zwei.url, A);
+        const z2 = await ladeModelleNeu(cdp, 2);
+        const modelle = (st: ZeilenStand): number => st.optionen.filter((o) => o.includes("i2m-fake-")).length;
+        const ok2 = z2.zeilen === 1 && modelle(z2) === 2 && z2.optionen.some((o) => /^(Automatic|Automatisch)/.test(o)) && !!z2.label && /^2 (models? loaded|Modelle? geladen)/.test(z2.ansage.trim());
+        // Gegenprobe: derselbe Messweg gegen einen Endpunkt mit EINEM Modell darf die Bedingung „zwei Modelle“ nicht erfuellen.
+        await setzeFakeEndpunkt(cdp, eins.url, A);
+        const z1 = await ladeModelleNeu(cdp, 1);
+        const gegenprobe = modelle(z1) === 1;
+        return { ok: ok2 && gegenprobe,
+          detail: `zwei Modelle: ${z2.zeilen} Zeile, Eintraege ${JSON.stringify(z2.optionen)}, Name "${z2.label}", Ansage "${z2.ansage.trim()}"; Gegenprobe (ein Modell): ${modelle(z1)} Modell(e) im Dropdown, Ansage "${z1.ansage.trim()}"` };
+      } finally {
+        await zwei.close(); await eins.close();
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
+  {
+    key: "ML2",
+    titel: "Modellzeile: der Wechsel wirkt — modelInUse() meldet das gewaehlte Modell, und die NAECHSTE Anfrage am Endpunkt traegt es",
+    async run(cdp) {
+      const A = "i2m-fake-a", B = "i2m-fake-b";
+      const fake = await startFakeChat({ models: [A, B] });
+      const vor = await verbindungVorher(cdp);
+      const sende = (): Promise<string> => cdp.evaluate<string>(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        const deps = p.makeImgViewDeps();
+        const items = await deps.scan(${JSON.stringify(NOTIZ.bilder)});
+        const item = items.find((i) => i.supported && i.kind === "image");
+        if (!item) return JSON.stringify({ fehler: "kein unterstuetztes Bild in der Fixture-Notiz" });
+        try { await deps.transcribeStream(${JSON.stringify(NOTIZ.bilder)}, item, () => {}, () => {}, new AbortController().signal); }
+        catch (e) { return JSON.stringify({ fehler: String(e && e.message || e) }); }
+        return JSON.stringify({ ok: true });
+      `);
+      try {
+        await zeigeNotiz(cdp, NOTIZ.bilder);
+        await setzeFakeEndpunkt(cdp, fake.url, A);
+        await ladeModelleNeu(cdp, 2);
+        await sende();
+        const erste = (fake.bodies.at(-1) as { model?: string } | undefined)?.model;
+        // Die Wahl im Dropdown: Wert setzen und "change" ausloesen, wie der Browser es bei einer Auswahl tut.
+        await cdp.evaluate(`
+          const sel = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar select")});
+          sel.value = ${JSON.stringify(B)};
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+          return true;
+        `);
+        const gewaehlt = await pollUntil<string>(cdp, `
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          return p.llm.modelInUse() === ${JSON.stringify(B)} ? p.llm.modelInUse() : null;
+        `, 5_000, 150);
+        await sende();
+        const zweite = (fake.bodies.at(-1) as { model?: string } | undefined)?.model;
+        const st = await messeModellzeile(cdp);
+        return { ok: !!gewaehlt && erste === A && zweite === B && st.wert === B,
+          detail: `Anfrage vor dem Wechsel "${erste}" (Gegenprobe: das Modell A), nach dem Wechsel "${zweite}"; modelInUse ${gewaehlt ? `"${gewaehlt}"` : "nicht gewechselt"}, Dropdown zeigt "${st.wert}"` };
+      } finally {
+        await fake.close();
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
+  {
+    key: "ML3",
+    titel: "Modellzeile: die Denk-Steuerung steht IN der Zeile (kein zweiter Knopf, kein alter Host in der Preset-Zeile)",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      const r = await cdp.evaluate<{ inZeile: number; gesamt: number; inPreset: number; alterHost: number }>(`
+        const w = document.querySelector(${JSON.stringify(SIDEBAR)});
+        return {
+          inZeile: w.querySelectorAll(".okit-model-bar .okit-thinking-toggle").length,
+          gesamt: w.querySelectorAll(".okit-thinking-toggle").length,
+          inPreset: w.querySelectorAll(".img2md-preset-row .okit-thinking-toggle").length,
+          alterHost: w.querySelectorAll(".img2md-think").length,
+        };
+      `);
+      // Gegenprobe: derselbe Selektor an einer Stelle, an der der Knopf frueher stand (Preset-Zeile), findet nichts.
+      return { ok: r.inZeile === 1 && r.gesamt === 1 && r.inPreset === 0 && r.alterHost === 0,
+        detail: `Denk-Knopf in der Zeile: ${r.inZeile}, in der Sidebar insgesamt: ${r.gesamt}, in der Preset-Zeile (Gegenprobe, soll 0): ${r.inPreset}, alter Host .img2md-think: ${r.alterHost}` };
+    },
+  },
+  {
+    key: "ML4",
+    titel: "Modellzeile: waehrend eines Laufs gesperrt (Dropdown und Neu laden), danach wieder frei",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      const roh = await cdp.evaluate<string>(`
+        const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+        const deps = view.deps;
+        const orig = deps.transcribeStream;
+        const model = deps.getModel();   // das aktive Modell zurueckmelden: sonst gleicht die View die Einstellungen an
+        const zeile = () => {
+          const w = document.querySelector(${JSON.stringify(SIDEBAR)});
+          const sel = w.querySelector(".okit-model-bar select"), btn = w.querySelector(".okit-model-bar-refresh");
+          return { dropdown: !!(sel && sel.disabled), neuLaden: !!(btn && btn.disabled) };
+        };
+        let waehrend = null;
+        deps.transcribeStream = async (_pfad, _item, onContent) => {
+          await new Promise((r) => setTimeout(r, 400));
+          waehrend = zeile();
+          onContent("T"); return { content: "T", reasoning: "", model };
+        };
+        try {
+          const bild = view.state.items.find((i) => i.supported);
+          if (!bild) throw new Error("kein unterstuetztes Bild in der Liste");
+          if (!view.state.isSelected(bild.link)) view.state.toggle(bild.link);
+          const davor = zeile();
+          await view.run();
+          return JSON.stringify({ davor, waehrend, danach: zeile() });
+        } finally {
+          deps.transcribeStream = orig;
+        }
+      `);
+      const d = JSON.parse(roh) as { davor: { dropdown: boolean; neuLaden: boolean }; waehrend: { dropdown: boolean; neuLaden: boolean } | null; danach: { dropdown: boolean; neuLaden: boolean } };
+      const ok = !d.davor.dropdown && !d.davor.neuLaden && !!d.waehrend && d.waehrend.dropdown && d.waehrend.neuLaden && !d.danach.dropdown && !d.danach.neuLaden;
+      return { ok, detail: `gesperrt (Dropdown/Neu laden) vor dem Lauf ${d.davor.dropdown}/${d.davor.neuLaden} (Gegenprobe: frei), waehrend ${d.waehrend ? `${d.waehrend.dropdown}/${d.waehrend.neuLaden}` : "nicht gemessen"}, danach ${d.danach.dropdown}/${d.danach.neuLaden}` };
+    },
+  },
+  {
+    key: "ML5",
+    titel: "Modellzeile: der Post-Sync nach dem Lauf (Altentscheidung, response.model) — konkrete Wahl folgt dem Modell, das der Server nennt; „Automatisch“ wird dabei festgelegt (Befund)",
+    async run(cdp) {
+      const A = "i2m-fake-a", B = "i2m-fake-b";
+      const ECHT = "google/gemma-4-e4b";   // so antwortet der Stub immer (`response.model`), egal was die Anfrage verlangt
+      const fake = await startFakeChat({ models: [A, B] });
+      const vor = await verbindungVorher(cdp);
+      const lauf = (wahl: string): Promise<string> => cdp.evaluate<string>(`
+        const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+        const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+        await p.llm.setModel(${JSON.stringify(wahl)});
+        view.refreshThinking();
+        view.state.clearCards(); view.resetCards();
+        const bild = view.state.items.find((i) => i.supported);
+        if (!bild) return JSON.stringify({ fehler: "kein unterstuetztes Bild in der Liste" });
+        if (!view.state.isSelected(bild.link)) view.state.toggle(bild.link);
+        await view.run();
+        const sel = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar select")});
+        return JSON.stringify({ danach: p.llm.modelInUse(), karte: view.state.cards[0] ? view.state.cards[0].model : null, dropdown: sel ? sel.value : null });
+      `);
+      try {
+        await zeigeNotiz(cdp, NOTIZ.bilder);
+        await setzeFakeEndpunkt(cdp, fake.url, A);
+        await ladeModelleNeu(cdp, 2);
+        const konkret = JSON.parse(await lauf(A)) as { danach?: string; karte?: string | null; dropdown?: string | null; fehler?: string };
+        const auto = JSON.parse(await lauf("")) as { danach?: string; karte?: string | null; dropdown?: string | null; fehler?: string };
+        const ok = !konkret.fehler && konkret.karte === ECHT && konkret.danach === ECHT;
+        return { ok,
+          detail: `Wahl "${A}", Server antwortet "${konkret.karte ?? "?"}" → Wahl danach "${konkret.danach ?? "?"}" (Dropdown "${konkret.dropdown ?? "?"}"); Wahl "Automatisch" (""), Server antwortet "${auto.karte ?? "?"}" → Wahl danach "${auto.danach ?? "?"}" — ${auto.danach === "" ? "bleibt Automatisch" : "WIRD FESTGELEGT (der Post-Sync ueberschreibt die Wahl \"Automatisch\")"}` };
+      } finally {
+        await fake.close();
+        await stelleVerbindungWieder(cdp, vor);
       }
     },
   },
@@ -1366,9 +1567,9 @@ interface FakeRequest { method: string; url: string; headers: Record<string, str
  *  und schneidet jede Anfrage samt Headern mit (`requests`, auch die 404-Pfade; V1 verlangt nur, dass `/api/v1/models`
  *  ANGEFRAGT wurde) und jeden POST-Body (`bodies`). Mit `echo` spiegelt er den Text der letzten Nutzernachricht in die
  *  Antwort (Beleg der umkehrbaren Schwaerzung). */
-async function startFakeChat(opts: { echo?: boolean; content?: string } = {}): Promise<{ url: string; bodies: unknown[]; requests: FakeRequest[]; close(): Promise<void> }> {
+async function startFakeChat(opts: { echo?: boolean; content?: string; models?: string[] } = {}): Promise<{ url: string; bodies: unknown[]; requests: FakeRequest[]; close(): Promise<void> }> {
   const stub = await startLlmStub({
-    models: ["google/gemma-4-e4b"],
+    models: opts.models ?? ["google/gemma-4-e4b"],
     antwort: (a) => ({ text: opts.echo ? echoText(a.json) : (opts.content ?? "Fake-Transkript"), model: "google/gemma-4-e4b" }),
   });
   return {
@@ -1377,6 +1578,45 @@ async function startFakeChat(opts: { echo?: boolean; content?: string } = {}): P
     get requests() { return stub.anfragen().map((a): FakeRequest => ({ method: a.methode, url: a.url, headers: a.header, body: a.json })); },
     close: () => stub.stop(),
   };
+}
+
+/** Was die Modellzeile (Kit `model-bar`) in der Sidebar zeigt: Zahl der Zeilen, Eintraege des Dropdowns, die Ansage der Zeile (aria-live),
+ *  der Name am Dropdown und ob es gesperrt ist. Gelesen am echten DOM, nicht an der View. */
+interface ZeilenStand { zeilen: number; optionen: string[]; ansage: string; label: string | null; gesperrt: boolean; wert: string }
+const messeModellzeile = (cdp: Cdp): Promise<ZeilenStand> => cdp.evaluate<ZeilenStand>(`
+  const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
+  const zeilen = wurzel ? [...wurzel.querySelectorAll(".okit-model-bar")] : [];
+  const sel = zeilen[0] ? zeilen[0].querySelector("select") : null;
+  return {
+    zeilen: zeilen.length,
+    optionen: sel ? [...sel.options].map((o) => o.textContent) : [],
+    ansage: zeilen[0] && zeilen[0].querySelector(".okit-model-bar-status") ? zeilen[0].querySelector(".okit-model-bar-status").textContent : "",
+    label: sel ? sel.getAttribute("aria-label") : null,
+    gesperrt: !!(sel && sel.disabled),
+    wert: sel ? sel.value : "",
+  };
+`);
+
+/** Legt einen Fake-Endpunkt mit den Modellen in die Einstellungen und merkt den Stand fuer `stelleVerbindungWieder`. */
+const setzeFakeEndpunkt = (cdp: Cdp, url: string, modell: string): Promise<unknown> => cdp.evaluate(`
+  const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+  p.settings.visionEndpoints = [{ url: ${JSON.stringify(url)}, model: ${JSON.stringify(modell)} }];
+  p.settings.request = { overrides: {}, thinking: {}, lastOnLevel: {}, levelPickerInChat: false };
+  p.settings.choice = {};
+  p.llm.invalidate();
+  await p.llm.resolve({ force: true });
+  return true;
+`);
+
+/** Klickt "Neu laden" der Modellzeile (echter Klick) und wartet, bis die Ansage die erwartete Zahl nennt. */
+async function ladeModelleNeu(cdp: Cdp, anzahl: number): Promise<ZeilenStand> {
+  await clickReal(cdp, `document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar-refresh")})`);
+  const re = `new RegExp("^${anzahl} (models? loaded|Modelle? geladen)")`;
+  await pollUntil<string>(cdp, `
+    const z = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar-status")});
+    return z && ${re}.test(z.textContent.trim()) ? z.textContent : null;
+  `, 5_000, 150);
+  return messeModellzeile(cdp);
 }
 
 const MGR_URL = "http://127.0.0.1:9312";

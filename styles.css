@@ -7,7 +7,6 @@
 .img2md-status.is-ok .img2md-status-icon { color: var(--text-success); }
 .img2md-status.is-error .img2md-status-icon { color: var(--text-error); }
 .img2md-status.is-checking .img2md-status-icon { color: var(--text-muted); }
-.img2md-model { width: 100%; flex: 0 0 auto; font-size: 12px; }
 /* Modus-Umschalter (Segmented-Control): Zustand über Form (gefüllter Hintergrund) + aria-pressed,
    nicht nur Farbe (WCAG 1.4.1). */
 .img2md-mode-row { display: flex; flex: 0 0 auto; margin-bottom: var(--size-4-2); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); overflow: hidden; }
@@ -70,14 +69,13 @@
 .img2md-exists { color: var(--text-accent); font-size: 11px; margin-left: 4px; }
 .img2md-exists-open { color: var(--text-accent); font-size: 11px; margin-left: 4px; cursor: pointer; text-decoration: underline; }
 .img2md-linked { font-size: var(--font-ui-smaller); color: var(--text-muted); margin-left: 0.4em; }
-.img2md-model-row { display: flex; align-items: center; gap: 0.4em; margin-bottom: var(--size-4-1); }
-.img2md-model-row .img2md-model { flex: 1; min-width: 0; }
+.img2md-model-row { display: flex; align-items: flex-start; gap: 0.4em; margin-bottom: var(--size-4-1); }
+.img2md-model-bar-host { flex: 1 1 auto; min-width: 0; }
 .img2md-preset-row { display: flex; align-items: center; gap: 0.4em; margin-bottom: var(--size-4-2); }
 .img2md-preset { font-size: 12px; }
 .img2md-preset-row .img2md-preset { flex: 1; min-width: 0; }
-.img2md-model-status { display: inline-flex; align-items: center; color: var(--text-faint); flex: 0 0 auto; }
+.img2md-model-status { display: inline-flex; align-items: center; align-self: flex-start; min-height: var(--input-height); color: var(--text-faint); flex: 0 0 auto; }
 .img2md-model-status.is-loaded { color: var(--text-success); }
-.img2md-think { flex: 0 0 auto; }
 /* Denk-Knopf: Kit-Baustein (THINKING_CONTROL_CSS, wortgleich kopiert — Kit-Vertrag). */
 .okit-thinking-control { display: inline-flex; align-items: center; }
 .okit-thinking-toggle {
@@ -104,7 +102,6 @@
 @media (prefers-reduced-motion: reduce) { .okit-model-bar-refresh.is-loading svg { animation: none; } .okit-model-bar-refresh.is-loading { opacity: 0.5; } }
 .okit-model-bar .okit-thinking-control { flex: 0 0 auto; }
 .okit-model-bar-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
-.img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }
 .img2md-retry-all.is-hidden { display: none; }
