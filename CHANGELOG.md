@@ -13,7 +13,7 @@ and versioning follows [SemVer](https://semver.org/).
 - **Vision hint in the settings:** a model id that starts with `claude-` is now shown as "probably vision-capable" instead of unknown.
 - The sidebar's model row is now the shared model row: the model dropdown, a "Reload models" icon and the thinking toggle sit in one row (the toggle moved up from the preset row), and the row wraps instead of cutting off in a narrow sidebar.
 - A model you selected that is no longer loaded stays selected and is marked "(saved)". Before, the plugin silently replaced it with the first loaded model.
-- "Automatic" is always in the model list and leaves the choice to the server for the run. After a run the sidebar still selects the model the server reports (`response.model`), as before.
+- "Automatic" is always in the model list and leaves the choice to the server. The status line names the model that ran.
 - Reloading the models announces the count to screen readers ("2 models loaded") instead of writing it into the status line; "Model changed to …" still appears after a run that used another model than the selected one.
 - The model row is locked while a run or a refine is in progress.
 - A warning sign next to the dropdown says when the endpoint does not answer or returns no model list. With the LLM Endpoint Manager installed, the last entry "Other endpoint …" opens the manager's settings.

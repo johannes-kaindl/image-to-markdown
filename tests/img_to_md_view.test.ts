@@ -677,6 +677,19 @@ describe("ImgToMdView — Modellzeile (Kit model-bar)", () => {
       expect(all(view.contentEl, "okit-model-bar-select")[0].value).toBe("other-model");
       expect(all(view.contentEl, "img2md-status")[0].textContent).toContain("other-model");
     });
+    it("run() bei „Automatisch“ legt die Wahl NICHT fest: kein setModel, die Statuszeile nennt das Modell des Laufs", async () => {
+      setLang("en");
+      const { view, llm } = mkView({
+        llm: mkLlm({ models: ["vm", "other-model"], model: "" }),
+        transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "other-model" }; },
+      });
+      await view.onOpen();
+      await view.run();
+      expect(llm.setModel).not.toHaveBeenCalled();
+      expect(llm.modelInUse()).toBe("");
+      expect(all(view.contentEl, "okit-model-bar-select")[0].value).toBe("");
+      expect(all(view.contentEl, "img2md-status")[0].textContent).toContain("Model: other-model");
+    });
     it("run() ohne Abweichung ruft setModel nicht (kein unnötiges Reconnect)", async () => {
       const { view, llm } = mkView({
         transcribeStream: async (_sp: string, _it: any, onC: any) => { onC("x"); return { content: "x", reasoning: "", model: "vm" }; },

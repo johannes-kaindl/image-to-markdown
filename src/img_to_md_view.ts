@@ -894,9 +894,13 @@ export class ImgToMdView extends ItemView {
     for (let i = 0; i < this.state.cards.length; i++) if (this.state.cards[i].status === "streaming") this.state.setError(i, t("view.aborted"));
     this.running = false; this.runBtn?.setText(this.runLabel()); this.modelBar?.update();
     this.controller = null;
-    // Post-Sync: das real verwendete Modell (response.model) → Auswahl angleichen
+    // Post-Sync: das real verwendete Modell (response.model). Bei einer konkreten Wahl folgt sie dem Server (LM Studio ignoriert das
+    // model-Feld, ein JIT geladenes Modell antwortet unter anderem Namen); „Automatisch“ bleibt Automatisch: dann nennt nur die Statuszeile das Modell.
     const actual = actualModel(this.state.cards);
-    if (actual && actual !== this.deps.getModel()) {
+    const chosen = this.deps.getModel();
+    if (actual && chosen === "") {
+      this.statusLabelEl?.setText(t("view.modelRan", actual));
+    } else if (actual && actual !== chosen) {
       try { await this.deps.llm.setModel(actual); } catch (e) { this.statusLabelEl?.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); }
       await this.modelBar?.refresh({ force: true });   // ein JIT geladenes Modell steht jetzt in der Liste
       if (this.deps.getModel() === actual) this.statusLabelEl?.setText(t("view.modelChanged", actual));

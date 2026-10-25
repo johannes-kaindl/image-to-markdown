@@ -1002,7 +1002,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "ML5",
-    titel: "Modellzeile: der Post-Sync nach dem Lauf (Altentscheidung, response.model) — konkrete Wahl folgt dem Modell, das der Server nennt; „Automatisch“ wird dabei festgelegt (Befund)",
+    titel: "Modellzeile: der Post-Sync nach dem Lauf (response.model) — eine konkrete Wahl folgt dem Modell, das der Server nennt, „Automatisch“ bleibt Automatisch",
     async run(cdp) {
       const A = "i2m-fake-a", B = "i2m-fake-b";
       const ECHT = "google/gemma-4-e4b";   // so antwortet der Stub immer (`response.model`), egal was die Anfrage verlangt
@@ -1027,9 +1027,9 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         await ladeModelleNeu(cdp, 2);
         const konkret = JSON.parse(await lauf(A)) as { danach?: string; karte?: string | null; dropdown?: string | null; fehler?: string };
         const auto = JSON.parse(await lauf("")) as { danach?: string; karte?: string | null; dropdown?: string | null; fehler?: string };
-        const ok = !konkret.fehler && konkret.karte === ECHT && konkret.danach === ECHT;
+        const ok = !konkret.fehler && konkret.karte === ECHT && konkret.danach === ECHT && !auto.fehler && auto.karte === ECHT && auto.danach === "";
         return { ok,
-          detail: `Wahl "${A}", Server antwortet "${konkret.karte ?? "?"}" → Wahl danach "${konkret.danach ?? "?"}" (Dropdown "${konkret.dropdown ?? "?"}"); Wahl "Automatisch" (""), Server antwortet "${auto.karte ?? "?"}" → Wahl danach "${auto.danach ?? "?"}" — ${auto.danach === "" ? "bleibt Automatisch" : "WIRD FESTGELEGT (der Post-Sync ueberschreibt die Wahl \"Automatisch\")"}` };
+          detail: `Wahl "${A}", Server antwortet "${konkret.karte ?? "?"}" → Wahl danach "${konkret.danach ?? "?"}" (folgt dem Server, erwartet "${ECHT}"); Wahl "Automatisch" (""), Server antwortet "${auto.karte ?? "?"}" → Wahl danach "${auto.danach ?? "?"}" (erwartet "" — Automatisch bleibt Automatisch, Dropdown "${auto.dropdown ?? "?"}")` };
       } finally {
         await fake.close();
         await stelleVerbindungWieder(cdp, vor);
