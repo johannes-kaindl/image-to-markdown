@@ -6,6 +6,12 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Vendored `obsidian-kit` 0.70.0 (was 0.63.0) and `code-kit` 0.37.5 (was 0.31.0). You will notice two things:
+- **Links in rendered transcripts:** an `obsidian://` link in a transcript, a description or a refine version loses its target and stays as plain text; `file:` and `app:` targets go too. Web, mail and note links are unchanged, and Markdown images were already turned into text before.
+- **Vision hint in the settings:** a model id that starts with `claude-` is now shown as "probably vision-capable" instead of unknown.
+
 ### Fixed
 
 - The "from" and "to" page fields of a PDF row keep the focus and the typed value when the list is redrawn, for example after a note was written. Before, the cursor jumped out of the field mid-typing.

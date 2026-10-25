@@ -1,6 +1,6 @@
-// vendored from code-kit@0.31.0, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.37.5, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { ThinkingSupport } from "./reasoning";
-import type { BackendId } from "./sampling-profiles";
+import { familyFromName, type BackendId } from "./sampling-profiles";
 
 export type Confidence = "no" | "likely" | "confirmed";
 export interface ThinkingState { support: ThinkingSupport; confidence: Confidence }
@@ -24,6 +24,10 @@ const GLM_V = /glm-4(\.\d+)?v/;                            // glm-4v, glm-4.1v, 
 const GEMMA_VISION = /gemma[-_]?[34]/;
 const GEMMA_TEXT = /gemma[-_]?3[-_:]?(1b|270m)/;
 const MISTRAL_VISION = /mistral-small.*(3\.1|3\.2)/;
+// Claude: the name starts the id or follows a provider (`anthropic/…`, `us.anthropic.…`). A local model that only carries the word
+// (`qwen3.6-claude-opus-distill`, `Claude-4.6-Opus-…-Distilled`, `claude-forge`) is not one: the family of its weights counts, as in
+// `FAMILY_PATTERNS`. Every Claude 3 and newer model takes images; `claude-2` and `claude-instant` do not.
+const CLAUDE_NAME = /(^|[/.])claude-(?:3|opus|sonnet|haiku|fable|mythos)/;
 
 // Thinking always-on
 const ALWAYS = [
@@ -39,6 +43,7 @@ const HYBRID = [
 const QWEN3_NONTHINK = /qwen3-instruct-2507/;
 
 function guessVision(m: string): Confidence {
+  if (CLAUDE_NAME.test(m)) return "likely";
   if (GEMMA_TEXT.test(m)) return "no";
   if (GEMMA_VISION.test(m)) return "likely";
   if (MISTRAL_VISION.test(m)) return "likely";
@@ -50,6 +55,10 @@ function guessVision(m: string): Confidence {
 }
 
 function guessThinking(m: string): ThinkingState {
+  // Thinking that cannot be switched off, as in the `claude` profile of `sampling-profiles` (`canTurnOff` false: `off` is the lowest
+  // effort). `always` here is the guess behind the hint "turning it off will likely do nothing", not the lock of `isAlwaysOnThinker`.
+  // Only the models that profile places; the earlier ones have a switch and think only when asked.
+  if (CLAUDE_NAME.test(m) && familyFromName(m) === "claude") return { support: "always", confidence: "likely" };
   if (QWEN3_NONTHINK.test(m)) return { support: "none", confidence: "no" };
   if (ALWAYS.some(a => m.includes(a))) return { support: "always", confidence: "likely" };
   if (HYBRID.some(h => m.includes(h))) return { support: "hybrid", confidence: "likely" };

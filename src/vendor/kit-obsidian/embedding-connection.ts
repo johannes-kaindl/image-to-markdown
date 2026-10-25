@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Embedding-Anbindung eines Fachplugins (`createLlmConnection({ capability: "embedding" })`): Endpunkt-Quelle (Manager oder
  *  lokale Liste mit Schlüsselbund), gemerkte Auflösung mit Index-Passung, Modellliste, ein `Embedder` (code-kit) und der
  *  Settings-Abschnitt für Quelle und Liste. Schmaler als die Chat-Verbindung: kein Modus, kein Anfrage-Abschnitt, kein Streaming,
@@ -66,6 +66,10 @@ export interface EmbeddingConnectionOptions {
    *  wenn der Server sie nennt (LM Studio, Ollama). Default an; `false` schaltet sie ab. */
   contextLength?: boolean;
   managerOnly?: boolean;
+  /** Seit 0.67.0: bedient diese Zeile nur die Suche? Dann trägt sie in der gezeichneten Liste die Rolle `search-only` („für Suche genutzt, schreibt nicht“)
+   *  statt `skipped-model`/`standby` (`buildEndpointList` `isSearchOnly`; Vorrang `active` > `unreachable` > `search-only`). Fehlt die Option, bleibt die Liste
+   *  wie bisher. Die Verbindung selbst ändert nichts: das Wissen, welche Zeile nur sucht, bleibt beim Plugin. */
+  isSearchOnly?: (cfg: EndpointConfig) => boolean;
   /** Index-Passung (Closure über den Index-Stand des Plugins). Fehlt sie, passt jede Zeile mit Modell. */
   accept?: (cfg: EndpointConfig, model: string) => EmbeddingAccept;
   embed?: {
@@ -356,6 +360,7 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
           rerender, app: o.app, pluginId: o.pluginId,
           allowEmptyModel: false,   // ein Index braucht ein benanntes Modell: ohne Modell ist die Anbindung `no-model`
           ...(o.contextLength === false ? {} : { modelContext: plumbing.modelContext }),
+          ...(o.isSearchOnly ? { isSearchOnly: o.isSearchOnly } : {}),
         });
       },
       rerender,

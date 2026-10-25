@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -78,7 +78,7 @@ interface Texts {
   addPlaceholder: string; apiKeyPlaceholder: string; modelPlaceholder: string; ariaUrl: string; ariaAdd: string;
   ariaApiKey: string; ariaModel: string;
   moveToFront: string; remove: string; thirdParty: string; probing: string;
-  roleActive: string; roleStandby: string; roleUnreachable: string; roleSkippedModel: string;
+  roleActive: string; roleStandby: string; roleUnreachable: string; roleSearchOnly: string; roleSkippedModel: string;
   preset: string; checkConnection: string;
   secretSaved: string; secretChange: string; secretClear: string; secretUnavailable: string;
   // Anfrage-Abschnitt
@@ -150,6 +150,7 @@ function build(x: Texts, lang: "en" | "de"): LlmConnectionStrings {
       role: (r) => (r.kind === "active" ? x.roleActive
         : r.kind === "standby" ? fmt(x.roleStandby, String(r.position))
         : r.kind === "unreachable" ? x.roleUnreachable
+        : r.kind === "search-only" ? x.roleSearchOnly
         : x.roleSkippedModel),
       warnings: (ws) => ws.map((w) => endpointWarningText(w.rule, { lang, fallback: w.message })).join(" · "),
       presetTooltip: (p) => fmt(x.preset, p.label), presetLabel: (p) => p.label,
@@ -210,6 +211,7 @@ const EN: Texts = {
   moveToFront: "Try this endpoint first", remove: "Remove endpoint",
   thirdParty: "Carries an API key — your text goes to this provider, not to a local server.", probing: "Checking…",
   roleActive: "active — this one is used", roleStandby: "reachable — fallback {0}", roleUnreachable: "not reachable — skipped",
+  roleSearchOnly: "used for search — does not write",
   roleSkippedModel: "skipped — model does not fit",
   preset: "Insert the {0} address", checkConnection: "Test connection",
   secretSaved: "saved", secretChange: "Change key", secretClear: "Remove key",
@@ -298,6 +300,7 @@ const DE: Texts = {
   moveToFront: "Diesen Endpunkt zuerst versuchen", remove: "Endpunkt entfernen",
   thirdParty: "Trägt einen API-Schlüssel — dein Text geht an diesen Anbieter, nicht an einen lokalen Server.", probing: "Wird geprüft…",
   roleActive: "aktiv — dieser wird genutzt", roleStandby: "erreichbar — Reserve {0}", roleUnreachable: "nicht erreichbar — wird übersprungen",
+  roleSearchOnly: "für Suche genutzt, schreibt nicht",
   roleSkippedModel: "übersprungen — Modell passt nicht",
   preset: "Adresse von {0} eintragen", checkConnection: "Verbindung prüfen",
   secretSaved: "gespeichert", secretChange: "Schlüssel ändern", secretClear: "Schlüssel entfernen",

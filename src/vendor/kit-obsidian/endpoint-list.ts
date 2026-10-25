@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
  * Status-Icon, Rollenzeile, Drittanbieter-Hinweis und Preset-Knöpfe.
@@ -99,6 +99,11 @@ export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> 
    *  Server). Embedding-Listen setzen `false`: ein Index braucht ein benanntes Modell, eine Zeile ohne Modell zeigt dort nur den
    *  Platzhalter „—“ und sie verschwindet, sobald ein Modell gewählt ist. */
   allowEmptyModel?: boolean;
+  /** Seit 0.67.0: bedient diese Zeile nur die Suche (der Consumer weiß es, die Rolle erfindet es nicht)? Dann trägt sie die Rolle `search-only`
+   *  (code-kit 0.36.0) statt `skipped-model`: die Zeile, die die Suche bedient, soll nicht „übersprungen, Modell passt nicht“ zeigen. Vorrang
+   *  `active` > `unreachable` > `search-only` > `skipped-model` > `standby`. Gefragt wird mit der Zeile, wie sie jetzt in der Liste steht. Fehlt die
+   *  Option, bleibt jede Antwort die der Fassung davor. Der Text steht in `strings.role` (Kit-Fassung: `roleSearchOnly` in `llm-connection-strings`). */
+  isSearchOnly?(cfg: T): boolean;
   /** Optional: Kontextlänge des Zeilen-Modells. Gerufen wird `load` **nach** der Status-Probe, nur für eine erreichbare
    *  Zeile mit gesetztem Modell; liefert er `null` oder nichts Messbares, bleibt die Zeile ohne Kontextzeile.
    *  `invalidate` läuft beim Knopf „Modelle neu laden“. Braucht `strings.contextText`. */
@@ -436,6 +441,7 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
           // Gilt nur für Embedding-Endpunkte; für Chat hängt kein Index am Modell (immer true).
           modelFits: opts.modelFits?.(current) ?? true,
           position: i + 1,
+          ...(opts.isSearchOnly ? { searchOnly: opts.isSearchOnly(current) } : {}),
         });
         stateEl.setText(opts.strings.role(role));
         stateEl.toggleClass("is-active", role.kind === "active");

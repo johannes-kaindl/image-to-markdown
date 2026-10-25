@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/settings_walker.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/settings_walker.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // obsidian-kit/src/obsidian/settings_walker.ts
 //
 // Der gemeinsame Fallback-Walker fuer zweigleisige deklarative Settings-Tabs
@@ -59,7 +59,19 @@ export function refreshSettingsTab(
  *  ruft ueblicherweise selbst `update()` (haelt `settingItems`/die Einstellungs-Suche
  *  synchron), und `update()`s native Implementierung ruft intern wieder `renderTab()` des
  *  aktiven Tabs auf -- ohne Guard waere das erneut `fullRebuild()` in Rekursion. Additiv:
- *  ein Tab, der den Hook nicht installiert, verhaelt sich wie zuvor. */
+ *  ein Tab, der den Hook nicht installiert, verhaelt sich wie zuvor.
+ *
+ *  **Vertrag (gemessen an Obsidian 1.14.5, Pilot `tab-refresh`, 2026-10-25, Task „installTabRefreshOnOpen hängt sich nicht ein“):**
+ *  `renderTab` ist beim Bau des Tabs und nach `addSettingTab` eine Funktion; der Hook ersetzt sie, in beiden Einbaustellen (Konstruktor und
+ *  nach `addSettingTab`), und jedes Öffnen baut neu auf (zwei Aufbauten beim ersten Öffnen, einer je weiteres). Die Vermutung „`renderTab`
+ *  existiert beim `new PluginSettingTab()` noch nicht“ trifft nicht zu. **Der Hook trägt nur, solange er installiert bleibt:** das Öffnen ruft
+ *  `renderTab()`, nicht `display()`. Wer den zurückgegebenen Abbau in `hide()` ruft (slide-deck, settings-assistant, json-editor, lingotuner,
+ *  image-to-markdown, gemessen als Variante E), baut beim ersten Öffnen auf und danach nie wieder; ein Blick auf `tab.renderTab` am offenen Tab
+ *  zeigt dann die native Funktion. **Der Abbau gehört in `onunload` des Plugins, nicht in `hide()`** (ghostline lässt ihn in `hide()` weg und
+ *  installiert bei Bedarf neu, Final-Review M3). Ein bloßes `update()` in `hide()` (Variante C) und das Leeren des Containers in `hide()`
+ *  (Variante D) bauen beim Öffnen nicht auf. **Ungemessen:** ob die native `renderTab` in 1.14.5 bei gleicher `settingItems.length` immer neu
+ *  zeichnet (in der Messung tat sie es an einer Render-Definition ohne Hook; die 1.14.2-Messung oben sah es nicht) und ob das für Definitionen
+ *  mit `control` gilt. */
 export function installTabRefreshOnOpen(
   tab: PluginSettingTab & { renderTab?: () => void },
   fullRebuild: () => void,

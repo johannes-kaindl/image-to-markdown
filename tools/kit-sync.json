@@ -1,10 +1,10 @@
 {
   "sources": {
     "obsidian-kit": {
-      "ref": "0.63.0"
+      "ref": "0.70.0"
     },
     "code-kit": {
-      "ref": "0.31.0"
+      "ref": "0.37.5"
     }
   },
   "targets": [
@@ -66,6 +66,7 @@
       "from": "src/ts/web",
       "modules": [
         "clipboard",
+        "link-guard",
         "remote-resources"
       ],
       "rewrite": [
@@ -108,6 +109,8 @@
         "endpoint-status-text",
         "llm-connection",
         "llm-connection-strings",
+        "model-bar",
+        "model-bar-strings",
         "model-picker",
         "plugin-api",
         "request-section",

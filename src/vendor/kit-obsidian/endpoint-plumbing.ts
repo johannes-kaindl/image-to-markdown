@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/endpoint-plumbing.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/endpoint-plumbing.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Verdrahtung der lokalen Endpunkt-Liste, die `createLlmConnection` (Chat) und `createLlmConnection` mit
  *  `capability: "embedding"` gemeinsam brauchen: der synchrone `persist`-Wächter, Erreichbarkeit und Modellliste einer Zeile
  *  (`GET /v1/models`, 5 s), die hydrierte Kopie mit Schlüssel und die Modellwahl eines Panels. Eigenes Modul statt zwei
@@ -36,7 +36,10 @@ export interface EndpointPlumbingOptions<S extends PlumbingSettings> {
 /** Kontextlänge je Zeile, gemerkt je (URL, Modell) — ein Zwischenspeicher der Verbindung, nicht des Zeichnens
  *  (`renderSettings` leert seinen Container und ruft die Liste neu). */
 export interface EndpointContextSource {
-  load(cfg: EndpointConfig): Promise<ModelContext | null>;
+  /** `opts.provider: "anthropic"` (seit 0.70.0) fragt die Models-API von Anthropic (`x-api-key`, eine Anfrage; siehe `fetchEndpointContext`). Wer `source.transport === "anthropic"`
+   *  aus dem Verbindungsmanager kennt, reicht es durch; die Endpunkt-Liste ruft `load(cfg)` ohne Optionen (LM Studio, Ollama) und zeigt bei Claude keine Zahl. Der Anbieter steht im
+   *  Zwischenspeicher-Schlüssel: derselbe Endpunkt mit und ohne Anbieter teilt keinen Eintrag. */
+  load(cfg: EndpointConfig, opts?: { provider?: "anthropic" | undefined }): Promise<ModelContext | null>;
   /** Vergisst alle Einträge der URL (Knopf „Modelle neu laden“). */
   invalidate(cfg: EndpointConfig): void;
   clear(): void;
@@ -124,13 +127,15 @@ export function createEndpointPlumbing<S extends PlumbingSettings>(o: EndpointPl
 
   // Die Hülle (Schlüssel als Header, Timer) liegt in `backend-probe.fetchEndpointContext`; hier nur Cache und `invalidate`.
   const contextCache = new Map<string, Promise<ModelContext | null>>();
-  const contextKey = (cfg: EndpointConfig): string => `${normalizeEndpoint(cfg.url)}\n${cfg.model?.trim() ?? ""}`;
+  // URL zuerst: `invalidate` löscht nach dem Präfix `URL\n`, auch die Einträge je Anbieter.
+  const contextKey = (cfg: EndpointConfig, provider?: "anthropic"): string => `${normalizeEndpoint(cfg.url)}\n${cfg.model?.trim() ?? ""}\n${provider ?? ""}`;
   const modelContext: EndpointContextSource = {
-    load: (cfg) => {
-      const key = contextKey(cfg);
+    load: (cfg, loadOpts) => {
+      const provider = loadOpts?.provider === "anthropic" ? "anthropic" as const : undefined;
+      const key = contextKey(cfg, provider);
       let hit = contextCache.get(key);
       if (!hit) {
-        hit = fetchEndpointContext(cfg.url, cfg.model ?? "", hydrated(cfg).apiKey, { timers: o.clock, ...(o.contextFetch ? { fetch: o.contextFetch } : {}) });
+        hit = fetchEndpointContext(cfg.url, cfg.model ?? "", hydrated(cfg).apiKey, { timers: o.clock, ...(o.contextFetch ? { fetch: o.contextFetch } : {}), ...(provider ? { provider } : {}) });
         contextCache.set(key, hit);
       }
       return hit;

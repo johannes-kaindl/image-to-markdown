@@ -1,7 +1,8 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { MarkdownRenderer, type App, type Component } from "obsidian";
 import { realClock, type ClockPort } from "./clock";
 import { neutralizeRemoteResourcesInTree, type RemovedResource, type RemoteResourcesOptions } from "../kit/remote-resources";
+import { neutralizeUnsafeLinksInTree } from "../kit/link-guard";
 
 /**
  * Zweite Schicht gegen Fernquellen in gerenderten Antworten: ein `MutationObserver` am Container, der
@@ -73,8 +74,22 @@ import { neutralizeRemoteResourcesInTree, type RemovedResource, type RemoteResou
  *   SMIL-`href` und `cursor` laden in Chromium im Kurzlauf nicht, der Durchgang entfernt sie trotzdem.
  * - `renderMarkdownGuarded` trennt den Observer nach der Frist; was danach asynchron entsteht, sieht er nicht.
  *   Der Observer des `createStableWriter` lebt dagegen so lange wie der Schreiber.
- * - Ein klickbarer Link bleibt (Restrisiko wie in der Regex-Fassung). Der Durchgang läuft hier auf dem angehängten
+ * - Links: seit 0.70.0 schneidet der zweite Durchgang gefährliche Link-Ziele ab (siehe unten); ein Link mit erlaubtem Ziel bleibt klickbar. Der Durchgang läuft hier auf dem angehängten
  *   Baum; serialisiert und neu geparst wird nirgends (Vertrag von `remote-resources`).
+ *
+ * ## Zweiter Durchgang: Link-Ziele und aktive Tags (seit 0.70.0, Linkschutz)
+ *
+ * `neutralizeRemoteResourcesInTree` meldet selbst: „No script defence“ (Ereignis-Attribute und `javascript:` im Link sind nicht sein Gegenstand). Dafür läuft hinter ihm, über denselben Teilbaum, im Observer, in `run()` und in
+ * `flush()`, `neutralizeUnsafeLinksInTree` (code-kit `web/link-guard`, die Klassifikation aus settings-assistant): `http`, `https`, `mailto` und Ziele ohne Schema bleiben; `javascript:`, `data:`, `vbscript:`, `file:` und `app:`
+ * gehen **nie** (auch nicht an einem inneren Link und auch nicht mit einem Schalter); `obsidian:` geht, solange `allowObsidianLinks` nicht `true` ist (Default aus: eine Antwort soll keine Obsidian-Aktion auslösen, etwa einen
+ * anderen Vault öffnen); jedes andere Schema geht, außer an einem inneren Link (`data-href`, dort ist ein Doppelpunkt im Notiznamen kein Schema). `img`, `iframe`, `embed`, `video`, `audio`, `object`, `link`, `style`, `script`,
+ * `source` und weitere aktive Tags gehen mit ihrem Teilbaum; mit `allowLocalImages` (Default aus) bleibt ein `img` mit lokaler Quelle (relativ, `app:`, `capacitor:`), auf `src`, `srcset`, `alt`, `title`, `width`, `height`, `class`
+ * gekürzt. Entfernte Bilder und `data:` bleiben mit und ohne Schalter gesperrt. Die Optionen stehen in `DomGuardOptions`; `onRemoved` bekommt das Entfernte beider Durchgänge in einem Aufruf.
+ *
+ * Gemessen im echten Renderer (Obsidian 1.14.5, `pilot/link-schutz.ts`): Obsidian entfernt `javascript:`, `data:` und `vbscript:` als `href` selbst, behält aber `file:`, `app:` und `obsidian:`; der Wächter kappt diese. Lokale
+ * Bilder (`![](bild.png)`, `![[bild.png]]`) kommen ohne Wächter als `app://…`-`img` an. **Im Chat-Fenster mit dem Standard-Schreiber erreichen Bilder und HTML den Wächter nie:** `neutralizeModelMarkdown` macht jedes Markdown-Bild
+ * zu Text und escaped `<`; `allowLocalImages` und ein gefälschtes `<a data-href>` gibt es dort nicht. Beides gilt für `raw`-Schreiber und `renderMarkdownGuarded`. Ein gekappter Link behält Klasse und Aussehen (Farbe,
+ * Unterstrich, Pfeil), nur das `href` fehlt. Ein `svg` bleibt (code-kit 0.37.4), wenn sein Teilbaum nur Formen trägt (`SVG_TAGS`), gekürzt auf Geometrie- und Darstellungsattribute: das Icon eines Callouts und der Kopier-Knopf eines Codeblocks bleiben (gemessen 1→1); mit 0.37.0 bis 0.37.2 gingen sie mit.
  *
  * Gebraucht wird ein DOM mit `MutationObserver`. Ohne einen wirft `attachDomGuard`, statt still ungeschützt zu
  * bleiben: ein Test mit dem Fake-DOM (`makeFakeEl`) übergibt `domGuard: false`.
@@ -82,7 +97,14 @@ import { neutralizeRemoteResourcesInTree, type RemovedResource, type RemoteResou
 export const DOM_GUARD_DEADLINE_MS = 1500;
 
 export interface DomGuardOptions extends RemoteResourcesOptions {
-  /** Wird mit dem Entfernten gerufen, wenn ein Durchgang etwas herausgenommen hat (Diagnose, Zähler). */
+  /** `obsidian://`-Links in Antworten behalten (Default aus, seit 0.70.0): eine Antwort soll keine Obsidian-Aktion auslösen können (einen anderen Vault öffnen). `javascript:`, `data:`,
+   *  `vbscript:`, `file:` und `app:` als Link-Ziel gehen nie, mit und ohne Schalter; `http`, `https`, `mailto` und Ziele ohne Schema bleiben immer. Die Einstellungszeile dazu: `buildLinkSettings`. */
+  allowObsidianLinks?: boolean;
+  /** Bilder mit lokaler Quelle (relativ, `app:`, `capacitor:`) behalten (Default aus, seit 0.70.0): `img` bleibt dann auf `src`, `srcset`, `alt`, `title`, `width`, `height`, `class` gekürzt.
+   *  Entfernte Bilder bleiben immer gesperrt, `data:` auch als Bildquelle; `iframe`, `embed`, `video`, `audio`, `object`, `link`, `style`, `script` und `source` gehen (ebenso ein `svg` mit einem Element außerhalb von `SVG_TAGS`) auch mit
+   *  dem Schalter. Ohne ihn verliert jedes Bild seine Quelle. */
+  allowLocalImages?: boolean;
+  /** Wird mit dem Entfernten gerufen, wenn ein Durchgang etwas herausgenommen hat (Diagnose, Zähler): erst das der Fernquellen, dann das der Link-Ziele, in einem Aufruf. */
   onRemoved?: (removed: RemovedResource[]) => void;
   /** Konstruktor des Observers; Default der `MutationObserver` des Fensters von `el`. Für Tests ohne DOM. */
   observer?: typeof MutationObserver;
@@ -105,9 +127,13 @@ export function attachDomGuard(el: HTMLElement, opts: DomGuardOptions = {}): Dom
   const MO = opts.observer ?? el.ownerDocument?.defaultView?.MutationObserver ?? (typeof window === "undefined" ? undefined : window.MutationObserver);
   if (!MO) throw new Error("domGuard braucht ein DOM mit MutationObserver — in Tests mit dem Fake-DOM `domGuard: false` übergeben.");
   let active = true;
+  // Zwei Durchgänge über denselben Teilbaum: erst die Fernquellen (code-kit `remote-resources`), dann die Link-Ziele und aktiven Tags (code-kit `link-guard`).
+  // Nur ein echtes `true` schaltet; ein Wurf in einem der beiden ist ein Wurf des Durchgangs (der Schreiber fällt dann auf `setText`, fail-closed).
+  const links = { allowObsidianLinks: opts.allowObsidianLinks === true, allowLocalImages: opts.allowLocalImages === true };
   const neutralize = (root: ParentNode): void => {
-    const { removed } = neutralizeRemoteResourcesInTree(root, opts.localSchemes ? { localSchemes: opts.localSchemes } : {});
-    if (removed.length > 0) opts.onRemoved?.(removed);
+    const remote = neutralizeRemoteResourcesInTree(root, opts.localSchemes ? { localSchemes: opts.localSchemes } : {}).removed;
+    const unsafe = neutralizeUnsafeLinksInTree(root, links).removed;
+    if (remote.length > 0 || unsafe.length > 0) opts.onRemoved?.([...remote, ...unsafe]);
   };
   const pass = (): void => {
     if (!active) return;

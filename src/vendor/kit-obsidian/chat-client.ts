@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/chat-client.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Ein Chat-Aufruf gegen `/v1/chat/completions` (OpenAI-kompatibel) — Streaming, Tool-Calls,
  *  Abbruch, Idle-Timeout, Fehlerbody, Fallback ohne Stream. Kein `obsidian`-Import: der Transport
  *  wird injiziert (`chat-transport.ts` liefert XHR und `requestUrl`), die Uhr ebenso. Damit ist
@@ -302,12 +302,22 @@ export function redactMessages<M extends ChatWireMessage>(messages: readonly M[]
   return { messages: out, count: session.count };
 }
 
+/** Ist `text` schon der Innenteil einer JSON-Zeichenkette, mit Backslash-Folgen wie `\n`, `\"` oder `\\`? Dann stammt das Original aus einem JSON-Text und ist maskiert:
+ *  ein zweites `JSON.stringify` machte aus `\n` ein `\\n` (gemessen von bunda-w27 an einem PEM-Schlüssel in einer JSON-Quelle, 2026-10-25). Ein Text ohne Backslash,
+ *  Anführungszeichen und Steuerzeichen ist in beiden Fassungen gleich. Echte Zeilenumbrüche, rohe Anführungszeichen und ungültige Folgen (ein Pfad wie `C:\Users`) lassen `JSON.parse` des Körpers scheitern: nicht maskiert. **Grenze:** ein Klartext, der zufällig wie ein
+ *  Körper aussieht (ein Backslash und ein `n` als Text, `a\nb`), gilt als maskiert und wird unverändert eingesetzt; die Herkunft des Originals kennt die Sitzung nicht. */
+function isJsonStringBody(text: string): boolean {
+  try { return typeof JSON.parse(`"${text}"`) === "string"; } catch { return false; }
+}
+
 /** Setzt Originale in einen JSON-Text ein: die Platzhalter stehen in Zeichenketten, also wird der Wert
- *  JSON-maskiert (ein PEM-Block trägt Zeilenumbrüche, rohes `restore` machte das JSON ungültig). */
+ *  JSON-maskiert (ein PEM-Block trägt Zeilenumbrüche, rohes `restore` machte das JSON ungültig). Ein Original, das schon
+ *  maskiert ist (aus einer JSON-Quelle, `isJsonStringBody`), wird unverändert eingesetzt: das Ergebnis ist bytegleich zur Quelle. */
 function restoreInJson(session: RedactionSession, json: string): string {
   return json.replace(/\[redacted-[a-z0-9-]+-\d+\]/g, (ph) => {
     const original = session.restore(ph);
-    return original === ph ? ph : JSON.stringify(original).slice(1, -1);
+    if (original === ph) return ph;
+    return isJsonStringBody(original) ? original : JSON.stringify(original).slice(1, -1);
   });
 }
 

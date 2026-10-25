@@ -1,4 +1,4 @@
-// vendored from code-kit@0.31.0, src/ts/pure/endpoint_config.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.37.5, src/ts/pure/endpoint_config.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Obsidian-freie Wahrheit für Endpunkt-Einträge: Struktur, Auth-Header, Modellwahl,
  *  Migration alter String-Listen und Listen-Bearbeitung.
  *
@@ -298,15 +298,21 @@ export function moveEndpointToFront(eps: EndpointConfig[], index: number): Endpo
 }
 
 /** Welche Rolle ein Endpunkt in der Liste gerade spielt. Reine Ableitung — kein eigener
- *  Zustand: die Einstellungs-UI kennt alle vier Zutaten bereits. */
+ *  Zustand: die Einstellungs-UI kennt alle Zutaten bereits. */
 export type EndpointRole =
   | { kind: "active" }
   | { kind: "standby"; position: number }   // 1-basiert, wie angezeigt
   | { kind: "unreachable" }
+  | { kind: "search-only" }                 // bedient nur die Suche, schreibt nicht (0.36.0)
   | { kind: "skipped-model" };
 
 /** Reihenfolge der Prüfung ist bedeutungstragend: „aktiv" schlägt alles; danach gewinnt der
  *  offensichtlichere Grund (nicht erreichbar) vor dem subtileren (Modell passt nicht).
+ *  Vorrang: active > unreachable > search-only > skipped-model > standby. `searchOnly` (der
+ *  Eintrag bedient nur die Suche) steht VOR „Modell passt nicht": die Zeile, die die Suche
+ *  bedient, soll nicht „übersprungen" zeigen — sie wird ja genutzt. Ein unerreichbarer
+ *  Endpunkt bleibt dagegen `unreachable`, auch wenn er nur die Suche bedienen soll. Ohne
+ *  `searchOnly` (fehlt oder false) gilt alles wie vor 0.36.0.
  *  `modelFits` ist für Chat-Listen immer true — dort hängt kein Index am Modell.
  *
  *  Den ANZEIGETEXT baut der Consumer: die Rolle ist sprachfrei, damit zweisprachige
@@ -316,9 +322,12 @@ export function endpointRole(input: {
   reachable: boolean;
   modelFits: boolean;
   position: number;
+  /** Der Eintrag bedient nur die Suche (der Consumer weiß das, die Rolle erfindet es nicht). */
+  searchOnly?: boolean;
 }): EndpointRole {
   if (input.isActive) return { kind: "active" };
   if (!input.reachable) return { kind: "unreachable" };
+  if (input.searchOnly === true) return { kind: "search-only" };
   if (!input.modelFits) return { kind: "skipped-model" };
   return { kind: "standby", position: input.position };
 }

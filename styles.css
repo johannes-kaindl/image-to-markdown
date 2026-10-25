@@ -88,6 +88,22 @@
 .okit-thinking-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
 .okit-thinking-toggle svg { width: var(--icon-xs); height: var(--icon-xs); }
 .okit-thinking-control select { font-size: var(--font-ui-small); }
+/* Modellzeile: Kit-Baustein (MODEL_BAR_CSS, obsidian-kit 0.70.0, wortgleich kopiert — Kit-Vertrag). */
+.okit-model-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--size-2-2) var(--size-4-1); min-width: 0; }
+.okit-model-bar-label { flex: 0 0 auto; color: var(--text-muted); font-size: var(--font-ui-small); white-space: nowrap; }
+.okit-model-bar select { flex: 1 1 12em; min-width: 0; max-width: 100%; font-size: var(--font-ui-small); text-overflow: ellipsis; }
+.okit-model-bar select:disabled { opacity: 0.6; cursor: not-allowed; }
+.okit-model-bar-warn { flex: 0 0 auto; display: inline-flex; color: var(--text-warning); }
+.okit-model-bar-warn.is-hidden { display: none; }
+.okit-model-bar-warn svg { width: var(--icon-xs); height: var(--icon-xs); }
+.okit-model-bar-refresh { flex: 0 0 auto; }
+.okit-model-bar-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
+.okit-model-bar-refresh svg { width: var(--icon-xs); height: var(--icon-xs); }
+.okit-model-bar-refresh.is-loading svg { animation: okit-model-bar-spin 1s linear infinite; }
+@keyframes okit-model-bar-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .okit-model-bar-refresh.is-loading svg { animation: none; } .okit-model-bar-refresh.is-loading { opacity: 0.5; } }
+.okit-model-bar .okit-thinking-control { flex: 0 0 auto; }
+.okit-model-bar-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
 .img2md-model-refresh.is-loading { opacity: 0.5; pointer-events: none; }
 .img2md-foot { flex: 0 0 auto; margin-top: var(--size-4-2); display: flex; gap: 6px; align-items: center; }
 .img2md-retry-all { font-size: 12px; }

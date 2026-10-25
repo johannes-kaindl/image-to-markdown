@@ -1,4 +1,4 @@
-// vendored from code-kit@0.31.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.37.5, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -578,6 +578,28 @@ export function onLevelFor(s: RequestSettings, mode: ModeId): ThinkingLevel {
   const stored = s.lastOnLevel[mode];
   if (stored && stored !== "off") return stored;
   return MODES[mode].thinking !== "off" ? MODES[mode].thinking : "low";
+}
+
+/** The settings with the thinking level of ONE mode set — the write behind the model row, the settings dropdown and the chat toggle.
+ *  `thinking[mode]` becomes `level`; for any level other than `"off"` it is also remembered as `lastOnLevel[mode]`, the level
+ *  {@link onLevelFor} gives back when the toggle is switched on again. `"off"` leaves the remembered level alone (that is the whole
+ *  point of remembering it).
+ *
+ *  Returns a NEW object and writes nothing into `request`; the parts it does not change (`overrides`, `levelPickerInChat`, a field a
+ *  newer version added) are carried over by reference, as neurovim-obsidian and settings-assistant did. The caller saves. An unknown
+ *  `mode` or `level` (a dropdown value cast to the type, a hand-edited file) writes nothing and gives `request` back — the SAME object,
+ *  so the caller can tell; `sanitizeRequestSettings` would drop such a value on the next load anyway.
+ *
+ *  Origin: three copies of one rule (read 2026-10-25) — neurovim-obsidian `llm/cipherRequest.ts` (`setCipherThinking`),
+ *  settings-assistant `main.ts` (`setChatThinking`) and obsidian-kit `obsidian/request-section.ts:219`; yijing-oracle needs it too.
+ *  The first two build a new object with flat copies, as here. **obsidian-kit's differs in one respect:** it deep-clones the whole
+ *  settings first and writes into the clone, so its result shares nothing with the input; its other handlers write into that clone
+ *  (`overrides`) afterwards, which is why. The values written are the same in all three (differential test). */
+export function withThinkingLevel(request: RequestSettings, mode: ModeId, level: ThinkingLevel): RequestSettings {
+  if (!(MODE_IDS as readonly string[]).includes(mode) || !(THINKING_LEVELS as readonly string[]).includes(level)) return request;
+  const next: RequestSettings = { ...request, thinking: { ...request.thinking, [mode]: level } };
+  if (level !== "off") next.lastOnLevel = { ...request.lastOnLevel, [mode]: level };
+  return next;
 }
 
 /** What the settings UI can be told went differently from what the profile asked for.

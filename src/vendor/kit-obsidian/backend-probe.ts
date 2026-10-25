@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Backend-Erkennung für Obsidian: der `requestUrl`-Adapter für die pure Probe aus code-kit
  *  (`vendor/code-kit/pure/backend-probe`). Die Kopier-Kette, die hier endet, hieß in zehn
  *  Konsumenten `cachedProbe(url, model)` (Herkunft lingotuner `obsidian/http.ts`); der Adapter ist
@@ -48,6 +48,14 @@ export const cachedProbe = createObsidianBackendProbe();
  *  Ohne Modell `null` ohne Anfrage; wirft nie, `null` heißt „der Endpunkt nennt sie nicht“. Mit `effectiveContext`
  *  (code-kit) wird daraus die eine Zahl.
  *
+ *  **`opts.provider: "anthropic"` (seit 0.70.0)** fragt die Models-API von Anthropic statt LM Studio und Ollama (code-kit 0.37.x: genau eine Anfrage
+ *  `GET {url}/v1/models?limit=1000`, das Fenster ist `max_input_tokens`). Der reine Zweig sendet weder `x-api-key` noch `Authorization`, **der Schlüssel gehört der Hülle**,
+ *  und sie macht daraus zwei Dinge: `x-api-key` (nur mit Schlüssel) **statt** `Authorization: Bearer` (ersetzt, nicht ergänzt: Bearer ist für OAuth-Token und
+ *  brächte ein 401, also `null`) und `anthropic-dangerous-direct-browser-access: true` wie `anthropic-transport.ts`; `anthropic-version` setzt der reine Zweig.
+ *  **Ob `requestUrl` den Browser-Zugriff-Header braucht, ist ungemessen gegen die echte API:** der Stub (`llm-stub.ts`) prüft ihn nicht, und `requestUrl` läuft ohne
+ *  CORS-Preflight; er wird gesendet, weil der Transport für die Gespräche es auch tut. Wer den Anbieter kennt, reicht ihn durch: der Verbindungsmanager meldet ihn als
+ *  `source.transport === "anthropic"` (`EndpointSourceResult`); `EndpointConfig` kennt ihn nicht. Ohne `provider` ändert sich nichts.
+ *
  *  Herkunft: die Hülle in `endpoint-plumbing` (`modelContext.load`), gehoben, damit Plugins, die die Kontextlänge
  *  außerhalb der Endpunkt-Liste brauchen (slide-deck Generate-Ansicht, vault-crews Orchestrator), sie nicht
  *  nachbauen. Die Optionen sind für Tests und Sonderfälle; `fetch` bekommt die Header schon eingemischt.
@@ -57,15 +65,18 @@ export function fetchEndpointContext(
   url: string,
   model: string,
   apiKey?: string,
-  opts?: { timers?: TimeoutTimers; timeoutMs?: number; fetch?: CapabilityFetch },
+  opts?: { timers?: TimeoutTimers; timeoutMs?: number; fetch?: CapabilityFetch; provider?: "anthropic" | undefined },
 ): Promise<ModelContext | null> {
   const base = opts?.fetch ?? requestUrlCapabilityFetch;
-  const auth = authHeaders(apiKey);
+  const key = apiKey?.trim() ?? "";
+  const auth: Record<string, string> = opts?.provider === "anthropic"
+    ? { ...(key !== "" ? { "x-api-key": key } : {}), "anthropic-dangerous-direct-browser-access": "true" }
+    : authHeaders(apiKey);
   return fetchModelContext(
     (req) => base({ ...req, headers: { ...auth, ...(req.headers ?? {}) } }),
     normalizeEndpoint(url),
     model.trim(),
-    { timers: opts?.timers ?? realClock, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) },
+    { timers: opts?.timers ?? realClock, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}), ...(opts?.provider === "anthropic" ? { provider: "anthropic" as const } : {}) },
   );
 }
 

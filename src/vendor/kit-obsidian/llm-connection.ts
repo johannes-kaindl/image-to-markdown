@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.63.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.70.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -29,6 +29,11 @@
  *  `requestUrlTransport` als Rückfall ohne Stream (CORS-freier Weg über den Hauptprozess). Ein Plugin
  *  übergibt `transports` nur, wenn es davon abweichen muss: `fallback: "none"` (koda), `shortcuts`
  *  für Apple Intelligence (transmute, lingotuner) oder eigene Transporte in Tests.
+ *
+ *  `onResolved` und `models()` (seit 0.70.0): `models()` löst still auf, `onResolved` feuert dabei nur, wenn das Ergebnis sich vom zuletzt
+ *  gezeigten unterscheidet (Adresse, Modell, Familie, Backend, Grund). Vorher rief jede Auflösung den Rückruf, und ein Rückruf, der
+ *  `models()` rief (Modellzeile neu laden), lief im Kreis; `resolve()`, `invalidate()` und `setModel()` melden weiter immer. Trotzdem gilt
+ *  für den Rückruf: nur neu zeichnen, wenn sich etwas geändert hat (vault-rag und image-to-markdown tun es und können es behalten).
  *
  *  Vertrag an `persist`: es übernimmt den Patch in die Settings des Plugins SYNCHRON (bevor es
  *  speichert) — die Endpunkt-Liste liest ihre Zeilen danach über `getSettings()` zurück. */
@@ -120,6 +125,10 @@ export interface LlmConnectionOptions {
    *  geladenes verdrängen würde (nur LM Studio). Default: `fetchLoadedModelsAt` (`GET /api/v1/models`, nur lesend). `null` = unbekannt. */
   loadedModels?: (cfg: EndpointConfig) => Promise<readonly LoadedModel[] | null>;
   managerOnly?: boolean;
+  /** Seit 0.67.0: bedient diese Zeile nur die Suche? Dann trägt sie in der gezeichneten Liste die Rolle `search-only` („für Suche genutzt, schreibt nicht“)
+   *  statt `skipped-model`/`standby` (`buildEndpointList` `isSearchOnly`; Vorrang `active` > `unreachable` > `search-only`). Fehlt die Option, bleibt die Liste
+   *  wie bisher. Die Verbindung selbst ändert nichts: das Wissen, welche Zeile nur sucht, bleibt beim Plugin. */
+  isSearchOnly?: (cfg: EndpointConfig) => boolean;
   transports?: LlmConnectionTransports;
   timeouts?: LlmConnectionTimeouts;
   /** Sampling-Modus; je Aufruf überschreibbar. */
@@ -148,9 +157,9 @@ export interface LlmConnectionOptions {
   /** Wird nach jeder abgeschlossenen Auflösung gerufen (auch der internen aus Liste, Wahl und `invalidate`),
    *  nicht bei einem gemerkten Ergebnis und nicht bei einem überholten parallelen Lauf. Für Plugin-eigene Zeilen
    *  im Settings-Tab (Kontextlänge, Modelldetails), die einer Endpunkt-Änderung folgen sollen.
-   *  **Kreis:** ein Callback, der selbst `resolve()` auslöst (z. B. über eine Probe oder `models()`), läuft im Kreis — jede
-   *  Auflösung ruft ihn wieder. Nur neu zeichnen, wenn sich das Ergebnis geändert hat (image-to-markdown: „nur bei geändertem
-   *  Modell“). */
+   *  **Kreis:** ein Callback, der selbst `resolve()` auslöst (z. B. über eine Probe), läuft im Kreis — jede Auflösung ruft ihn wieder.
+   *  Seit 0.70.0 gilt das nicht mehr für `models()`: es löst still auf und meldet nur eine Änderung (Adresse, Modell, Familie, Backend,
+   *  Grund). Trotzdem nur neu zeichnen, wenn sich das Ergebnis geändert hat (image-to-markdown: „nur bei geändertem Modell“). */
   onResolved?: (result: EndpointSourceResult) => void;
   /** Modi, die der Anfrage-Abschnitt in `renderSettings` zeigt (Default `[mode]`). */
   modes?: ModeId[];
@@ -293,6 +302,9 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
 
   // ── Auflösung ──────────────────────────────────────────────────────────────────────────────
   let pending: Promise<EndpointSourceResult> | null = null;
+  // Ruft der laufende Lauf `onResolved`? `resolve()` immer; `models()` löst still auf und meldet nur, wenn das Ergebnis neu ist (siehe `sameSource`).
+  // Ein `resolve()`, das einem stillen Lauf beitritt, hebt den Wunsch auf `true`, sonst verlöre es seinen Rückruf.
+  let pendingNotify = false;
   let last: EndpointSourceResult | null = null;
   // Was `source()` zeigt: die letzte abgeschlossene Auflösung, auch nach `invalidate()` bis die neue da ist.
   let shown: EndpointSourceResult | null = null;
@@ -325,19 +337,34 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
     return choice?.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : entries[0]?.id;
   }
 
-  function resolve(opts?: { force?: boolean }): Promise<EndpointSourceResult> {
+  /** Dieselbe Quelle für die Anzeige? Was ein Konsument in `onResolved` neu zeichnet (Modell, Familie, Backend, Endpunkt, Grund), nichts darüber hinaus. */
+  function sameSource(a: EndpointSourceResult | null, b: EndpointSourceResult): boolean {
+    return a !== null && a.kind === b.kind && a.config?.url === b.config?.url && a.config?.id === b.config?.id && a.model === b.model
+      && a.sentModel === b.sentModel && a.family === b.family && a.backend === b.backend && a.reason === b.reason;
+  }
+
+  /** `quiet`: nur `models()`. Ein stiller Lauf ruft `onResolved` bei einem Ergebnis, das sich vom zuletzt gezeigten nicht unterscheidet, nicht. */
+  function resolveInternal(opts: { force?: boolean } | undefined, quiet: boolean): Promise<EndpointSourceResult> {
     const manager = findEndpointManager(o.app);
     // Der Manager kann jederzeit deaktiviert werden: seine Quelle wird nie gemerkt.
     if (!opts?.force && !manager && last !== null && last.kind !== "manager") return Promise.resolve(last);
-    if (!opts?.force && pending !== null) return pending;
+    if (!opts?.force && pending !== null) {
+      if (!quiet) pendingNotify = true;
+      return pending;
+    }
+    pendingNotify = !quiet;
     // Gemerkt wird nur ein Treffer: „kein Endpunkt“ (Server beim Start aus) klebt sonst bis zur nächsten Listenänderung.
     const p = resolveNow().then((r) => {
       if (pending === p) {
         pending = null;
+        const notify = pendingNotify || !sameSource(shown, r);
+        pendingNotify = false;
         last = r.config !== null ? r : null;
         shown = r;
         freshSinceInvalidate = true;
-        try { o.onResolved?.(r); } catch { /* ein Fehler im UI-Callback darf die Auflösung nicht scheitern lassen */ }
+        if (notify) {
+          try { o.onResolved?.(r); } catch { /* ein Fehler im UI-Callback darf die Auflösung nicht scheitern lassen */ }
+        }
       }
       return r;
     },
@@ -345,12 +372,13 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
     pending = p;
     return p;
   }
+  const resolve = (opts?: { force?: boolean }): Promise<EndpointSourceResult> => resolveInternal(opts, false);
   // `pending` hält die Auflösung nur, solange sie läuft; danach bewahrt `last` die lokale.
   function invalidate(): void { pending = null; last = null; client = null; freshSinceInvalidate = false; modelCache.clear(); settingsCache.clear(); }
 
   // ── Modellliste ────────────────────────────────────────────────────────────────────────────
   async function models(opts?: { force?: boolean }): Promise<ModelListResult> {
-    const r = await resolve();
+    const r = await resolveInternal(undefined, true);
     if (r.kind === "manager") {
       const api = findEndpointManager(o.app);
       const id = lastManagerEntry;
@@ -539,6 +567,7 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
           reconnect: async () => { invalidate(); await resolve().catch(() => undefined); },
           rerender, app: o.app, pluginId: o.pluginId,
           ...(o.contextLength === false ? {} : { modelContext: plumbing.modelContext }),
+          ...(o.isSearchOnly ? { isSearchOnly: o.isSearchOnly } : {}),
         });
       },
       rerender,
