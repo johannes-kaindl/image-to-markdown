@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.5] — 2026-10-25
+
 ### Changed
 
 - The README and CONTRIBUTING no longer call the GitHub repository a mirror: Forgejo is canonical, GitHub only receives the branch and tag when a release is published. The German README now says so too.
