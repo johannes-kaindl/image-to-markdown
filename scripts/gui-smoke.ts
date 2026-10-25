@@ -79,6 +79,14 @@ import {
   schliesseEinstellungen,
 } from "../../tools/obsidian-cdp/cdp.js";
 import { echoText, startLlmStub } from "../../tools/obsidian-cdp/llm-stub.js";
+import {
+  fokusAufraeumSkript,
+  fokusStandSkript,
+  gegenprobeErreichbarkeit,
+  messeErreichbarkeit,
+  messeFokusFenster,
+  type PflichtTeilurteil,
+} from "../../tools/obsidian-cdp/pflichtpunkte.js";
 import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
 import { requireEigenerBuild } from "../../tools/obsidian-cdp/vault.js";
 import { MODES, familyFromName } from "../src/vendor/kit/sampling-profiles";
@@ -131,7 +139,7 @@ async function haltePanelBild(cdp: Cdp, name: string, selector: string): Promise
 
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "F1", "F2", "F3",
-  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "G1", "G2", "G3",
+  "N1", "N2", "N3", "N4", "N5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -215,6 +223,56 @@ async function zeigeNotiz(cdp: Cdp, pfad: string): Promise<void> {
     `);
     throw new Error(`Sidebar verarbeitete "${pfad}" nicht — sie steht auf "${gesehen}"`);
   }
+}
+
+/** Pflichtpunkte (Welle 26, §3a): ein Urteil der Bruecken-Bausteine wird zum Ergebnis dieses Treibers. „nichts gemessen"
+ *  wirft, der Hauptlauf zaehlt den Wurf als „nichts gemessen" (nicht rot). */
+function ausUrteil(u: PflichtTeilurteil): Ergebnis {
+  if (u.urteil === "nichts-gemessen") throw new Error(`Messung ungueltig: ${u.detail}`);
+  return { ok: u.urteil === "gruen", detail: u.detail };
+}
+
+const PDF_VON = `${SIDEBAR} .img2md-pdf-from`;
+const KARTEN = `${SIDEBAR} .img2md-cards`;
+const FUSS_KNOEPFE = [`${SIDEBAR} .img2md-clear`, `${SIDEBAR} .img2md-apply`];
+
+/** Stellt den Zustand her, den die Fussknoepfe brauchen: fertige Karten (Stub statt Modell, Rezept von R1). Gibt zurueck, wie viele
+ *  Karten fertig sind; die Stubs sind beim Rueckkehren wieder ausgebaut. */
+async function stelleFertigeKartenHer(cdp: Cdp): Promise<number> {
+  await zeigeNotiz(cdp, NOTIZ.bilder);
+  return await cdp.evaluate<number>(`
+    const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+    const deps = view.deps;
+    const orig = deps.transcribeStream;
+    const model = deps.getModel();
+    deps.transcribeStream = async (_pfad, _item, onContent) => { onContent("T0"); return { content: "T0", reasoning: "", model }; };
+    try {
+      for (const i of view.state.items) if (i.supported && !view.state.isSelected(i.link)) view.state.toggle(i.link);
+      await view.run();
+      return view.state.cards.filter((c) => c.status === "done").length;
+    } finally {
+      deps.transcribeStream = orig;
+    }
+  `);
+}
+
+/** Die Mutation fuer ein Zahlenfeld: `fokusMutationSkript` der Bruecke ruft `setSelectionRange`, das bei `type=number` wirft. Hier:
+ *  Fokus setzen, Feld markieren, Ziffer tippen. Misst danach, ob der Fokus im Feld LIEGT, sonst ist die Probe gegenstandslos. */
+async function fokusInZahlenfeld(cdp: Cdp, selector: string, text: string): Promise<PflichtTeilurteil | null> {
+  const stand = await cdp.evaluate<{ da: boolean; treffer: boolean; wert: string | null }>(`
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return { da: false, treffer: false, wert: null };
+    el.focus();
+    if (el.select) el.select();
+    document.execCommand("insertText", false, ${JSON.stringify(text)});
+    const a = document.activeElement;
+    return { da: true, treffer: a === el, wert: el.value };
+  `);
+  if (!stand.da) return { urteil: "nichts-gemessen", detail: `kein Feld ${selector} im DOM` };
+  if (!stand.treffer || stand.wert !== text) {
+    return { urteil: "nichts-gemessen", detail: `die Vorbedingung fehlt: nach dem Tippen liegt der Fokus ${stand.treffer ? "im Feld" : "nicht im Feld"}, value=${JSON.stringify(stand.wert)} (erwartet ${JSON.stringify(text)})` };
+  }
+  return null;
 }
 
 const PRUEFPUNKTE: Pruefpunkt[] = [
@@ -1038,6 +1096,90 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         await cdp.evaluate(`app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.ocrMethod = ${JSON.stringify(methode)}; return true;`).catch(() => undefined);
         await stelleVerbindungWieder(cdp, vor);
       }
+    },
+  },
+  // ── P: Pflichtpunkte (Welle 26, UI-STANDARD §8 / `tools/obsidian-cdp/pflichtpunkte.ts`) ─────────────────────────────────────
+  // Dieses Plugin hat keinen Kit-Strom, aber waechst: Karten in `.img2md-cards` (Flex-Kind ueber dem Fuss) und ein Neuaufbau der Liste
+  // (`renderList`, `el.empty()`), der ein Eingabefeld der Liste ersetzt. Die Messungen laufen ueber die Bausteine der Bruecke; die
+  // Gegenproben stehen als eigene Punkte (P1b, P2b), damit ein Befund und eine blinde Messung nicht denselben Punkt rot faerben.
+  {
+    key: "P1",
+    titel: "Fokus-Erhalt: das Seitenfeld der PDF-Zeile behaelt den Fokus, wenn die Liste neu aufgebaut wird (rescan -> renderList)",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.pdf);
+      const da = await pollUntil<boolean>(cdp, `return !!document.querySelector(${JSON.stringify(PDF_VON)});`, 20_000, 400);
+      if (!da) throw new Error(`kein ${PDF_VON} erschienen · ${await meldungen(cdp)}`);
+      try {
+        // Seitenzahl-Feld ist type=number: getippt wird eine Ziffer, die der Neuaufbau NICHT zuruecksetzt, wenn das Feld bleibt.
+        const vorbedingung = await fokusInZahlenfeld(cdp, PDF_VON, "2");
+        if (vorbedingung) return ausUrteil(vorbedingung);
+        // Die Mutation, die den Defekt ausloest: derselbe Neuaufbau wie nach dem Schreiben oder bei einem Moduswechsel.
+        await cdp.evaluate(`
+          const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+          await view.rescan();
+          return true;
+        `);
+        return ausUrteil(await messeFokusFenster(cdp, { selector: PDF_VON, text: "2" }));
+      } finally {
+        await cdp.evaluate(fokusAufraeumSkript(PDF_VON)).catch(() => undefined);
+      }
+    },
+  },
+  {
+    key: "P1b",
+    titel: "Gegenprobe zu P1: nimmt man dem Feld nach dem Tippen den Fokus, muss die Fokus-Messung rot werden",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.pdf);
+      const da = await pollUntil<boolean>(cdp, `return !!document.querySelector(${JSON.stringify(PDF_VON)});`, 20_000, 400);
+      if (!da) throw new Error(`kein ${PDF_VON} erschienen · ${await meldungen(cdp)}`);
+      try {
+        const vorbedingung = await fokusInZahlenfeld(cdp, PDF_VON, "2");
+        if (vorbedingung) return ausUrteil(vorbedingung);
+        // Wie ein Neuaufbau, der den Fokus nimmt — ohne dass das Plugin dafuer etwas tut: der Defekt, den P1 sehen muss.
+        const geblurrt = await cdp.evaluate<boolean>(`
+          const el = document.querySelector(${JSON.stringify(PDF_VON)});
+          const vorher = document.activeElement === el;
+          el.blur();
+          return vorher && document.activeElement !== el;
+        `);
+        if (!geblurrt) throw new Error("der Fokus lag vor dem blur() nicht im Feld oder blieb danach darin — die Manipulation hat nichts veraendert");
+        const u = await messeFokusFenster(cdp, { selector: PDF_VON, text: "2" });
+        if (u.urteil === "gruen") return { ok: false, detail: `Fokus genommen, aber die Messung blieb gruen — sie sieht den Fokusverlust nicht (${u.detail})` };
+        if (u.urteil === "nichts-gemessen") return ausUrteil(u);
+        return { ok: u.detail.startsWith("Fokus fiel"), detail: `Fokus genommen -> Messung rot wie verlangt (${u.detail})` };
+      } finally {
+        await cdp.evaluate(fokusAufraeumSkript(PDF_VON)).catch(() => undefined);
+      }
+    },
+  },
+  {
+    key: "P2",
+    titel: "Erreichbarkeit: „Ergebnisse verwerfen\" und „Anwenden\" bleiben erreichbar, wenn die Kartenliste ueberlaeuft",
+    async run(cdp) {
+      const fertig = await stelleFertigeKartenHer(cdp);
+      if (fertig < 1) throw new Error(`keine fertige Karte (${fertig}) — die Fussknoepfe bleiben versteckt (is-hidden), die Messung waere leer`);
+      // .img2md-run / -toggle / -mode-btn liegen UEBER den Karten und koennen von ihnen nie verdeckt werden; .img2md-retry-all bleibt ohne
+      // fehlgeschlagene Karte versteckt: beide ausgenommen. Verdeckbar sind nur die Fussknoepfe.
+      return ausUrteil(await messeErreichbarkeit(cdp, {
+        selektoren: FUSS_KNOEPFE,
+        fuelle: { in: KARTEN },
+        erforderlich: FUSS_KNOEPFE,
+      }));
+    },
+  },
+  {
+    key: "P2b",
+    titel: "Gegenprobe zu P2: waechst die Kartenliste statt zu rollen, muss mindestens ein Fussknopf unerreichbar werden",
+    async run(cdp) {
+      const fertig = await stelleFertigeKartenHer(cdp);
+      if (fertig < 1) throw new Error(`keine fertige Karte (${fertig}) — die Fussknoepfe bleiben versteckt (is-hidden)`);
+      return ausUrteil(await gegenprobeErreichbarkeit(cdp, {
+        selektoren: FUSS_KNOEPFE,
+        fuelle: { in: KARTEN },
+        erforderlich: FUSS_KNOEPFE,
+        scrollen: false,
+        art: "wachsen",
+      }));
     },
   },
   // ── G: Streaming gegen einen ECHTEN Endpunkt (Welle 11, Chat-Client-Tausch) ──────────────────
