@@ -22,6 +22,19 @@ export function isDescribingCard(cardMode: "transcript" | "description" | undefi
   return defaultDescribing;
 }
 
+type Selection = [number, number] | null;
+
+/** Auswahl eines Textfelds; ein `type="number"`-Feld kennt keine (die Getter liefern null), dann gibt es nichts zu merken. */
+function readSelection(f: HTMLInputElement): Selection {
+  const a = f.selectionStart;
+  return a === null ? null : [a, f.selectionEnd ?? a];
+}
+
+function writeSelection(f: HTMLInputElement, sel: Selection): void {
+  if (!sel) return;
+  try { f.setSelectionRange(sel[0], sel[1]); } catch { /* InvalidStateError bei type="number": der Cursor bleibt, wo der Browser ihn setzt */ }
+}
+
 interface CardRefs {
   cardEl: HTMLElement;
   headEl: HTMLElement;
@@ -89,6 +102,9 @@ export interface ImgToMdViewDeps {
   openPath: (p: string) => void;
   copyText: (t: string) => void;
   cardCache: CardCache;
+  /** Das Element mit dem Fokus (Produktion: `activeDocument.activeElement`). Eine Naht, weil das Fake-DOM der Tests keinen
+   *  Fokus führt: `renderList` merkt sich damit das Seitenfeld einer PDF-Zeile und fokussiert es nach dem Neuaufbau wieder. */
+  activeElement: () => Element | null;
 }
 
 export class ImgToMdView extends ItemView {
@@ -102,6 +118,8 @@ export class ImgToMdView extends ItemView {
   private refreshBtn: HTMLElement | null = null;
   private thinkCtl: { refresh(): void } | null = null;
   private listEl: HTMLElement | null = null;
+  /** Die Seitenfelder (Von/Bis) der PDF-Zeilen des letzten `renderList`, je mit dem Link ihrer Zeile — nicht dem Index, ein Scan kann umsortieren. */
+  private pdfFields = new Map<Element, { link: string; which: "from" | "to" }>();
   private cardsEl: HTMLElement | null = null;
   private cardEls: CardRefs[] = [];
   /** Transiente, nicht-committete Refine-Streams je Karten-Index (Live-Anzeige; card.text/refine
@@ -349,7 +367,14 @@ export class ImgToMdView extends ItemView {
   private basename(link: string): string { return link.split("/").pop() ?? link; }
 
   private renderList(): void {
-    const el = this.listEl; if (!el) return; el.empty();
+    const el = this.listEl; if (!el) return;
+    // `el.empty()` wirft die Felder weg: stand der Fokus in einem Seitenfeld, gehören Fokus, getippter (noch unbestätigter) Text und Auswahl danach dem neuen Feld derselben Zeile.
+    const active = this.deps.activeElement();
+    const held = active ? this.pdfFields.get(active) : undefined;
+    const keep = held && active ? { ...held, value: (active as HTMLInputElement).value, sel: readSelection(active as HTMLInputElement) } : null;
+    let refocus: HTMLInputElement | null = null;
+    this.pdfFields.clear();
+    el.empty();
     this.toggleBtn?.setText(this.state.allSelected() ? t("view.deselectAll") : t("view.selectAll"));
     if (!this.state.items.length) { el.createDiv({ cls: "img2md-empty", text: t("view.noImages") }); return; }
     for (const item of this.state.items) {
@@ -371,6 +396,9 @@ export class ImgToMdView extends ItemView {
         range.createSpan({ cls: "img2md-pdf-lbl", text: t("view.pdfRangeMid") });
         const to = range.createEl("input", { cls: "img2md-pdf-to" }); to.type = "number"; to.value = String(r.to);
         to.setAttribute("min", "1"); to.setAttribute("max", String(max)); to.setAttribute("aria-label", t("view.pdfRangeTo"));
+        this.pdfFields.set(from, { link: item.link, which: "from" });
+        this.pdfFields.set(to, { link: item.link, which: "to" });
+        if (keep && keep.link === item.link) refocus = keep.which === "from" ? from : to;
         const clamp = () => {
           const f = Math.max(1, Math.min(max, Math.floor(Number(from.value) || 1)));
           const tt = Math.max(f, Math.min(max, Math.floor(Number(to.value) || max)));
@@ -397,6 +425,11 @@ export class ImgToMdView extends ItemView {
         open.addEventListener("click", () => this.deps.openPath(item.existingTranscriptPath!));
         row.setAttribute("title", t("view.overwriteHint"));
       }
+    }
+    if (refocus && keep) {
+      refocus.value = keep.value;
+      refocus.focus();
+      writeSelection(refocus, keep.sel);
     }
   }
 

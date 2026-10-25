@@ -497,6 +497,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       openPath: this.openPath,
       copyText: (text: string) => { void copyToClipboard(text, { copiedMessage: t("notice.copied"), failedMessage: t("notice.copyFailed") }); },
       cardCache: this.pendingCards,
+      activeElement: () => activeDocument.activeElement,
     };
   }
 

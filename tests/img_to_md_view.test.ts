@@ -49,6 +49,7 @@ function mkView(over: any = {}) {
     openPath: (p: string) => calls.opened.push(p),
     copyText: over.copyText ?? ((t: string) => calls.copied.push(t)),
     cardCache: over.cardCache ?? new CardCache(),
+    activeElement: over.activeElement ?? (() => null),
   };
   const view = new ImgToMdView({ app: makeFakeApp() } as any, deps);
   return { view, calls, deps };
@@ -1395,5 +1396,92 @@ describe("refresh — überlappende Notizwechsel (B3-Rennfall)", () => {
     await b;
     expect(all(view.contentEl, "img2md-empty").length).toBe(1);
     expect((view as any).cardsSourcePath).toBe("leer.md");
+  });
+});
+
+/** Hängt `focus()` an jedes Element, das unter `root` entsteht: das Fake-DOM führt keinen Fokus (focus() ist dort ein
+ *  No-Op), die Naht `deps.activeElement` antwortet deshalb mit dem Element, das zuletzt `focus()` bekam. */
+function spyFocus(root: any, onFocus: (el: any) => void): void {
+  for (const m of ["createEl", "createDiv", "createSpan"]) {
+    const orig = root[m];
+    root[m] = (...a: any[]) => { const c = orig(...a); c.focus = () => onFocus(c); spyFocus(c, onFocus); return c; };
+  }
+}
+
+describe("ImgToMdView — Fokus beim Neuzeichnen der Liste (Seitenfeld der PDF-Zeile)", () => {
+  const freshPdf = (): ImgItem[] => [{ raw: "![[doc.pdf]]", link: "doc.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 5, range: { from: 1, to: 5 } }];
+  function mkFocusView(scan: () => Promise<ImgItem[]> = async () => freshPdf()) {
+    let focused: any = null;
+    const focusCalls: any[] = [];
+    const { view } = mkView({ scan, activeElement: () => focused });
+    spyFocus(view.contentEl, (el) => { focused = el; focusCalls.push(el); });
+    return { view, focusCalls, setFocus: (el: any) => { focused = el; }, current: () => focused };
+  }
+
+  it("der Fokus (und der getippte, unbestätigte Wert) wandert auf das neue Von-Feld derselben Zeile; item.range bleibt", async () => {
+    const { view, setFocus, current } = mkFocusView();
+    await view.onOpen();
+    const old = all(view.contentEl, "img2md-pdf-from")[0];
+    old.value = "2"; setFocus(old);
+    expect(await view.rescan()).toBe(true);
+    const now = all(view.contentEl, "img2md-pdf-from")[0];
+    expect(now).not.toBe(old);
+    expect(current()).toBe(now);
+    expect(now.value).toBe("2");
+    expect((view as any).state.items[0].range).toEqual({ from: 1, to: 5 });
+  });
+
+  it("der Fokus im Bis-Feld bleibt im Bis-Feld", async () => {
+    const { view, setFocus, current } = mkFocusView();
+    await view.onOpen();
+    const old = all(view.contentEl, "img2md-pdf-to")[0];
+    old.value = "4"; setFocus(old);
+    await view.rescan();
+    const now = all(view.contentEl, "img2md-pdf-to")[0];
+    expect(current()).toBe(now);
+    expect(now.value).toBe("4");
+    expect(current()).not.toBe(all(view.contentEl, "img2md-pdf-from")[0]);
+  });
+
+  it("Fokus nicht in einem Seitenfeld (Häkchen) → der Neuaufbau setzt keinen Fokus", async () => {
+    const { view, focusCalls, setFocus } = mkFocusView();
+    await view.onOpen();
+    setFocus(all(view.contentEl, "img2md-check")[0]);
+    await view.rescan();
+    expect(focusCalls).toEqual([]);
+  });
+
+  it("Fokus außerhalb der Liste (null) → der Neuaufbau setzt keinen Fokus", async () => {
+    const { view, focusCalls } = mkFocusView();
+    await view.onOpen();
+    await view.rescan();
+    expect(focusCalls).toEqual([]);
+  });
+
+  it("die Zeile ist nach dem Neuaufbau weg → kein Fokus, kein Wurf", async () => {
+    let scans = 0;
+    const { view, focusCalls, setFocus } = mkFocusView(async () => (++scans === 1 ? freshPdf() : []));
+    await view.onOpen();
+    setFocus(all(view.contentEl, "img2md-pdf-from")[0]);
+    await expect(view.rescan()).resolves.toBe(true);
+    expect(all(view.contentEl, "img2md-pdf-from")).toHaveLength(0);
+    expect(focusCalls).toEqual([]);
+  });
+
+  it("zwei PDF-Zeilen: der Fokus bleibt in der Zeile des Links, auch wenn der Scan sie umsortiert", async () => {
+    let scans = 0;
+    const two = (): ImgItem[] => [
+      { raw: "![[a.pdf]]", link: "a.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 3, range: { from: 1, to: 3 } },
+      { raw: "![[b.pdf]]", link: "b.pdf", ext: "pdf", supported: true, kind: "pdf", pageCount: 3, range: { from: 1, to: 3 } },
+    ];
+    const { view, setFocus, current } = mkFocusView(async () => (++scans === 1 ? two() : two().reverse()));
+    await view.onOpen();
+    const oldB = all(view.contentEl, "img2md-pdf-from")[1];
+    oldB.value = "2"; setFocus(oldB);
+    await view.rescan();
+    const froms = all(view.contentEl, "img2md-pdf-from");
+    expect(current()).toBe(froms[0]);   // b.pdf steht jetzt oben
+    expect(current().value).toBe("2");
+    expect(froms[1].value).toBe("1");
   });
 });

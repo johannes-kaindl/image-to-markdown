@@ -6,6 +6,10 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The "from" and "to" page fields of a PDF row keep the focus and the typed value when the list is redrawn, for example after a note was written. Before, the cursor jumped out of the field mid-typing.
+
 ## [0.31.5] — 2026-10-25
 
 ### Changed
