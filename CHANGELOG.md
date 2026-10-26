@@ -6,6 +6,10 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A link the guard cut in a transcript or a refined version now looks like text.** The guard removes the target of a dangerous link (`javascript:…`, an Obsidian link) but kept its class, so it stayed coloured, underlined, with a pointer and an arrow icon and did nothing. It now has the colour of the text around it, no underline, no pointer and no icon; links with a target stay as they are.
+
 ### Changed
 
 - **Vendored `obsidian-kit` 0.72.0 (was 0.70.0) and `code-kit` 0.38.0 (was 0.37.5).** Two things you may notice in the model row: when the thinking button is locked because the model always thinks, it is readable now (contrast 1.8:1 light and 2.3:1 dark before, 4.4:1 and 5.5:1 now), and with a Claude model and thinking off the button's tooltip names the reason once instead of adding a second sentence. The other changes of these kit releases (the new `onRefreshed` option of the model row, a quieter linear-time test probe, a Live-Indexer fix and `detectEol` in code-kit, the Anthropic wire moving into code-kit) touch modules this plugin does not use or have no visible effect here; the copy of `link-guard` has new comments only.

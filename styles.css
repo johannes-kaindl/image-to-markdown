@@ -311,3 +311,8 @@
 .okit-request-status.is-error { color: var(--text-error); }
 .okit-request-deviation-action { margin-inline-start: var(--size-4-2); }
 .okit-request-deviation { color: var(--text-muted); font-size: var(--font-ui-small); padding-left: var(--size-4-6); }
+
+/* Modelltext (Transkript, Verfeinerung): ein vom Wächter gekappter Link (ohne `href`) sieht aus wie Text. Die zwei Regeln von
+   STREAM_AREA_CSS (obsidian-kit 0.72.0, dort unter `.okit-stream-body`) mit eigenem Vorfahren; ein Link mit `href` bleibt unverändert. */
+.img2md-text a:not([href]), .img2md-refine-version a:not([href]) { color: inherit; text-decoration: none; cursor: inherit; }
+.img2md-text a.external-link:not([href]), .img2md-refine-version a.external-link:not([href]) { background-image: none; padding-right: 0; }
