@@ -92,7 +92,7 @@ Reasoning models that emit `reasoning_content` in the stream, or inline `<think>
 ## Requirements
 
 - **Obsidian 1.11.4+** (desktop or mobile) — API keys are kept in Obsidian's keychain, which needs that version.
-- **An OpenAI-compatible local server running a vision-capable model** (e.g. [LM Studio](https://lmstudio.ai)). New to local LLMs? The **[local LLM setup guide](https://uplink.jkaindl.de/llm-setup)** walks you through server, model and mobile access end to end. The endpoint and model are configured in the plugin settings. Nothing leaves your machine: offline-first, no cloud, no VPN required.
+- **An OpenAI-compatible local server running a vision-capable model** (e.g. [LM Studio](https://lmstudio.ai)). New to local LLMs? The **[local LLM setup guide](https://jkaindl.de/uplink/llm-setup/)** walks you through server, model and mobile access end to end. The endpoint and model are configured in the plugin settings. Nothing leaves your machine: offline-first, no cloud, no VPN required.
 
 ## Install
 

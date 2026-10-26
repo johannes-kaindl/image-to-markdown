@@ -164,7 +164,7 @@ and versioning follows [SemVer](https://semver.org/).
 
 ### Added
 
-- **New text recognition path alongside the vision model: Apple Shortcuts (on-device OCR)** — settings: path choice, shortcut name (default "Extract Text (Obsidian)"), timeout (default 30 s, mandatory: a deleted shortcut never answers). v1 without PDF, no streaming, no LLM endpoint. Wired into the sidebar view: with this path the result card fills at once instead of live; errors (timeout, "busy", shortcut error) appear in the existing card error state. New how-to "Use the Apple Shortcut OCR path" (docs/manual/how-to.md) + settings reference, linking to the central guide `uplink.jkaindl.de/apple-shortcuts`.
+- **New text recognition path alongside the vision model: Apple Shortcuts (on-device OCR)** — settings: path choice, shortcut name (default "Extract Text (Obsidian)"), timeout (default 30 s, mandatory: a deleted shortcut never answers). v1 without PDF, no streaming, no LLM endpoint. Wired into the sidebar view: with this path the result card fills at once instead of live; errors (timeout, "busy", shortcut error) appear in the existing card error state. New how-to "Use the Apple Shortcut OCR path" (docs/manual/how-to.md) + settings reference, linking to the central guide `jkaindl.de/uplink/apple-shortcuts`.
 
 ## [0.25.0] — 2026-09-26
 

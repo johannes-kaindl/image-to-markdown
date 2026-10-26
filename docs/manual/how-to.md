@@ -448,7 +448,7 @@ reachable LM Studio/MLX/Ollama server.
 **Setup (once):**
 
 1. Import or build the Shortcut named exactly **"Extract Text (Obsidian)"** — see
-   the central [Apple shortcuts for Obsidian plugins](https://uplink.jkaindl.de/apple-shortcuts)
+   the central [Apple shortcuts for Obsidian plugins](https://jkaindl.de/uplink/apple-shortcuts/)
    guide for the iCloud link, a copy-paste generator prompt, and a by-hand recipe.
 2. Open the Image to Markdown settings (heading **"Vision (Image → Markdown)"**).
 3. Set **"Text extraction path"** ("Text-Erkennungsweg") to **"Apple Shortcut
