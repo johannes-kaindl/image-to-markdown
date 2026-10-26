@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/pure/override-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/pure/override-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Werte je Aufruf, die das Profil nicht annimmt, werden NICHT gesendet (Welle 23, Entscheidung des Masters 2026-10-16).
  *
  *  `createLlmConnection` mischt die Überschreibungen eines Aufrufs (`CompleteHandlers.overrides`, z. B. transmute

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/pure/anthropic-wire.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/pure/anthropic-wire.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Leitungsform der Anthropic Messages-API (`POST /v1/messages`) als reine Funktionen — ohne `obsidian`-Import,
  *  in Node gegen Doubles testbar. Der Transport (`obsidian/anthropic-transport.ts`) steckt sie zwischen den
  *  `chat-client` und das Netz: der Client spricht weiter das OpenAI-Format (Nachrichten, `tool_calls`, SSE-`choices`),

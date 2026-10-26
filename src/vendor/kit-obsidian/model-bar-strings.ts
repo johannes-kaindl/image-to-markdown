@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/obsidian/model-bar-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/obsidian/model-bar-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `buildModelBar` — nach dem Muster von `chat-window-strings.ts`: das Kit formuliert nichts fest, aber jedes Plugin soll
  *  „Modell“, „Modelle neu laden“ oder „Anderer Endpunkt …“ nicht selbst erfinden.
  *

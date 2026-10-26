@@ -84,6 +84,8 @@
 }
 .okit-thinking-toggle.is-off { color: var(--text-muted); }
 .okit-thinking-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Gesperrt „immer an“ (Option locked): lesbarer als ein gewöhnlich deaktivierter Knopf, denn die Beschriftung trägt die Aussage, aber erkennbar nicht bedienbar (kein Zeiger, kein Hover). */
+.okit-thinking-toggle.is-locked:disabled { opacity: 0.85; cursor: default; }
 .okit-thinking-toggle svg { width: var(--icon-xs); height: var(--icon-xs); }
 .okit-thinking-control select { font-size: var(--font-ui-small); }
 /* Modellzeile: Kit-Baustein (MODEL_BAR_CSS, obsidian-kit 0.70.0, wortgleich kopiert — Kit-Vertrag). */

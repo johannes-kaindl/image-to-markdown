@@ -1,4 +1,4 @@
-// vendored from code-kit@0.37.5, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.38.0, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Link guard for rendered model answers: the second line of defence after `MarkdownRenderer.render`. It cuts link targets that
  *  would run or open something (`javascript:`, `data:`, `vbscript:`, `file:`, `app:`, and `obsidian:` unless the caller allows it),
  *  removes the active elements, and removes `src` / `srcset` — except for local images, when the caller allows them.
@@ -50,8 +50,11 @@
  *
  *  ── Limits ──────────────────────────────────────────────────────────────────────────────
  *  (1) Only `href` of `<a>` / `<area>` is a link target here. `<form action>`, `formaction`, `<a ping>`, MathML `href` and event-handler
- *  attributes on elements other than a kept `<img>` are not touched; Obsidian's own sanitiser is the first line for those, this pass
- *  is about link targets and sources. (1b) **`data-href` is read from the tree and may come from the answer.** The internal-link exception (a
+ *  attributes on elements other than a kept `<img>` are not touched; this pass is about link targets and sources. **Measured 2026-10-25
+ *  (kitok2-w27, Obsidian 1.14.5, pilot `pilot/link-schutz.ts` of obsidian-kit, point P11, 13 of 13 points green, no click): none of the five
+ *  carriers (`form action`, `formaction`, `<a ping>`, MathML `href`, `onclick` on a `<p>`) is left in the DOM after `MarkdownRenderer.render`
+ *  and this guard.** Which of the two removes them is not recorded: the pilot prints the column "without the guard" on the console and does
+ *  not store it, so this comment does not claim that the renderer does it alone. (1b) **`data-href` is read from the tree and may come from the answer.** The internal-link exception (a
  *  colon in a note name is no scheme) therefore also lets a forged `<a data-href=… href="ms-excel:…">` keep a scheme that is not on the
  *  never-list; it takes a click. **Measured 2026-10-25 (kitok2-w27, Obsidian 1.14.5): the exception cannot be narrowed.** The renderer writes the wiki link
  *  `[[ms-excel:foo]]` in the same attribute form as a forged `<a data-href="ms-excel:foo" href="ms-excel:foo">` (`class="internal-link"`, `data-href` equal to
@@ -60,8 +63,10 @@
  *  (2) Shadow roots are not entered (do not parse with `setHTMLUnsafe`, see `remote-resources`);
  *  `template.content` is. (3) Run it on an inert tree or before the nodes go live: removing an attribute from a tree that is already
  *  attached cannot call off a fetch that the browser scheduled when the attribute was set; this pass removes the loading attributes
- *  before it removes an element (as `remote-resources` does), which is all it can do. (4) Not measured in a real renderer: Obsidian's
- *  `MarkdownRenderer` and the cascade after it are the consumer's to test (Fake DOM sees no cascade).
+ *  before it removes an element (as `remote-resources` does), which is all it can do. (4) The renderer run is one measurement, not a
+ *  guarantee: the pilot ran `MarkdownRenderer.render` plus this guard in Obsidian 1.14.5 (points P11 and P12, the carriers above and the
+ *  `<svg>` cases), once, without a click. Not measured: other Obsidian versions, and the path without the regex layer in front (`raw` /
+ *  `renderMarkdownGuarded`, where limit (1b) stays). The cascade after the renderer is the consumer's to test (Fake DOM sees no cascade).
  *
  *  Origin: settings-assistant `src/obsidian/dom-safety.ts` (`stripActiveContent`, `schemeOf`), n = 1; Welle 27. **Behaviour that differs
  *  from the source:** `file:` and `app:` targets are refused on an internal link too (the source kept them with `data-href`);

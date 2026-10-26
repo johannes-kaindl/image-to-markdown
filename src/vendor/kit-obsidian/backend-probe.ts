@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/obsidian/backend-probe.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Backend-Erkennung für Obsidian: der `requestUrl`-Adapter für die pure Probe aus code-kit
  *  (`vendor/code-kit/pure/backend-probe`). Die Kopier-Kette, die hier endet, hieß in zehn
  *  Konsumenten `cachedProbe(url, model)` (Herkunft lingotuner `obsidian/http.ts`); der Adapter ist

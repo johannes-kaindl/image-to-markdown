@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/obsidian/anthropic-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/obsidian/anthropic-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Transport für die native Messages-API von Anthropic (`transport: "anthropic"` am Endpunkt): ein `SseTransport`
  *  wie `createShortcutsChatTransport`, der den OpenAI-Körper des `chat-client` übersetzt, an `POST /v1/messages`
  *  schickt und die Antwort in OpenAI-SSE zurückübersetzt. `chat-client`, Schwärzung, Idle-Frist, Denkzerlegung und

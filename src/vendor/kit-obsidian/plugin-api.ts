@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/obsidian/plugin-api.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/obsidian/plugin-api.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die öffentliche `api` eines geladenen Plugins, defensiv aus dem Plugin-Register gelesen — **bei JEDEM Aufruf frisch** (das Plugin kann
  *  zur Laufzeit an- oder abgeschaltet werden) und mit **Form-Guard statt Versionskopie**: ein halb initialisiertes oder fremdes Objekt unter
  *  demselben Schlüssel ergibt `null`. `null` auch bei jedem fehlenden Zwischenglied (kein `app`, kein Register, kein Plugin, keine `api`)

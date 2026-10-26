@@ -1,4 +1,5 @@
-// vendored from code-kit@0.37.5, src/ts/pure/model-context.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.38.0, src/ts/pure/model-context.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+import { ANTHROPIC_VERSION } from "./anthropic-wire";
 import type { CapabilityFetch } from "./capabilities";
 import { withTimeout, type TimeoutTimers } from "./timeout";
 
@@ -79,10 +80,6 @@ export interface FetchModelContextOptions {
    *  and the caller knows the transport from the endpoint manager (`transport === "anthropic"`). */
   provider?: "anthropic" | undefined;
 }
-
-/** The `anthropic-version` the Anthropic branch sends: the one obsidian-kit's transport sends (`anthropic-transport.ts`). The Models
- *  API behaves the same on `2026-10-21` (`shared/api-version-migration.md` of the claude-api skill); this stays on the old value. */
-const ANTHROPIC_VERSION = "2023-06-01";
 
 /** Asks the endpoint for the context window of `model`: LM Studio `GET {baseUrl}/api/v0/models` first
  *  (it reports the LOADED length, `loaded_context_length`, which Ollama does not know), then Ollama

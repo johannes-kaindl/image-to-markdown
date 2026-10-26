@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /**
  * Modellzeile (UI-STANDARD § 8, neu in 0.67.0): eine Zeile, in der man sieht, welches Modell eine Aufgabe benutzt, und es wechselt — Dropdown mit den Modellen
  * des aktiven Endpunkts, „Anderer Endpunkt …“, Neu-laden-Knopf und optional die Denk-Steuerung. Läuft eigenständig in jeder Seitenleiste und im
@@ -38,6 +38,7 @@
  * 2. **Mehrere Aufgaben mit eigenem Modell = mehrere Zeilen.** `llm` ist das eigene Interface `ModelBarConnection` (eine `LlmConnection` passt hinein, die Zeile braucht sie nicht); eine Aufgabe, deren
  *    Modell anderswo gespeichert wird (vault-rag Smart Apply: `smartApplyModel`), reicht einen Adapter mit denselben vier Methoden. Jede Zeile bekommt
  *    ein `label` (sichtbarer Aufgabenname, auch Teil des `aria-label`).
+ *    **Wer die Liste nach einem Laden braucht, baut keinen Adapter um `llm.models()` mehr:** `onRefreshed(result)` (seit 0.71.0) meldet jedes abgeschlossene Laden (das erste beim Bauen, den Neu-laden-Knopf, `refresh()`).
  * 3. **Das Kit weiß nicht, wann sich die Einstellungen ändern.** Ändert sich Modell oder Endpunkt außerhalb der Zeile (Settings-Tab, Manager),
  *    ruft das Plugin `update()` (zeichnet aus dem Zustand neu) oder `refresh()` (lädt die Liste neu). Hängt es das an `onResolved` der
  *    Verbindung, gilt seit 0.70.0: `llm.models()` (und damit `refresh()`) meldet über `onResolved` nur noch eine Änderung, ein Rückruf, der
@@ -82,6 +83,11 @@ export interface ModelBarOptions {
   disabled?: () => boolean;
   /** Nach einem erfolgreichen Wechsel. */
   onChange?: (model: string) => void;
+  /** Nach jedem abgeschlossenen `refresh()` mit einem Ergebnis (seit 0.71.0): dem ersten Laden beim Bauen, dem Neu-laden-Knopf und `bar.refresh()`, auch bei einem nicht erreichbaren
+   *  Endpunkt (`reachable: false`). Die Zeile ist dann schon gezeichnet und angesagt. Kommt **nicht**, wenn `models()` wirft (es gibt kein Ergebnis, der Wurf geht an `onError`), nicht für
+   *  einen überholten Lauf (nur der neueste meldet, nie eine veraltete Liste) und nicht nach `destroy()`. Ein Wurf des Rückrufs geht an `onError`. Für Wirte, die neben der Zeile etwas
+   *  aus der Liste zeichnen (image-to-markdown: das Status-Icon „Modell geladen“) und dafür bisher einen Adapter um `llm.models()` bauten. Ohne die Option ändert sich nichts. */
+  onRefreshed?: (result: ModelListResult) => void;
   /** Würfe aus `models()`, `setModel` und `onOtherEndpoint`. Ohne: die Zeile bleibt stehen, die Ansage nennt nur den Wechsel-Fehler. */
   onError?: (error: unknown) => void;
   /** Zusätzliche Klasse an der Wurzel. */
@@ -185,6 +191,7 @@ export function buildModelBar(opts: ModelBarOptions): ModelBar {
     if (result !== null) list = result;
     redraw();   // nach der Auflösung kennt die Verbindung Familie und Backend: auch der Denk-Knopf zeichnet neu
     if (force && result !== null) statusEl.setText(result.reachable ? st.loaded(result.models.length) : st.notReachable);
+    if (result !== null) { try { opts.onRefreshed?.(result); } catch (e) { report(e); } }
   }
 
   async function pick(value: string): Promise<void> {

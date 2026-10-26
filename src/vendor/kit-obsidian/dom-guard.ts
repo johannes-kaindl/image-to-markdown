@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { MarkdownRenderer, type App, type Component } from "obsidian";
 import { realClock, type ClockPort } from "./clock";
 import { neutralizeRemoteResourcesInTree, type RemovedResource, type RemoteResourcesOptions } from "../kit/remote-resources";
@@ -88,8 +88,8 @@ import { neutralizeUnsafeLinksInTree } from "../kit/link-guard";
  *
  * Gemessen im echten Renderer (Obsidian 1.14.5, `pilot/link-schutz.ts`): Obsidian entfernt `javascript:`, `data:` und `vbscript:` als `href` selbst, behält aber `file:`, `app:` und `obsidian:`; der Wächter kappt diese. Lokale
  * Bilder (`![](bild.png)`, `![[bild.png]]`) kommen ohne Wächter als `app://…`-`img` an. **Im Chat-Fenster mit dem Standard-Schreiber erreichen Bilder und HTML den Wächter nie:** `neutralizeModelMarkdown` macht jedes Markdown-Bild
- * zu Text und escaped `<`; `allowLocalImages` und ein gefälschtes `<a data-href>` gibt es dort nicht. Beides gilt für `raw`-Schreiber und `renderMarkdownGuarded`. Ein gekappter Link behält Klasse und Aussehen (Farbe,
- * Unterstrich, Pfeil), nur das `href` fehlt. Ein `svg` bleibt (code-kit 0.37.4), wenn sein Teilbaum nur Formen trägt (`SVG_TAGS`), gekürzt auf Geometrie- und Darstellungsattribute: das Icon eines Callouts und der Kopier-Knopf eines Codeblocks bleiben (gemessen 1→1); mit 0.37.0 bis 0.37.2 gingen sie mit.
+ * zu Text und escaped `<`; `allowLocalImages` und ein gefälschtes `<a data-href>` gibt es dort nicht. Beides gilt für `raw`-Schreiber und `renderMarkdownGuarded`. Ein gekappter Link behält seine Klasse, nur das `href` fehlt; `STREAM_AREA_CSS` (seit 0.72.0, `.okit-stream-body a:not([href])`) nimmt ihm
+ * Farbe, Unterstrich, Zeiger und Pfeil, er sieht aus wie Text (ein Wirt ohne `.okit-stream-body` kopiert die Regel). Ein `svg` bleibt (code-kit 0.37.4), wenn sein Teilbaum nur Formen trägt (`SVG_TAGS`), gekürzt auf Geometrie- und Darstellungsattribute: das Icon eines Callouts und der Kopier-Knopf eines Codeblocks bleiben (gemessen 1→1); mit 0.37.0 bis 0.37.2 gingen sie mit.
  *
  * Gebraucht wird ein DOM mit `MutationObserver`. Ohne einen wirft `attachDomGuard`, statt still ungeschützt zu
  * bleiben: ein Test mit dem Fake-DOM (`makeFakeEl`) übergibt `domGuard: false`.

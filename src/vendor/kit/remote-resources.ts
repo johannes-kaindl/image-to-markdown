@@ -1,4 +1,4 @@
-// vendored from code-kit@0.37.5, src/ts/web/remote-resources.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.38.0, src/ts/web/remote-resources.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Removes every resource from a DOM subtree that the browser would load without a click and that is not
  *  on the positive list. The tree-shaped sibling of `neutralizeRemoteResources` in `pure/safe-markdown`
  *  (the regex pass over Markdown text), and the reason it exists: that pass is a partial protection by

@@ -1,4 +1,4 @@
-// vendored from code-kit@0.37.5, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.38.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -92,8 +92,8 @@ const ms = (value: string, source: string): Sourced<string> => ({ value, source,
 const us = (value: string, source: string): Sourced<string> => ({ value, source, evidence: "unmeasured" });
 
 const CLAUDE_SAMPLING = "Anthropic docs (claude-api skill 2026-10-06; OpenAI compatibility page 2026-10-16): temperature, top_p, top_k removed on Claude Fable 5/5.1, Opus 5.5/5/4.8/4.7, non-default values refused on Sonnet 5.5 and Haiku 5.5; compatibility layer: temperature below 1 and top_p other than 0.99 return 400 on Claude 4.7 and newer";
-const CLAUDE_EFFORT = "Anthropic docs (claude-api skill 2026-10-06): output_config.effort low/medium/high/xhigh/max; not called by us";
-const CLAUDE_OFF = "Anthropic docs (claude-api skill 2026-10-06): thinking {type: disabled} returns 400 on Opus 5.5 and Sonnet 5.5, thinking is always on on Fable 5/5.1, so off is the lowest effort";
+const CLAUDE_EFFORT = "Anthropic docs (effort page and claude-api skill, 2026-10-26): output_config.effort low/medium/high/xhigh/max, sent by the obsidian-kit transport (anthropic-wire) when GET /v1/models reports effort.supported";
+const CLAUDE_OFF = "Anthropic docs (effort page and claude-api skill, 2026-10-26): off is the lowest effort because our transport never sends thinking disabled; the API itself takes disabled up to effort high on Haiku 5.5 and Opus 5 and between_tools on Sonnet 5.5, returns 400 for it on Opus 5.5, and thinking is always on on Fable 5/5.1";
 const CLAUDE_RESERVE = "Anthropic docs (claude-api skill 2026-10-06): max_tokens includes the adaptive thinking, default ~16000; conservative, unmeasured";
 const cn = (value: string, source: string): Sourced<string> => ({ value, source, evidence: "unmeasured" });
 const QWEN38_CARD = "model card Qwen/Qwen3.8-27B (retrieved 2026-09-20)";

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -34,6 +34,11 @@
  *  gezeigten unterscheidet (Adresse, Modell, Familie, Backend, Grund). Vorher rief jede Auflösung den Rückruf, und ein Rückruf, der
  *  `models()` rief (Modellzeile neu laden), lief im Kreis; `resolve()`, `invalidate()` und `setModel()` melden weiter immer. Trotzdem gilt
  *  für den Rückruf: nur neu zeichnen, wenn sich etwas geändert hat (vault-rag und image-to-markdown tun es und können es behalten).
+ *
+ *  **`onResolved` darf `resolve()` nicht rufen, auch nicht mittelbar** (seit 0.70.1 mit Sperre): ein `resolve()`, das synchron aus dem eigenen Rückruf kommt, löst auf und
+ *  meldet nur ein geändertes Ergebnis (wie `models()`). Ruft der Rückruf `resolve()` erst nach einem Warten (Speichern, eine Probe, ein Timer), greift die Sperre nicht und
+ *  jede Auflösung ruft ihn wieder: ein Kreis (Renderer 101 % CPU; gemessen am settings-assistant über `refreshChatViews` → `reload()` → `resolveEndpoint()` → `resolve()`).
+ *  Dort bleibt es beim Hinweis: den Rückruf nur neu zeichnen lassen, die Auflösung davon trennen.
  *
  *  Vertrag an `persist`: es übernimmt den Patch in die Settings des Plugins SYNCHRON (bevor es
  *  speichert) — die Endpunkt-Liste liest ihre Zeilen danach über `getSettings()` zurück. */
@@ -157,7 +162,8 @@ export interface LlmConnectionOptions {
   /** Wird nach jeder abgeschlossenen Auflösung gerufen (auch der internen aus Liste, Wahl und `invalidate`),
    *  nicht bei einem gemerkten Ergebnis und nicht bei einem überholten parallelen Lauf. Für Plugin-eigene Zeilen
    *  im Settings-Tab (Kontextlänge, Modelldetails), die einer Endpunkt-Änderung folgen sollen.
-   *  **Kreis:** ein Callback, der selbst `resolve()` auslöst (z. B. über eine Probe), läuft im Kreis — jede Auflösung ruft ihn wieder.
+   *  **Kreis:** ein Callback, der selbst `resolve()` auslöst (z. B. über eine Probe), läuft im Kreis — jede Auflösung ruft ihn wieder. Seit 0.70.1 meldet ein `resolve()`, das
+   *  SYNCHRON aus dem Rückruf kommt, nicht erneut (nur ein geändertes Ergebnis); ruft er es erst nach einem Warten, bleibt der Kreis.
    *  Seit 0.70.0 gilt das nicht mehr für `models()`: es löst still auf und meldet nur eine Änderung (Adresse, Modell, Familie, Backend,
    *  Grund). Trotzdem nur neu zeichnen, wenn sich das Ergebnis geändert hat (image-to-markdown: „nur bei geändertem Modell“). */
   onResolved?: (result: EndpointSourceResult) => void;
@@ -305,6 +311,8 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
   // Ruft der laufende Lauf `onResolved`? `resolve()` immer; `models()` löst still auf und meldet nur, wenn das Ergebnis neu ist (siehe `sameSource`).
   // Ein `resolve()`, das einem stillen Lauf beitritt, hebt den Wunsch auf `true`, sonst verlöre es seinen Rückruf.
   let pendingNotify = false;
+  // Läuft gerade der synchrone Teil von `onResolved`? (Wiedereintrittssperre in `resolveInternal`.)
+  let inOnResolved = false;
   let last: EndpointSourceResult | null = null;
   // Was `source()` zeigt: die letzte abgeschlossene Auflösung, auch nach `invalidate()` bis die neue da ist.
   let shown: EndpointSourceResult | null = null;
@@ -345,6 +353,10 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
 
   /** `quiet`: nur `models()`. Ein stiller Lauf ruft `onResolved` bei einem Ergebnis, das sich vom zuletzt gezeigten nicht unterscheidet, nicht. */
   function resolveInternal(opts: { force?: boolean } | undefined, quiet: boolean): Promise<EndpointSourceResult> {
+    // Wiedereintrittssperre (0.70.1): ein `resolve()`, das SYNCHRON aus dem eigenen `onResolved`-Rückruf kommt (auch mittelbar über synchrone Aufrufer), löst auf, meldet aber
+    // nur ein geändertes Ergebnis, wie `models()`. Ohne sie lief ein Rückruf, der `resolve()` rief, im Kreis (Renderer 101 % CPU, kuroset-w27 am settings-assistant). Nicht
+    // gedeckt: ein Rückruf, der `resolve()` erst nach einem Warten ruft (E/A, Timer): dort ist der Aufrufer dran (Kopfkommentar, MIGRATION § 0.70.0).
+    if (inOnResolved) quiet = true;
     const manager = findEndpointManager(o.app);
     // Der Manager kann jederzeit deaktiviert werden: seine Quelle wird nie gemerkt.
     if (!opts?.force && !manager && last !== null && last.kind !== "manager") return Promise.resolve(last);
@@ -363,7 +375,8 @@ function createChatConnection(o: LlmConnectionOptions): LlmConnection {
         shown = r;
         freshSinceInvalidate = true;
         if (notify) {
-          try { o.onResolved?.(r); } catch { /* ein Fehler im UI-Callback darf die Auflösung nicht scheitern lassen */ }
+          inOnResolved = true;
+          try { o.onResolved?.(r); } catch { /* ein Fehler im UI-Callback darf die Auflösung nicht scheitern lassen */ } finally { inOnResolved = false; }
         }
       }
       return r;

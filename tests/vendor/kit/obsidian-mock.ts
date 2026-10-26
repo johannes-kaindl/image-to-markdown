@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.70.0, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.72.0, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // Self-contained Obsidian test double for obsidian-kit.
 // - Zero external imports (NOT from "obsidian", NOT from "vitest").
 // - Consumed via vitest `resolve.alias` as a drop-in for `import ... from "obsidian"`,
@@ -306,7 +306,7 @@ export class DropdownComponent {
   addOptions(options: Record<string, string>): this { Object.assign(this.options, options); return this; }
   getValue(): string { return this._value; }
   setValue(v: string): this { this._value = String(v ?? ""); return this; }
-  setDisabled(_d: boolean): this { return this; }
+  setDisabled(d: boolean): this { this.selectEl.disabled = Boolean(d); return this; }   // wie Obsidian: das `<select>` trägt `disabled`
   onChange(cb: (v: string) => any): this { this.onChangeCB = cb; return this; }
 }
 export class SliderComponent {
