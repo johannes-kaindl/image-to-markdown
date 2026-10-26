@@ -139,7 +139,7 @@ async function haltePanelBild(cdp: Cdp, name: string, selector: string): Promise
 
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3",
-  "N1", "N2", "N3", "N4", "N5", "ML1", "ML2", "ML3", "ML4", "ML5", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
+  "N1", "N2", "N3", "N4", "N5", "ML1", "ML2", "ML3", "ML4", "ML5", "LK1", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -1001,6 +1001,41 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
     },
   },
   {
+    key: "LK1",
+    titel: "Link-Waechter: ein gekappter Link im Transkript sieht aus wie Text (Farbe, Unterstrich, Zeiger, Icon), ein Link mit Ziel bleibt ein Link",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      const roh = await cdp.evaluate<string>(`
+        const view = app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})[0].view;
+        const deps = view.deps;
+        const orig = deps.transcribeStream;
+        const model = deps.getModel();
+        const text = "Vorher [gekappt](javascript:alert(1)) und [Ziel](https://example.org/x) danach.";
+        deps.transcribeStream = async (_pfad, _item, onContent) => { onContent(text); return { content: text, reasoning: "", model }; };
+        try {
+          const bild = view.state.items.find((i) => i.supported);
+          if (!bild) throw new Error("kein unterstuetztes Bild in der Liste");
+          if (!view.state.isSelected(bild.link)) view.state.toggle(bild.link);
+          await view.run();
+          await new Promise((r) => setTimeout(r, 1200));
+          const w = document.querySelector(${JSON.stringify(SIDEBAR)});
+          const zone = w.querySelector(".img2md-text");
+          const werte = (a) => { const s = getComputedStyle(a); return { href: a.getAttribute("href"), text: a.textContent, color: s.color, deko: s.textDecorationLine, zeiger: s.cursor, bild: s.backgroundImage, rechts: s.paddingRight }; };
+          return JSON.stringify({ eltern: zone ? getComputedStyle(zone).color : null, links: zone ? [...zone.querySelectorAll("a")].map(werte) : [] });
+        } finally {
+          deps.transcribeStream = orig;
+        }
+      `);
+      const d = JSON.parse(roh) as { eltern: string | null; links: { href: string | null; text: string; color: string; deko: string; zeiger: string; bild: string; rechts: string }[] };
+      const gekappt = d.links.find((l) => l.text === "gekappt");
+      const ziel = d.links.find((l) => l.text === "Ziel");
+      if (!gekappt || !ziel || d.eltern === null) return { ok: false, detail: `NICHT GEMESSEN: Links im Transkript ${JSON.stringify(d.links.map((l) => l.text))}, Textzone ${d.eltern === null ? "fehlt" : "da"}` };
+      const wieText = gekappt.href === null && gekappt.color === d.eltern && gekappt.deko === "none" && gekappt.zeiger !== "pointer" && gekappt.bild === "none" && gekappt.rechts === "0px";
+      const bleibtLink = ziel.href !== null && (ziel.deko !== "none" || ziel.color !== d.eltern || ziel.zeiger === "pointer");
+      return { ok: wieText && bleibtLink, detail: `gekappt (href ${gekappt.href}): Farbe ${gekappt.color} (Text ${d.eltern}), Linie ${gekappt.deko}, Zeiger ${gekappt.zeiger}, Icon ${gekappt.bild === "none" ? "keins" : "DA"}, Abstand ${gekappt.rechts} · mit Ziel (Gegenprobe): Farbe ${ziel.color}, Linie ${ziel.deko}, Zeiger ${ziel.zeiger}` };
+    },
+  },
+  {
     key: "ML5",
     titel: "Modellzeile: der Post-Sync nach dem Lauf (response.model) — eine konkrete Wahl folgt dem Modell, das der Server nennt, „Automatisch“ bleibt Automatisch",
     async run(cdp) {
@@ -1774,7 +1809,10 @@ async function main(): Promise<void> {
 
     // `requireVisible` zielt auf das VERBUNDENE Fenster; `osascript activate` holte die laufende
     // Instanz (9222) nach vorn statt der Zweitinstanz (gemessen von kl-w19, 2026-10-12).
-    await requireVisible(cdp);
+    // Dieser Treiber braucht den Vordergrund (nur unter `--exclusive focus`): ohne ihn zeichnet die Seitenleiste die leere Notiz in B3 nicht um (Dach-Standard
+    // `vordergrund: "nie"`). Gemessen 2026-10-26: B3 rot ohne Vordergrund (auch am Stand 4b1624d, vor Welle 28),
+    // grün mit `"nehmen"` (38 grün · 0 rot · 3 übersprungen von 41).
+    await requireVisible(cdp, { vordergrund: "nehmen" });
 
     const bereit = await cdp.evaluate<boolean>(
       `return document.hasFocus() && document.visibilityState === "visible";`,
