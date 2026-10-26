@@ -118,8 +118,6 @@ export class ImgToMdView extends ItemView {
   private modelStatusEl: HTMLElement | null = null;
   /** Die Kit-Modellzeile (Dropdown, Neu-laden, Denk-Steuerung); `null` vor `onOpen` und nach `onClose`. */
   private modelBar: ModelBar | null = null;
-  /** Zählt Öffnen und Schließen: ein spätes Listen-Ergebnis einer früheren Zeile fasst das Status-Symbol nicht an. */
-  private barGen = 0;
   /** Die Modelle der letzten Antwort von `llm.models()` — das Status-Symbol „geladen“ vergleicht die Wahl damit. */
   private loadedModels: string[] = [];
   private listEl: HTMLElement | null = null;
@@ -231,26 +229,15 @@ export class ImgToMdView extends ItemView {
     else { root.addClass("is-error"); setIcon(icon, "circle-x"); label.setText(t("view.offline")); }
   }
 
-  /** Baut die Modellzeile. Das Status-Symbol „Modell geladen“ bleibt Sache des Plugins und folgt der Liste der Zeile über einen
-   *  Adapter um `llm.models()` (das Kit hat keinen Rückruf nach dem Laden); der Adapter fragt nur die echte Verbindung und löst nichts aus. */
+  /** Baut die Modellzeile. Das Status-Symbol „Modell geladen“ bleibt Sache des Plugins und folgt der Liste der Zeile über `onRefreshed`
+   *  (nach jedem abgeschlossenen Laden; das Kit meldet weder einen überholten Lauf noch nach `destroy()` noch bei einem Wurf). */
   private buildBar(host: HTMLElement): ModelBar {
-    const gen = ++this.barGen;
-    const { llm } = this.deps;
-    const adapter: ModelBarConnection = {
-      models: async (o) => {
-        const r = await llm.models(o);
-        if (gen === this.barGen) { this.loadedModels = r.models; this.updateModelStatus(); }
-        return r;
-      },
-      setModel: (m) => llm.setModel(m),
-      modelInUse: () => llm.modelInUse(),
-      source: () => llm.source(),
-    };
     return buildModelBar({
       app: this.app,
       containerEl: host,
-      llm: adapter,
+      llm: this.deps.llm,
       strings: { lang: getLang() },
+      onRefreshed: (r) => { this.loadedModels = r.models; this.updateModelStatus(); },
       // Eine Pfeilfunktion statt `this.running`: die Zeile liest den Laufzustand bei jedem `update()` neu.
       disabled: () => this.running,
       onChange: () => { this.updateModelStatus(); },
@@ -997,7 +984,6 @@ export class ImgToMdView extends ItemView {
   async onClose(): Promise<void> {
     this.persistCards();
     this.controller?.abort();
-    this.barGen++;   // ein spätes Listen-Ergebnis der Zeile fasst das Status-Symbol nicht mehr an
     this.modelBar?.destroy();
     this.modelBar = null;
     this.cardEls = [];

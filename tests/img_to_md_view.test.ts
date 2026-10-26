@@ -722,6 +722,30 @@ describe("ImgToMdView — Modellzeile (Kit model-bar)", () => {
       expect(offIcon).toBeTruthy();
       expect(okIcon).not.toBe(offIcon);
     });
+    it("folgt dem Neu laden: eine neue Liste setzt den Haken (Rückruf onRefreshed der Zeile)", async () => {
+      const llm = mkLlm({ models: [], model: "vm", reachable: true });
+      const { view } = mkView({ llm });
+      await view.onOpen();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+      llm.models.mockResolvedValue({ models: ["vm"], reachable: true });
+      all(view.contentEl, "okit-model-bar-refresh")[0].click();
+      await tick();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).toContain("is-loaded");
+      llm.models.mockResolvedValue({ models: [], reachable: false });
+      all(view.contentEl, "okit-model-bar-refresh")[0].click();
+      await tick();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).not.toContain("is-loaded");
+    });
+    it("Gegenprobe: eine werfende Liste lässt das Symbol, wie es war", async () => {
+      const llm = mkLlm({ models: ["vm"], model: "vm" });
+      const { view } = mkView({ llm });
+      await view.onOpen();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).toContain("is-loaded");
+      llm.models.mockRejectedValue(new Error("boom"));
+      all(view.contentEl, "okit-model-bar-refresh")[0].click();
+      await tick();
+      expect(all(view.contentEl, "img2md-model-status")[0].className).toContain("is-loaded");
+    });
     it("folgt einem Wechsel in der Zeile (Haken weg, wenn das gewählte Modell nicht geladen ist)", async () => {
       const llm = mkLlm({ models: ["vm"], model: "vm" });
       const { view } = mkView({ llm });
