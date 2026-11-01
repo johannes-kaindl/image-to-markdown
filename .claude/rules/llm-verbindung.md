@@ -30,7 +30,7 @@ Gotchas zur Kit-Verbindung `createLlmConnection` (`plugin.llm`) und zum Vision-W
 - **`settings.choice` hält die Wahl gegenüber dem Manager und gilt nur mit Manager** (ein Modellname ist an seinen Endpunkt gebunden).
 - **Es gibt keine eigene Modell-Zeile mehr (Welle 17).** Die Fähigkeits-Anzeige folgt über `onResolved` dem Modell der Zeile — **nur bei geändertem Modell**, sonst ruft ihre Probe die Auflösung im Kreis (gemessen: Renderer hing, F1–V1 Zeitüberschreitung).
 - **Ein Manager ohne Endpunkt ergibt KEINEN lokalen Rückfall** (Kit-Vertrag).
-- **GUI-Smoke F1–F3 legen einen Fake-Manager in den Plugin-Slot und stellen den Slot im `finally` und im Abbruch-Handler zurück;** V1–V5 prüfen Schlüssel, Schlüsselbund, Nicht-Stream, Schwärzung und Stufenwahl gegen einen Fake-Endpunkt.
+- **GUI-Smoke F1–F3 legen einen Fake-Manager in den Plugin-Slot und stellen den Slot im `finally` und im Abbruch-Handler zurück;** V1–V5 prüfen Schlüssel, Schlüsselbund, Nicht-Stream, Schwärzung und das Fehlen der Einstellung „Stufenwahl im Chat“ gegen einen Fake-Endpunkt. **CL1/CL2 legen einen Fake-Manager mit Claude-Eintrag VORN an:** `transports: { anthropic: "explicit" }` (`main.ts`) hält „Automatisch“ von Claude fern, die ausdrückliche Wahl nimmt ihn; ohne den Opt-in gingen Bilder bei Claude als erstem Eintrag ohne Rückfrage an einen Cloud-Anbieter. Die Wire (`anthropic-wire`, aus code-kit) lässt ein Bild mit einem anderen Typ als JPEG, PNG, GIF, WebP still weg; `tests/anthropic_images.test.ts` sichert `SUPPORTED_EXTS`.
 
 ## Server-Eigenheiten
 
