@@ -263,17 +263,17 @@ async function main(): Promise<void> {
     `, 15_000, 250);
     if (!bereit) throw new Error("Sidebar verarbeitete \"Field notes.md\" nicht");
 
-    // Zuschnitt auf die Modellzeile mit dem Denk-Knopf (Kit-Bausteine `model-bar` und „Thinking: …“).
+    // Zuschnitt auf die Modellzeile mit dem Denk-Dropdown (Kit-Bausteine `model-bar` und `thinking-control`, seit Kit 0.73.0 ein Dropdown).
     const denkBild = async (): Promise<void> => {
-      // Der Vertrag bevorzugt den eingeschalteten Zustand; steht er auf „off“, einmal umschalten.
+      // Der Vertrag bevorzugt eine eingeschaltete Stufe; steht das Dropdown auf „off“, auf „medium“ stellen (das Mess-`select` von Obsidian ausnehmen).
       await cdp.evaluate(`
-        const k = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar .okit-thinking-toggle")});
-        if (k && /off/.test(k.textContent || "")) k.click();
+        const s = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar .okit-thinking-control select:not(.is-measuring)")});
+        if (s && s.value === "off" && [...s.options].some((o) => o.value === "medium")) { s.value = "medium"; s.dispatchEvent(new Event("change", { bubbles: true })); }
         await new Promise((r) => setTimeout(r, 600));
         return true;
       `);
       const zeile = await boxOf(cdp, `${SIDEBAR} .img2md-model-row`, 4);
-      if (!zeile) throw new Error("thinking-toggle.png — keine Modellzeile in der Sidebar");
+      if (!zeile) throw new Error("thinking-toggle.png — keine Modellzeile in der Sidebar (Dateiname bleibt, damit die URLs der READMEs halten; das Bild zeigt das Dropdown der Denkstufe)");
       const png = await capture(cdp, zeile, 2);
       console.log(`  ${await writeShot(cdp, "thinking-toggle.png", png, { outDir, captureWidth: 900, thumbWidth: 450 })}`);
     };

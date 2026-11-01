@@ -7,3 +7,4 @@ data.json
 src/pdf-worker-src.generated.ts
 .gui-smoke.mjs
 .shots.mjs
+.layout.mjs
