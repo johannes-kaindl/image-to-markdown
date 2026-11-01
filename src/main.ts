@@ -95,6 +95,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
       caller: ENDPOINT_CALLER,
       capability: "vision",
       mode: MODE,   // kein maxTokens: i2m sendet kein Budget, ein abgeschnittenes Transkript meldet finish_reason length
+      // Claude (Anthropic-API) des LLM Endpoint Managers ist ausdrücklich wählbar, „Automatisch“ nimmt es nie: Bilder gehen sonst ohne Rückfrage an einen Cloud-Anbieter (Kit 0.73.0).
+      transports: { anthropic: "explicit" },
       lang: () => getLang(),
       onResolved: () => { this.onSourceResolved?.(); },
       getSettings: () => ({

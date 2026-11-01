@@ -31,7 +31,8 @@ to trust the endpoint you already decided to run. Everything else — the reques
 streamed responses, the notes that get written — is downstream of that one decision, and you
 made it. The security posture is covered more formally in
 [`../../SECURITY.md`](../../SECURITY.md), but the short version is: the vault is the only
-place your transcripts live, and the local endpoint is the only place your images travel.
+place your transcripts live, and the endpoint you chose is the only place your images travel.
+That endpoint is local unless you decide otherwise: with the LLM Endpoint Manager you can add a Claude (Anthropic API) entry and pick it by hand, and then your images go to Anthropic. "Automatic" never picks it.
 
 A practical consequence worth internalising: because *you* choose the endpoint and model,
 quality and behaviour are yours to tune. A small model on a laptop and a large model on a

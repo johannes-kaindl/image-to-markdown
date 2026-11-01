@@ -162,8 +162,43 @@ async function mitFakeModell<T>(cdp: Cdp, modell: string, request: unknown, fn: 
   }
 }
 
+const CL_MANAGER_ID = "llm-endpoint-manager";
+const CL_MODELL = "claude-haiku-5-5";
+const CL_SCHLUESSEL = "sk-ant-smoke-image-to-markdown";
+const CL_ANTWORT = "Claude-Transkript";
+/** Fake-Manager mit zwei Eintraegen, der Claude-Eintrag VORN (so waere er der Treffer von „Automatisch“ ohne den Opt-in „explicit“), dahinter ein lokaler
+ *  Endpunkt; Gegenstellen sind der Claude-Stub (Messages-API) und ein lokaler Fake. Alles wird zurueckgestellt. Ein echter Manager im Vault bricht den Punkt ab. */
+async function mitClaudeManager<T>(cdp: Cdp, fn: (c: { claudeUrl: string; lokalUrl: string; claude: Awaited<ReturnType<typeof startLlmStub>> }) => Promise<T>): Promise<T> {
+  const echt = await cdp.evaluate<boolean>(`const m = app.plugins.plugins[${JSON.stringify(CL_MANAGER_ID)}]; return !!m && !m.__fakeManager;`);
+  if (echt) throw new Error("das echte Plugin llm-endpoint-manager ist im Vault aktiv — der Fake wuerde es ersetzen");
+  const claude = await startLlmStub({
+    anbieter: "anthropic",
+    schluessel: CL_SCHLUESSEL,
+    models: [{ id: CL_MODELL, capabilities: { effort: { supported: true }, thinking: { types: { adaptive: { supported: true } } } } }],
+    standard: { text: CL_ANTWORT, model: CL_MODELL },
+  });
+  const lokal = await startFakeChat();
+  const vor = await verbindungVorher(cdp);
+  try {
+    await installFakeManager(cdp, {
+      pluginId: CL_MANAGER_ID,
+      endpunkte: [
+        { id: "cl-claude", label: "Claude API", url: claude.url, models: [CL_MODELL], defaultModel: CL_MODELL, capabilities: ["chat", "vision"],
+          provider: "anthropic", backend: "anthropic", apiKey: CL_SCHLUESSEL, hasSecret: true, transport: "anthropic" },
+        { id: "cl-lokal", label: "Lokal", url: lokal.url, models: ["google/gemma-4-e4b"], defaultModel: "google/gemma-4-e4b", capabilities: ["chat", "vision"] },
+      ],
+      invalidiere: [PLUGIN_ID],
+    });
+    return await fn({ claudeUrl: claude.url, lokalUrl: lokal.url, claude });
+  } finally {
+    await entferneFakeManager(cdp, { pluginId: CL_MANAGER_ID, invalidiere: [PLUGIN_ID] }).catch(() => undefined);
+    await lokal.close(); await claude.stop();
+    await stelleVerbindungWieder(cdp, vor);
+  }
+}
+
 const PUNKTE = [
-  "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3",
+  "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3", "CL1", "CL2",
   "N1", "N2", "N3", "N4", "N5", "N6", "ML1", "ML2", "ML3", "ML4", "ML5", "LK1", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
@@ -724,6 +759,81 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   // Kein Modell noetig: alles hier ist DOM-Zustand bzw. ein Fake-Server im Node-Prozess. N2 faehrt
   // ZWEI Edits hintereinander (setzen, zuruecksetzen) — der Einklapp-Fehler des Piloten war im
   // gruenen Smoke unsichtbar, weil kein Punkt zwei Edits nacheinander fuhr (Plan-Nachtrag 6).
+  // ── CL: Claude (Anthropic-API) über den LLM Endpoint Manager — Opt-in `transports.anthropic: "explicit"` (Welle 29) ──────────────────
+  {
+    key: "CL1",
+    titel: "Claude-Opt-in: „Automatisch“ nimmt Claude nie (auch wenn der Eintrag vorn steht), die ausdrückliche Wahl nimmt ihn (Backend anthropic, Familie claude)",
+    async run(cdp) {
+      return mitClaudeManager(cdp, async (c) => {
+        // Kontrolle am Fake: der Filter existiert (ohne transports kein Claude, mit beiden ja), sonst misst der Punkt den Fake statt das Plugin.
+        const r = await cdp.evaluate<string>(`
+          const api = app.plugins.plugins[${JSON.stringify(CL_MANAGER_ID)}].api;
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          const kontrolle = { ohne: api.list({ capability: "vision" }).length, mit: api.list({ capability: "vision", transports: ["http", "anthropic"] }).length };
+          // Gegenprobe zur Aufstellung: fragte das Plugin den Manager nach beiden Transporten (Opt-in true), waere der Claude-Eintrag der Treffer.
+          const wuerde = await api.resolve("vision", { transports: ["http", "anthropic"] });
+          const orig = api.resolve;
+          const gefragt = [];
+          api.resolve = async (cap, opts) => { gefragt.push(opts && opts.transports ? [...opts.transports] : null); return orig(cap, opts); };
+          p.settings.choice = {};
+          p.llm.invalidate();
+          const auto = await p.llm.resolve({ force: true });
+          const autoQuelle = p.llm.source();
+          api.resolve = orig;
+          p.settings.choice = { endpointId: "cl-claude", model: ${JSON.stringify(CL_MODELL)} };
+          p.llm.invalidate();
+          const wahl = await p.llm.resolve({ force: true });
+          const wahlQuelle = p.llm.source();
+          return JSON.stringify({ kontrolle, wuerde: wuerde.id, gefragt,
+            auto: { url: auto.config ? auto.config.url : null, backend: autoQuelle.backend, familie: autoQuelle.family },
+            wahl: { url: wahl.config ? wahl.config.url : null, backend: wahlQuelle.backend, familie: wahlQuelle.family, modell: wahlQuelle.model } });
+        `);
+        const d = JSON.parse(r) as { kontrolle: { ohne: number; mit: number }; wuerde: string; gefragt: Array<string[] | null>; auto: { url: string | null; backend: string; familie: string | null }; wahl: { url: string | null; backend: string; familie: string | null; modell: string } };
+        const nurHttp = d.gefragt.length > 0 && d.gefragt.every((g) => g !== null && g.length === 1 && g[0] === "http");
+        const ok = d.kontrolle.ohne === 1 && d.kontrolle.mit === 2 && d.wuerde === "cl-claude" && nurHttp
+          && d.auto.url === c.lokalUrl && d.auto.backend !== "anthropic"
+          && d.wahl.url === c.claudeUrl && d.wahl.backend === "anthropic" && d.wahl.familie === "claude" && d.wahl.modell === CL_MODELL;
+        return { ok, detail: `Kontrolle am Fake: list() ohne transports ${d.kontrolle.ohne}, mit beiden ${d.kontrolle.mit}; resolve mit beiden Transporten wuerde "${d.wuerde}" nehmen (Gegenprobe: Claude steht vorn) · Automatisch fragte den Manager mit ${JSON.stringify(d.gefragt)} und nahm: ${d.auto.url} (erwartet lokal ${c.lokalUrl}), Backend ${d.auto.backend} · ausdrückliche Wahl: ${d.wahl.url} (erwartet Claude ${c.claudeUrl}), Backend ${d.wahl.backend}, Familie ${d.wahl.familie}, Modell ${d.wahl.modell}` };
+      });
+    },
+  },
+  {
+    key: "CL2",
+    titel: "Claude-Opt-in: ein Bild geht als Bildblock (base64, image/png) an die Messages-API, mit Schlüssel und ohne temperature; der Text der Antwort kommt zurück",
+    async run(cdp) {
+      return mitClaudeManager(cdp, async (c) => {
+        await cdp.evaluate(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.choice = { endpointId: "cl-claude", model: ${JSON.stringify(CL_MODELL)} };
+          p.llm.invalidate();
+          await p.llm.resolve({ force: true });
+          return true;
+        `);
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          const deps = p.makeImgViewDeps();
+          const items = await deps.scan(${JSON.stringify(NOTIZ.bilder)});
+          const item = items.find((i) => i.supported && i.kind === "image");
+          if (!item) return JSON.stringify({ fehler: "kein unterstuetztes Bild in der Fixture-Notiz" });
+          try {
+            const out = await deps.transcribeStream(${JSON.stringify(NOTIZ.bilder)}, item, () => {}, () => {}, new AbortController().signal);
+            return JSON.stringify({ ok: true, text: out.content });
+          } catch (e) { return JSON.stringify({ fehler: String(e && e.message || e) }); }
+        `);
+        const d = JSON.parse(r) as { ok?: boolean; text?: string; fehler?: string };
+        const anfrage = c.claude.anfragen().filter((a) => a.route === "messages").at(-1);
+        if (!anfrage) return { ok: false, detail: `der Claude-Stub sah keine Messages-Anfrage (${d.fehler ?? "kein Fehler gemeldet"})` };
+        const body = anfrage.json as { model?: string; messages?: Array<{ role: string; content: unknown }>; temperature?: unknown } | null;
+        const inhalt = body?.messages?.[0]?.content;
+        const bloecke = Array.isArray(inhalt) ? (inhalt as Array<{ type?: string; source?: { type?: string; media_type?: string; data?: string } }>) : [];
+        const bild = bloecke.find((b) => b.type === "image");
+        const schluessel = String(anfrage.header["x-api-key"] ?? "");
+        const ok = !!bild && bild.source?.type === "base64" && bild.source.media_type === "image/png" && (bild.source.data ?? "").length > 100
+          && schluessel === CL_SCHLUESSEL && body?.model === CL_MODELL && body.temperature === undefined && d.ok === true && (d.text ?? "").includes(CL_ANTWORT);
+        return { ok, detail: `Bildblock ${bild ? `${bild.source?.type}/${bild.source?.media_type}, ${(bild.source?.data ?? "").length} Zeichen` : "FEHLT"} · Blöcke ${JSON.stringify(bloecke.map((b) => b.type))} · Schlüssel ${schluessel === CL_SCHLUESSEL ? "ok" : "falsch"} · Modell ${String(body?.model)} · temperature ${String(body?.temperature)} · Antwort "${(d.text ?? d.fehler ?? "").slice(0, 60)}"` };
+      });
+    },
+  },
   {
     key: "N1",
     titel: "Anfrage: Abschnitt „Anfrage“/„Request“ in den Einstellungen klappt auf und wieder zu",
