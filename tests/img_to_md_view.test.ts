@@ -58,7 +58,7 @@ function mkView(over: any = {}) {
     listPresets: over.listPresets ?? (() => [{ id: "default", label: "Default" }, { id: "math", label: "Math → LaTeX" }]),
     getPreset: over.getPreset ?? (() => "default"),
     setPreset: over.setPreset ?? vi.fn(),
-    thinkingState: over.thinkingState ?? (() => ({ family: null, level: "off", onLevel: "low", levelPicker: false })),
+    thinkingState: over.thinkingState ?? (() => ({ family: null, level: "off", onLevel: "low" })),
     getReasoningExpanded: over.getReasoningExpanded ?? (() => false),
     setThinkingLevel: over.setThinkingLevel ?? vi.fn(async () => {}),
     openPath: (p: string) => calls.opened.push(p),
@@ -588,10 +588,11 @@ describe("ImgToMdView — Modellzeile (Kit model-bar)", () => {
   });
   it("die Denk-Steuerung steht in der Zeile, der alte Host entfällt", async () => {
     setLang("en");
-    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "off", onLevel: "low", levelPicker: false }) });
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "off", onLevel: "low" }) });
     await view.onOpen();
     const bar = all(view.contentEl, "okit-model-bar")[0];
-    expect(all(bar, "okit-thinking-toggle").length).toBe(1);
+    expect(all(bar, "okit-thinking-control").length).toBe(1);
+    expect(all(view.contentEl, "okit-thinking-toggle").length).toBe(0);   // seit Kit 0.73.0 ein Dropdown, kein Knopf
     expect(all(view.contentEl, "img2md-think").length).toBe(0);
   });
   it("die Zeile ist während eines Laufs gesperrt und danach wieder frei (disabled als Funktion des Laufzustands)", async () => {
@@ -904,99 +905,93 @@ describe("ImgToMdView — Diff-Confirm + Content-aware Gate (v1.1)", () => {
   });
 });
 
-describe("ImgToMdView — Denk-Steuerung (Kit thinking-control)", () => {
-  it("Profil-Vorgabe 'off' → Label 'Thinking: off', is-off, aria-pressed=false", async () => {
+describe("ImgToMdView — Denk-Steuerung (Kit thinking-control, Dropdown in der Modellzeile)", () => {
+  /** Das Dropdown der Denk-Steuerung in der Modellzeile (Fake-DOM kennt keine Tag-Selektoren: Komponente über `__component`). */
+  const dropdown = (view: any) => {
+    const host = all(all(view.contentEl, "okit-model-bar")[0], "okit-thinking-control")[0];
+    const select = host?.children.find((c: any) => c.tagName === "SELECT");
+    return select ? { dd: select.__component, select } : null;
+  };
+
+  it("Profil-Vorgabe 'off' (qwen3.8): Dropdown mit den vier Stufen, 'Off' gewählt, kein Zwei-Zustands-Knopf", async () => {
     setLang("en");
-    const { view } = mkView();
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "off", onLevel: "low" }) });
     await view.onOpen();
-    const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("Thinking: off");
-    expect(String(btn.className)).toContain("is-off");
-    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    const d = dropdown(view)!;
+    expect(d.dd.options).toEqual({ off: "Off", low: "Low", medium: "Medium", high: "High" });
+    expect(d.dd.getValue()).toBe("off");
+    expect(d.select.getAttribute("aria-label")).toBe("Thinking level: Off");
+    expect(all(view.contentEl, "okit-thinking-toggle")).toHaveLength(0);
   });
 
-  it("Klick schaltet auf die Ein-Stufe, das Label folgt dem Zustand, aria-pressed=true", async () => {
+  it("eine Wahl schreibt die Stufe (setThinkingLevel) und das Dropdown zeigt sie danach", async () => {
     setLang("en");
     let level: any = "off";
     const setThinkingLevel = vi.fn(async (l: any) => { level = l; });
-    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level, onLevel: "medium", levelPicker: false }), setThinkingLevel });
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level, onLevel: "medium" }), setThinkingLevel });
     await view.onOpen();
-    const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    btn.click(); await tick();
-    expect(setThinkingLevel).toHaveBeenCalledWith("medium");
-    const [after] = all(view.contentEl, "okit-thinking-toggle");
-    expect(after.textContent).toContain("Thinking: medium");
-    expect(after.getAttribute("aria-pressed")).toBe("true");
-    expect(String(after.className)).not.toContain("is-off");
-  });
-
-  it("Familie ohne Aus-Stellung (gpt-oss) auf 'off' → 'Thinking: lowest level'", async () => {
-    setLang("en");
-    const { view } = mkView({ thinkingState: () => ({ family: "gpt-oss", level: "off", onLevel: "low", levelPicker: false }) });
-    await view.onOpen();
-    const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("Thinking: lowest level");
-  });
-
-  it("gemma4 auf LM Studio auf 'off' → der Knopf sagt, dass es sich nicht ganz abschalten lässt (Kit 0.61.0, backend)", async () => {
-    setLang("en");
-    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", backend: "lmstudio", level: "off", onLevel: "low", levelPicker: false }) });
-    await view.onOpen();
-    const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("lowest level");
-  });
-
-  it("'aus nicht möglich' auf Deutsch: Beschriftung und Grund im Tooltip kommen aus dem Kit", async () => {
-    setLang("de");
-    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", backend: "lmstudio", level: "off", onLevel: "low", levelPicker: false }) });
-    await view.onOpen();
-    const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("Denken: niedrigste Stufe");
-    expect(btn.getAttribute("aria-label")).toContain("nicht ganz abschalten");
-    setLang("en");
-  });
-
-  it("gemma4 ohne Backend (Familie allein) bleibt abschaltbar: 'Thinking: off'", async () => {
-    setLang("en");
-    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", level: "off", onLevel: "low", levelPicker: false }) });
-    await view.onOpen();
-    const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("Thinking: off");
-  });
-
-  it("Deutsch: Label folgt der Oberflächensprache", async () => {
-    setLang("de");
-    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "high", onLevel: "high", levelPicker: false }) });
-    await view.onOpen();
-    const [btn] = all(view.contentEl, "okit-thinking-toggle");
-    expect(btn.textContent).toContain("Thinking: hoch");
-    setLang("en");
-  });
-
-  it("Stufenwahl an → Dropdown mit vier Stufen, jede mit sichtbarem Kontext 'Thinking: …'", async () => {
-    setLang("en");
-    const setThinkingLevel = vi.fn(async () => {});
-    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "low", onLevel: "low", levelPicker: true }), setThinkingLevel });
-    await view.onOpen();
-    expect(all(view.contentEl, "okit-thinking-toggle")).toHaveLength(0);
-    const host = all(view.contentEl, "okit-thinking-control")[0];
-    const select = host.children.find((c: any) => c.tagName === "SELECT");
-    const dd = select.__component;
-    expect(dd.options).toEqual({ off: "Thinking: off", low: "Thinking: low", medium: "Thinking: medium", high: "Thinking: high" });
-    dd.onChangeCB("high"); await tick();
+    dropdown(view)!.dd.onChangeCB("high"); await tick();
     expect(setThinkingLevel).toHaveBeenCalledWith("high");
+    expect(dropdown(view)!.dd.getValue()).toBe("high");
+  });
+
+  it("Familie ohne Aus-Stellung (gpt-oss): kein 'Off' in der Liste, das gespeicherte 'off' steht als niedrigste Stufe (code-kit 0.39.0)", async () => {
+    setLang("en");
+    const { view } = mkView({ thinkingState: () => ({ family: "gpt-oss", level: "off", onLevel: "low" }) });
+    await view.onOpen();
+    const d = dropdown(view)!;
+    expect(Object.keys(d.dd.options)).toEqual(["low", "medium", "high"]);
+    expect(d.dd.getValue()).toBe("low");
+  });
+
+  it("gemma4 auf LM Studio: kein 'Off' in der Liste (lässt sich dort nicht abschalten), gezeigt wird die niedrigste Stufe", async () => {
+    setLang("en");
+    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", backend: "lmstudio", level: "off", onLevel: "low" }) });
+    await view.onOpen();
+    const d = dropdown(view)!;
+    expect(Object.keys(d.dd.options)).toEqual(["low", "medium", "high"]);
+    expect(d.dd.getValue()).toBe("low");
+  });
+
+  it("gemma4 ohne Backend (Familie allein) bleibt abschaltbar: 'Off' steht in der Liste und ist gewählt", async () => {
+    setLang("en");
+    const { view } = mkView({ thinkingState: () => ({ family: "gemma4", level: "off", onLevel: "low" }) });
+    await view.onOpen();
+    const d = dropdown(view)!;
+    expect(Object.keys(d.dd.options)).toContain("off");
+    expect(d.dd.getValue()).toBe("off");
+  });
+
+  it("Deutsch: Stufen und Name kommen aus den Kit-Texten", async () => {
+    setLang("de");
+    const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "high", onLevel: "high" }) });
+    await view.onOpen();
+    const d = dropdown(view)!;
+    expect(d.dd.options).toEqual({ off: "Aus", low: "Niedrig", medium: "Mittel", high: "Hoch" });
+    expect(d.select.getAttribute("aria-label")).toBe("Denkstufe: Hoch");
+    setLang("en");
+  });
+
+  it("unbekannte Familie auf einem Backend ohne Liste: kein Element (Kit: keine Denksteuerung ohne Stufen); auf LM Studio die generischen vier", async () => {
+    setLang("en");
+    const stumm = mkView({ thinkingState: () => ({ family: null, level: "off", onLevel: "low" }) });
+    await stumm.view.onOpen();
+    expect(dropdown(stumm.view)).toBeNull();
+    const lm = mkView({ thinkingState: () => ({ family: null, backend: "lmstudio", level: "off", onLevel: "low" }) });
+    await lm.view.onOpen();
+    expect(Object.keys(dropdown(lm.view)!.dd.options)).toEqual(["off", "low", "medium", "high"]);
   });
 
   it("refreshThinking() zeichnet nach einem Familienwechsel neu, ohne die Notiz neu zu scannen", async () => {
     setLang("en");
     let family: any = "qwen3.8";
     const scan = vi.fn(async () => ITEMS.map(i => ({ ...i })));
-    const { view } = mkView({ scan, thinkingState: () => ({ family, level: "off", onLevel: "low", levelPicker: false }) });
+    const { view } = mkView({ scan, thinkingState: () => ({ family, level: "off", onLevel: "low" }) });
     await view.onOpen();
     const scans = scan.mock.calls.length;
-    expect(all(view.contentEl, "okit-thinking-toggle")[0].textContent).toContain("Thinking: off");
+    expect(dropdown(view)!.dd.getValue()).toBe("off");
     family = "gpt-oss"; view.refreshThinking();
-    expect(all(view.contentEl, "okit-thinking-toggle")[0].textContent).toContain("Thinking: lowest level");
+    expect(dropdown(view)!.dd.getValue()).toBe("low");
     expect(scan.mock.calls.length).toBe(scans);
   });
 });

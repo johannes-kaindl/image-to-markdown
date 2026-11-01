@@ -97,7 +97,7 @@ settings.ts         ImageToMarkdownSettings (enthält `visionEndpoints: Endpoint
                     makeVisionTestImage (Canvas, DOM-Schicht).
 main.ts             Plugin-Entry: setHttp(obsidianHttp) + Sprach-Detektion (setLang) beim onload,
                     View/Ribbon/Command/Kontextmenü/SettingTab. Hält `llm` (= `createLlmConnection`, Fähigkeit
-                    `vision`, Modus `transform`, `levelPicker: true`; `persist` bildet endpoints→visionEndpoints,
+                    `vision`, Modus `transform` (kein `levelPicker`: die Modellzeile zeigt die Stufe immer als Dropdown, Kit 0.73.0); `persist` bildet endpoints→visionEndpoints,
                     model→aktive Zeile synchron ab, `llm.setModel`) + `callLlm` (ein Aufruf mit `messages`, optional EIN Retry nach
                     `invalidate()`, nie nach Abbruch oder bereits gestreamtem Text) + `testVision` + `reconnect`.
 pdf-worker-src.generated.ts  Auto-generiert von scripts/build-pdf-worker.mjs — enthält den
@@ -134,7 +134,7 @@ vendor/kit-obsidian/
   chat-client.ts    createChatClient: Streaming, Idle-/Erst-Chunk-Frist, Abbruch, Fehlerkörper, Fallback ohne Stream. Obsidian-frei (Transport injiziert) — von der Verbindung genutzt.
   chat-transport.ts xhrSseTransport (Stream) + requestUrlTransport (Fallback ohne Stream). Importiert `obsidian`; die Verbindung wählt sie selbst (`transportFor`).
   clock.ts          Uhr-Port für chat-client (Tests injizieren eine Fake-Uhr).
-  request-section.ts / request-session.ts / thinking-control.ts / collapsible.ts  Sampling-Plan-Bausteine (Abschnitt „Anfrage“, Sitzung, Denk-Knopf der Sidebar); CSS verbatim in `styles.css`.
+  request-section.ts / request-session.ts / thinking-control.ts / collapsible.ts  Sampling-Plan-Bausteine (Abschnitt „Anfrage“, Sitzung, Denk-Dropdown der Modellzeile); CSS verbatim in `styles.css`.
   clipboard.ts      copyToClipboard: Zwischenablage mit Notice-Quittung. Genutzt von main.ts (copyText in ImgToMdViewDeps).
   folder-suggest.ts FolderSuggest (Ordner-Autovervollständigung in Settings-Feldern).
   settings_walker.ts Deklarative Settings-Zeilen (Settings-Tab).

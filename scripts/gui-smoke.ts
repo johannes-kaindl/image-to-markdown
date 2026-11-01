@@ -137,9 +137,34 @@ async function haltePanelBild(cdp: Cdp, name: string, selector: string): Promise
   }
 }
 
+/** Stellt einen Fake-Endpunkt mit dem Modell `modell` als einzige Zeile ein, laesst die offene Sidebar nachziehen und fuehrt `fn` aus; danach wird alles zurueckgestellt.
+ *  Die Denk-Steuerung der Modellzeile zeigt seit Kit 0.73.0 nur etwas, wenn das Modell Stufen hat (Familie aus dem Modellnamen). */
+async function mitFakeModell<T>(cdp: Cdp, modell: string, request: unknown, fn: (sicht: { url: string; bodies: unknown[] }) => Promise<T>): Promise<T> {
+  // Der Fake nennt in der Antwort das Modell der Zeile: antwortet er mit einem anderen, zeigt die Sidebar eine Notice („andere Modellfamilie“) in der Ecke, und ein folgender Klick trifft sie.
+  const sicht = await startFakeChat({ models: [modell], antwortModell: modell });
+  const vor = await verbindungVorher(cdp);
+  try {
+    await cdp.evaluate(`
+      const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+      p.settings.visionEndpoints = [{ url: ${JSON.stringify(sicht.url)}, model: ${JSON.stringify(modell)} }];
+      p.settings.request = ${JSON.stringify(request)};
+      p.settings.choice = {};
+      p.llm.invalidate();
+      await p.llm.resolve({ force: true });
+      for (const l of app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})) { l.view.refreshThinking(); }
+      await new Promise((x) => setTimeout(x, 600));
+      return true;
+    `);
+    return await fn(sicht);
+  } finally {
+    await sicht.close();
+    await stelleVerbindungWieder(cdp, vor);
+  }
+}
+
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3",
-  "N1", "N2", "N3", "N4", "N5", "ML1", "ML2", "ML3", "ML4", "ML5", "LK1", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
+  "N1", "N2", "N3", "N4", "N5", "N6", "ML1", "ML2", "ML3", "ML4", "ML5", "LK1", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -774,60 +799,48 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "N3",
-    titel: "Anfrage: der Denk-Knopf in der Sidebar schaltet um (Label und aria-pressed folgen)",
+    titel: "Anfrage: die Denkstufe in der Modellzeile ist ein Dropdown mit den Stufen des Modells, die Wahl wird gespeichert und das Dropdown zeigt sie",
     async run(cdp) {
-      const vorher = await cdp.evaluate<string>(`return JSON.stringify(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.request);`);
-      try {
-        await zeigeNotiz(cdp, NOTIZ.bilder);
-        const lies = `(() => { const b = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-thinking-toggle")}); return b ? JSON.stringify({ text: b.textContent.trim(), pressed: b.getAttribute("aria-pressed") }) : null; })()`;
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      return mitFakeModell(cdp, "google/gemma-4-e4b", { overrides: {}, thinking: {}, lastOnLevel: {} }, async () => {
+        const lies = `(() => { const s = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar .okit-thinking-control select:not(.is-measuring)")}); return s ? JSON.stringify({ wert: s.value, optionen: [...s.options].map((o) => o.value), name: s.getAttribute("aria-label"), knopf: !!document.querySelector(${JSON.stringify(SIDEBAR + " .okit-thinking-toggle")}) }) : null; })()`;
         const davor = await cdp.evaluate<string | null>(`return ${lies};`);
-        if (!davor) return { ok: false, detail: "kein .okit-thinking-toggle in der Sidebar" };
-        await clickReal(cdp, `document.querySelector(${JSON.stringify(SIDEBAR + " .okit-thinking-toggle")})`);
-        const danach = await pollUntil<string>(cdp, `const r = ${lies}; return r && r !== ${JSON.stringify(davor)} ? r : null;`, 5000, 200);
-        const a = JSON.parse(davor) as { text: string; pressed: string };
-        const b = danach ? (JSON.parse(danach) as { text: string; pressed: string }) : null;
-        return { ok: b !== null && b.pressed !== a.pressed && b.text !== a.text,
-          detail: `vorher "${a.text}" (aria-pressed=${a.pressed}) → nachher ${b ? `"${b.text}" (aria-pressed=${b.pressed})` : "unveraendert"}` };
-      } finally {
+        if (!davor) return { ok: false, detail: "kein Denk-Dropdown in der Modellzeile der Sidebar" };
+        const a = JSON.parse(davor) as { wert: string; optionen: string[]; name: string; knopf: boolean };
+        const ziel = a.optionen.includes("high") && a.wert !== "high" ? "high" : a.optionen.find((o) => o !== a.wert) ?? a.wert;
         await cdp.evaluate(`
-          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-          p.settings.request = JSON.parse(${JSON.stringify(vorher)});
-          await p.saveSettings();
-          for (const l of app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})) if (l.view.refreshThinking) l.view.refreshThinking();
+          const s = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar .okit-thinking-control select:not(.is-measuring)")});
+          s.value = ${JSON.stringify(ziel)}; s.dispatchEvent(new Event("change", { bubbles: true }));
           return true;
-        `).catch(() => undefined);
-      }
+        `);
+        const danach = await pollUntil<string>(cdp, `const r = ${lies}; return r && JSON.parse(r).wert === ${JSON.stringify(ziel)} ? r : null;`, 5000, 200);
+        const gespeichert = await cdp.evaluate<string>(`return String(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.request.thinking.transform);`);
+        const b = danach ? (JSON.parse(danach) as { wert: string; name: string }) : null;
+        return { ok: a.optionen.length >= 3 && !a.knopf && b !== null && gespeichert === ziel,
+          detail: `Stufen ${JSON.stringify(a.optionen)}, kein Zwei-Zustands-Knopf: ${!a.knopf}; vorher "${a.wert}" → Wahl "${ziel}" → Dropdown ${b ? `"${b.wert}" (Name "${b.name}")` : "unveraendert"}, gespeichert: ${gespeichert}` };
+      });
     },
   },
   {
     key: "N4",
-    titel: "Anfrage: „Stufenwahl im Chat“ an → die Sidebar zeigt ein Dropdown mit vier Stufen statt des Knopfs",
+    titel: "Anfrage: die Stufe ist in der Modellzeile IMMER ein Dropdown, auch mit levelPickerInChat aus oder an (Falle 13: die Einstellung ist wirkungslos und wird nicht mehr angeboten)",
     async run(cdp) {
-      const vorher = await cdp.evaluate<string>(`return JSON.stringify(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].settings.request);`);
-      try {
-        await zeigeNotiz(cdp, NOTIZ.bilder);
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      return mitFakeModell(cdp, "google/gemma-4-e4b", { overrides: {}, thinking: {}, lastOnLevel: {}, levelPickerInChat: false }, async () => {
         const r = await cdp.evaluate<string>(`
           const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
           const wurzel = document.querySelector(${JSON.stringify(SIDEBAR)});
-          const vorherDd = !!wurzel.querySelector(".okit-thinking-control select");
-          const vorherKnopf = !!wurzel.querySelector(".okit-thinking-toggle");
+          const lies = () => { const s = wurzel.querySelector(".okit-thinking-control select:not(.is-measuring)"); return { dd: !!s, optionen: s ? [...s.options].map((o) => o.value) : [], knopf: !!wurzel.querySelector(".okit-thinking-toggle") }; };
+          const aus = lies();
           await p.saveRequestSettings({ ...p.settings.request, levelPickerInChat: true });
           await new Promise((x) => setTimeout(x, 300));
-          const sel = wurzel.querySelector(".okit-thinking-control select");
-          return JSON.stringify({ vorherDd, vorherKnopf, nachherDd: !!sel, optionen: sel ? [...sel.options].map((o) => o.textContent) : [], knopfWeg: !wurzel.querySelector(".okit-thinking-toggle") });
+          const an = lies();
+          return JSON.stringify({ aus, an });
         `);
-        const d = JSON.parse(r) as { vorherDd: boolean; vorherKnopf: boolean; nachherDd: boolean; optionen: string[]; knopfWeg: boolean };
-        return { ok: !d.vorherDd && d.vorherKnopf && d.nachherDd && d.knopfWeg && d.optionen.length === 4,
-          detail: `Dropdown vorher=${d.vorherDd}, nachher=${d.nachherDd} (${JSON.stringify(d.optionen)}), Knopf ersetzt=${d.knopfWeg}` };
-      } finally {
-        await cdp.evaluate(`
-          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
-          p.settings.request = JSON.parse(${JSON.stringify(vorher)});
-          await p.saveSettings();
-          for (const l of app.workspace.getLeavesOfType(${JSON.stringify(VIEW_TYPE)})) if (l.view.refreshThinking) l.view.refreshThinking();
-          return true;
-        `).catch(() => undefined);
-      }
+        const d = JSON.parse(r) as { aus: { dd: boolean; optionen: string[]; knopf: boolean }; an: { dd: boolean; optionen: string[]; knopf: boolean } };
+        return { ok: d.aus.dd && d.an.dd && !d.aus.knopf && !d.an.knopf && JSON.stringify(d.aus.optionen) === JSON.stringify(d.an.optionen),
+          detail: `Schalter aus: Dropdown=${d.aus.dd} ${JSON.stringify(d.aus.optionen)}, Knopf=${d.aus.knopf} · Schalter an: Dropdown=${d.an.dd} ${JSON.stringify(d.an.optionen)}, Knopf=${d.an.knopf} (gleich = der Schalter wirkt nicht)` };
+      });
     },
   },
   {
@@ -870,6 +883,31 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
           return true;
         `).catch(() => undefined);
       }
+    },
+  },
+  {
+    key: "N6",
+    titel: "Anfrage: ein gespeichertes „aus“ bei gpt-oss (kein Aus-Schalter) sendet die niedrigste Stufe low statt minimal (code-kit 0.39.0, Falle 12), und das Dropdown zeigt Low",
+    async run(cdp) {
+      await zeigeNotiz(cdp, NOTIZ.bilder);
+      return mitFakeModell(cdp, "openai/gpt-oss-20b", { overrides: {}, thinking: { transform: "off" }, lastOnLevel: {}, levelPickerInChat: false }, async (sicht) => {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          const s = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar .okit-thinking-control select:not(.is-measuring)")});
+          const deps = p.makeImgViewDeps();
+          const items = await deps.scan(${JSON.stringify(NOTIZ.bilder)});
+          const item = items.find((i) => i.supported && i.kind === "image");
+          if (!item) return JSON.stringify({ fehler: "kein unterstuetztes Bild in der Fixture-Notiz" });
+          try { await deps.transcribeStream(${JSON.stringify(NOTIZ.bilder)}, item, () => {}, () => {}, new AbortController().signal); }
+          catch (e) { return JSON.stringify({ fehler: String(e && e.message || e) }); }
+          return JSON.stringify({ ok: true, dd: s ? { wert: s.value, optionen: [...s.options].map((o) => o.value) } : null });
+        `);
+        const d = JSON.parse(r) as { ok?: boolean; fehler?: string; dd?: { wert: string; optionen: string[] } | null };
+        const body = sicht.bodies.at(-1) as Record<string, unknown> | undefined;
+        if (!body) return { ok: false, detail: `der Fake-Server sah keinen POST (${d.fehler ?? "kein Fehler gemeldet"})` };
+        return { ok: body.reasoning_effort === "low" && !!d.dd && d.dd.wert === "low" && !d.dd.optionen.includes("off"),
+          detail: `Server sah reasoning_effort=${JSON.stringify(body.reasoning_effort)} (erwartet "low"), Modell ${String(body.model)} · Dropdown ${d.dd ? `${JSON.stringify(d.dd.optionen)} zeigt "${d.dd.wert}"` : "fehlt"}` };
+      });
     },
   },
   // ── ML: Modellzeile (Kit model-bar, Welle 27) — am echten DOM, gegen einen Fake-Endpunkt mit zwei Modellen ──────
@@ -946,21 +984,26 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "ML3",
-    titel: "Modellzeile: die Denk-Steuerung steht IN der Zeile (kein zweiter Knopf, kein alter Host in der Preset-Zeile)",
+    titel: "Modellzeile: die Denk-Steuerung (Dropdown) steht IN der Zeile (kein zweiter Knopf, kein alter Host in der Preset-Zeile)",
     async run(cdp) {
       await zeigeNotiz(cdp, NOTIZ.bilder);
-      const r = await cdp.evaluate<{ inZeile: number; gesamt: number; inPreset: number; alterHost: number }>(`
-        const w = document.querySelector(${JSON.stringify(SIDEBAR)});
-        return {
-          inZeile: w.querySelectorAll(".okit-model-bar .okit-thinking-toggle").length,
-          gesamt: w.querySelectorAll(".okit-thinking-toggle").length,
-          inPreset: w.querySelectorAll(".img2md-preset-row .okit-thinking-toggle").length,
-          alterHost: w.querySelectorAll(".img2md-think").length,
-        };
-      `);
-      // Gegenprobe: derselbe Selektor an einer Stelle, an der der Knopf frueher stand (Preset-Zeile), findet nichts.
-      return { ok: r.inZeile === 1 && r.gesamt === 1 && r.inPreset === 0 && r.alterHost === 0,
-        detail: `Denk-Knopf in der Zeile: ${r.inZeile}, in der Sidebar insgesamt: ${r.gesamt}, in der Preset-Zeile (Gegenprobe, soll 0): ${r.inPreset}, alter Host .img2md-think: ${r.alterHost}` };
+      return mitFakeModell(cdp, "google/gemma-4-e4b", { overrides: {}, thinking: {}, lastOnLevel: {} }, async () => {
+        const r = await cdp.evaluate<{ inZeile: number; gesamt: number; inPreset: number; alterHost: number; knopf: number; zeilen: number; blaetter: number }>(`
+          const w = document.querySelector(${JSON.stringify(SIDEBAR)});
+          return {
+            inZeile: w.querySelectorAll(".okit-model-bar .okit-thinking-control select:not(.is-measuring)").length,
+            gesamt: w.querySelectorAll(".okit-thinking-control select:not(.is-measuring)").length,
+            inPreset: w.querySelectorAll(".img2md-preset-row .okit-thinking-control").length,
+            alterHost: w.querySelectorAll(".img2md-think").length,
+            knopf: w.querySelectorAll(".okit-thinking-toggle").length,
+            zeilen: w.querySelectorAll(".okit-model-bar").length,
+            blaetter: document.querySelectorAll(${JSON.stringify(SIDEBAR)}).length,
+          };
+        `);
+        // Gegenprobe: derselbe Selektor an einer Stelle, an der die Steuerung frueher stand (Preset-Zeile), findet nichts.
+        return { ok: r.inZeile === 1 && r.gesamt === 1 && r.inPreset === 0 && r.alterHost === 0 && r.knopf === 0,
+          detail: `Denk-Dropdown in der Zeile: ${r.inZeile} (Modellzeilen ${r.zeilen}, Sidebars ${r.blaetter}), in der Sidebar insgesamt: ${r.gesamt}, in der Preset-Zeile (Gegenprobe, soll 0): ${r.inPreset}, alter Host .img2md-think: ${r.alterHost}, Zwei-Zustands-Knopf: ${r.knopf}` };
+      });
     },
   },
   {
@@ -1188,7 +1231,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "V5",
-    titel: "Einstellungen: der Anfrage-Abschnitt bietet die „Stufenwahl im Chat“ an (levelPicker: true) — in einem Host, ohne den Tab zu leeren",
+    titel: "Einstellungen: der Anfrage-Abschnitt bietet die „Stufenwahl im Chat“ nicht mehr an (Falle 13) — in einem Host, ohne den Tab zu leeren",
     async run(cdp) {
       const sicht = await oeffneEinstellungen(cdp);
       if (!sicht) throw new Error("kein Einstellungen-Fenster am Port");
@@ -1199,7 +1242,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
           return JSON.stringify({ stufenwahl: namen.some((n) => /Stufenwahl|Level picker/i.test(n)), hilfeErste: /^(Help|Hilfe)$/.test(namen[0] ?? ""), prompt: namen.some((n) => /Prompt/i.test(n)), anzahl: namen.length });
         `);
         const d = JSON.parse(r) as { stufenwahl: boolean; hilfeErste: boolean; prompt: boolean; anzahl: number };
-        return { ok: d.stufenwahl && d.hilfeErste && d.prompt, detail: `Stufenwahl-Zeile: ${d.stufenwahl} · Hilfe-Zeile zuerst: ${d.hilfeErste} · Prompt-Zeile (nach dem Host) noch da: ${d.prompt} · ${d.anzahl} Zeilen` };
+        return { ok: !d.stufenwahl && d.hilfeErste && d.prompt, detail: `Stufenwahl-Zeile (soll fehlen): ${d.stufenwahl} · Hilfe-Zeile zuerst: ${d.hilfeErste} · Prompt-Zeile (nach dem Host) noch da: ${d.prompt} · ${d.anzahl} Zeilen` };
       } finally { await schliesseEinstellungenMitSicht(cdp, sicht); }
     },
   },
@@ -1602,10 +1645,10 @@ interface FakeRequest { method: string; url: string; headers: Record<string, str
  *  und schneidet jede Anfrage samt Headern mit (`requests`, auch die 404-Pfade; V1 verlangt nur, dass `/api/v1/models`
  *  ANGEFRAGT wurde) und jeden POST-Body (`bodies`). Mit `echo` spiegelt er den Text der letzten Nutzernachricht in die
  *  Antwort (Beleg der umkehrbaren Schwaerzung). */
-async function startFakeChat(opts: { echo?: boolean; content?: string; models?: string[] } = {}): Promise<{ url: string; bodies: unknown[]; requests: FakeRequest[]; close(): Promise<void> }> {
+async function startFakeChat(opts: { echo?: boolean; content?: string; models?: string[]; antwortModell?: string } = {}): Promise<{ url: string; bodies: unknown[]; requests: FakeRequest[]; close(): Promise<void> }> {
   const stub = await startLlmStub({
     models: opts.models ?? ["google/gemma-4-e4b"],
-    antwort: (a) => ({ text: opts.echo ? echoText(a.json) : (opts.content ?? "Fake-Transkript"), model: "google/gemma-4-e4b" }),
+    antwort: (a) => ({ text: opts.echo ? echoText(a.json) : (opts.content ?? "Fake-Transkript"), model: opts.antwortModell ?? "google/gemma-4-e4b" }),
   });
   return {
     url: stub.url,

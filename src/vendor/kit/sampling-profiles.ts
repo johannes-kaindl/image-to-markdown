@@ -1,4 +1,4 @@
-// vendored from code-kit@0.38.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.40.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -27,7 +27,9 @@ export type ModeId = (typeof MODE_IDS)[number];
 export const BACKEND_IDS = ["lmstudio", "openwebui", "ollama", "openai", "anthropic", "unknown"] as const;
 export type BackendId = (typeof BACKEND_IDS)[number];
 
-export const THINKING_LEVELS = ["off", "low", "medium", "high"] as const;
+/** Order matters: it is the distance {@link resolveThinkingLevel} clamps a stored level by. `xhigh` and `max` are Claude's two
+ *  levels above `high` (0.39.0); every local family carries the value and the reserve of `high` there and never offers them. */
+export const THINKING_LEVELS = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 /** Sampling fields a family supplies (temperature comes from the mode). */
@@ -92,10 +94,19 @@ const ms = (value: string, source: string): Sourced<string> => ({ value, source,
 const us = (value: string, source: string): Sourced<string> => ({ value, source, evidence: "unmeasured" });
 
 const CLAUDE_SAMPLING = "Anthropic docs (claude-api skill 2026-10-06; OpenAI compatibility page 2026-10-16): temperature, top_p, top_k removed on Claude Fable 5/5.1, Opus 5.5/5/4.8/4.7, non-default values refused on Sonnet 5.5 and Haiku 5.5; compatibility layer: temperature below 1 and top_p other than 0.99 return 400 on Claude 4.7 and newer";
-const CLAUDE_EFFORT = "Anthropic docs (effort page and claude-api skill, 2026-10-26): output_config.effort low/medium/high/xhigh/max, sent by the obsidian-kit transport (anthropic-wire) when GET /v1/models reports effort.supported";
+const CLAUDE_REFUSED = "HTTP 400 on Claude 4.7 and newer; also withheld for Opus 4.6, Sonnet 4.6 and Opus 4.5, which accept it: the family decides, not the model";
+const CLAUDE_EFFORT = "Anthropic docs (effort page and claude-api skill, 2026-10-26; effort page retrieved again 2026-10-27): output_config.effort low/medium/high/xhigh/max, sent by the transport (anthropic-wire) when GET /v1/models reports effort.supported; which model takes which level: CLAUDE_MODEL_LEVELS";
 const CLAUDE_OFF = "Anthropic docs (effort page and claude-api skill, 2026-10-26): off is the lowest effort because our transport never sends thinking disabled; the API itself takes disabled up to effort high on Haiku 5.5 and Opus 5 and between_tools on Sonnet 5.5, returns 400 for it on Opus 5.5, and thinking is always on on Fable 5/5.1";
-const CLAUDE_RESERVE = "Anthropic docs (claude-api skill 2026-10-06): max_tokens includes the adaptive thinking, default ~16000; conservative, unmeasured";
+const CLAUDE_RESERVE = "Anthropic docs (claude-api skill 2026-10-06): max_tokens includes the adaptive thinking, default ~16000; conservative, unmeasured. For xhigh and max the reserve is 64000, see below";
+const CLAUDE_RESERVE_TOP = "Anthropic docs (effort page, retrieved 2026-10-27, https://platform.claude.com/docs/en/build-with-claude/effort): at xhigh or max set a large max_tokens, \"starting at 64k tokens and tuning from there is a reasonable default\" (Opus 5, 4.8, 4.7); unmeasured. Below the output limit of every model that was read (128K; the models with 64K have neither xhigh nor max), but a non-streaming request with a large max_tokens can run into the request time limit (HTTP 504), which is why the wire layer keeps 16000 for non-streaming";
 const cn = (value: string, source: string): Sourced<string> => ({ value, source, evidence: "unmeasured" });
+const NOT_OFFERED = "not offered (thinkingLevels): same as high";
+/** The four levels a local family has, completed with `xhigh` and `max` as copies of `high` (`thinkingLevels` never offers them
+ *  there, but the records stay complete for `familyThinking` and its callers). */
+function withAbove<V>(base: Record<"off" | "low" | "medium" | "high", Sourced<V>>): Record<ThinkingLevel, Sourced<V>> {
+  const above = (): Sourced<V> => ({ value: base.high.value, source: NOT_OFFERED, evidence: "unmeasured" });
+  return { ...base, xhigh: above(), max: above() };
+}
 const QWEN38_CARD = "model card Qwen/Qwen3.8-27B (retrieved 2026-09-20)";
 const QWEN_GREEDY = "Qwen docs quickstart (Qwen3): no greedy decoding while thinking; transferred, supported by harness night run 2026-09-19";
 const HARNESS = "llm-benchmark-harness night run 2026-09-19, max reasoning tokens per level, rounded up";
@@ -110,36 +121,36 @@ export const FAMILIES: Record<FamilyId, FamilyProfile> = {
       top_p: u(0.8, QWEN38_CARD), top_k: u(20, QWEN38_CARD), min_p: u(0, QWEN38_CARD),
       presence_penalty: u(1.5, QWEN38_CARD),
     },
-    effort: {
+    effort: withAbove({
       off: ms("none", LMS_EFFORT), low: ms("low", LMS_EFFORT),
       medium: ms("medium", LMS_EFFORT), high: ms("xhigh", LMS_EFFORT),
-    },
+    }),
     canTurnOff: true,
     thinkingTemperatureFloor: u(0.6, QWEN_GREEDY),
-    reserve: { off: u(0, "no thinking"), low: u(1024, HARNESS), medium: u(2048, HARNESS), high: u(32768, HARNESS) },
+    reserve: withAbove({ off: u(0, "no thinking"), low: u(1024, HARNESS), medium: u(2048, HARNESS), high: u(32768, HARNESS) }),
   },
   "qwen3.6": {
     label: "Qwen 3.6",
     thinking: { top_p: u(0.95, "LM Studio hub model.yaml (llm-setup)"), top_k: u(20, "LM Studio hub model.yaml (llm-setup)") },
     noThinking: { top_p: u(0.95, "LM Studio hub model.yaml (llm-setup)"), top_k: u(20, "LM Studio hub model.yaml (llm-setup)") },
-    effort: {
+    effort: withAbove({
       off: us("none", "transferred from qwen3.8"), low: us("low", "transferred from qwen3.8"),
       medium: us("medium", "transferred from qwen3.8"), high: us("high", "transferred from qwen3.8"),
-    },
+    }),
     canTurnOff: true,
     thinkingTemperatureFloor: u(0.6, QWEN_GREEDY),
-    reserve: { off: u(0, "no thinking"), low: u(1024, "transferred from qwen3.8"), medium: u(2048, "transferred from qwen3.8"), high: u(32768, "transferred from qwen3.8") },
+    reserve: withAbove({ off: u(0, "no thinking"), low: u(1024, "transferred from qwen3.8"), medium: u(2048, "transferred from qwen3.8"), high: u(32768, "transferred from qwen3.8") }),
   },
   gemma4: {
     label: "Gemma 4",
     thinking: { top_p: u(0.95, "Gemma 4 model card (llm-configs 2026-09-17)"), top_k: u(64, "Gemma 4 model card (llm-configs 2026-09-17)") },
     noThinking: { top_p: u(0.95, "Gemma 4 model card (llm-configs 2026-09-17)"), top_k: u(64, "Gemma 4 model card (llm-configs 2026-09-17)") },
-    effort: {
+    effort: withAbove({
       off: ms("none", "llm-configs 2026-09-17, verdigado-think: 583 -> 0 reasoning chars"),
       low: us("low", "unmeasured"), medium: us("medium", "unmeasured"), high: us("high", "unmeasured"),
-    },
+    }),
     canTurnOff: true,
-    reserve: { off: u(0, "no thinking"), low: u(1024, "unmeasured, conservative"), medium: u(2048, "unmeasured, conservative"), high: u(8192, "unmeasured, conservative") },
+    reserve: withAbove({ off: u(0, "no thinking"), low: u(1024, "unmeasured, conservative"), medium: u(2048, "unmeasured, conservative"), high: u(8192, "unmeasured, conservative") }),
     byBackend: {
       lmstudio: {
         canTurnOff: false,
@@ -152,16 +163,16 @@ export const FAMILIES: Record<FamilyId, FamilyProfile> = {
     label: "gpt-oss",
     thinking: { top_p: u(1.0, "openai/gpt-oss repo (llm-configs 2026-09-17)") },
     noThinking: { top_p: u(1.0, "openai/gpt-oss repo (llm-configs 2026-09-17)") },
-    effort: {
+    effort: withAbove({
       off: ms("minimal", "llm-configs, verdigado-pro: none 187 / low 55 / minimal 41 reasoning chars"),
       low: ms("low", "llm-configs, verdigado-pro: 55 reasoning chars"),
       medium: us("medium", "unmeasured"), high: us("high", "unmeasured"),
-    },
+    }),
     canTurnOff: false,
-    reserve: {
+    reserve: withAbove({
       off: m(256, "llm-configs: max_tokens 40 left content empty, 60 answered; 256 as margin"),
       low: u(1024, "unmeasured"), medium: u(2048, "unmeasured"), high: u(8192, "unmeasured"),
-    },
+    }),
   },
   claude: {
     label: "Claude",
@@ -170,15 +181,17 @@ export const FAMILIES: Record<FamilyId, FamilyProfile> = {
     effort: {
       off: us("low", CLAUDE_OFF), low: us("low", CLAUDE_EFFORT),
       medium: us("medium", CLAUDE_EFFORT), high: us("high", CLAUDE_EFFORT),
+      xhigh: us("xhigh", CLAUDE_EFFORT), max: us("max", CLAUDE_EFFORT),
     },
     canTurnOff: false,
     reserve: {
       off: u(2048, CLAUDE_RESERVE), low: u(2048, CLAUDE_RESERVE), medium: u(4096, CLAUDE_RESERVE), high: u(16000, CLAUDE_RESERVE),
+      xhigh: u(64000, CLAUDE_RESERVE_TOP), max: u(64000, CLAUDE_RESERVE_TOP),
     },
     unsupportedFields: {
-      temperature: cn("HTTP 400 on Claude 4.7 and newer", CLAUDE_SAMPLING),
-      top_p: cn("HTTP 400 on Claude 4.7 and newer", CLAUDE_SAMPLING),
-      top_k: cn("HTTP 400 on Claude 4.7 and newer", CLAUDE_SAMPLING),
+      temperature: cn(CLAUDE_REFUSED, CLAUDE_SAMPLING),
+      top_p: cn(CLAUDE_REFUSED, CLAUDE_SAMPLING),
+      top_k: cn(CLAUDE_REFUSED, CLAUDE_SAMPLING),
       min_p: cn("not a Claude parameter", CLAUDE_SAMPLING),
       presence_penalty: cn("not a Claude parameter (ignored by the compatibility layer)", CLAUDE_SAMPLING),
     },
@@ -224,7 +237,7 @@ export const BACKENDS: Record<BackendId, BackendProfile> = {
       temperature: "unsupported", top_p: "unsupported", top_k: "unsupported", min_p: "unsupported",
       presence_penalty: "unsupported", reasoning_effort: "accepted", max_tokens: "accepted",
     },
-    source: "Anthropic docs (claude-api skill 2026-10-06): no sampling fields (400 on Claude 4.7 and newer), depth through output_config.effort, max_tokens required and includes the thinking; not called by us",
+    source: "Anthropic docs (claude-api skill 2026-10-06): no sampling fields (400 on Claude 4.7 and newer), depth through output_config.effort, max_tokens required and includes the thinking; the obsidian-kit transport sends output_config.effort (the wire layer is anthropic-wire, in this library since 0.38.0); levels per model: CLAUDE_MODEL_LEVELS",
     effortParam: "effort",
     effortValues: ["low", "medium", "high", "xhigh", "max"],
   },
@@ -238,15 +251,20 @@ export const FAMILY_PATTERNS: readonly [RegExp, FamilyId][] = [
   [/qwen3\.6/i, "qwen3.6"],
   [/gemma[-_]?4/i, "gemma4"],
   [/gpt-oss/i, "gpt-oss"],
-  // Claude 4.7 and newer, where the sampling fields are refused with HTTP 400 (the family's `unsupportedFields`): fable, mythos,
-  // opus 4.7/4.8/5…, sonnet 5…, haiku 5…. Earlier models (Opus 4.6, Sonnet 4.6, Haiku 4.5, …) accept sampling and stay
-  // unplaced, as do `claude-3-…`, the order distills write (`Claude-4.6-Opus`) and names that only start with the word
+  // The models with an effort parameter, which is the dropdown (`thinkingLevels`) and what `resolveRequestParams` sends from one
+  // table: fable, mythos, opus 4.5/4.6/4.7/4.8/5…, sonnet 4.6 and 5…, haiku 5…. Unplaced stay Sonnet 4.5, Haiku 4.5 and Opus 4.1
+  // (no effort), `claude-3-…`, the order distills write (`Claude-4.6-Opus`) and names that only start with the word
   // (`claude-forge`). Last on purpose: a local distill that carries both names (`qwen3.6-claude-opus-distill`) is the family of
-  // its weights. A new generation needs a line here, and a test.
+  // its weights. A new generation needs a line here, in `CLAUDE_MODEL_LEVELS`, and a test.
+  // **Cost of placing 4.6 and Opus 4.5 (0.39.0):** `unsupportedFields` is a property of the family, not of the model, so the kit now
+  // withholds `temperature`, `top_p` and `top_k` from these three on EVERY backend, also where Anthropic still accepts them (Open
+  // WebUI: the compatibility layer answers 400 only from 4.7 on). Only the 400 of 4.7 and newer is a refusal; for 4.6 and 4.5 it is
+  // a loss of sampling the kit chooses. A per-model condition would be a second kind of rule (model × field); it waits for a user it hits.
   [/claude-fable/i, "claude"],
   [/claude-mythos/i, "claude"],
   [/claude-opus-5/i, "claude"],
-  [/claude-opus-4-[78]/i, "claude"],
+  [/claude-opus-4-[5678]/i, "claude"],
+  [/claude-sonnet-4-6/i, "claude"],
   [/claude-sonnet-5/i, "claude"],
   [/claude-haiku-5/i, "claude"],
 ];
@@ -292,9 +310,10 @@ const idText = (v: unknown): string => (typeof v === "string" ? v : Object.proto
 const UNKNOWN_SRC = "family not in this table: generic values";
 const UNKNOWN_EFFORT: Record<ThinkingLevel, Sourced<string>> = {
   off: us("none", UNKNOWN_SRC), low: us("low", UNKNOWN_SRC), medium: us("medium", UNKNOWN_SRC), high: us("high", UNKNOWN_SRC),
+  xhigh: us("high", UNKNOWN_SRC), max: us("high", UNKNOWN_SRC),
 };
 const UNKNOWN_RESERVE: Record<ThinkingLevel, Sourced<number>> = {
-  off: u(0, UNKNOWN_SRC), low: u(0, UNKNOWN_SRC), medium: u(0, UNKNOWN_SRC), high: u(0, UNKNOWN_SRC),
+  off: u(0, UNKNOWN_SRC), low: u(0, UNKNOWN_SRC), medium: u(0, UNKNOWN_SRC), high: u(0, UNKNOWN_SRC), xhigh: u(0, UNKNOWN_SRC), max: u(0, UNKNOWN_SRC),
 };
 
 /** The thinking table of a family on one backend: the family's own, with what that backend changes laid over it
@@ -317,11 +336,130 @@ export function familyThinking(family: FamilyId, backend: BackendId | undefined)
   };
 }
 
+/** One line of the Claude table: which effort levels a model takes and which one the API runs when none is sent. Read from the
+ *  Anthropic documentation, one `source` per line (page and day). `off` is never on a list: for Claude it is the lowest level, not a
+ *  state of its own (`canTurnOff` false). `defaultLevel` is the default OF THE API (what runs when `effort` is omitted), not what the
+ *  kit sends: the kit sends the level of the mode (`thinkingFor`). `maxOutput` is the model's synchronous output limit in tokens, or
+ *  `null` where no page of the model was read. */
+export interface ClaudeModelLevels {
+  pattern: RegExp;
+  levels: readonly ThinkingLevel[];
+  defaultLevel: ThinkingLevel | null;
+  maxOutput: number | null;
+  source: string;
+  evidence: Evidence;
+}
+
+const EFFORT_PAGE = "https://platform.claude.com/docs/en/build-with-claude/effort";
+const OVERVIEW_PAGE = "https://platform.claude.com/docs/en/models/overview";
+const modelPage = (slug: string): string => `https://platform.claude.com/docs/en/models/${slug}/overview`;
+const claudeRow = (
+  pattern: RegExp, levels: readonly ThinkingLevel[], defaultLevel: ThinkingLevel | null, maxOutput: number | null, read: string,
+): ClaudeModelLevels => ({ pattern, levels, defaultLevel, maxOutput, source: `Anthropic docs, retrieved 2026-10-27: ${read}`, evidence: "unmeasured" });
+const L5: readonly ThinkingLevel[] = ["low", "medium", "high", "xhigh", "max"];
+const L4_MAX: readonly ThinkingLevel[] = ["low", "medium", "high", "max"];
+const L3: readonly ThinkingLevel[] = ["low", "medium", "high"];
+
+/** The effort levels per Claude model, ordered: the more specific pattern first, because a pattern is not anchored
+ *  (`claude-opus-5` also matches `claude-opus-5-5`). The patterns stay in the portable subset of {@link FAMILY_PATTERNS}. Used by
+ *  {@link thinkingLevels} for the family `claude` on the backend `anthropic` only. */
+export const CLAUDE_MODEL_LEVELS: readonly ClaudeModelLevels[] = [
+  claudeRow(/claude-mythos-preview/i, ["low", "medium", "high", "max"], "high", null,
+    `${EFFORT_PAGE}: max available, xhigh not; default high. No model page read, output limit unmeasured`),
+  claudeRow(/claude-fable/i, L5, "high", null,
+    `${EFFORT_PAGE}: all five levels on Fable 5 and 5.1, default high; ${OVERVIEW_PAGE}: Fable 5.1 128K; the page of Fable 5 was not read, output limit unmeasured`),
+  claudeRow(/claude-mythos/i, L5, "high", null,
+    `${EFFORT_PAGE}: all five levels on Mythos 5 and 5.1, default high; no model page read, output limit unmeasured`),
+  claudeRow(/claude-opus-5-5/i, L5, "medium", 128000, `${EFFORT_PAGE}: all five levels, default medium; ${OVERVIEW_PAGE}: 128K output`),
+  claudeRow(/claude-opus-5/i, L5, "high", null,
+    `${EFFORT_PAGE}: all five levels, default high, 64k max_tokens suggested at xhigh and max; no model page read, output limit unmeasured`),
+  claudeRow(/claude-opus-4-[78]/i, L5, "high", null,
+    `${EFFORT_PAGE}: all five levels on Opus 4.7 and 4.8, default high; ${modelPage("opus-4-8")}: 4.8 128K; the page of 4.7 was not read, output limit unmeasured`),
+  claudeRow(/claude-sonnet-5/i, L5, "high", null,
+    `${EFFORT_PAGE}: all five levels on Sonnet 5 and 5.5, default high; ${OVERVIEW_PAGE}: Sonnet 5.5 128K; the page of Sonnet 5 was not read, output limit unmeasured`),
+  claudeRow(/claude-haiku-5/i, L5, "medium", 128000, `${EFFORT_PAGE}: all five levels, default medium; ${OVERVIEW_PAGE}: Haiku 5.5 128K output`),
+  claudeRow(/claude-opus-4-6/i, L4_MAX, "high", 128000, `${EFFORT_PAGE}: max available, xhigh not; ${modelPage("opus-4-6")}: 128K output, default high`),
+  claudeRow(/claude-sonnet-4-6/i, L4_MAX, "high", 128000,
+    `${EFFORT_PAGE}: max available, xhigh not (the page recommends medium, the API default is high); ${modelPage("sonnet-4-6")}: 128K output, default high`),
+  claudeRow(/claude-opus-4-5/i, L3, "high", 64000,
+    `${EFFORT_PAGE}: listed as claude-opus-4-5-20251101 without xhigh and max; ${modelPage("opus-4-5")}: 64K output, default high`),
+  claudeRow(/claude-haiku-4-5/i, [], null, 64000, `${EFFORT_PAGE}: not in the list of models with effort; ${modelPage("haiku-4-5")}: default effort not supported, 64K output`),
+  claudeRow(/claude-sonnet-4-5/i, [], null, null, `${EFFORT_PAGE}: not in the list of models with effort; no model page read, output limit unmeasured`),
+];
+
+/** What a Claude model that is in no row gets (an alias of the endpoint manager, a model that came after this table): the levels all
+ *  documented effort models share, with the API default of nearly all of them. */
+const CLAUDE_OTHER: Pick<ClaudeModelLevels, "levels" | "defaultLevel"> = { levels: L3, defaultLevel: "high" };
+
+/** The effort levels a dropdown offers for a model, and the default of the model (`null` where there is none to name).
+ *
+ *  - Family `claude` on the backend `anthropic`: the row of {@link CLAUDE_MODEL_LEVELS} for `model`, else low, medium, high. The
+ *    Claude lines apply to the family only, not to the backend alone: `resolveRequestParams` sends no `effort` for an unplaced model
+ *    (`claude-3-5-sonnet`), so a list for it would offer levels that never go out.
+ *  - Family `claude` on any other backend (Open WebUI, OpenAI-compatible): none, the compatibility layer ignores `reasoning_effort`.
+ *  - A local family: `off` where {@link familyThinking} says it can be turned off, then low, medium, high; never xhigh or max;
+ *    no default (`null`: the kit sends the level of the mode there, there is no model default to name).
+ *  - No family: the generic table on LM Studio and Open WebUI (off, low, medium, high), none on a strict backend (`support()`).
+ *
+ *  Nothing here imports `capabilities.ts` (that module imports this one): the table patterns are the recognition. */
+export function thinkingLevels(
+  family: FamilyId | null, backend: BackendId, model?: string,
+): { levels: readonly ThinkingLevel[]; defaultLevel: ThinkingLevel | null } {
+  const none = { levels: [] as readonly ThinkingLevel[], defaultLevel: null };
+  if (family === null) return backend === "lmstudio" || backend === "openwebui" ? { levels: GENERIC_LEVELS, defaultLevel: null } : none;
+  if (!isKnownFamily(family)) return none;
+  if (family === "claude") {
+    if (backend !== "anthropic") return none;
+    const row = model === undefined ? undefined : CLAUDE_MODEL_LEVELS.find((r) => r.pattern.test(model));
+    const { levels, defaultLevel } = row ?? CLAUDE_OTHER;
+    return { levels, defaultLevel };
+  }
+  const { canTurnOff } = familyThinking(family, backend);
+  return { levels: canTurnOff ? LOCAL_LEVELS : LOCAL_LEVELS.slice(1), defaultLevel: null };
+}
+const LOCAL_LEVELS: readonly ThinkingLevel[] = ["off", "low", "medium", "high"];
+const GENERIC_LEVELS = LOCAL_LEVELS;
+
+const isLevelValue = (v: unknown): v is ThinkingLevel => typeof v === "string" && (THINKING_LEVELS as readonly string[]).includes(v);
+
+/** A stored level mapped onto the list of the chosen model, for the dropdown on a model change. The ONE clamp function: there is no
+ *  second `clampThinkingLevel`.
+ *
+ *  `stored` is the level of the mode in operation, `thinkingFor(request, mode)`, never the raw `request.thinking[mode]`: this function
+ *  knows no mode. Missing and not-a-level (a hand edit, an older copy) count the same: "the caller knows no choice".
+ *  - empty list (nothing is sent for this model): a valid `stored` comes back unchanged, else `off`.
+ *  - `stored` on the list: unchanged.
+ *  - `stored` missing, invalid, or `off` on a list without `off` (for Claude, `off` is no state of its own and a stored `off` means
+ *    "no own choice", decided by Johannes 2026-10-27): the model's `defaultLevel`, or the lowest level of the list where there is none.
+ *  - any other level not on the list: the nearest one by distance in {@link THINKING_LEVELS}, a tie goes to the LOWER (cheaper) one
+ *    (`xhigh` between `high` and `max` on Opus 4.6 becomes `high`). */
+export function resolveThinkingLevel(
+  stored: ThinkingLevel | undefined, family: FamilyId | null, backend: BackendId, model?: string,
+): ThinkingLevel {
+  const { levels, defaultLevel } = thinkingLevels(family, backend, model);
+  const given = isLevelValue(stored) ? stored : undefined;
+  if (levels.length === 0) return given ?? "off";
+  if (given !== undefined && levels.includes(given)) return given;
+  if (given === undefined || given === "off") return defaultLevel ?? levels[0] ?? "off";
+  const at = THINKING_LEVELS.indexOf(given);
+  let best = levels[0] ?? "off";
+  for (const l of levels) {
+    const d = Math.abs(THINKING_LEVELS.indexOf(l) - at);
+    const bd = Math.abs(THINKING_LEVELS.indexOf(best) - at);
+    if (d < bd) best = l;   // `levels` runs low to high, so on a tie the first (lower) one stays
+  }
+  return best;
+}
+
 export interface ResolveInput {
   family: FamilyId | null;
   mode: ModeId;
   backend: BackendId;
   thinking: ThinkingLevel;
+  /** The model id (0.39.0, optional). With it the level is first mapped onto the list of that model by {@link resolveThinkingLevel}:
+   *  `max` on Opus 4.5 goes out as `high`, a stored `off` on a Claude model becomes the model's default. Without it the level goes
+   *  out as given, as before: on a local family `xhigh` and `max` are then the value of `high`. */
+  model?: string;
   /** The plugin's budget. Absent = max_tokens is not sent. */
   maxTokens?: number;
   /** Already selected for this mode × family, already validated. */
@@ -352,7 +490,7 @@ export interface ResolvedRequest {
   unrecognised?: { backend?: string; family?: string };
 }
 
-export const GENERIC_EFFORT: Record<ThinkingLevel, string> = { off: "none", low: "low", medium: "medium", high: "high" };
+export const GENERIC_EFFORT: Record<ThinkingLevel, string> = { off: "none", low: "low", medium: "medium", high: "high", xhigh: "high", max: "high" };
 export const FAMILY_FIELDS: readonly FamilyField[] = ["top_p", "top_k", "min_p", "presence_penalty"];
 
 interface Candidate { value: number | string; origin: FieldOrigin; source?: string; evidence?: Evidence; note?: FieldNote }
@@ -369,7 +507,11 @@ export function resolveRequestParams(rawInput: ResolveInput): ResolvedRequest {
   if (!backendKnown) unrecognised.backend = idText(rawInput.backend);
   const familyKnown = !rawInput.family || isKnownFamily(rawInput.family);
   if (!familyKnown) unrecognised.family = idText(rawInput.family);
-  const input: ResolveInput = { ...rawInput, backend: backendKnown ? rawInput.backend : "unknown", family: familyKnown ? (rawInput.family ?? null) : null };
+  const backend: BackendId = backendKnown ? rawInput.backend : "unknown";
+  const family: FamilyId | null = familyKnown ? (rawInput.family ?? null) : null;
+  // With a model, the stored level is clamped to that model's list first; every later step (floor, effort, reserve) sees the clamped one.
+  const thinking = rawInput.model === undefined ? rawInput.thinking : resolveThinkingLevel(rawInput.thinking, family, backend, rawInput.model);
+  const input: ResolveInput = { ...rawInput, backend, family, thinking };
   const fallback: ("backend" | "family")[] = [...(backendKnown ? [] : ["backend" as const]), ...(familyKnown ? [] : ["family" as const])];
   const fam = input.family ? FAMILIES[input.family] : null;
   const think = input.family ? familyThinking(input.family, input.backend) : null;
@@ -478,7 +620,7 @@ export const RANGES: Record<Exclude<FieldId, "reasoning_effort">, { min: number;
   presence_penalty: { min: 0, max: 2, int: false },
   max_tokens: { min: 1, max: Number.MAX_SAFE_INTEGER, int: true },
 };
-export const EFFORT_VALUES = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
+export const EFFORT_VALUES = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 export function validateOverride(field: FieldId, raw: unknown): number | string | null {
   if (field === "reasoning_effort") return typeof raw === "string" && EFFORT_VALUES.has(raw) ? raw : null;

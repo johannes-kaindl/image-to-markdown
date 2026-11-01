@@ -4,7 +4,7 @@ import { renderMarkdownGuarded } from "./vendor/kit-obsidian/dom-guard";
 import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, refineRequest } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
 import { getLang, t } from "./i18n";
-import { thinkingOffTexts } from "./vendor/kit-obsidian/thinking-control";
+import { thinkingLevelTexts, thinkingOffTexts } from "./vendor/kit-obsidian/thinking-control";
 import { buildModelBar, type ModelBar, type ModelBarConnection } from "./vendor/kit-obsidian/model-bar";
 import type { BackendId, FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { CardCache } from "./card_cache";
@@ -97,7 +97,7 @@ export interface ImgToMdViewDeps {
   getPreset: () => string;
   setPreset: (id: string) => void;
   /** Stand der Denk-Steuerung: Familie der aufgeloesten Quelle, aktuelle und Ein-Stufe, Stufenwahl an/aus. */
-  thinkingState: () => { family: FamilyId | null; backend?: BackendId | undefined; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean };
+  thinkingState: () => { family: FamilyId | null; backend?: BackendId | undefined; level: ThinkingLevel; onLevel: ThinkingLevel };
   /** Ob Denkprozess-Blöcke im Nachbesserungs-Verlauf standardmäßig aufgeklappt starten. */
   getReasoningExpanded: () => boolean;
   setThinkingLevel: (l: ThinkingLevel) => Promise<void>;
@@ -242,7 +242,7 @@ export class ImgToMdView extends ItemView {
       disabled: () => this.running,
       onChange: () => { this.updateModelStatus(); },
       onError: (e) => { this.statusLabelEl?.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); },
-      // Denk-Steuerung in derselben Zeile (Zustands-Knopf nach UI-STANDARD §8, optional Stufenwahl).
+      // Denk-Steuerung in derselben Zeile: seit Kit 0.73.0 immer ein Dropdown mit den Stufen des Modells (`levelPicker` gilt in der Zeile nicht).
       // Die Familie kommt aus der Endpunkt-Aufloesung, nicht aus dem Modellnamen.
       thinking: {
         family: () => this.deps.thinkingState().family,
@@ -250,14 +250,13 @@ export class ImgToMdView extends ItemView {
         current: () => this.deps.thinkingState().level,
         onLevel: () => this.deps.thinkingState().onLevel,
         setLevel: (l) => this.deps.setThinkingLevel(l),
-        levelPicker: () => this.deps.thinkingState().levelPicker,
+        levelPicker: () => true,   // Pflichtfeld des Kit-Typs; in der Modellzeile ist die Stufe immer eine Auswahl
         strings: {
-          button: (level) => level === "off"
-            ? t("think.button.off")
-            : t("think.button.on", t(`request.level.${level}`)),
+          // Die Modellzeile zeigt die Stufe immer als Dropdown; Stufentexte, Namen und Zusatz bei xhigh/max sind die des Kits (EN/DE nach App-Sprache).
+          ...thinkingLevelTexts(getLang()),
+          button: (level) => thinkingLevelTexts(getLang()).level(level),   // Pflichtfeld des Kit-Typs, der Knopf entfällt in der Zeile
           // „aus“ nicht möglich (Gemma 4 auf LM Studio, Claude): Kit-Text mit Grund im Tooltip.
           offNotPossible: thinkingOffTexts(getLang()),
-          level: (l) => t(`think.level.${l}`),
           pickerLabel: t("think.pickerLabel"),
         },
       },

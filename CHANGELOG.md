@@ -6,6 +6,15 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Vendored `obsidian-kit` 0.74.0 (was 0.72.0) and `code-kit` 0.40.0 (was 0.38.0).** The visible changes are in the model row of the sidebar; the other changes of these releases (the chat window and its history, `live-indexer`, `detectEol`) touch modules this plugin does not use.
+- **The thinking control in the model row is now a dropdown with the levels of the chosen model, not a two-state button.** It has a brain icon in front and offers Off / Low / Medium / High (English) or Aus / Niedrig / Mittel / Hoch (German); for a Claude model the list is the one that model supports, up to Very high and Max. The old button texts ("Thinking: off", "Thinking: lowest level") are gone, and so are the German texts "Thinking: aus/niedrig/mittel/hoch". Models whose family the plugin cannot place show no dropdown, unless the server is LM Studio or Open WebUI: those get the four general levels. Before, the button was always there.
+- **The setting "Level picker in chat" is gone from Settings → Request.** The model row always shows the level as a dropdown now, so the setting did nothing; a saved value stays in your data and is ignored.
+- **A model that cannot be switched off (gpt-oss, Gemma 4 in LM Studio) shows its lowest level and sends it:** a saved "off" is now sent as `low` for gpt-oss (it was `minimal`), and the dropdown has no "Off" entry. With a Claude model, a saved "off" sends the model's own default level (more thinking, time and cost until you lower the level), and a level the model does not have becomes the next lower one.
+- **The model's full name is the tooltip of the model dropdown** (unless the dropdown shows a hint such as "endpoint not reachable"), and in a narrow sidebar the name is cut with an ellipsis before the level dropdown and the reload icon give way. On mobile, the "Reload models" icon is 44 × 44 px.
+- **Claude models (through the LLM Endpoint Manager):** Opus 4.6, Sonnet 4.6 and Opus 4.5 no longer receive `temperature`, `top_p` or `top_k`; Haiku 4.5 and Claude behind Open WebUI show no "Thinking level" row under Settings → Request.
+
 ## [0.32.1] — 2026-10-26
 
 ### Fixed

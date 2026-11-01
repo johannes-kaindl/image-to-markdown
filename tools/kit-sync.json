@@ -1,10 +1,10 @@
 {
   "sources": {
     "obsidian-kit": {
-      "ref": "0.72.0"
+      "ref": "0.74.0"
     },
     "code-kit": {
-      "ref": "0.38.0"
+      "ref": "0.40.0"
     }
   },
   "targets": [
@@ -13,7 +13,6 @@
       "source": "obsidian-kit",
       "from": "src/pure",
       "modules": [
-        "anthropic-wire",
         "endpoint-secret-hook",
         "endpoint-source",
         "ocr-provider",
@@ -35,6 +34,7 @@
       "source": "code-kit",
       "from": "src/ts/pure",
       "modules": [
+        "anthropic-wire",
         "backend-probe",
         "capabilities",
         "data-url",

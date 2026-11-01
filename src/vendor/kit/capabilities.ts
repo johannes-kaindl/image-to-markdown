@@ -1,4 +1,4 @@
-// vendored from code-kit@0.38.0, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.40.0, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { ThinkingSupport } from "./reasoning";
 import { familyFromName, type BackendId } from "./sampling-profiles";
 
@@ -57,7 +57,7 @@ function guessVision(m: string): Confidence {
 function guessThinking(m: string): ThinkingState {
   // Thinking that cannot be switched off, as in the `claude` profile of `sampling-profiles` (`canTurnOff` false: `off` is the lowest
   // effort). `always` here is the guess behind the hint "turning it off will likely do nothing", not the lock of `isAlwaysOnThinker`.
-  // Only the models that profile places; the earlier ones have a switch and think only when asked.
+  // Only the models that profile places (since 0.39.0 that includes Opus 4.6, Sonnet 4.6 and Opus 4.5, which have effort levels); the others have a switch and think only when asked.
   if (CLAUDE_NAME.test(m) && familyFromName(m) === "claude") return { support: "always", confidence: "likely" };
   if (QWEN3_NONTHINK.test(m)) return { support: "none", confidence: "no" };
   if (ALWAYS.some(a => m.includes(a))) return { support: "always", confidence: "likely" };

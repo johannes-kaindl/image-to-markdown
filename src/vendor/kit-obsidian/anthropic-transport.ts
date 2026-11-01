@@ -1,8 +1,8 @@
-// vendored from obsidian-kit@0.72.0, src/obsidian/anthropic-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.74.0, src/obsidian/anthropic-transport.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Transport für die native Messages-API von Anthropic (`transport: "anthropic"` am Endpunkt): ein `SseTransport`
  *  wie `createShortcutsChatTransport`, der den OpenAI-Körper des `chat-client` übersetzt, an `POST /v1/messages`
  *  schickt und die Antwort in OpenAI-SSE zurückübersetzt. `chat-client`, Schwärzung, Idle-Frist, Denkzerlegung und
- *  Fehlerklassen laufen unverändert; die Übersetzung steht in `pure/anthropic-wire.ts`.
+ *  Fehlerklassen laufen unverändert; die Übersetzung steht in code-kit (`anthropic-wire`, vendort unter `vendor/code-kit/pure/`).
  *
  *  **Rohes HTTP statt `@anthropic-ai/sdk`** (Entscheidung Johannes' Master 2026-10-16, gemessen in Welle 23):
  *  PROF-OBS-12 verbietet globales `fetch`, auf dem das SDK streamt; der kleinste Client kostet als Bündel 314 KB

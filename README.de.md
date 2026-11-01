@@ -27,7 +27,7 @@
 - **Eigenständige Dateien** — eine PDF oder ein Bild direkt in Obsidian öffnen, und die Sidebar behandelt *diese Datei* als Quelle — keine umgebende Notiz nötig
 - **Prompt-Presets** — ein Wähler neben dem Modell in der Sidebar: ein „Standard"-Preset (dein editierbarer Prompt) plus feste Modi für Tabellen → Markdown, Handschrift, Mathe → LaTeX und Quellcode; die Wahl bleibt erhalten. Bei einem lokalen Vision-Modell ist der Prompt der wichtigste Qualitätshebel. (Bildbeschreibung gewünscht? Dafür gibt es jetzt den Beschreiben-Modus oben.)
 - **Endpoint-Fallback-Liste** — eine geordnete Liste von Vision-Endpunkten konfigurieren (API-Schlüssel optional, im Schlüsselbund von Obsidian statt in der `data.json`); das Plugin pingt sie der Reihe nach und nutzt den ersten erreichbaren automatisch — eine einzige gesyncte Config funktioniert auf allen Geräten und Netzen
-- **Thinking-Toggle** — ein Schalter neben der Modellauswahl schaltet das Nachdenken (Reasoning) von Hybrid-Modellen ab, um Wartezeit zu sparen; bleibt erhalten (Default: an); Modelle, die sich nicht abschalten lassen, zeigen „Denken: niedrigste Stufe"
+- **Denkstufe** — ein Dropdown neben der Modellauswahl (Hirn-Symbol, dann die Stufen des gewählten Modells: **Aus / Niedrig / Mittel / Hoch**, bei Claude bis **Sehr hoch** und **Maximal**) steuert, wie viel ein Hybrid-Modell nachdenkt, um Wartezeit zu sparen; bleibt erhalten (Default: aus); wo sich „Aus“ nicht einstellen lässt (gpt-oss, Gemma 4 in LM Studio), beginnt die Liste bei **Niedrig**, und genau diese Stufe wird gesendet; bei Claude sendet ein gespeichertes „Aus“ die Standardstufe des Modells. Modelle, die das Plugin nicht einordnen kann, zeigen kein Stufen-Dropdown, außer der Server ist LM Studio oder Open WebUI (dann die vier allgemeinen Stufen). Der volle Modellname steht im Tooltip des Dropdowns.
 - **Konfigurierbares Frontmatter-Mapping** — jeder Frontmatter-Schlüssel der erzeugten Notizen (und der `type`-Wert) lässt sich auf dein eigenes Vault-Schema anpassen — einheitlich für Transkript-, PDF- und Beschreibungs-Notizen
 
 ### Screenshots
@@ -59,9 +59,9 @@
 
 <img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/diff-modal.png" width="522" alt="Der Dialog „Overwrite field-notes (transcript).md?“: ein Zeilen-Diff mit einer Checkbox je geändertem Hunk (eine abgewählt), unveränderte Kontextzeilen ohne Checkbox, dazu die Knöpfe Cancel und Apply">
 
-**Thinking-Schalter** — die Wartezeit großer Reasoning-Modelle überspringen:
+**Denkstufe** — die Wartezeit großer Reasoning-Modelle verkürzen:
 
-<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="Die Modellzeile der Sidebar mit Modell-Dropdown und dem Thinking-Schalter auf „Thinking: on“">
+<img src="https://raw.githubusercontent.com/johannes-kaindl/image-to-markdown/main/docs/images/thinking-toggle.png" width="450" alt="Die Modellzeile der Sidebar mit Modell-Dropdown und dem Dropdown der Denkstufe">
 
 ### Im Detail
 
@@ -138,11 +138,7 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
 - **Endpoint-Fallback-Liste.** Statt eines einzelnen Vision-Endpunkts nimmt das Plugin eine geordnete Liste entgegen. Bei jedem Resolve (Sidebar-Refresh oder nach einem fehlgeschlagenen Aufruf mit einem automatischen Retry) werden die Endpunkte der Reihe nach angepingt und der erste erreichbare genutzt. Der aktive Endpunkt ist im Settings-Tab markiert und wird in der Sidebar-Statuszeile als **„verbunden via \<Endpunkt\>"** angezeigt. Der Settings-Tab rendert ein dynamisches Feld pro Eintrag — ein leeres Abschlussfeld ist der „Neu hinzufügen"-Einstieg; ein Feld leeren und verlassen entfernt den Eintrag. Jedes Feld zeigt ein eigenes Erreichbarkeits-Icon (Kreis-Haken / Kreis-X / Ladekreis) plus barrierefreien Titeltext. Eine einzige gesyncte `data.json` funktioniert damit auf allen Geräten: `localhost:1234` zuerst (das Gerät mit LM Studio), dann eine LAN-IP als Fallback (z.B. erreichbar vom Handy via WireGuard). Jeder Eintrag kann seinen **eigenen API-Schlüssel** tragen (Passwortfeld neben der Adresse) — so stehen ein lokaler Server und ein gehosteter Anbieter in derselben Kette; ohne Schlüssel geht gar kein `Authorization`-Header raus. **Die Schlüssel liegen im Schlüsselbund von Obsidian** (Einstellungen → Schlüsselbund), nicht in der `data.json`: ein Schlüssel aus einer älteren Version zieht beim ersten Auflösen der Endpunkte automatisch dorthin um, und eine gesyncte `data.json` trägt ihn nicht mehr — das Schlüsselfeld auf jedem Gerät prüfen. Migration ist automatisch: sowohl ein vorhandenes `visionEndpoint`-Feld als auch eine reine String-Liste werden still in die aktuelle Form überführt — kein manueller Eingriff nötig.
 
 - **LLM Endpoint Manager.** Ist das Plugin **LLM Endpoint Manager** installiert, kommen die Endpunkte (samt Schlüsseln) stattdessen von ihm: Der Einstellungen-Tab bietet dann eine Endpunkt- und Modellwahl sowie einen Knopf, der deine lokalen Endpunkte in den Manager übernimmt; die lokale Liste bleibt als Rückfall erhalten, wenn der Manager aus ist. Meldet der Manager keinen Endpunkt, gibt es keinen Rückfall auf die lokale Liste.
-- **Thinking-Toggle.** Ein Schalter neben der Modellauswahl (Gehirn-Icon, beschriftet
-  „Thinking: an" / „Thinking: aus") schaltet das Nachdenken (Reasoning) von Hybrid-Modellen ab —
-  praktisch, wenn ein großes Reasoning-Modell sonst lange denkt, bevor du das Ergebnis bekommst. Der
-  Zustand bleibt erhalten (Standard: an). Modelle, die sich nicht abschalten lassen (z. B.
-  gpt-oss/harmony), zeigen „Denken: niedrigste Stufe"; der Tooltip nennt den Grund (die niedrigste verfügbare Stufe wird gesendet).
+- **Denkstufe.** Ein Dropdown neben der Modellauswahl (Gehirn-Icon, dann die Stufen des gewählten Modells: Aus / Niedrig / Mittel / Hoch, bei Claude bis Sehr hoch und Maximal) steuert, wie viel ein Hybrid-Modell nachdenkt — praktisch, wenn ein großes Reasoning-Modell sonst lange denkt, bevor du das Ergebnis bekommst. Die Wahl bleibt erhalten (Standard: aus). Modelle, die sich nicht abschalten lassen (z. B. gpt-oss/harmony, Gemma 4 in LM Studio), beginnen die Liste bei „Niedrig"; genau diese niedrigste Stufe wird gesendet.
 - **Konfigurierbares Frontmatter-Mapping.** Alle Frontmatter-Schlüssel der erzeugten Notizen — plus
   der `type`-Wert selbst — lassen sich unter „Frontmatter-Mapping" in den Einstellungen an dein
   eigenes Vault-Schema anpassen (z. B. `kind` → `type`) — einheitlich für Transkript-, PDF- und

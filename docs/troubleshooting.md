@@ -34,7 +34,7 @@ or, when you transcribed from the command palette: `Empty transcript: <image>`
 
 **Cause:** a reasoning model used its whole token budget on thinking before it wrote the first character.
 
-**Fix:** switch thinking off with the **Thinking: on** toggle next to the model picker in the sidebar. A model that shows **Thinking: lowest level** cannot be switched off (the lowest available level is sent) — use another model or raise its token limit in the server.
+**Fix:** lower the thinking level (**Off** or **Low**) in the dropdown next to the model picker in the sidebar. A model whose list has no **Off** entry (gpt-oss, Gemma 4 in LM Studio) cannot be switched off (the lowest available level is sent) — use another model or raise its token limit in the server.
 
 ## The transcript is cut off
 

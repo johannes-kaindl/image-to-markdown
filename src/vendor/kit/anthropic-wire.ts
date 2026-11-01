@@ -1,32 +1,39 @@
-// vendored from obsidian-kit@0.72.0, src/pure/anthropic-wire.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
-/** Die Leitungsform der Anthropic Messages-API (`POST /v1/messages`) als reine Funktionen — ohne `obsidian`-Import,
- *  in Node gegen Doubles testbar. Der Transport (`obsidian/anthropic-transport.ts`) steckt sie zwischen den
- *  `chat-client` und das Netz: der Client spricht weiter das OpenAI-Format (Nachrichten, `tool_calls`, SSE-`choices`),
- *  die Übersetzung steht an EINER Stelle. Vorbild für die Naht ist `createShortcutsChatTransport` (Apple, Welle 13):
- *  ein `SseTransport`, der eine andere Gegenstelle als OpenAI bedient, ohne dass `chat-client`, Schwärzung,
- *  Idle-Frist, Denkzerlegung und Fehlerklassen sich ändern.
+// vendored from code-kit@0.40.0, src/ts/pure/anthropic-wire.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+/** Origin: obsidian-kit `src/pure/anthropic-wire.ts` (0.71.0; the Claude transport exists since 0.62.0); moved to code-kit in Welle 28 with the
+ *  logic unchanged — only these comments were translated.
  *
- *  ── Was übersetzt wird ───────────────────────────────────────────────────────────────────────
- *  Anfrage: `system`/`developer`-Nachrichten wandern in das Feld `system` (die API kennt keine System-Rolle im
- *  Verlauf), `tool`-Nachrichten werden `tool_result`-Blöcke EINER Nutzernachricht (parallele Werkzeuge gehören
- *  in eine), `image_url` wird ein `image`-Block, Werkzeuge `{type:"function"}` werden `{name, input_schema}`.
- *  Von den Parametern kommen nur `max_tokens`, `stop` (→ `stop_sequences`) und `effort` (→ `output_config.effort`)
- *  durch; `temperature`, `top_p` und der Rest fehlen absichtlich — das Profil `claude` aus code-kit (`unsupportedFields`)
- *  sendet sie nie, und ein fester Wert aus einem Aufruf würde auf Claude 4.7 und neuer einen 400 auslösen.
- *  Antwort: `text_delta` → `delta.content`, `thinking_delta` → `delta.reasoning_content`, `input_json_delta` →
+ *  The wire format of the Anthropic Messages API (`POST /v1/messages`) as pure functions — no `obsidian` import, testable in Node against
+ *  doubles. The transport (`obsidian/anthropic-transport.ts` in obsidian-kit) slots them between `chat-client` and the network: the client
+ *  keeps speaking the OpenAI format (messages, `tool_calls`, SSE `choices`), the translation lives in ONE place. The model for the seam is
+ *  `createShortcutsChatTransport` (Apple, Welle 13): an `SseTransport` that serves a counterpart other than OpenAI without `chat-client`,
+ *  redaction, idle deadline, think splitting and error classes changing.
+ *
+ *  What does NOT live here: the transport itself (`anthropic-transport.ts`, with `requestUrl`, the key and the browser headers) stays in
+ *  obsidian-kit. This file has no imports and no I/O.
+ *
+ *  Relation to `model-context.ts`: `parseAnthropicContext` reads `max_input_tokens` from `GET /v1/models`, `modelCapsFromList` reads
+ *  `max_tokens`, `effort` and adaptive thinking from the same answer — same response, other fields, hence two functions. `model-context`
+ *  imports {@link ANTHROPIC_VERSION} from here, so the value stands once. **Whoever vendors `model-context` needs this file too.**
+ *
+ *  ── What is translated ───────────────────────────────────────────────────────────────────────
+ *  Request: `system`/`developer` messages move into the `system` field (the API has no system role in the history), `tool` messages become
+ *  `tool_result` blocks of ONE user message (parallel tools belong in one), `image_url` becomes an `image` block, tools `{type:"function"}`
+ *  become `{name, input_schema}`. Of the parameters only `max_tokens`, `stop` (→ `stop_sequences`) and `effort` (→ `output_config.effort`)
+ *  get through; `temperature`, `top_p` and the rest are missing on purpose — the `claude` profile of code-kit (`unsupportedFields`) never
+ *  sends them, and a fixed value from a call would trigger a 400 on Claude 4.7 and newer.
+ *  Response: `text_delta` → `delta.content`, `thinking_delta` → `delta.reasoning_content`, `input_json_delta` →
  *  `delta.tool_calls[].function.arguments`, `stop_reason` → `finish_reason`.
  *
- *  ── Denkblöcke im Werkzeug-Verlauf ───────────────────────────────────────────────────────────
- *  Eine Assistenten-Runde mit `tool_use` geht UNVERÄNDERT samt ihrem Denkblock (mit `signature`) zurück, solange
- *  ihr `tool_result` aussteht. Der OpenAI-Verlauf trägt den Block nicht: der Aufrufer sieht nur Text und `tool_calls`.
- *  Deshalb merkt sich der Transport die Denkblöcke je `tool_use`-Id (`ThinkingStash`) samt ihrem Platz — Denkblöcke
- *  stehen VOR dem Text oder vor dem Werkzeug-Aufruf, den sie einleiten (Fortschrittsnotizen, Opus 5.5) — und setzt sie
- *  beim Zurückschicken an dieselbe Stelle. Fehlt der Eintrag (Neustart des Plugins mitten in der Runde), geht die Runde
- *  ohne Denkblock raus. */
+ *  ── Thinking blocks in the tool history ──────────────────────────────────────────────────────
+ *  An assistant round with `tool_use` goes back UNCHANGED, with its thinking block (and `signature`), as long as its `tool_result` is
+ *  pending. The OpenAI history does not carry the block: the caller sees only text and `tool_calls`. So the transport remembers the thinking
+ *  blocks per `tool_use` id (`ThinkingStash`) together with their place — thinking blocks stand BEFORE the text or before the tool call they
+ *  introduce (progress notes, Opus 5.5) — and puts them back in the same place when sending. If the entry is missing (the plugin restarted
+ *  in the middle of the round), the round goes out without a thinking block. */
 
 export const ANTHROPIC_VERSION = "2023-06-01";
-/** Obergrenzen, wenn weder Plugin noch Modell-Liste ein `max_tokens` nennen: Stream (Zeitüberschreitungen sind dort
- *  kein Thema) bzw. volle Antwort (bleibt unter den HTTP-Fristen). `min` mit der Modellgrenze aus `/v1/models`. */
+/** Upper bounds when neither the caller nor the model list names a `max_tokens`: a stream (timeouts are no issue there) and a full
+ *  response (stays under the HTTP deadlines). Taken as `min` with the model limit from `/v1/models`. */
 export const ANTHROPIC_DEFAULT_MAX_TOKENS_STREAM = 64_000;
 export const ANTHROPIC_DEFAULT_MAX_TOKENS = 16_000;
 
@@ -34,20 +41,19 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-// ── Modell-Fähigkeiten ───────────────────────────────────────────────────────────────────────────
+// ── Model capabilities ───────────────────────────────────────────────────────────────────────────
 
-/** Was `GET /v1/models` je Modell ausweist und der Transport braucht. `undefined` = die Liste nennt es nicht
- *  (Stub, Proxy, Modell fehlt): dann wird das Feld NICHT gesendet — ein fehlendes Feld ist auf jedem Modell gültig,
- *  ein falsches `effort` auf Sonnet 4.5 oder Haiku 4.5 ein 400. */
+/** What `GET /v1/models` reports per model and the transport needs. `undefined` = the list does not name it (stub, proxy, model
+ *  missing): then the field is NOT sent — a missing field is valid on every model, a wrong `effort` on Sonnet 4.5 or Haiku 4.5 is a 400. */
 export interface AnthropicModelCaps {
   effort?: boolean;
   adaptiveThinking?: boolean;
-  /** `max_tokens` des Modells (Ausgabegrenze). */
+  /** The model's `max_tokens` (output limit). */
   maxOutputTokens?: number;
 }
 
-/** Liest die Fähigkeiten eines Modells aus der Antwort von `GET /v1/models` (`{data:[{id, max_tokens, capabilities}]}`);
- *  `null`, wenn die Liste das Modell nicht enthält oder keine Liste ist. */
+/** Reads the capabilities of a model from the answer of `GET /v1/models` (`{data:[{id, max_tokens, capabilities}]}`);
+ *  `null` when the list does not contain the model or is no list. */
 export function modelCapsFromList(json: unknown, modelId: string): AnthropicModelCaps | null {
   if (!isRecord(json) || !Array.isArray(json.data)) return null;
   const row: unknown = (json.data as unknown[]).find((m: unknown) => isRecord(m) && m.id === modelId);
@@ -66,15 +72,15 @@ export function modelCapsFromList(json: unknown, modelId: string): AnthropicMode
   return out;
 }
 
-// ── Anfrage ──────────────────────────────────────────────────────────────────────────────────────
+// ── Request ──────────────────────────────────────────────────────────────────────────────────────
 
 export type AnthropicBlock = Record<string, unknown> & { type: string };
 
-/** Ein gemerkter Denkblock und wovor er stand: `"text"` (vor dem Antworttext oder, ohne Text, am Anfang), die Id eines
- *  `tool_use` (unmittelbar davor) oder `"end"`. */
+/** A stashed thinking block and what it stood before: `"text"` (before the answer text or, without text, at the start), the id of a
+ *  `tool_use` (immediately before it) or `"end"`. */
 export interface ThinkingAnchor { block: AnthropicBlock; before: string }
 
-/** Denkblöcke (`thinking`, `redacted_thinking`) je `tool_use`-Id; beschränkt, damit eine lange Sitzung nicht wächst. */
+/** Thinking blocks (`thinking`, `redacted_thinking`) per `tool_use` id; bounded so a long session does not grow it. */
 export interface ThinkingStash {
   get(toolUseId: string): ThinkingAnchor[] | undefined;
   set(toolUseIds: readonly string[], anchors: ThinkingAnchor[]): void;
@@ -99,7 +105,7 @@ export function createThinkingStash(limit = 256): ThinkingStash {
 export interface ToAnthropicOptions {
   caps: AnthropicModelCaps | null;
   stash?: ThinkingStash;
-  /** Default `true`; `false` lässt jeden Denkblock des Verlaufs weg (Wiederholung nach „Invalid signature“). */
+  /** Default `true`; `false` drops every thinking block of the history (the retry after "Invalid signature"). */
   withThinkingBlocks?: boolean;
 }
 
@@ -114,7 +120,7 @@ function textOf(content: unknown): string {
     .join("\n");
 }
 
-/** `data:image/png;base64,…` ohne Regex über den Nutzdaten (Bilder sind Megabytes groß). */
+/** `data:image/png;base64,…` without a regex over the payload (images are megabytes). */
 function imageBlock(url: string): AnthropicBlock | null {
   if (url.startsWith("data:")) {
     const sep = url.indexOf(";base64,");
@@ -152,8 +158,8 @@ function parseArguments(args: unknown): Record<string, unknown> {
 
 interface Turn { role: "user" | "assistant"; blocks: AnthropicBlock[] }
 
-/** Ein Turn je Rolle: aufeinanderfolgende gleiche Rollen verschmelzen (die API erlaubt es, aber `tool_result`-Blöcke
- *  müssen in einer Nutzernachricht VOR deren Text stehen). */
+/** One turn per role: consecutive equal roles merge (the API allows it, but `tool_result` blocks must stand in a user message BEFORE
+ *  its text). */
 function pushTurn(turns: Turn[], role: Turn["role"], blocks: AnthropicBlock[]): void {
   if (blocks.length === 0) return;
   const last = turns.at(-1);
@@ -165,7 +171,7 @@ function toolResultsFirst(blocks: AnthropicBlock[]): AnthropicBlock[] {
   return [...blocks.filter((b) => b.type === "tool_result"), ...blocks.filter((b) => b.type !== "tool_result")];
 }
 
-/** Die Ids der `tool_use`-Blöcke einer fertigen Anfrage — Hilfe für die Wiederholung und die Tests. */
+/** The ids of the `tool_use` blocks of a finished request — a help for the retry and the tests. */
 export function toolUseIdsOf(messages: unknown): string[] {
   const ids: string[] = [];
   if (!Array.isArray(messages)) return ids;
@@ -176,7 +182,7 @@ export function toolUseIdsOf(messages: unknown): string[] {
   return ids;
 }
 
-/** Ob die Anfrage Denkblöcke aus dem Merkzettel trägt (Wiederholung nur dann sinnvoll). */
+/** Whether the request carries thinking blocks from the stash (a retry only makes sense then). */
 export function hasThinkingBlocks(messages: unknown): boolean {
   if (!Array.isArray(messages)) return false;
   return messages.some((m: unknown) => isRecord(m) && Array.isArray(m.content)
@@ -202,8 +208,8 @@ function wireTools(tools: unknown): Record<string, unknown>[] {
   return out;
 }
 
-/** Der OpenAI-Körper, den `chat-client` baut (`model`, `messages`, `stream`, `tools`, dazu die flachen Parameter),
- *  als Körper für `POST /v1/messages`. */
+/** The OpenAI body that `chat-client` builds (`model`, `messages`, `stream`, `tools`, plus the flat parameters) as a body for
+ *  `POST /v1/messages`. */
 export function toAnthropicBody(body: unknown, opts: ToAnthropicOptions): Record<string, unknown> {
   const b = isRecord(body) ? body : {};
   const messages = Array.isArray(b.messages) ? b.messages : [];
@@ -233,8 +239,8 @@ export function toAnthropicBody(body: unknown, opts: ToAnthropicOptions): Record
         toolBlocks.push({ type: "tool_use", id: typeof tc.id === "string" && tc.id !== "" ? tc.id : `call_${i}`, name: fn.name, input: parseArguments(fn.arguments) });
       }
       const text = textOf(m.content);
-      // Denkblöcke an ihren Platz zurück: vor den Text, vor das Werkzeug, das sie einleiteten, oder ans Ende. Ein Anker, dessen
-      // Werkzeug der Aufrufer weggelassen hat, wandert an den Anfang (nie still verlieren: die Wiederholung fängt einen 400 ab).
+      // Thinking blocks back in their place: before the text, before the tool they introduced, or at the end. An anchor whose tool the
+      // caller left out moves to the start (never lose it silently: the retry catches a 400).
       const saved = withThinking && opts.stash ? toolBlocks.map((tb) => opts.stash?.get(tb.id as string)).find((a) => a !== undefined) : undefined;
       const present = new Set(toolBlocks.map((tb) => tb.id as string));
       const placed = (before: string): AnthropicBlock[] => (saved ?? []).filter((a) => (before === "text" ? a.before === "text" || (a.before !== "end" && !present.has(a.before)) : a.before === before)).map((a) => a.block);
@@ -271,7 +277,7 @@ export function toAnthropicBody(body: unknown, opts: ToAnthropicOptions): Record
   return out;
 }
 
-// ── Antwort ──────────────────────────────────────────────────────────────────────────────────────
+// ── Response ──────────────────────────────────────────────────────────────────────────────────────
 
 const FINISH: Record<string, string> = {
   end_turn: "stop", stop_sequence: "stop", pause_turn: "stop",
@@ -282,7 +288,7 @@ export function finishReasonOf(stopReason: unknown): string {
   return typeof stopReason === "string" ? (FINISH[stopReason] ?? "stop") : "stop";
 }
 
-/** HTTP-Status zu einem Fehlertyp der API — für den Fehler MITTEN im Strom (dort war der Status schon 200). */
+/** HTTP status for an error type of the API — for the error in the MIDDLE of the stream (where the status was already 200). */
 const ERROR_STATUS: Record<string, number> = {
   invalid_request_error: 400, authentication_error: 401, billing_error: 402, permission_error: 403, not_found_error: 404,
   request_too_large: 413, rate_limit_error: 429, api_error: 500, overloaded_error: 529, timeout_error: 504,
@@ -291,8 +297,8 @@ export function anthropicErrorStatus(type: unknown): number {
   return typeof type === "string" ? (ERROR_STATUS[type] ?? 500) : 500;
 }
 
-/** Die 400er-Antwort, die ein Denkblock mit fremder Signatur auslöst (preserved thinking, Wortlaut der Doku):
- *  Auslöser der einen Wiederholung ohne Denkblöcke. */
+/** The 400 answer that a thinking block with a foreign signature triggers (preserved thinking, wording of the docs): the trigger of the
+ *  one retry without thinking blocks. */
 export const THINKING_SIGNATURE_RE = /invalid\s+`?signature`?\s+in\s+`?(?:redacted_)?thinking`?\s+block|bound to a different conversation/i;
 export function isThinkingSignatureError(raw: string): boolean {
   return THINKING_SIGNATURE_RE.test(raw);
@@ -301,13 +307,13 @@ export function isThinkingSignatureError(raw: string): boolean {
 const chunk = (obj: unknown): string => `data: ${JSON.stringify(obj)}\n\n`;
 
 export interface StreamTranslator {
-  /** Rohtext des Anthropic-Stroms → OpenAI-SSE-Zeilen (`""`, wenn nichts Vollständiges da ist). */
+  /** Raw text of the Anthropic stream → OpenAI SSE lines (`""` when nothing complete is there). */
   push(text: string): string;
-  /** Rest und Abschluss (`data: [DONE]`), einmal nach dem letzten `push`. */
+  /** The rest and the close (`data: [DONE]`), once after the last `push`. */
   finish(): string;
-  /** Fehler-Ereignis (`event: error`) mitten im Strom. */
+  /** Error event (`event: error`) in the middle of the stream. */
   readonly error: { type: string; message: string } | null;
-  /** Das Denken (samt Platz) und die Werkzeug-Ids der Runde, sobald `finish()` lief (für den Merkzettel). */
+  /** The thinking (with its place) and the tool ids of the round, once `finish()` ran (for the stash). */
   readonly turn: { anchors: ThinkingAnchor[]; toolUseIds: string[] };
 }
 
@@ -315,11 +321,11 @@ export function createStreamTranslator(): StreamTranslator {
   let buffer = "";
   let error: { type: string; message: string } | null = null;
   const anchors: ThinkingAnchor[] = [];
-  /** Abgeschlossene Denkblöcke, deren Platz noch offen ist: er steht fest, sobald der nächste Block beginnt. */
+  /** Finished thinking blocks whose place is still open: it is fixed as soon as the next block begins. */
   let pending: AnthropicBlock[] = [];
   const place = (before: string): void => { for (const block of pending) anchors.push({ block, before }); pending = []; };
   const toolUseIds: string[] = [];
-  /** Block-Index der API → was wir dort sammeln. */
+  /** Block index of the API → what we collect there. */
   const open = new Map<number, { kind: "thinking" | "redacted" | "tool" | "other"; block?: AnthropicBlock; toolIndex?: number }>();
   let toolCount = 0;
   let done = false;
@@ -382,7 +388,7 @@ export function createStreamTranslator(): StreamTranslator {
         return "";
       }
       default:
-        return "";   // ping, message_stop, unbekannte Ereignisse
+        return "";   // ping, message_stop, unknown events
     }
   }
 
@@ -390,7 +396,7 @@ export function createStreamTranslator(): StreamTranslator {
     let out = "";
     for (const line of text.split(/\r\n|\n|\r/)) {
       const t = line.trim();
-      if (!t.startsWith("data:")) continue;   // `event:`-Zeilen tragen nichts, was `data.type` nicht auch trägt
+      if (!t.startsWith("data:")) continue;   // `event:` lines carry nothing that `data.type` does not carry too
       let data: unknown;
       try { data = JSON.parse(t.slice(5).trim()); } catch { continue; }
       if (isRecord(data)) out += event(data);
@@ -421,14 +427,14 @@ export function createStreamTranslator(): StreamTranslator {
 }
 
 export interface TranslatedMessage {
-  /** Eine OpenAI-Completion (`choices[0].message`), wie `chat-client` sie ohne Stream liest. */
+  /** An OpenAI completion (`choices[0].message`) as `chat-client` reads it without a stream. */
   completion: Record<string, unknown>;
   anchors: ThinkingAnchor[];
   toolUseIds: string[];
 }
 
-/** Antwort ohne Stream (`{type:"message", content:[…], stop_reason}`) als OpenAI-Completion; `null`, wenn der Körper
- *  keine Nachricht ist. */
+/** A response without a stream (`{type:"message", content:[…], stop_reason}`) as an OpenAI completion; `null` when the body is no
+ *  message. */
 export function translateMessage(json: unknown): TranslatedMessage | null {
   if (!isRecord(json) || json.type !== "message" || !Array.isArray(json.content)) return null;
   let text = "";

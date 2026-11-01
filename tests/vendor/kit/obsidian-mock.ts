@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.72.0, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.74.0, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // Self-contained Obsidian test double for obsidian-kit.
 // - Zero external imports (NOT from "obsidian", NOT from "vitest").
 // - Consumed via vitest `resolve.alias` as a drop-in for `import ... from "obsidian"`,
@@ -481,6 +481,8 @@ export class Setting {
    *  Kit-Module zeichnen dort Zusatz-DOM neben die `add*`-Komponenten — die Endpunkt-Liste
    *  etwa Status-Icon, Rollenzeile, Warn-/Drittanbieter-Icon und den Modell-Slot. */
   controlEl: any;
+  /** Beschreibungsbereich der Zeile (im echten Obsidian `.setting-item-description`); Zusatz-DOM unter der Beschreibung, etwa ein Hinweis, der Form und Text trägt. */
+  descEl: any;
   components: any[] = [];
   nameValue = "";
   descValue = "";
@@ -492,6 +494,7 @@ export class Setting {
     this.controlEl = this.settingEl?.createDiv
       ? this.settingEl.createDiv({ cls: "setting-item-control" })
       : makeFakeEl();
+    this.descEl = makeFakeEl();   // losgelöst wie im Fallback oben: kein Kind von settingEl, damit Tests, die dessen Kinder zählen, unberührt bleiben
     Setting.__last = this;
   }
   /** Wie im echten Obsidian landen die `add*`-Elemente in controlEl, nicht direkt in
@@ -741,17 +744,35 @@ export class FuzzySuggestModal<T> {
  *  bricht ein Import, der von ihr erbt, mit „Class extends value undefined“. Anders als `FuzzySuggestModal` (hier ohne Modal-Basis)
  *  erbt sie von `Modal`; `open()`/`close()` tun nichts, wie in der Hand-Kopie, aus der sie stammt. */
 export class SuggestModal<T> extends Modal {
-  inputEl: { value: string } = { value: "" };
+  /** Mit `dispatchEvent` (Chat-Verlauf, 0.73.0): der Dialog zeichnet seine Liste über ein `input`-Ereignis des Feldes neu; der Stub merkt sich die Typen in `__events`. */
+  inputEl: { value: string; dispatchEvent(e: { type: string }): boolean } = {
+    value: "",
+    dispatchEvent: (e) => { this.__events.push(e.type); return true; },
+  };
+  /** Wie im echten Obsidian: 100 Zeilen, `0` hebt die Kappung auf. Der Stub kappt nichts, ein Test liest den Wert. */
+  limit = 100;
+  emptyStateText = "No results found.";
+  resultContainerEl: any = makeFakeEl();
   /** Letzte gebaute Instanz, damit ein Test sie erreicht, wenn das Plugin sie selbst baut. */
   static __instance: any = null;
+  /** Typen der Ereignisse, die der Dialog am Eingabefeld ausgelöst hat. */
+  __events: string[] = [];
+  /** Zuletzt gesetzte Anweisungszeile (`setInstructions`). */
+  __instructions: Array<{ command: string; purpose: string }> = [];
+  /** Das „markierte“ Element für `selectActiveSuggestion`; der Test setzt es (der Stub zeichnet keine Liste). */
+  __active: T | undefined = undefined;
   constructor(app?: any) {
     super(app);
     (this.constructor as any).__instance = this;
     SuggestModal.__instance = this;
   }
   setPlaceholder(_s: string): this { return this; }
+  setInstructions(i: Array<{ command: string; purpose: string }>): this { this.__instructions = i; return this; }
   getSuggestions(_query: string): T[] | Promise<T[]> { return []; }
   renderSuggestion(_value: T, _el: any): void {}
+  /** Wie Obsidian (Programmtext 1.15.0): die Wahl SCHLIESST den Dialog und ruft dann `onChooseSuggestion`. */
+  selectSuggestion(value: T, evt: any): void { this.close(); this.onChooseSuggestion(value, evt); }
+  selectActiveSuggestion(evt: any): void { if (this.__active !== undefined) this.selectSuggestion(this.__active, evt); }
   onChooseSuggestion(_value: T, _evt?: any): void {}
   open(): void {}
   close(): void {}

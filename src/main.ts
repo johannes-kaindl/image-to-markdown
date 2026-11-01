@@ -96,7 +96,6 @@ export default class ImageToMarkdownPlugin extends Plugin {
       capability: "vision",
       mode: MODE,   // kein maxTokens: i2m sendet kein Budget, ein abgeschnittenes Transkript meldet finish_reason length
       lang: () => getLang(),
-      levelPicker: true,   // die Sidebar zeigt die Stufenwahl (buildThinkingControl, ImgToMdView)
       onResolved: () => { this.onSourceResolved?.(); },
       getSettings: () => ({
         endpoints: this.settings.visionEndpoints,
@@ -217,10 +216,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
     await this.saveRequestSettings(next);
   }
 
-  thinkingState(): { family: FamilyId | null; backend: BackendId; level: ThinkingLevel; onLevel: ThinkingLevel; levelPicker: boolean } {
+  thinkingState(): { family: FamilyId | null; backend: BackendId; level: ThinkingLevel; onLevel: ThinkingLevel } {
     const r = this.settings.request;
     const src = this.llm.source();
-    return { family: src.family, backend: src.backend, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE), levelPicker: r.levelPickerInChat };
+    return { family: src.family, backend: src.backend, level: thinkingFor(r, MODE), onLevel: onLevelFor(r, MODE) };
   }
 
   /** Zeichnet die Modellzeile samt Denk-Steuerung jeder offenen Sidebar aus dem Zustand neu (ohne Abruf). */

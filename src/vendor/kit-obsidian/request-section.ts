@@ -1,11 +1,12 @@
-// vendored from obsidian-kit@0.72.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.74.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, setIcon } from "obsidian";
 import { collapsibleSection, type CollapsibleStorage } from "./collapsible";
 import { copyToClipboard } from "./clipboard";
 import type { RequestSession } from "./request-session";
+import type { EndpointTransport } from "../kit/endpoint-source";
 import { isModelLoaded, type LoadedModel } from "../kit/capabilities";
 import {
-  FAMILY_IDS, THINKING_LEVELS, resolveRequestParams, thinkingFor, validateOverride,
+  FAMILY_IDS, resolveRequestParams, resolveThinkingLevel, thinkingFor, thinkingLevels, validateOverride,
   type BackendId, type FamilyId, type FamilyKey, type FieldExplain, type FieldId, type ModeId, type ModelFamilyId,
   type RequestSettings, type ThinkingLevel, type DeviationKind,
 } from "../kit/sampling-profiles";
@@ -25,6 +26,8 @@ export interface RequestSectionState {
   model: string;
   sentModel: string;
   defaultModel?: string;
+  /** Seit 0.73.0: der Transport der Quelle (`EndpointSourceResult.transport`, nur der Manager-Pfad kennt ihn); fehlt er, ist es `"http"`. Der Abschnitt zeichnet ihn nicht, ein Wirt liest ihn hier statt aus `resolve()`. */
+  transport?: EndpointTransport;
 }
 export interface RequestSectionStrings {
   title: string;
@@ -121,6 +124,10 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
   const state = opts.state();
   const settings = opts.settings();
   const key = famKey(state.family);
+  // Das Modell, das auf den Draht geht (ein Alias des Managers ist hier schon aufgelöst): seine Zeile in der Stufentabelle von code-kit gilt, und mit ihm klemmt `resolveRequestParams`
+  // die gespeicherte Stufe, damit der Abschnitt zeigt, was `LlmConnection` sendet (0.73.0).
+  const model = state.sentModel || state.model;
+  const modelPart = model !== "" ? { model } : {};
 
   // Speichern: ein Fehler wird zur Notice und färbt den Status-Indikator (entsteht erst weiter unten).
   const ui: { status?: HTMLElement } = {};
@@ -164,7 +171,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
   // 2b. Backend oder Familie unbekannt (neuerer Manager als diese Tabelle): ehrlich zeigen, was daraus wurde.
   const firstMode = opts.modes[0];
   if (firstMode !== undefined && st.unrecognised) {
-    const probe = resolveRequestParams({ family: state.family, mode: firstMode, backend: state.backend, thinking: thinkingFor(settings, firstMode) });
+    const probe = resolveRequestParams({ family: state.family, mode: firstMode, backend: state.backend, thinking: thinkingFor(settings, firstMode), ...modelPart });
     if (probe.unrecognised) body.createDiv({ cls: "okit-request-warning mod-warning", text: st.unrecognised(probe.unrecognised) });
   }
 
@@ -174,7 +181,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
     const ov = settings.overrides[mode]?.[key] ?? {};
     const level = thinkingFor(settings, mode);
     const resolved = resolveRequestParams({
-      family: state.family, mode, backend: state.backend, thinking: level,
+      family: state.family, mode, backend: state.backend, thinking: level, ...modelPart,
       ...(opts.maxTokens(mode) !== undefined ? { maxTokens: opts.maxTokens(mode) } : {}),
       overrides: ov,
     });
@@ -211,16 +218,20 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
         }));
       }
     }
-    // Denkstufe je Modus
-    new Setting(body).setName(st.thinkingLevel).addDropdown((d) => {
-      for (const l of THINKING_LEVELS) d.addOption(l, st.level(l));
-      d.setValue(level).onChange((v) => {
-        const next = clone(opts.settings());
-        next.thinking[mode] = v as ThinkingLevel;
-        if (v !== "off") next.lastOnLevel[mode] = v as ThinkingLevel;
-        persist(next, () => opts.rerender());
+    // Denkstufe je Modus: die Stufen des Modells (`thinkingLevels`), die gespeicherte durch `resolveThinkingLevel` darauf gebracht (nie still überschrieben, gespeichert wird bei einer Wahl).
+    // Ohne Stufen (Haiku 4.5, Claude über Open WebUI) gibt es keine Zeile: sie zeigte etwas, das nie gesendet wird.
+    const offered = thinkingLevels(state.family, state.backend, model);
+    if (offered.levels.length > 0) {
+      new Setting(body).setName(st.thinkingLevel).addDropdown((d) => {
+        for (const l of offered.levels) d.addOption(l, st.level(l));
+        d.setValue(resolveThinkingLevel(level, state.family, state.backend, model)).onChange((v) => {
+          const next = clone(opts.settings());
+          next.thinking[mode] = v as ThinkingLevel;
+          if (v !== "off") next.lastOnLevel[mode] = v as ThinkingLevel;
+          persist(next, () => opts.rerender());
+        });
       });
-    });
+    }
     // Ruhende Überschreibungen
     for (const fam of [...FAMILY_IDS, "unknown"] as FamilyKey[]) {
       if (fam === key) continue;

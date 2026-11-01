@@ -1,8 +1,14 @@
-// vendored from obsidian-kit@0.72.0, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.74.0, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /**
  * Modellzeile (UI-STANDARD § 8, neu in 0.67.0): eine Zeile, in der man sieht, welches Modell eine Aufgabe benutzt, und es wechselt — Dropdown mit den Modellen
  * des aktiven Endpunkts, „Anderer Endpunkt …“, Neu-laden-Knopf und optional die Denk-Steuerung. Läuft eigenständig in jeder Seitenleiste und im
- * Kopfzeilen-Einschub des Kit-Chatfensters (`ChatWindowOptions.header`).
+ * Einschub `composer` des Kit-Chatfensters (`ChatWindowOptions.composer`, über dem Textfeld; bis 0.72.0 stand sie im Kopf).
+ *
+ * ## Aufbau seit 0.73.0
+ *
+ * Reihenfolge `[Modell][Warnzeichen][Denkstufe][Neu laden]`, **ohne sichtbare Beschriftung** (`label` steht im `aria-label`, `showLabel` holt sie zurück) und **einzeilig**:
+ * die Wurzel ist ein Container (`container-type: inline-size`), die Elemente liegen in einer inneren Flex-Zeile ohne Umbruch. Bei Enge fällt zuerst das Gehirn-Symbol vor der
+ * Denkstufe weg (Container unter 260 px), danach kürzt nur der Modellname. Die Denk-Steuerung ist in der Zeile immer das Dropdown mit den Stufen des Modells (`inModelBar`).
  *
  * ## Woher
  *
@@ -43,9 +49,11 @@
  *    ruft das Plugin `update()` (zeichnet aus dem Zustand neu) oder `refresh()` (lädt die Liste neu). Hängt es das an `onResolved` der
  *    Verbindung, gilt seit 0.70.0: `llm.models()` (und damit `refresh()`) meldet über `onResolved` nur noch eine Änderung, ein Rückruf, der
  *    `models()` ruft, läuft nicht mehr im Kreis. Trotzdem nur neu zeichnen, wenn sich das Ergebnis geändert hat.
- * 4. **Im Kopf des Chatfensters** zeichnen `win.refresh()` und `win.refreshHeader()` die Kopfzeile neu: der Einschub baut dann eine neue Zeile. Die alte gibt der
- *    Einschub über seine Rückgabe frei (seit 0.70.0: `header: (el) => { const bar = buildModelBar(…); return () => { bar.destroy(); }; }`, das Fenster ruft sie vor
+ * 4. **Im Einschub des Chatfensters** (`composer`, früher `header`) zeichnen `win.refresh()` und `win.refreshComposer()` die Zeile neu: der Einschub baut dann eine neue Zeile. Die alte gibt der
+ *    Einschub über seine Rückgabe frei (seit 0.70.0: `composer: (el) => { const bar = buildModelBar(…); return () => { bar.destroy(); }; }`, das Fenster ruft sie vor
  *    der nächsten Zeichnung und bei `destroy()`); `disabled: () => win.running()` mit `onRunChange: () => { bar.update(); }` sperrt die Zeile während eines Laufs.
+ *    **Der Einschub `composer` ist im Leerzustand des Wirts (`empty.when()`) unsichtbar**, der Kopf war es nie: ein Wirt, der die Zeile dort braucht, setzt `empty` entsprechend.
+ * 5. **Die Zeile braucht Breite.** Ein Container ohne eigene Breite fällt in einem Eltern-Element mit `display: flex` (Reihe) auf null: die Wurzel trägt `width: 100%` (`MODEL_BAR_CSS`).
  */
 
 import { setIcon, type App } from "obsidian";
@@ -64,20 +72,25 @@ export interface ModelBarConnection {
   setModel(model: string): Promise<void>;
   /** Das Modell, das jetzt gilt. */
   modelInUse(): string;
-  /** Vom Endpunkt gemeldet: das Standard-Modell (für „Automatisch (qwen …)“). Mehr liest die Zeile nicht. */
-  source(): { defaultModel?: string };
+  /** Vom Endpunkt gemeldet: das Standard-Modell (für „Automatisch (qwen …)“). Seit 0.73.0 liest die Zeile für die Stufenliste der Denk-Steuerung auch `model` (der Auswahlname) und `sentModel`
+   *  (der Name auf dem Draht, nach Alias): die Tabelle von code-kit kennt Namen, keine Aliase des Managers. Eine `LlmConnection` liefert beides; ein Adapter darf sie weglassen. */
+  source(): { defaultModel?: string; model?: string; sentModel?: string };
 }
 
 export interface ModelBarOptions {
   app: App;
   containerEl: HTMLElement;
   llm: ModelBarConnection;
-  /** Name der Aufgabe („Chat“, „Smart Apply“): sichtbar vor dem Dropdown und im `aria-label` („Modell für Chat“). Ohne: nur „Modell“. */
+  /** Name der Aufgabe („Chat“, „Smart Apply“): im `aria-label` des Dropdowns („Modell für Chat“), seit 0.73.0 nur noch dort. Ohne: nur „Modell“. */
   label?: string;
+  /** Seit 0.73.0, Standard `false`: zeigt `label` zusätzlich sichtbar vor dem Dropdown. Für Ansichten mit mehreren Modellzeilen, deren Zeilen sich sichtbar unterscheiden müssen
+   *  (UI-STANDARD § 8: jede Aufgabe eine eigene Zeile). Ohne `label` zeichnet es nichts. */
+  showLabel?: boolean;
   strings?: ModelBarStringsOverride;
   /** Öffnet die Endpunkt-Auswahl. Fehlt sie: `openEndpointManagerSettings(app)`, solange ein Manager erreichbar ist, sonst kein Eintrag. `null`: nie ein Eintrag. */
   onOtherEndpoint?: (() => void) | null;
-  /** Die Denk-Steuerung in derselben Zeile (kein zweiter Knopf): dieselben Optionen wie `buildThinkingControl`, ohne `containerEl`. */
+  /** Die Denk-Steuerung in derselben Zeile (kein zweiter Knopf): dieselben Optionen wie `buildThinkingControl`, ohne `containerEl`. Seit 0.73.0 immer als Dropdown mit den Stufen des Modells
+   *  (`levelPicker` gilt hier nicht, die Zeile setzt `inModelBar`); `model` setzt die Zeile selbst (gesendetes Modell), ein Wert des Wirts gewinnt. */
   thinking?: Omit<ThinkingControlOptions, "containerEl">;
   /** `true` sperrt Dropdown, Neu-laden-Knopf und die Bedienelemente der Denk-Steuerung (während eines Laufs). Wirkt beim Zeichnen und bei `update()`. */
   disabled?: () => boolean;
@@ -111,15 +124,25 @@ export function buildModelBar(opts: ModelBarOptions): ModelBar {
   const st = resolveModelBarStrings(opts.strings);
   const { llm } = opts;
   const root = opts.containerEl.createDiv({ cls: opts.cls ? `okit-model-bar ${opts.cls}` : "okit-model-bar" });
-  if (opts.label !== undefined) root.createSpan({ cls: "okit-model-bar-label", text: opts.label });
-  const select = root.createEl("select", { cls: "dropdown okit-model-bar-select" });
+  // Die Elemente liegen in einer inneren Zeile: ein `@container` stylt nie den Container selbst (MODEL_BAR_CSS).
+  const rowEl = root.createDiv({ cls: "okit-model-bar-row" });
+  if (opts.showLabel === true && opts.label !== undefined) rowEl.createSpan({ cls: "okit-model-bar-label", text: opts.label });
+  const select = rowEl.createEl("select", { cls: "dropdown okit-model-bar-select" });
   select.setAttribute("aria-label", opts.label !== undefined ? st.modelFor(opts.label) : st.model);
   // Das Zeichen für „Endpunkt antwortet nicht“ / „keine Liste“: Form und Text, nicht nur Farbe (CORE-META-20); der Hinweis steht auch am Dropdown.
-  const warnEl = root.createSpan({ cls: "okit-model-bar-warn is-hidden", attr: { role: "img" } });
+  const warnEl = rowEl.createSpan({ cls: "okit-model-bar-warn is-hidden", attr: { role: "img" } });
   setIcon(warnEl, "alert-triangle");
-  const refreshBtn = root.createEl("button", { cls: "clickable-icon okit-model-bar-refresh", attr: { type: "button", "aria-label": st.refresh } });
+  /** Das Modell, dessen Stufen die Denk-Steuerung anbietet: das gesendete, sonst der Auswahlname. `sentModel` und `model` der Quelle gehören zusammen; hat die Wahl der Zeile sie überholt
+   *  (`setModel` läuft noch, oder ein Adapter wählt anderswo), gilt `modelInUse()`. „Automatisch“ (leer) heißt: das Standard-Modell des Endpunkts. */
+  const modelForLevels = (): string => {
+    const src = llm.source();
+    const inUse = llm.modelInUse();
+    const sameChoice = inUse === "" || inUse === src.model;
+    return ((sameChoice ? src.sentModel : "") || inUse || src.model || src.defaultModel || "").trim();
+  };
+  const thinkCtl = opts.thinking ? buildThinkingControl({ model: modelForLevels, ...opts.thinking, containerEl: rowEl, inModelBar: true }) : null;
+  const refreshBtn = rowEl.createEl("button", { cls: "clickable-icon okit-model-bar-refresh", attr: { type: "button", "aria-label": st.refresh } });
   setIcon(refreshBtn, "refresh-cw");
-  const thinkCtl = opts.thinking ? buildThinkingControl({ containerEl: root, ...opts.thinking }) : null;
   const statusEl = root.createSpan({ cls: "okit-model-bar-status", attr: { role: "status", "aria-live": "polite" } });
 
   let list: ModelListResult | null = null;
@@ -152,7 +175,7 @@ export function buildModelBar(opts: ModelBarOptions): ModelBar {
     const off = opts.disabled?.() === true;
     select.disabled = off;
     refreshBtn.disabled = off;
-    if (off) root.querySelectorAll(".okit-thinking-control button, .okit-thinking-control select").forEach((el) => { (el as HTMLButtonElement | HTMLSelectElement).disabled = true; });
+    if (off) root.querySelectorAll("button, select").forEach((el) => { (el as HTMLButtonElement | HTMLSelectElement).disabled = true; });
   };
 
   const draw = (): void => {
@@ -162,7 +185,10 @@ export function buildModelBar(opts: ModelBarOptions): ModelBar {
     if (otherEndpoint() !== null) select.createEl("option", { text: st.otherEndpoint, attr: { value: OTHER_ENDPOINT } });
     select.value = current;
     const hint = list === null ? "" : !list.reachable ? st.hintUnreachable : list.models.length === 0 ? st.hintNoList : "";
-    if (hint !== "") select.setAttribute("title", hint); else select.removeAttribute("title");
+    // Der Tooltip trägt den Hinweis, sonst seit 0.74.0 den vollen Namen des gewählten Modells: im kompakten Composer ist das Dropdown schmal und kürzt den Namen mit Auslassung.
+    const shown = entries(current).find((e) => e.value === current)?.label ?? "";
+    const tip = hint !== "" ? hint : shown;
+    if (tip !== "") select.setAttribute("title", tip); else select.removeAttribute("title");
     warnEl.toggleClass("is-hidden", hint === "");
     if (hint !== "") { warnEl.setAttribute("aria-label", hint); warnEl.setAttribute("title", hint); } else { warnEl.removeAttribute("aria-label"); warnEl.removeAttribute("title"); }
     applyDisabled();
@@ -231,24 +257,31 @@ export function buildModelBar(opts: ModelBarOptions): ModelBar {
 
 /** Gehört in die `styles.css` des Consumers — das Kit injiziert kein CSS (Muster `THINKING_CONTROL_CSS`). Nur Theme-Variablen.
  *
- *  Die Zeile bricht um (`flex-wrap`), damit der Denk-Knopf in einer schmalen Seitenleiste unter das Dropdown rutscht, statt es auf null zu drücken; das
- *  Dropdown darf schrumpfen (`min-width: 0`) und kürzt einen langen Modellnamen mit Auslassung. Die Ansage ist für Augen unsichtbar, aber nicht
- *  `display: none` (ein Screenreader läse sie sonst nicht). Der Ladezustand dreht das Symbol; `prefers-reduced-motion` hält es an. Herkunft der
- *  Maße: vault-rag `styles.css` (`vault-rag-chat-model-row`), lingotuner (`lt-model`, `lt-model-refresh`). */
+ *  Seit 0.73.0 bleibt die Zeile einzeilig. Die Wurzel ist ein benannter Container (`container-type: inline-size`, `width: 100%`: ohne eigene Breite fiele sie in einer
+ *  Flex-Reihe auf null), die Elemente liegen in der inneren Zeile `okit-model-bar-row` (eine Container-Abfrage stylt nie den Container selbst). Rangfolge bei Enge: unter 260 px
+ *  Containerbreite fällt das Symbol vor der Denkstufe weg (mit `.okit-model-bar` davor: `.okit-thinking-icon` steht in `THINKING_CONTROL_CSS`, und eine spätere Regel gleicher Spezifität gewänne; gemessen im Pilot, die Reihenfolge der kopierten Konstanten ist egal), danach kürzt nur der Modellname (Mindestbreite 6 em, Auslassung); Stufe, Warnzeichen und Neu laden behalten ihre Breite.
+ *  Erst unter dem Soll-Bereich bricht die Zeile um, als Netz, damit nie ein Bedienelement überläuft. Die Bereichssyntax trifft auch gebrochene Breiten (259,5 px).
+ *  Die Ansage ist für Augen unsichtbar, aber nicht `display: none` (ein Screenreader läse sie sonst nicht). Der Ladezustand dreht das Symbol; `prefers-reduced-motion`
+ *  hält es an. Herkunft der Maße: vault-rag `styles.css` (`vault-rag-chat-model-row`), lingotuner (`lt-model`, `lt-model-refresh`). */
 export const MODEL_BAR_CSS = `
-.okit-model-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--size-2-2) var(--size-4-1); min-width: 0; }
+.okit-model-bar { position: relative; width: 100%; min-width: 0; container-type: inline-size; container-name: okit-model-bar; }
+.okit-model-bar-row { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--size-2-2) var(--size-4-1); min-width: 0; }
 .okit-model-bar-label { flex: 0 0 auto; color: var(--text-muted); font-size: var(--font-ui-small); white-space: nowrap; }
-.okit-model-bar select { flex: 1 1 12em; min-width: 0; max-width: 100%; font-size: var(--font-ui-small); text-overflow: ellipsis; }
+.okit-model-bar-select { flex: 1 1 auto; min-width: 6em; max-width: 100%; font-size: var(--font-ui-small); text-overflow: ellipsis; }
 .okit-model-bar select:disabled { opacity: 0.6; cursor: not-allowed; }
 .okit-model-bar-warn { flex: 0 0 auto; display: inline-flex; color: var(--text-warning); }
 .okit-model-bar-warn.is-hidden { display: none; }
 .okit-model-bar-warn svg { width: var(--icon-xs); height: var(--icon-xs); }
 .okit-model-bar-refresh { flex: 0 0 auto; }
+/* Tippfläche auf Mobil (44 px, das Symbol bleibt klein): gemessen 30 × 26 ohne diese Regel. */
+.is-mobile button.clickable-icon.okit-model-bar-refresh { min-width: calc(var(--size-4-10) + var(--size-4-1)); min-height: calc(var(--size-4-10) + var(--size-4-1)); display: inline-flex; align-items: center; justify-content: center; }
 .okit-model-bar-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
 .okit-model-bar-refresh svg { width: var(--icon-xs); height: var(--icon-xs); }
 .okit-model-bar-refresh.is-loading svg { animation: okit-model-bar-spin 1s linear infinite; }
 @keyframes okit-model-bar-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .okit-model-bar-refresh.is-loading svg { animation: none; } .okit-model-bar-refresh.is-loading { opacity: 0.5; } }
 .okit-model-bar .okit-thinking-control { flex: 0 0 auto; }
+@container okit-model-bar (width < 260px) { .okit-model-bar .okit-thinking-icon { display: none; } }
+@container okit-model-bar (width < 200px) { .okit-model-bar-row { flex-wrap: wrap; } }
 .okit-model-bar-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
 `;

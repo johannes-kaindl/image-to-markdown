@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.72.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.74.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, type App } from "obsidian";
 import { resolveModelChoice, type ModelHintKey } from "../kit/model-choice";
 import type { EndpointConfig } from "../kit/endpoint_config";
@@ -96,6 +96,9 @@ interface EndpointSourceSectionBase {
    *  `["http"]` — ein Konsument ohne Kurzbefehl-Weg sieht nie ungefragt einen Apple-Endpunkt.
    *  Wer `"shortcuts"` anfordert, baut die `ShortcutsBridge` selbst (s. MIGRATION § 0.45.0). */
   transports?: EndpointTransport[];
+  /** Seit 0.73.0, optional: die Transporte des AUTOMATISCHEN Wegs. Die Modell-Zeile unter „Automatisch“ gehört dem ersten Eintrag dieser Liste, nicht dem ersten der
+   *  wählbaren (`transports`): sonst zeigte sie die Modelle eines Endpunkts, den „Automatisch“ nie nimmt. Fehlt die Option, gilt `transports`. */
+  autoTransports?: EndpointTransport[];
   caller: string;
   choice(): EndpointChoice;
   setChoice(c: EndpointChoice): Promise<void>;
@@ -160,7 +163,8 @@ export function buildEndpointSourceSection(opts: EndpointSourceSectionOptions): 
   });
 
   if (opts.modelRow !== false) {
-    const targetId = choice.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : entries[0]?.id;
+    const autoEntries = opts.autoTransports ? api.list({ capability: opts.capability, transports: opts.autoTransports }) : entries;
+    const targetId = choice.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : autoEntries[0]?.id;
     if (targetId) renderModelRow(opts, opts.strings, api, entries, choice, targetId);
   }
 

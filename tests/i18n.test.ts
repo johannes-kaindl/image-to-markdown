@@ -63,14 +63,10 @@ describe("i18n", () => {
     expect(de).toEqual(en);
   });
 
-  it("Denk-Steuerung Keys EN/DE", () => {
+  it("Denk-Steuerung: der Name des Dropdowns EN/DE (Stufen und Namen kommen aus dem Kit)", () => {
     setLang("en");
-    expect(t("think.button.off")).toBe("Thinking: off");
-    expect(t("think.button.on", "low")).toBe("Thinking: low");
-    expect(t("think.level.high")).toBe("Thinking: high");
+    expect(t("think.pickerLabel")).toBe("Thinking level");
     setLang("de");
-    expect(t("think.button.off")).toBe("Thinking: aus");
-    expect(t("think.level.medium")).toBe("Thinking: mittel");
     expect(t("think.pickerLabel")).toBe("Denkstufe");
     setLang("en");
   });

@@ -1,4 +1,4 @@
-// vendored from code-kit@0.38.0, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.40.0, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Link guard for rendered model answers: the second line of defence after `MarkdownRenderer.render`. It cuts link targets that
  *  would run or open something (`javascript:`, `data:`, `vbscript:`, `file:`, `app:`, and `obsidian:` unless the caller allows it),
  *  removes the active elements, and removes `src` / `srcset` — except for local images, when the caller allows them.
