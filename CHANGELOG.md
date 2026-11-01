@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-11-01
+
 ### Added
 
 - **Claude (Anthropic API) as an opt-in.** If the LLM Endpoint Manager has a Claude entry, you can now pick it in the model row (and in the settings); your images then go to Anthropic as image blocks of the Messages API. **"Automatic" never picks Claude**, even when the Claude entry is first in the manager's list — without this, a Claude entry at the top would have received your images without a question. Claude model names count as "probably vision-capable". A saved thinking level "off" sends the model's own default level to Claude (more thinking, time and cost until you lower the level); Opus 4.6, Sonnet 4.6 and Opus 4.5 receive no `temperature`, `top_p` or `top_k`. The plugin only sends PNG, JPEG, GIF and WebP (the formats of the API), which are exactly the image types it already accepts; a test guards that none of them is dropped on the way.
