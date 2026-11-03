@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.74.0, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.76.1, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { DropdownComponent, setIcon } from "obsidian";
 import { familyThinking, resolveThinkingLevel, thinkingLevels, type BackendId, type FamilyId, type ThinkingLevel } from "../kit/sampling-profiles";
 
@@ -119,6 +119,15 @@ export interface ThinkingControlOptions {
   hint?(): string | undefined;
 }
 
+/** Das Zeichen je Stufe (seit 0.76.0), in der Modellzeile vor dem Namen im Eintrag des Dropdowns: ein Zeichen breit, steigende Füllung (Block-Elemente), „aus“ ein leerer Kreis.
+ *  Ein natives `<select>` zeigt im geschlossenen Zustand nur den Text des gewählten Eintrags; die gefaltete Zeile (`CHAT_WINDOW_CSS`, `MODEL_BAR_CSS`) beschneidet es auf dieses Zeichen,
+ *  damit der Modellname den Platz behält. Liste und Name (`aria-label`) tragen den vollen Stufennamen. Das Zeichen ist keine Farbe und kein Wort: es trägt die Stufe als Form. */
+const LEVEL_GLYPHS: Record<ThinkingLevel, string> = { off: "○", low: "▂", medium: "▄", high: "▆", xhigh: "▇", max: "█" };
+const LOCKED_GLYPH = "●";
+export function thinkingLevelGlyph(level: ThinkingLevel): string {
+  return LEVEL_GLYPHS[level];
+}
+
 export function buildThinkingControl(opts: ThinkingControlOptions): { refresh(): void } {
   const root = opts.containerEl.createDiv({ cls: "okit-thinking-control" });
   const render = (): void => {
@@ -148,15 +157,21 @@ export function buildThinkingControl(opts: ThinkingControlOptions): { refresh():
       if (locked !== undefined) {
         name = `${st.pickerLabel}. ${locked.label}. ${locked.hint}`;
         dd.setDisabled(true);
-        dd.addOption(shown, st.lockedLevel ?? locked.label);
+        const lockedText = st.lockedLevel ?? locked.label;
+        dd.addOption(shown, opts.inModelBar === true ? `${LOCKED_GLYPH} ${lockedText}` : lockedText);
       } else {
-        for (const l of levels) dd.addOption(l, st.level(l));
+        for (const l of levels) dd.addOption(l, opts.inModelBar === true ? `${thinkingLevelGlyph(l)} ${st.level(l)}` : st.level(l));
         // Höchstens ein Grund hinter dem Namen: der Hinweis des Wirts gewinnt gegen den Zusatz bei xhigh und max.
         const reason = hintText !== "" ? hintText : st.costNote !== undefined && (shown === "xhigh" || shown === "max") ? st.costNote : "";
         if (st.name !== undefined) name = st.name(st.level(shown), defaultLevel === null ? null : st.level(defaultLevel));
         if (reason !== "") name = `${name}. ${reason}`;
       }
       dd.selectEl.setAttribute("aria-label", name);
+      // Der Eintrag beginnt in der Modellzeile mit einem Zeichen: ein Screenreader soll den Namen der Stufe lesen, nicht „schwarzer Block“ (im Fake-DOM der Tests gibt es keine option-Elemente).
+      if (opts.inModelBar === true && locked === undefined) {
+        const entries = dd.selectEl.options as HTMLOptionsCollection | undefined;
+        levels.forEach((l, i) => { entries?.[i]?.setAttribute("aria-label", st.level(l)); });
+      }
       dd.setValue(shown).onChange((v) => { void opts.setLevel(v as ThinkingLevel).then(render); });
       return;
     }

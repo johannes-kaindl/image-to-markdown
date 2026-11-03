@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.74.0, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.76.1, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /**
  * Modellzeile (UI-STANDARD § 8, neu in 0.67.0): eine Zeile, in der man sieht, welches Modell eine Aufgabe benutzt, und es wechselt — Dropdown mit den Modellen
  * des aktiven Endpunkts, „Anderer Endpunkt …“, Neu-laden-Knopf und optional die Denk-Steuerung. Läuft eigenständig in jeder Seitenleiste und im
@@ -258,8 +258,8 @@ export function buildModelBar(opts: ModelBarOptions): ModelBar {
 /** Gehört in die `styles.css` des Consumers — das Kit injiziert kein CSS (Muster `THINKING_CONTROL_CSS`). Nur Theme-Variablen.
  *
  *  Seit 0.73.0 bleibt die Zeile einzeilig. Die Wurzel ist ein benannter Container (`container-type: inline-size`, `width: 100%`: ohne eigene Breite fiele sie in einer
- *  Flex-Reihe auf null), die Elemente liegen in der inneren Zeile `okit-model-bar-row` (eine Container-Abfrage stylt nie den Container selbst). Rangfolge bei Enge: unter 260 px
- *  Containerbreite fällt das Symbol vor der Denkstufe weg (mit `.okit-model-bar` davor: `.okit-thinking-icon` steht in `THINKING_CONTROL_CSS`, und eine spätere Regel gleicher Spezifität gewänne; gemessen im Pilot, die Reihenfolge der kopierten Konstanten ist egal), danach kürzt nur der Modellname (Mindestbreite 6 em, Auslassung); Stufe, Warnzeichen und Neu laden behalten ihre Breite.
+ *  Flex-Reihe auf null), die Elemente liegen in der inneren Zeile `okit-model-bar-row` (eine Container-Abfrage stylt nie den Container selbst). Rangfolge bei Enge (seit 0.76.0): unter 260 px
+ *  Containerbreite schrumpft die Denkstufe auf ihr Zeichen (der Eintrag beginnt mit ihm, das geschlossene Dropdown wird beschnitten; Liste und Name tragen den vollen Namen, `thinkingLevelGlyph`), das Symbol davor bleibt (mit `.okit-model-bar` und `select` davor: die Regel muss `.okit-thinking-control select` aus `THINKING_CONTROL_CSS` schlagen, die Reihenfolge der kopierten Konstanten ist egal), danach kürzt nur der Modellname (Mindestbreite 6 em, Auslassung); Warnzeichen und Neu laden behalten ihre Breite.
  *  Erst unter dem Soll-Bereich bricht die Zeile um, als Netz, damit nie ein Bedienelement überläuft. Die Bereichssyntax trifft auch gebrochene Breiten (259,5 px).
  *  Die Ansage ist für Augen unsichtbar, aber nicht `display: none` (ein Screenreader läse sie sonst nicht). Der Ladezustand dreht das Symbol; `prefers-reduced-motion`
  *  hält es an. Herkunft der Maße: vault-rag `styles.css` (`vault-rag-chat-model-row`), lingotuner (`lt-model`, `lt-model-refresh`). */
@@ -281,7 +281,7 @@ export const MODEL_BAR_CSS = `
 @keyframes okit-model-bar-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .okit-model-bar-refresh.is-loading svg { animation: none; } .okit-model-bar-refresh.is-loading { opacity: 0.5; } }
 .okit-model-bar .okit-thinking-control { flex: 0 0 auto; }
-@container okit-model-bar (width < 260px) { .okit-model-bar .okit-thinking-icon { display: none; } }
+@container okit-model-bar (width < 260px) { .okit-model-bar .okit-thinking-control select { width: calc(var(--size-2-3) + var(--size-4-6) + 1.2em); min-width: 0; padding-inline: var(--size-2-3) var(--size-4-6); text-overflow: clip; } }
 @container okit-model-bar (width < 200px) { .okit-model-bar-row { flex-wrap: wrap; } }
 .okit-model-bar-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
 `;

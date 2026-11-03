@@ -6,6 +6,17 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Switching notes quickly could leave the list of the previous note in the sidebar.** When you moved on to another note while the sidebar was still scanning the one before (for example opening a transcript through "open" and going on to a note without images), the sidebar remembered the new note as already scanned although the rows belonged to the old one; the list then stayed on the old rows and the "no images" hint did not appear. The sidebar now remembers the note it actually scanned, so the next switch scans again. (The GUI smoke point B3 flickered because of this.)
+
+### Changed
+
+- Vendored `obsidian-kit` 0.76.1 (was 0.74.0; 0.75.0 and 0.76.0 were skipped). What you may notice:
+- The levels in the thinking dropdown of the model row start with a block character that shows the level (`▄ Medium`); the closed dropdown keeps the word next to it. Below 260 px of row width it shrinks to the character alone, the brain icon stays (obsidian-kit 0.76.0). On a phone the sidebar row is about 280 px wide, so the word stays and the model name gets shorter than before ("goo…" instead of "googl…"); the full name is still the tooltip of the dropdown.
+- The request section in Settings draws its status line through the kit's status indicator (obsidian-kit 0.76.0): same look, the colours of the states stay as they were.
+- Everything else in these kit releases does not touch this plugin: the chat window fixes (history button, copy buttons, keyboard gap), the choice dialog `askChoice` (not used yet), `block-writer` and `markChatHost`. The row "Level picker in chat" was already gone in 0.33.0.
+
 ## [0.33.0] — 2026-11-01
 
 ### Added

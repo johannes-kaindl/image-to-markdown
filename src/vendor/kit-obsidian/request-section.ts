@@ -1,5 +1,6 @@
-// vendored from obsidian-kit@0.74.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
-import { Notice, Setting, setIcon } from "obsidian";
+// vendored from obsidian-kit@0.76.1, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+import { Notice, Setting } from "obsidian";
+import { buildStatus, paintStatus, type StatusParts } from "./status-indicator";
 import { collapsibleSection, type CollapsibleStorage } from "./collapsible";
 import { copyToClipboard } from "./clipboard";
 import type { RequestSession } from "./request-session";
@@ -87,8 +88,8 @@ export interface RequestSectionOptions {
   /** Phase 2 (Systemprompt): der Konsument hängt hier sein Kapitel ein. */
   promptSlot?(el: HTMLElement): void;
   /** Zeigt den Schalter „Stufenwahl im Chat“. Default `false`: er wirkt nur dort, wo das Plugin
-   *  `settings.levelPickerInChat` an `buildThinkingControl` (`levelPicker`) reicht. Ist die
-   *  Einstellung schon `true`, bleibt der Schalter sichtbar, sonst ließe sie sich nicht mehr abschalten. */
+   *  `settings.levelPickerInChat` an ein frei eingebautes `buildThinkingControl` (`levelPicker`) reicht, also **nicht** mit der Modellzeile (`buildModelBar`): die zeigt die Stufe seit 0.73.0
+   *  immer als Dropdown. Seit 0.76.0 hält ein gespeichertes `levelPickerInChat: true` die Zeile nicht mehr am Leben; der Wert bleibt in den Daten, das Plugin muss nichts ändern. */
   levelPicker?: boolean;
 }
 
@@ -130,18 +131,11 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
   const modelPart = model !== "" ? { model } : {};
 
   // Speichern: ein Fehler wird zur Notice und färbt den Status-Indikator (entsteht erst weiter unten).
-  const ui: { status?: HTMLElement } = {};
+  const ui: { status?: StatusParts } = {};
   const failed = (): void => {
     const msg = st.saveFailed ?? SAVE_FAILED_FALLBACK;
     new Notice(msg);
-    const statusEl = ui.status;
-    if (!statusEl) return;
-    statusEl.removeClass("is-ok", "is-warning");
-    statusEl.addClass("is-error");
-    statusEl.setAttribute("aria-label", msg);
-    statusEl.empty();
-    setIcon(statusEl.createSpan(), "circle-x");
-    statusEl.createSpan({ text: msg });
+    if (ui.status) paintStatus(ui.status, "error", msg);
   };
   const persist = (next: RequestSettings, then?: () => void): void => {
     void opts.save(next).then(then, failed);
@@ -247,7 +241,8 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
   }
 
   // 4. Stufenwahl im Chat
-  if (opts.levelPicker === true || settings.levelPickerInChat) {
+  // Seit 0.76.0 folgt die Zeile allein der Option des Plugins: ein gespeichertes `levelPickerInChat: true` hält sie nicht mehr am Leben (ein Plugin mit Modellzeile meldet die Stufenwahl nie an, die Zeile ist dort wirkungslos).
+  if (opts.levelPicker === true) {
     new Setting(body).setName(st.levelPicker).setDesc(st.levelPickerDesc).addToggle((t) =>
       t.setValue(settings.levelPickerInChat).onChange((v) => {
         const next = clone(opts.settings());
@@ -271,13 +266,10 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
 
   // 6. Abweichungen (Status-Indikator, UI-STANDARD §8)
   const devs = opts.session.deviations();
-  const status = body.createDiv({ cls: `okit-request-status ${devs.length === 0 ? "is-ok" : "is-warning"}` });
+  // Seit 0.76.0 über den Baustein `status-indicator` (DOM: Wurzel, Symbol, Text, aria-label). Die Farben des ganzen Zeilentextes bleiben in REQUEST_SECTION_CSS, ein Konsument kopiert deshalb nichts Neues.
+  const status = buildStatus(body, "okit-request-status");
   ui.status = status;
-  const label = devs.length === 0 ? st.deviationsOk : st.deviationsWarn(devs.length);
-  status.setAttribute("aria-label", label);
-  const icon = status.createSpan();
-  setIcon(icon, devs.length === 0 ? "circle-check" : "alert-triangle");
-  status.createSpan({ text: label });
+  paintStatus(status, devs.length === 0 ? "ok" : "warning", devs.length === 0 ? st.deviationsOk : st.deviationsWarn(devs.length));
   for (const d of devs) {
     const line = body.createDiv({ cls: "okit-request-deviation", text: st.deviation(d.kind, d.count, d.detail) });
     if (d.kind === "family-detected" && opts.openManager !== undefined && st.setFamily !== undefined) {

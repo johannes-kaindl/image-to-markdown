@@ -316,8 +316,12 @@ export class ImgToMdView extends ItemView {
   /** Scannt die aktive Notiz neu. `false`, wenn ein neuerer Scan die Antwort überholt hat: dann
    *  bleibt die Liste unberührt (ein langsamer Scan der alten Notiz darf die neue nicht überschreiben). */
   async rescan(): Promise<boolean> {
+    return this.scanFor(this.deps.getActivePath());
+  }
+
+  /** Scannt `path` (die Notiz, für die der Aufrufer sich entschieden hat) und übernimmt die Antwort, wenn kein neuerer Scan sie überholt hat. */
+  private async scanFor(path: string | null): Promise<boolean> {
     const folge = ++this.scanFolge;
-    const path = this.deps.getActivePath();
     const items = path ? await this.deps.scan(path) : [];
     if (folge !== this.scanFolge) return false;
     this.state.setItems(items);
@@ -340,8 +344,10 @@ export class ImgToMdView extends ItemView {
     this.resetCards();
     this.refineErrors.clear();
     this.refineDrafts.clear();
-    if (!(await this.rescan())) return;   // ein neuerer Wechsel hat übernommen
-    this.restoreCardsFor(this.deps.getActivePath());
+    // Mit `path` scannen UND wiederherstellen, nicht mit der inzwischen aktiven Notiz: wechselt sie während des Scans, gehören die Zeilen zu `path`;
+    // stünde die Quelle schon auf der neuen Notiz, hielte der nächste `refresh()` sie für gescannt und ließe die alten Zeilen stehen (B3 flackerte).
+    if (!(await this.scanFor(path))) return;   // ein neuerer Wechsel hat übernommen
+    this.restoreCardsFor(path);
   }
 
   /** Aktuelle Karten unter ihrer Quelle im Cache sichern (No-op ohne bekannte Quelle). */

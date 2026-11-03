@@ -918,7 +918,8 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control, Dropdown in der 
     const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "off", onLevel: "low" }) });
     await view.onOpen();
     const d = dropdown(view)!;
-    expect(d.dd.options).toEqual({ off: "Off", low: "Low", medium: "Medium", high: "High" });
+    // Seit Kit 0.76.0 beginnt jeder Eintrag mit dem Zeichen der Stufe (○ ▂ ▄ ▆); Wert und aria-label bleiben.
+    expect(d.dd.options).toEqual({ off: "○ Off", low: "▂ Low", medium: "▄ Medium", high: "▆ High" });
     expect(d.dd.getValue()).toBe("off");
     expect(d.select.getAttribute("aria-label")).toBe("Thinking level: Off");
     expect(all(view.contentEl, "okit-thinking-toggle")).toHaveLength(0);
@@ -967,7 +968,7 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control, Dropdown in der 
     const { view } = mkView({ thinkingState: () => ({ family: "qwen3.8", level: "high", onLevel: "high" }) });
     await view.onOpen();
     const d = dropdown(view)!;
-    expect(d.dd.options).toEqual({ off: "Aus", low: "Niedrig", medium: "Mittel", high: "Hoch" });
+    expect(d.dd.options).toEqual({ off: "○ Aus", low: "▂ Niedrig", medium: "▄ Mittel", high: "▆ Hoch" });
     expect(d.select.getAttribute("aria-label")).toBe("Denkstufe: Hoch");
     setLang("en");
   });
@@ -1570,6 +1571,25 @@ describe("refresh — überlappende Notizwechsel (B3-Rennfall)", () => {
     ctl.gib("leer.md", []);
     await b;
     expect(all(view.contentEl, "img2md-empty").length).toBe(1);
+    expect((view as any).cardsSourcePath).toBe("leer.md");
+  });
+
+  it("wechselt die aktive Notiz, während der Scan läuft, merkt sich die Ansicht die gescannte Notiz, nicht die aktuelle (restb-w30, B3 flackerte)", async () => {
+    let active = "q.md";
+    const ctl = gesteuerterScan();
+    const { view } = mkView({ getActivePath: () => active, scan: (p: string) => (p === "q.md" ? Promise.resolve(ITEMS.map(i => ({ ...i }))) : ctl.scan(p)) });
+    await view.onOpen();
+    active = "slow.md"; const a = view.refresh();      // Scan von slow.md hängt …
+    active = "leer.md";                                  // … die aktive Notiz wechselt, das zweite Ereignis ist noch unterwegs
+    ctl.gib("slow.md", ITEMS.map(i => ({ ...i })));
+    await a;
+    // Die Zeilen gehören zu slow.md; die Quelle darf nicht schon auf leer.md stehen, sonst hält der nächste refresh() sie für gescannt.
+    expect((view as any).cardsSourcePath).toBe("slow.md");
+    const b = view.refresh();                            // das nachgereichte Ereignis für leer.md
+    ctl.gib("leer.md", []);
+    await b;
+    expect(all(view.contentEl, "img2md-empty").length).toBe(1);
+    expect(all(view.contentEl, "img2md-item").length).toBe(0);
     expect((view as any).cardsSourcePath).toBe("leer.md");
   });
 });

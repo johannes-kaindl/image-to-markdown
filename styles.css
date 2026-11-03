@@ -94,7 +94,7 @@
 @keyframes okit-model-bar-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .okit-model-bar-refresh.is-loading svg { animation: none; } .okit-model-bar-refresh.is-loading { opacity: 0.5; } }
 .okit-model-bar .okit-thinking-control { flex: 0 0 auto; }
-@container okit-model-bar (width < 260px) { .okit-model-bar .okit-thinking-icon { display: none; } }
+@container okit-model-bar (width < 260px) { .okit-model-bar .okit-thinking-control select { width: calc(var(--size-2-3) + var(--size-4-6) + 1.2em); min-width: 0; padding-inline: var(--size-2-3) var(--size-4-6); text-overflow: clip; } }
 @container okit-model-bar (width < 200px) { .okit-model-bar-row { flex-wrap: wrap; } }
 .okit-model-bar-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
 /* Denk-Steuerung: Kit-Baustein (THINKING_CONTROL_CSS, obsidian-kit 0.74.0, wortgleich kopiert — Kit-Vertrag). */
@@ -324,3 +324,14 @@
    STREAM_AREA_CSS (obsidian-kit 0.72.0, dort unter `.okit-stream-body`) mit eigenem Vorfahren; ein Link mit `href` bleibt unverändert. */
 .img2md-text a:not([href]), .img2md-refine-version a:not([href]) { color: inherit; text-decoration: none; cursor: inherit; }
 .img2md-text a.external-link:not([href]), .img2md-refine-version a.external-link:not([href]) { background-image: none; padding-right: 0; }
+
+/* ── Status-Indikator (STATUS_INDICATOR_CSS aus obsidian-kit@0.76.1, src/obsidian/status-indicator.ts; vom Anfrage-Abschnitt mitgezogen) ── */
+.okit-status { display: flex; gap: var(--size-2-2); align-items: center; font-size: var(--font-ui-small); color: var(--text-muted); }
+.okit-status-icon { display: inline-flex; align-items: center; }
+.okit-status-icon svg { width: 14px; height: 14px; }
+.okit-status.is-ok .okit-status-icon { color: var(--text-success); }
+.okit-status.is-error .okit-status-icon { color: var(--text-error); }
+.okit-status.is-warning .okit-status-icon { color: var(--text-warning); }
+.okit-status.is-checking .okit-status-icon svg { animation: okit-status-spin 1.2s linear infinite; }
+@keyframes okit-status-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .okit-status.is-checking .okit-status-icon svg { animation: none; } }

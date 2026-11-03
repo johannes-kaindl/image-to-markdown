@@ -22,7 +22,11 @@ img_to_md_view.ts   ImgToMdView (ItemView, Sidebar) — Modell-Picker, Bild-List
                     Transkript „✓ transcript exists" + „open"-Link (springt zur Notiz), Zeilen-Titel
                     „re-transcribing overwrites it" — erneut transkribieren überschreibt (kein Block).
                     `rescan()` trägt eine Folgenummer: eine überholte Antwort verändert die Liste nicht,
-                    `refresh()` bricht dann ab (B3-Rennfall, 2026-10-23).
+                    `refresh()` bricht dann ab (B3-Rennfall, 2026-10-23). `refresh()` scannt und stellt mit
+                    dem zu Beginn erfassten Pfad wieder her, nicht mit der inzwischen aktiven Notiz: sonst
+                    stünde die Quelle nach einem Wechsel mitten im Scan auf der neuen Notiz, die Zeilen
+                    gehörten zur alten, und das nächste `refresh()` ließe sie stehen (zweiter B3-Rennfall,
+                    2026-11-03; Test „merkt sich die Ansicht die gescannte Notiz“).
 pdf_render.ts       Obsidian/DOM-Schicht für pdf.js: `pdfPageCount`, `renderPdfPage` (Seite auf
                     OffscreenCanvas/Canvas → PNG-Data-URL), `extractPdfPageText` (eingebetteter
                     Text-Layer einer Seite, "" ohne Layer). Importiert den gebündelten pdf.js-Worker

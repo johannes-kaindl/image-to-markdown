@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.74.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.76.1, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -151,8 +151,8 @@ export interface LlmConnectionOptions {
   /** Sprache des Default-Notice-Texts; eine Funktion wird je Notice gefragt. Default `"en"`. */
   lang?: "en" | "de" | (() => "en" | "de");
   /** Zeigt im Anfrage-Abschnitt den Schalter „Stufenwahl im Chat“ (`levelPickerInChat`). Default `false`:
-   *  `true` nur, wenn das Plugin den Wert an `buildThinkingControl` (`levelPicker`) reicht, sonst wirkt der
-   *  Schalter nicht. Ist die Einstellung schon `true`, bleibt er sichtbar (sonst unabschaltbar). */
+   *  `true` nur, wenn das Plugin den Wert an ein frei eingebautes `buildThinkingControl` (`levelPicker`) reicht, sonst wirkt der Schalter nicht; mit der Modellzeile (`buildModelBar`) nie
+   *  (sie zeigt die Stufe immer als Dropdown). Seit 0.76.0 hält ein gespeichertes `true` den Schalter ohne diese Option nicht mehr am Leben (der Wert bleibt in den Daten). */
   levelPicker?: boolean;
   /** Antwort als Stream (Default `true`). `false` fragt eine volle Completion ab (`stream: false`), mit
    *  `timeouts.nonStreamMs` als Frist; je Aufruf überschreibbar (`CompleteHandlers.stream`). Für Plugins,
