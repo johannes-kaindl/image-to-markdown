@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.76.1, src/obsidian/status-indicator.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.77.1, src/obsidian/status-indicator.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { setIcon } from "obsidian";
 
 /** §8-Baustein Status-Indikator (UI-STANDARD, `.claude/rules/ui-bausteine.md`): Form (Symbol) UND Farbe UND Klasse UND `aria-label` — nie Farbe allein.

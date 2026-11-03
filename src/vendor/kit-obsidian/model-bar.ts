@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.76.1, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.77.1, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /**
  * Modellzeile (UI-STANDARD § 8, neu in 0.67.0): eine Zeile, in der man sieht, welches Modell eine Aufgabe benutzt, und es wechselt — Dropdown mit den Modellen
  * des aktiven Endpunkts, „Anderer Endpunkt …“, Neu-laden-Knopf und optional die Denk-Steuerung. Läuft eigenständig in jeder Seitenleiste und im
@@ -7,8 +7,8 @@
  * ## Aufbau seit 0.73.0
  *
  * Reihenfolge `[Modell][Warnzeichen][Denkstufe][Neu laden]`, **ohne sichtbare Beschriftung** (`label` steht im `aria-label`, `showLabel` holt sie zurück) und **einzeilig**:
- * die Wurzel ist ein Container (`container-type: inline-size`), die Elemente liegen in einer inneren Flex-Zeile ohne Umbruch. Bei Enge fällt zuerst das Gehirn-Symbol vor der
- * Denkstufe weg (Container unter 260 px), danach kürzt nur der Modellname. Die Denk-Steuerung ist in der Zeile immer das Dropdown mit den Stufen des Modells (`inModelBar`).
+ * die Wurzel ist ein Container (`container-type: inline-size`), die Elemente liegen in einer inneren Flex-Zeile ohne Umbruch. Bei Enge schrumpft zuerst die Denkstufe auf ihr Zeichen
+ * (Container unter 340 px, seit 0.77.1), danach kürzt nur der Modellname. Die Denk-Steuerung ist in der Zeile immer das Dropdown mit den Stufen des Modells (`inModelBar`).
  *
  * ## Woher
  *
@@ -46,7 +46,7 @@
  *    ein `label` (sichtbarer Aufgabenname, auch Teil des `aria-label`).
  *    **Wer die Liste nach einem Laden braucht, baut keinen Adapter um `llm.models()` mehr:** `onRefreshed(result)` (seit 0.71.0) meldet jedes abgeschlossene Laden (das erste beim Bauen, den Neu-laden-Knopf, `refresh()`).
  * 3. **Das Kit weiß nicht, wann sich die Einstellungen ändern.** Ändert sich Modell oder Endpunkt außerhalb der Zeile (Settings-Tab, Manager),
- *    ruft das Plugin `update()` (zeichnet aus dem Zustand neu) oder `refresh()` (lädt die Liste neu). Hängt es das an `onResolved` der
+ *    ruft das Plugin `update()` (zeichnet aus dem Zustand neu, auch die Stufenwahl; billig, ohne Netz) oder `refresh()` (lädt die Liste neu). **Ohne diesen Aufruf bleibt die Zeile bei der alten Stufenwahl bis zum nächsten `refresh()`** (Befund lingotuner, 0.77.1): an `onResolved` der Verbindung hängen oder beim Schließen des Einstellungs-Tabs rufen. Hängt es das an `onResolved` der
  *    Verbindung, gilt seit 0.70.0: `llm.models()` (und damit `refresh()`) meldet über `onResolved` nur noch eine Änderung, ein Rückruf, der
  *    `models()` ruft, läuft nicht mehr im Kreis. Trotzdem nur neu zeichnen, wenn sich das Ergebnis geändert hat.
  * 4. **Im Einschub des Chatfensters** (`composer`, früher `header`) zeichnen `win.refresh()` und `win.refreshComposer()` die Zeile neu: der Einschub baut dann eine neue Zeile. Die alte gibt der
@@ -258,7 +258,7 @@ export function buildModelBar(opts: ModelBarOptions): ModelBar {
 /** Gehört in die `styles.css` des Consumers — das Kit injiziert kein CSS (Muster `THINKING_CONTROL_CSS`). Nur Theme-Variablen.
  *
  *  Seit 0.73.0 bleibt die Zeile einzeilig. Die Wurzel ist ein benannter Container (`container-type: inline-size`, `width: 100%`: ohne eigene Breite fiele sie in einer
- *  Flex-Reihe auf null), die Elemente liegen in der inneren Zeile `okit-model-bar-row` (eine Container-Abfrage stylt nie den Container selbst). Rangfolge bei Enge (seit 0.76.0): unter 260 px
+ *  Flex-Reihe auf null), die Elemente liegen in der inneren Zeile `okit-model-bar-row` (eine Container-Abfrage stylt nie den Container selbst). Rangfolge bei Enge (seit 0.76.0, Schwelle 340 px seit 0.77.1; gemessen mit dem Pilot `model-bar-breite`: bei 296 px Containerbreite zeigt das offene Dropdown von `google/gemma-4-e4b` 9 von 18 Zeichen, gefaltet 17; ab 340 px zeigt es 11, `qwen3.8-27b` ganz): unter 340 px
  *  Containerbreite schrumpft die Denkstufe auf ihr Zeichen (der Eintrag beginnt mit ihm, das geschlossene Dropdown wird beschnitten; Liste und Name tragen den vollen Namen, `thinkingLevelGlyph`), das Symbol davor bleibt (mit `.okit-model-bar` und `select` davor: die Regel muss `.okit-thinking-control select` aus `THINKING_CONTROL_CSS` schlagen, die Reihenfolge der kopierten Konstanten ist egal), danach kürzt nur der Modellname (Mindestbreite 6 em, Auslassung); Warnzeichen und Neu laden behalten ihre Breite.
  *  Erst unter dem Soll-Bereich bricht die Zeile um, als Netz, damit nie ein Bedienelement überläuft. Die Bereichssyntax trifft auch gebrochene Breiten (259,5 px).
  *  Die Ansage ist für Augen unsichtbar, aber nicht `display: none` (ein Screenreader läse sie sonst nicht). Der Ladezustand dreht das Symbol; `prefers-reduced-motion`
@@ -281,7 +281,7 @@ export const MODEL_BAR_CSS = `
 @keyframes okit-model-bar-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .okit-model-bar-refresh.is-loading svg { animation: none; } .okit-model-bar-refresh.is-loading { opacity: 0.5; } }
 .okit-model-bar .okit-thinking-control { flex: 0 0 auto; }
-@container okit-model-bar (width < 260px) { .okit-model-bar .okit-thinking-control select { width: calc(var(--size-2-3) + var(--size-4-6) + 1.2em); min-width: 0; padding-inline: var(--size-2-3) var(--size-4-6); text-overflow: clip; } }
+@container okit-model-bar (width < 340px) { .okit-model-bar .okit-thinking-control select { width: calc(var(--size-2-3) + var(--size-4-6) + 1.2em); min-width: 0; padding-inline: var(--size-2-3) var(--size-4-6); text-overflow: clip; } }
 @container okit-model-bar (width < 200px) { .okit-model-bar-row { flex-wrap: wrap; } }
 .okit-model-bar-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; white-space: nowrap; }
 `;

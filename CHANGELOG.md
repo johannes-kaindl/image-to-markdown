@@ -12,8 +12,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ### Changed
 
-- Vendored `obsidian-kit` 0.76.1 (was 0.74.0; 0.75.0 and 0.76.0 were skipped). What you may notice:
-- The levels in the thinking dropdown of the model row start with a block character that shows the level (`▄ Medium`); the closed dropdown keeps the word next to it. Below 260 px of row width it shrinks to the character alone, the brain icon stays (obsidian-kit 0.76.0). On a phone the sidebar row is about 280 px wide, so the word stays and the model name gets shorter than before ("goo…" instead of "googl…"); the full name is still the tooltip of the dropdown.
+- Vendored `obsidian-kit` 0.77.1 (was 0.74.0; 0.75.0 to 0.77.0 were skipped). What you may notice:
+- The levels in the thinking dropdown of the model row start with a block character that shows the level (`▄ Medium`); the closed dropdown keeps the word next to it. Below 340 px of row width it shrinks to the character alone, the brain icon stays (obsidian-kit 0.76.0, threshold raised from 260 px in 0.77.1). On a phone the sidebar row is about 280 px wide, so the row now shows the character only and leaves the room to the model name; the full name is still the tooltip of the dropdown.
 - The request section in Settings draws its status line through the kit's status indicator (obsidian-kit 0.76.0): same look, the colours of the states stay as they were.
 - Everything else in these kit releases does not touch this plugin: the chat window fixes (history button, copy buttons, keyboard gap), the choice dialog `askChoice` (not used yet), `block-writer` and `markChatHost`. The row "Level picker in chat" was already gone in 0.33.0.
 

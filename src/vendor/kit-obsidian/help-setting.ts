@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.76.1, src/obsidian/help-setting.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.77.1, src/obsidian/help-setting.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Setting } from "obsidian";
 import type { SettingDefinitionRender } from "obsidian";
 
