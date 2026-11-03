@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.1] — 2026-11-03
+
 ### Fixed
 
 - **Switching notes quickly could leave the list of the previous note in the sidebar.** When you moved on to another note while the sidebar was still scanning the one before (for example opening a transcript through "open" and going on to a note without images), the sidebar remembered the new note as already scanned although the rows belonged to the old one; the list then stayed on the old rows and the "no images" hint did not appear. The sidebar now remembers the note it actually scanned, so the next switch scans again. (The GUI smoke point B3 flickered because of this.)
