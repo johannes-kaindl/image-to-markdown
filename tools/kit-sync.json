@@ -49,7 +49,10 @@
         "model-context",
         "model-list-cache",
         "reasoning",
-        "redact",
+        {
+          "name": "redact",
+          "ref": "0.60.0"
+        },
         "rounds",
         "safe-markdown",
         "sampling-profiles",

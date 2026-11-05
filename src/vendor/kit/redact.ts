@@ -1,4 +1,4 @@
-// vendored from code-kit@0.40.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.60.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus ghostline/src/core/context.ts (redactText) und settings-assistant/src/core/secrets.ts (redactFields), 2026-10-09; vault-crews/src/core/redact.ts und llm-lab/src/core/redact_secrets.ts + redact_pii.ts (redactKeys, redactKeysInValue, createPiiRedactor), 2026-10-10
 /** Redaction of secrets, in two entry points (plus a reversible session for text): over free
  *  text and over parsed JSON.
@@ -62,7 +62,13 @@ export const SECRET_REDACT_RULES: RedactRules = [
 
 /** E-mail addresses. Not part of the default: whether an address is a secret depends on the
  *  consumer. Apply it as `[...SECRET_REDACT_RULES, EMAIL_REDACT_RULE]`. */
-export const EMAIL_REDACT_RULE: readonly [RegExp, string] = [/(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]"];
+export const EMAIL_REDACT_RULE: readonly [RegExp, string] = [/(^|[^A-Z0-9._%+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi, "[redacted-email]"];
+
+// A rule whose regex puts the character in front of the hit in group 1 and the hit in group 2 (a lookbehind written out: iOS
+// Safari before 16.4 does not parse `(?<!…)` and the whole bundle fails to load, which is what eslint-plugin-obsidianmd's
+// `regex-lookbehind` guards against). The lead is kept, only the hit is replaced. Without it every start inside a long
+// run of local-part characters would scan to the end of the run, quadratic; with it only the start of a run is tried.
+const LEAD_RULES = new WeakSet<RegExp>([EMAIL_REDACT_RULE[0]]);
 
 /** What `redactText` applies when no rules are passed. */
 export const DEFAULT_REDACT_RULES: RedactRules = SECRET_REDACT_RULES;
@@ -80,7 +86,9 @@ const ORPHAN_PLACEHOLDER = "[redacted-private-key]";
  *  and the reversible entry point, so both find exactly the same places. */
 function scan(text: string, rules: RedactRules, sub: (match: string, replacement: string) => string): string {
   let out = text;
-  for (const [re, rep] of rules) out = out.replace(re, (m) => sub(m, rep));
+  for (const [re, rep] of rules) {
+    out = LEAD_RULES.has(re) ? out.replace(re, (_m, lead: string, hit: string) => lead + sub(hit, rep)) : out.replace(re, (m) => sub(m, rep));
+  }
   out = out.replace(ORPHAN_END, (m) => sub(m, ORPHAN_PLACEHOLDER));
   return out.replace(ORPHAN_BEGIN, (m) => sub(m, ORPHAN_PLACEHOLDER));
 }
@@ -280,10 +288,11 @@ export function redactKeysInValue<T>(value: T, keys: readonly (string | undefine
 export type PiiLabel = "EMAIL" | "IBAN" | "PHONE" | "URLCRED" | "CUSTOM";
 
 // The patterns of llm-lab/src/core/redact_pii.ts, in meaning unchanged (a differential test pins that). The EMAIL pattern
-// has one lookbehind more: without it every start inside a long run of local-part characters scans to the end of the
-// run, quadratic; the leftmost start of a run is the only one that can succeed, so the matches are the same.
+// has a lead more (the character in front, group 1, kept; the hit is group 2): without it every start inside a long
+// run of local-part characters scans to the end of the run, quadratic; the leftmost start of a run is the only one that
+// can succeed, so the matches are the same. It was a lookbehind up to 0.58.0, see `LEAD_RULES`.
 const PII_PATTERNS: readonly (readonly [Exclude<PiiLabel, "CUSTOM">, RegExp])[] = [
-  ["EMAIL", /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g],
+  ["EMAIL", /(^|[^A-Za-z0-9._%+-])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g],
   ["IBAN", /\b[A-Z]{2}\d{2}(?:[ ]?[A-Za-z0-9]{4}){2,7}(?:[ ]?[A-Za-z0-9]{1,4})?\b/g],
   ["PHONE", /(?:\+\d{1,3}[ /-]?)?(?:\(?\d{2,5}\)?[ /-]?)\d{3,}(?:[ -]?\d{2,})+/g],
   ["URLCRED", /\/\/[^\s:/@]+:[^\s:/@]+@/g],
@@ -329,13 +338,14 @@ export function createPiiRedactor(opts: PiiRedactorOptions = {}): PiiRedactor {
 
   const replaceAll = (text: string, label: PiiLabel, re: RegExp): string => {
     const seen = seenFor(label);
-    return text.replace(re, (hit) => {
+    const token = (hit: string): string => {
       const known = seen.get(hit);
       if (known !== undefined) return known;
-      const token = format(label, seen.size + 1);
-      seen.set(hit, token);
-      return token;
-    });
+      const created = format(label, seen.size + 1);
+      seen.set(hit, created);
+      return created;
+    };
+    return label === "EMAIL" ? text.replace(re, (_m, lead: string, hit: string) => lead + token(hit)) : text.replace(re, token);
   };
 
   return {
