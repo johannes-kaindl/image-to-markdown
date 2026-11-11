@@ -101,6 +101,17 @@ describe("ImgToMdView — Gerüst + Liste", () => {
     await v.view.onOpen();
     expect(all(v.view.contentEl, "img2md-status")[0].textContent).toContain("offline");
   });
+  it("die Statuszeile ist der Kit-Baustein: Phase als Klasse (is-ok / is-error), der Name des Knopfs bleibt die Handlung", async () => {
+    const okV = mkView({ connectionStatus: async () => ({ ok: true, endpoint: null }) }); await okV.view.onOpen();
+    const ok = all(okV.view.contentEl, "img2md-status")[0] as any;
+    expect(String(ok.className).split(/\s+/)).toEqual(expect.arrayContaining(["okit-status", "img2md-status", "is-ok"]));
+    expect(String(ok.className)).not.toContain("is-error");
+    const offV = mkView({ connectionStatus: async () => ({ ok: false, endpoint: null }) }); await offV.view.onOpen();
+    const off = all(offV.view.contentEl, "img2md-status")[0] as any;
+    expect(String(off.className)).toContain("is-error");
+    expect(String(off.className)).not.toContain("is-ok");
+    expect(off.getAttribute("aria-label")).toBe("Check the connection again"); // nach dem Zeichnen nicht auf den Statustext umgestellt
+  });
   it("Verbindungsstatus unterscheidet sich per Icon-Form (nicht nur Glyph/Farbe)", async () => {
     const okV = mkView({ connectionStatus: async () => ({ ok: true, endpoint: "http://localhost:1234" }) }); await okV.view.onOpen();
     const okIcon = all(okV.view.contentEl, "img2md-status-icon")[0].getAttribute("data-icon");

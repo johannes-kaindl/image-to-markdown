@@ -6,6 +6,10 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The connection line at the top of the sidebar now uses the shared status indicator of `obsidian-kit`.** Texts, symbols, colours and the click (or Enter) that checks the connection again stay as they were. What you notice: the symbol shown while the connection is being checked now turns (it stays still when the system asks to reduce motion).
+
 ## [0.33.1] — 2026-11-03
 
 ### Fixed

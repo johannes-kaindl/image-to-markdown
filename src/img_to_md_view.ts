@@ -6,6 +6,7 @@ import { truncateMiddle } from "./img_to_md";
 import { getLang, t } from "./i18n";
 import { thinkingLevelTexts, thinkingOffTexts } from "./vendor/kit-obsidian/thinking-control";
 import { buildModelBar, type ModelBar, type ModelBarConnection } from "./vendor/kit-obsidian/model-bar";
+import { buildStatus, paintStatus, type StatusParts } from "./vendor/kit-obsidian/status-indicator";
 import type { BackendId, FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { CardCache } from "./card_cache";
 import { parseDescription } from "./describe";
@@ -111,9 +112,7 @@ export interface ImgToMdViewDeps {
 
 export class ImgToMdView extends ItemView {
   private state = new ImgToMdState();
-  private statusEl: HTMLElement | null = null;
-  private statusIconEl: HTMLElement | null = null;
-  private statusLabelEl: HTMLElement | null = null;
+  private status: StatusParts | null = null;
   private presetSel: HTMLSelectElement | null = null;
   private modelStatusEl: HTMLElement | null = null;
   /** Die Kit-Modellzeile (Dropdown, Neu-laden, Denk-Steuerung); `null` vor `onOpen` und nach `onClose`. */
@@ -155,16 +154,18 @@ export class ImgToMdView extends ItemView {
 
   async onOpen(): Promise<void> {
     const c = this.contentEl; c.empty(); c.addClass("img2md-root");
-    this.statusEl = c.createDiv({ cls: "img2md-status" });
-    this.statusIconEl = this.statusEl.createSpan({ cls: "img2md-status-icon" });
-    this.statusLabelEl = this.statusEl.createSpan({ cls: "img2md-status-label" });
+    // Status-Indikator aus dem Kit (UI-STANDARD §8): Klasse, Symbol und Text je Phase; die Zeile ist zugleich der Knopf zum Neupruefen.
+    const status = buildStatus(c, "img2md-status");
+    status.iconEl.addClass("img2md-status-icon");
+    status.labelEl.addClass("img2md-status-label");
+    this.status = status;
     // Die Statuszeile ist selbst der Knopf zum Neupruefen: Name und Tooltip sagen es, die Tastatur erreicht sie.
-    this.statusEl.setAttribute("role", "button");
-    this.statusEl.setAttribute("tabindex", "0");
-    this.statusEl.setAttribute("aria-label", t("view.recheck"));
-    this.statusEl.setAttribute("title", t("view.recheck"));
-    this.statusEl.addEventListener("click", () => void this.refreshStatus());
-    this.statusEl.addEventListener("keydown", (ev: KeyboardEvent) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); void this.refreshStatus(); } });
+    status.statusEl.setAttribute("role", "button");
+    status.statusEl.setAttribute("tabindex", "0");
+    status.statusEl.setAttribute("aria-label", t("view.recheck"));
+    status.statusEl.setAttribute("title", t("view.recheck"));
+    status.statusEl.addEventListener("click", () => void this.refreshStatus());
+    status.statusEl.addEventListener("keydown", (ev: KeyboardEvent) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); void this.refreshStatus(); } });
     // Zeile 1: Modellzeile des Kits (Dropdown, Neu-laden, Denk-Steuerung) + das Status-Symbol „Modell geladen“ des Plugins.
     const modelRow = c.createDiv({ cls: "img2md-model-row" });
     const barHost = modelRow.createDiv({ cls: "img2md-model-bar-host" });
@@ -212,7 +213,7 @@ export class ImgToMdView extends ItemView {
   }
 
   async refreshStatus(): Promise<void> {
-    if (!this.statusEl) return;
+    if (!this.status) return;
     this.setConnState(null, null);
     const { ok, endpoint } = await this.deps.connectionStatus();
     this.setConnState(ok, endpoint);
@@ -221,12 +222,13 @@ export class ImgToMdView extends ItemView {
   /** Verbindungsstatus per Icon-FORM (loader / circle-check / circle-x) + Text; Farbe nur
    *  sekundär — lesbar auch bei Farbsehschwäche (WCAG 1.4.1). */
   private setConnState(state: boolean | null, endpoint: string | null): void {
-    const root = this.statusEl, icon = this.statusIconEl, label = this.statusLabelEl;
-    if (!root || !icon || !label) return;
-    root.removeClass("is-ok"); root.removeClass("is-error"); root.removeClass("is-checking");
-    if (state === null) { root.addClass("is-checking"); setIcon(icon, "loader"); label.setText(t("view.checking")); }
-    else if (state) { root.addClass("is-ok"); setIcon(icon, "circle-check"); label.setText(endpoint ? t("view.connectedVia", endpoint) : t("view.connected")); }
-    else { root.addClass("is-error"); setIcon(icon, "circle-x"); label.setText(t("view.offline")); }
+    const status = this.status;
+    if (!status) return;
+    if (state === null) paintStatus(status, "checking", t("view.checking"));
+    else if (state) paintStatus(status, "ok", endpoint ? t("view.connectedVia", endpoint) : t("view.connected"));
+    else paintStatus(status, "error", t("view.offline"));
+    // Der Kit-Baustein setzt `aria-label` auf den Text; diese Zeile ist aber der Knopf zum Neupruefen, sein Name bleibt die Handlung.
+    status.statusEl.setAttribute("aria-label", t("view.recheck"));
   }
 
   /** Baut die Modellzeile. Das Status-Symbol „Modell geladen“ bleibt Sache des Plugins und folgt der Liste der Zeile über `onRefreshed`
@@ -241,7 +243,7 @@ export class ImgToMdView extends ItemView {
       // Eine Pfeilfunktion statt `this.running`: die Zeile liest den Laufzustand bei jedem `update()` neu.
       disabled: () => this.running,
       onChange: () => { this.updateModelStatus(); },
-      onError: (e) => { this.statusLabelEl?.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); },
+      onError: (e) => { this.status?.labelEl.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); },
       // Denk-Steuerung in derselben Zeile: seit Kit 0.73.0 immer ein Dropdown mit den Stufen des Modells (`levelPicker` gilt in der Zeile nicht).
       // Die Familie kommt aus der Endpunkt-Aufloesung, nicht aus dem Modellnamen.
       thinking: {
@@ -891,11 +893,11 @@ export class ImgToMdView extends ItemView {
     const actual = actualModel(this.state.cards);
     const chosen = this.deps.getModel();
     if (actual && chosen === "") {
-      this.statusLabelEl?.setText(t("view.modelRan", actual));
+      this.status?.labelEl.setText(t("view.modelRan", actual));
     } else if (actual && actual !== chosen) {
-      try { await this.deps.llm.setModel(actual); } catch (e) { this.statusLabelEl?.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); }
+      try { await this.deps.llm.setModel(actual); } catch (e) { this.status?.labelEl.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); }
       await this.modelBar?.refresh({ force: true });   // ein JIT geladenes Modell steht jetzt in der Liste
-      if (this.deps.getModel() === actual) this.statusLabelEl?.setText(t("view.modelChanged", actual));
+      if (this.deps.getModel() === actual) this.status?.labelEl.setText(t("view.modelChanged", actual));
     }
     this.updateAllCards();
   }

@@ -1,12 +1,7 @@
 /* Image to Markdown — Sidebar-Styles */
 .img2md-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-/* Status-Icon: Form (circle-check / circle-x / loader) trägt die Bedeutung, Farbe nur sekundär — barrierefrei bei Farbsehschwäche (WCAG 1.4.1). */
-.img2md-status { font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 2px 0; margin-bottom: var(--size-4-2); flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
-.img2md-status-icon { display: inline-flex; align-items: center; color: var(--text-muted); }
-.img2md-status-icon svg { width: 14px; height: 14px; }
-.img2md-status.is-ok .img2md-status-icon { color: var(--text-success); }
-.img2md-status.is-error .img2md-status-icon { color: var(--text-error); }
-.img2md-status.is-checking .img2md-status-icon { color: var(--text-muted); }
+/* Statuszeile der Ansicht (die Kit-Regeln `.okit-status*` stehen weiter unten bei REQUEST_SECTION/STATUS_INDICATOR_CSS; mit `.img2md-root` gewinnt diese Regel unabhängig von der Reihenfolge): der Kit-Baustein zeichnet Form (circle-check / circle-x / loader) und Farbe, die Zeile ist zugleich der Knopf zum Neupruefen. */
+.img2md-root .img2md-status { font-size: 11px; cursor: pointer; padding: 2px 0; margin-bottom: var(--size-4-2); flex: 0 0 auto; gap: 4px; }
 /* Modus-Umschalter (Segmented-Control): Zustand über Form (gefüllter Hintergrund) + aria-pressed,
    nicht nur Farbe (WCAG 1.4.1). */
 .img2md-mode-row { display: flex; flex: 0 0 auto; margin-bottom: var(--size-4-2); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); overflow: hidden; }
