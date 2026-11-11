@@ -1,4 +1,5 @@
 import type { Lang } from "./i18n";
+import { splitList } from "./vendor/kit/split-list";
 
 export interface ParsedDescription { category: string | null; tags: string[]; prose: string; }
 
@@ -34,7 +35,7 @@ export function parseDescription(raw: string, taxonomy: string[]): ParsedDescrip
     const cat = /^\s*CATEGORY\s*:(.*)$/i.exec(line);
     if (cat) { candidate = cat[1].trim() || null; continue; }
     const tg = /^\s*TAGS\s*:(.*)$/i.exec(line);
-    if (tg) tags = tg[1].split(",").map(s => s.trim()).filter(Boolean);
+    if (tg) tags = splitList(tg[1]);
   }
   let category: string | null = null;
   if (candidate) {

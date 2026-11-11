@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { neutralizeModelMarkdown } from "./vendor/kit/safe-markdown";
+import { splitList } from "./vendor/kit/split-list";
 import { renderMarkdownGuarded } from "./vendor/kit-obsidian/dom-guard";
 import { ImgToMdState, ImgItem, PdfGroup, partitionDoneCards, actualModel, canRefine, refineRequest } from "./img_to_md_state";
 import { truncateMiddle } from "./img_to_md";
@@ -548,7 +549,7 @@ export class ImgToMdView extends ItemView {
         tagsInput.setAttribute("aria-label", t("view.tags"));
         tagsInput.addEventListener("change", () => {
           const c = this.state.cards[i]; if (!c) return;
-          c.tags = tagsInput.value.split(",").map(s => s.trim()).filter(Boolean);
+          c.tags = splitList(tagsInput.value);
         });
         refs.catRow = row; refs.categoryInput = input; refs.tagsInput = tagsInput;
       }
