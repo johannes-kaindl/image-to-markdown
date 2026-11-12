@@ -1,7 +1,8 @@
 // src/migration_modal.ts
-import { App, Modal } from "obsidian";
+import type { App } from "obsidian";
 import { DiffLine, diffLines } from "./vendor/kit/diff";
 import { t } from "./i18n";
+import { askChoice } from "./vendor/kit-obsidian/choice-modal";
 import { confirmAction } from "./vendor/kit-obsidian/confirm";
 import { MigrationPlan, NotePlan, MappingChange } from "./fm_migration";
 
@@ -15,102 +16,61 @@ function frontmatterBlock(content: string): string {
   return m ? m[0] : content;
 }
 
-/** Zeigt den Migrationsplan (Task 5: planMigration) vor der Ausführung: Zusammenfassung,
- *  Mapping-Änderungen, Konflikte und je Notiz einen read-only Frontmatter-Diff. Drei Wege
- *  (migrieren+anwenden / nur anwenden / abbrechen); „Migrieren & anwenden“ verlangt eine
- *  zweite Bestätigung über das Kit-Modal `confirmAction` (kein window.confirm — blockiert die Obsidian-Event-Loop).
- *  DOM ausschließlich via createEl/createDiv (UI-STANDARD §2). */
-export class MigrationModal extends Modal {
-  private decided = false;
-  constructor(
-    app: App,
-    private plan: MigrationPlan,
-    private changes: MappingChange[],
-    private onResolve: (choice: MigrationChoice) => void,
-  ) {
-    super(app);
+function renderDiffLine(parent: HTMLElement, d: DiffLine): void {
+  const marker = d.kind === "add" ? "+" : d.kind === "del" ? "-" : " ";
+  const line = parent.createDiv({ cls: `img2md-diff-line img2md-diff-${d.kind}` });
+  line.createSpan({ cls: "img2md-diff-marker", text: marker });
+  line.createSpan({ cls: "img2md-diff-text", text: d.text });
+}
+
+function renderNote(parent: HTMLElement, note: NotePlan): void {
+  const wrap = parent.createDiv({ cls: "img2md-migration-note" });
+  wrap.createEl("h4", { text: note.path, cls: "img2md-migration-note-path" });
+  const box = wrap.createDiv({ cls: "img2md-diff" });
+  for (const d of diffLines(frontmatterBlock(note.old), frontmatterBlock(note.next))) renderDiffLine(box, d);
+}
+
+/** Körper der Migrations-Vorschau: Zusammenfassung, Mapping-Änderungen, Konflikte und je Notiz ein read-only Frontmatter-Diff.
+ *  Knöpfe, Esc und Auflösung gehören dem Kit-`askChoice` (obsidian-kit 0.83.0, Körper-Hook `render`); DOM ausschließlich via
+ *  createEl/createDiv (UI-STANDARD §2). */
+function renderBody(contentEl: HTMLElement, plan: MigrationPlan, changes: MappingChange[]): void {
+  contentEl.addClass("img2md-migration-modal");
+  contentEl.createEl("p", { text: t("migration.summary", String(plan.migrations.length)), cls: "img2md-migration-summary" });
+
+  const changesBox = contentEl.createDiv({ cls: "img2md-migration-changes" });
+  for (const c of changes) changesBox.createDiv({ cls: "img2md-migration-change", text: t("migration.change", c.from, c.to) });
+
+  if (plan.conflicts.length > 0) {
+    contentEl.createEl("p", { text: t("migration.conflicts", String(plan.conflicts.length)), cls: "img2md-migration-conflicts" });
+    const conflictBox = contentEl.createDiv({ cls: "img2md-migration-conflict-list" });
+    for (const path of plan.conflicts) conflictBox.createDiv({ cls: "img2md-migration-conflict-path", text: `⚠ ${path}` });
   }
 
-  onOpen(): void {
-    this.contentEl.addClass("img2md-migration-modal");
-    this.renderMain();
-  }
+  const body = contentEl.createDiv({ cls: "img2md-migration-body" });
+  for (const note of plan.migrations) renderNote(body, note);
+}
 
-  private renderMain(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-    contentEl.createEl("h3", { text: t("migration.title") });
-    contentEl.createEl("p", {
-      text: t("migration.summary", String(this.plan.migrations.length)),
-      cls: "img2md-migration-summary",
-    });
-
-    const changesBox = contentEl.createDiv({ cls: "img2md-migration-changes" });
-    this.changes.forEach((c) => {
-      changesBox.createDiv({ cls: "img2md-migration-change", text: t("migration.change", c.from, c.to) });
-    });
-
-    if (this.plan.conflicts.length > 0) {
-      contentEl.createEl("p", {
-        text: t("migration.conflicts", String(this.plan.conflicts.length)),
-        cls: "img2md-migration-conflicts",
-      });
-      const conflictBox = contentEl.createDiv({ cls: "img2md-migration-conflict-list" });
-      this.plan.conflicts.forEach((path) => {
-        conflictBox.createDiv({ cls: "img2md-migration-conflict-path", text: `⚠ ${path}` });
-      });
-    }
-
-    const body = contentEl.createDiv({ cls: "img2md-migration-body" });
-    this.plan.migrations.forEach((note) => this.renderNote(body, note));
-
-    const actions = contentEl.createDiv({ cls: "img2md-diff-actions" });
-    const cancel = actions.createEl("button", { text: t("migration.cancel"), cls: "img2md-migration-btn-cancel" });
-    cancel.addEventListener("click", () => { this.finish("cancel"); });
-    const applyOnly = actions.createEl("button", { text: t("migration.applyOnly"), cls: "img2md-migration-btn-apply" });
-    applyOnly.addEventListener("click", () => { this.finish("apply"); });
-    const migrate = actions.createEl("button", {
-      text: t("migration.migrateApply"),
-      cls: "mod-cta img2md-migration-btn-migrate",
-    });
-    migrate.addEventListener("click", () => { void this.confirmMigrate(); });
-  }
-
-  private renderNote(parent: HTMLElement, note: NotePlan): void {
-    const wrap = parent.createDiv({ cls: "img2md-migration-note" });
-    wrap.createEl("h4", { text: note.path, cls: "img2md-migration-note-path" });
-    const box = wrap.createDiv({ cls: "img2md-diff" });
-    const diff = diffLines(frontmatterBlock(note.old), frontmatterBlock(note.next));
-    diff.forEach((d) => this.renderDiffLine(box, d));
-  }
-
-  private renderDiffLine(parent: HTMLElement, d: DiffLine): void {
-    const marker = d.kind === "add" ? "+" : d.kind === "del" ? "-" : " ";
-    const line = parent.createDiv({ cls: `img2md-diff-line img2md-diff-${d.kind}` });
-    line.createSpan({ cls: "img2md-diff-marker", text: marker });
-    line.createSpan({ cls: "img2md-diff-text", text: d.text });
-  }
-
-  /** Zweite Bestaetigung vor dem irreversiblen Umschreiben: das Kit-Bestaetigungs-Modal (destruktiv), kein window.confirm.
-   *  „Abbrechen“ dort bricht wie bisher die ganze Migration ab. */
-  private async confirmMigrate(): Promise<void> {
-    const ok = await confirmAction(this.app, {
-      title: t("migration.title"),
-      message: t("migration.confirm", String(this.plan.migrations.length)),
-      confirmLabel: t("migration.migrateApply"),
-      cancelLabel: t("migration.cancel"),
-    });
-    this.finish(ok ? "migrate" : "cancel");
-  }
-
-  private finish(choice: MigrationChoice): void {
-    this.decided = true;
-    this.onResolve(choice);
-    this.close();
-  }
-
-  onClose(): void {
-    this.contentEl.empty();
-    if (!this.decided) this.onResolve("cancel");
-  }
+/** Zeigt den Migrationsplan (Task 5: planMigration) vor der Ausführung. Drei Wege (migrieren+anwenden / nur anwenden / abbrechen);
+ *  „Migrieren & anwenden“ verlangt eine zweite Bestätigung über das Kit-Modal `confirmAction` (kein window.confirm — blockiert die
+ *  Obsidian-Event-Loop); „Abbrechen“ dort bricht wie bisher die ganze Migration ab. Esc, Klick daneben und der Abbrechen-Knopf
+ *  liefern in `askChoice` `null`; hier heißt das „cancel“ — es wird nichts migriert und nichts gespeichert. */
+export async function askMigration(app: App, plan: MigrationPlan, changes: MappingChange[]): Promise<MigrationChoice> {
+  const choice = await askChoice<"migrate" | "apply">(app, {
+    title: t("migration.title"),
+    options: [
+      { value: "apply", label: t("migration.applyOnly") },
+      { value: "migrate", label: t("migration.migrateApply"), cta: true },
+    ],
+    cancelLabel: t("migration.cancel"),
+    render: (contentEl) => { renderBody(contentEl, plan, changes); },
+  });
+  if (choice === null) return "cancel";
+  if (choice === "apply") return "apply";
+  const ok = await confirmAction(app, {
+    title: t("migration.title"),
+    message: t("migration.confirm", String(plan.migrations.length)),
+    confirmLabel: t("migration.migrateApply"),
+    cancelLabel: t("migration.cancel"),
+  });
+  return ok ? "migrate" : "cancel";
 }

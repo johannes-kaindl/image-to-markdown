@@ -84,8 +84,9 @@ frontmatter_map.ts  FrontmatterMap: konfigurierbare Frontmatter-Keys + Diskrimin
                     `=== true`, weil `card.truncated` nie `false` ist, sondern `undefined`.
 fm_migration.ts     Frontmatter-Mapping-Migration: diffMappings + Migrationsplan
                     (MigrationPlan/NotePlan) über bestehende i2m-Notizen. Reiner Kern.
-migration_modal.ts  MigrationModal (Modal): Vorschau der Frontmatter-Migration (read-only
-                    Frontmatter-Diff, migrate/apply/cancel). Obsidian-abhängig.
+migration_modal.ts  askMigration: Vorschau der Frontmatter-Migration über das Kit-`askChoice` (Körper-Hook
+                    `render`, obsidian-kit 0.83.0): read-only Frontmatter-Diff, migrate/apply/cancel; „migrate“
+                    verlangt eine zweite Bestätigung (`confirmAction`). Obsidian-abhängig.
 i18n.ts             reiner Kern: UI-Lokalisierung EN/DE — STRINGS{en,de} · t() (Fallback lang→en→key,
                     {0}-Interpolation) · pickLang · setLang/getLang · defaultVisionPrompt. EN kanonisch.
 settings.ts         ImageToMarkdownSettings (enthält `visionEndpoints: EndpointConfig[]` — je Eintrag

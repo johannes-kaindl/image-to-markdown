@@ -104,6 +104,10 @@
         "anthropic-transport",
         "backend-probe",
         "chat-client",
+        {
+          "name": "choice-modal",
+          "ref": "0.83.0"
+        },
         "clipboard",
         "collapsible",
         "confirm",

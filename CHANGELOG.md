@@ -8,6 +8,7 @@ and versioning follows [SemVer](https://semver.org/).
 
 ### Changed
 
+- **The frontmatter migration preview (when you change the field mapping) now uses the shared choice dialog of `obsidian-kit` 0.83.0.** The summary, the list of changed keys, the conflicts and the frontmatter diff per note are unchanged; the title moves into the dialog's title bar and the buttons (Cancel, Apply without migrating, Migrate & apply) sit in Obsidian's standard button row. "Migrate & apply" still asks a second time before notes are rewritten, and closing the dialog with Esc or a click outside still means Cancel: nothing is migrated and the mapping stays as it was.
 - **The connection line at the top of the sidebar now uses the shared status indicator of `obsidian-kit`.** Texts, symbols, colours and the click (or Enter) that checks the connection again stay as they were. What you notice: the symbol shown while the connection is being checked now turns (it stays still when the system asks to reduce motion).
 
 ## [0.33.1] — 2026-11-03
