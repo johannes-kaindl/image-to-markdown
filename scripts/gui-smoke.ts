@@ -79,6 +79,7 @@ import {
   schliesseEinstellungen,
 } from "../../tools/obsidian-cdp/cdp.js";
 import { echoText, startLlmStub } from "../../tools/obsidian-cdp/llm-stub.js";
+import { fakeManagerAendereMit } from "../../tools/obsidian-cdp/fake-manager.js";
 import {
   fokusAufraeumSkript,
   fokusStandSkript,
@@ -199,7 +200,7 @@ async function mitClaudeManager<T>(cdp: Cdp, fn: (c: { claudeUrl: string; lokalU
 
 const PUNKTE = [
   "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3", "CL1", "CL2",
-  "N1", "N2", "N3", "N4", "N5", "N6", "ML1", "ML2", "ML3", "ML4", "ML5", "LK1", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
+  "N1", "N2", "N3", "N4", "N5", "N6", "ML1", "ML2", "ML3", "ML4", "ML5", "ML6", "ML7", "ML8", "ML9", "LK1", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
 
@@ -997,7 +998,7 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   {
     key: "N6",
-    titel: "Anfrage: ein gespeichertes „aus“ bei gpt-oss (kein Aus-Schalter) sendet die niedrigste Stufe low statt minimal (code-kit 0.39.0, Falle 12), und das Dropdown zeigt Low",
+    titel: "Anfrage: ein gespeichertes „aus“ bei gpt-oss (kein Aus-Schalter) sendet die niedrigste Stufe minimal (code-kit 0.65.0, vorher low), und das Dropdown zeigt sie",
     async run(cdp) {
       await zeigeNotiz(cdp, NOTIZ.bilder);
       return mitFakeModell(cdp, "openai/gpt-oss-20b", { overrides: {}, thinking: { transform: "off" }, lastOnLevel: {}, levelPickerInChat: false }, async (sicht) => {
@@ -1015,8 +1016,8 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const d = JSON.parse(r) as { ok?: boolean; fehler?: string; dd?: { wert: string; optionen: string[] } | null };
         const body = sicht.bodies.at(-1) as Record<string, unknown> | undefined;
         if (!body) return { ok: false, detail: `der Fake-Server sah keinen POST (${d.fehler ?? "kein Fehler gemeldet"})` };
-        return { ok: body.reasoning_effort === "low" && !!d.dd && d.dd.wert === "low" && !d.dd.optionen.includes("off"),
-          detail: `Server sah reasoning_effort=${JSON.stringify(body.reasoning_effort)} (erwartet "low"), Modell ${String(body.model)} · Dropdown ${d.dd ? `${JSON.stringify(d.dd.optionen)} zeigt "${d.dd.wert}"` : "fehlt"}` };
+        return { ok: body.reasoning_effort === "minimal" && !!d.dd && d.dd.wert === "minimal" && !d.dd.optionen.includes("off"),
+          detail: `Server sah reasoning_effort=${JSON.stringify(body.reasoning_effort)} (erwartet "minimal"), Modell ${String(body.model)} · Dropdown ${d.dd ? `${JSON.stringify(d.dd.optionen)} zeigt "${d.dd.wert}"` : "fehlt"}` };
       });
     },
   },
@@ -1226,6 +1227,41 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
   },
   // ── V: Verbindungs-Tausch (Welle 15) — Schluessel, Schluesselbund, Nicht-Stream, Schwaerzung ─────
   // Alle gegen den Fake-Endpunkt im Node-Prozess; kein Modell noetig. Der Schluessel ist ein Fake-Wert.
+  {
+    key: "ML6",
+    titel: "Modellzeile mit Manager: je Endpunkt eine Gruppe, der nicht erreichbare mit gesperrtem Hinweis, und die Wahl unter dem zweiten Endpunkt bindet Endpunkt und Modell",
+    async run(cdp) { return (await gruppenSitzung(cdp))[0]!; },
+  },
+  {
+    key: "ML7",
+    titel: "Modellzeile: verwaiste Wahl — ist der gewaehlte Endpunkt abgeschaltet, zeigt die Zeile Automatisch mit Warnzeichen und die gespeicherte Wahl bleibt (Gegenprobe: wieder an, die Wahl zeigt wieder)",
+    async run(cdp) { return (await gruppenSitzung(cdp))[1]!; },
+  },
+  {
+    key: "ML8",
+    titel: "Modellzeile: eine Wahl von aussen (llm.setChoice an der Verbindung, nicht die Zeile) erscheint ohne Bedienung im Dropdown",
+    async run(cdp) { return (await gruppenSitzung(cdp))[2]!; },
+  },
+  {
+    key: "ML9",
+    titel: "Modellzeile, Gegenprobe: ohne Manager zeigt dieselbe Zeile keine Gruppen, sondern die Modelle des lokalen Endpunkts als flache Liste",
+    async run(cdp) {
+      const stub = await startFakeChat({ models: ["i2m-lokal-a", "i2m-lokal-b"] });
+      const vor = await verbindungVorher(cdp);
+      try {
+        await zeigeNotiz(cdp, NOTIZ.bilder);
+        await setzeFakeEndpunkt(cdp, stub.url, "i2m-lokal-a");
+        // Das Entfernen des Managers meldet das Kit-Abo nicht (offene Kit-Task): die Zeile zeigt sonst noch die Liste des Managers. Der Nutzer-Weg dagegen ist „Neu laden“.
+        await ladeModelleNeu(cdp, 2);
+        const z = await warteGruppen(cdp, `z.gruppen.length === 0 && [...s.options].some((o) => o.textContent === "i2m-lokal-b")`);
+        const st = await messeModellzeile(cdp);
+        return { ok: z !== null, detail: `ohne Manager: ${z ? z.gruppen.length : "?"} Gruppen, Optionen ${JSON.stringify(st.optionen)} (soll: keine Gruppe, die lokalen Modelle i2m-lokal-a/b)` };
+      } finally {
+        await stub.close();
+        await stelleVerbindungWieder(cdp, vor);
+      }
+    },
+  },
   {
     key: "V1",
     titel: "Verbindung: der Schluessel geht als Bearer an Ping, Backend-Probe UND Chat — auch der Vision-Test der Einstellungen laeuft mit Schluessel",
@@ -1805,6 +1841,94 @@ async function ladeModelleNeu(cdp: Cdp, anzahl: number): Promise<ZeilenStand> {
     return z && ${re}.test(z.textContent.trim()) ? z.textContent : null;
   `, 5_000, 150);
   return messeModellzeile(cdp);
+}
+
+/** Fake-Manager mit drei Endpunkten (`lm`, `zwei`, `aus` mit unerreichbarer Modellliste) fuer die Gruppen der Modellzeile (obsidian-kit 0.89.0, Vorlage koda-agent 139–141).
+ *  Das Abo des Plugins auf den Manager haengt sich erst beim naechsten Layout-Ereignis an, wenn der Manager beim Start fehlte (Kit-Grenze): der Helfer loest es aus und
+ *  prueft, dass zwei Hoerer am Fake haengen (Plugin und Zeile), sonst haette eine Aenderungs-Messung nichts zu messen. Ein echter Manager im Vault bricht ab. */
+async function mitGruppenManager<T>(cdp: Cdp, fn: (url: string) => Promise<T>): Promise<T> {
+  const echt = await cdp.evaluate<boolean>(`const m = app.plugins.plugins[${JSON.stringify(CL_MANAGER_ID)}]; return !!m && !m.__fakeManager;`);
+  if (echt) throw new Error("das echte Plugin llm-endpoint-manager ist im Vault aktiv — der Fake wuerde es ersetzen");
+  const stub = await startFakeChat({ models: ["i2m-lokal-a", "i2m-lokal-b"] });
+  const vor = await verbindungVorher(cdp);
+  try {
+    await zeigeNotiz(cdp, NOTIZ.bilder);
+    await installFakeManager(cdp, {
+      pluginId: CL_MANAGER_ID,
+      endpunkte: [
+        { id: "lm", label: "Smoke LM", url: stub.url, models: ["nv-eins", "nv-zwei"], capabilities: ["chat", "vision"] },
+        { id: "zwei", label: "Smoke Zwei", url: stub.url, models: ["z-eins", "z-zwei"], capabilities: ["chat", "vision"] },
+        { id: "aus", label: "Smoke Offline", url: stub.url, models: ["aus-std"], capabilities: ["chat", "vision"], unerreichbar: true },
+      ],
+      invalidiere: [PLUGIN_ID],
+    });
+    await cdp.evaluate(`app.workspace.trigger("layout-change"); return true;`);
+    await cdp.evaluate(`const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}]; p.settings.choice = {}; await p.saveSettings(); p.llm.invalidate(); return true;`);
+    const hoerer = await pollUntil<number>(cdp, "return (window.__fakeManagerHoerer || []).length >= 2 ? window.__fakeManagerHoerer.length : null;", 6_000, 250);
+    if (hoerer === null) throw new Error("am Fake-Manager haengen nicht zwei Hoerer (Plugin und Zeile): die Aenderungs-Punkte haetten nichts zu messen");
+    return await fn(stub.url);
+  } finally {
+    await entferneFakeManager(cdp, { pluginId: CL_MANAGER_ID, invalidiere: [PLUGIN_ID] }).catch(() => undefined);
+    await stub.close();
+    await stelleVerbindungWieder(cdp, vor);
+  }
+}
+
+interface GruppenStand { gruppen: { label: string; optionen: { text: string; wert: string; gesperrt: boolean }[] }[]; text: string; wert: string; warn: string | null }
+const lieseGruppen = (bedingung: string): string => `
+  const s = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar-select")});
+  if (!s) return null;
+  const w = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar-warn")});
+  const z = {
+    gruppen: [...s.querySelectorAll("optgroup")].map((g) => ({ label: g.label, optionen: [...g.querySelectorAll("option")].map((o) => ({ text: o.textContent ?? "", wert: o.value, gesperrt: o.disabled })) })),
+    text: s.selectedOptions[0]?.textContent ?? "", wert: s.value,
+    warn: w && !w.classList.contains("is-hidden") ? (w.getAttribute("aria-label") ?? "") : null,
+  };
+  return (${bedingung}) ? z : null;`;
+const warteGruppen = (cdp: Cdp, bedingung: string): Promise<GruppenStand | null> => pollUntil<GruppenStand>(cdp, lieseGruppen(bedingung), 15_000, 250).catch(() => null);
+const planWahl = (cdp: Cdp): Promise<unknown> => cdp.evaluate(`return JSON.parse(JSON.stringify(app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].llm.choice()));`);
+
+/** ML6 bis ML8 teilen EINE Sitzung des Fake-Managers: das Abo des Plugins auf den Manager (`onEndpointManagerChanged`) hängt am Hörer-Verzeichnis des ersten Fakes, und der Abbau löscht es
+ *  (`entferneAusdruck`); ein zweiter Einbau im selben Lauf hat nur noch den Hörer der Zeile (gemessen: ML7 und ML8 „nichts gemessen“ bei getrennten Sitzungen). Wer das Plugin-Abo braucht,
+ *  baut in EINER Sitzung ein, oder lädt das Plugin vorher neu. */
+let gruppenSitzungErgebnis: Promise<Ergebnis[]> | null = null;
+function gruppenSitzung(cdp: Cdp): Promise<Ergebnis[]> {
+  gruppenSitzungErgebnis ??= mitGruppenManager(cdp, async () => {
+    // ML6 — Gruppen, gesperrter Hinweis, Wahl unter dem zweiten Endpunkt.
+    let r6: Ergebnis;
+    const z = await warteGruppen(cdp, `z.gruppen.length === 3 && z.gruppen.every((g) => g.optionen.length > 0)`);
+    if (z === null) r6 = { ok: false, detail: `die Zeile zeigte nach 15 s keine drei Gruppen (Stand: ${JSON.stringify((await messeModellzeile(cdp)).optionen)})` };
+    else {
+      const lm = z.gruppen.find((g) => g.label === "Smoke LM"), zwei = z.gruppen.find((g) => g.label === "Smoke Zwei"), aus = z.gruppen.find((g) => g.label === "Smoke Offline");
+      const gruppenOk = !!lm && !!zwei && !!aus && lm.optionen.some((o) => o.text === "nv-zwei") && zwei.optionen.some((o) => o.text === "z-zwei")
+        && aus.optionen.some((o) => o.gesperrt && o.wert === "" && /not reachable|nicht erreichbar/i.test(o.text));
+      await cdp.evaluate(`
+        const s = document.querySelector(${JSON.stringify(SIDEBAR + " .okit-model-bar-select")});
+        const o = [...s.querySelectorAll("optgroup[label='Smoke Zwei'] option")].find((x) => x.textContent === "z-zwei");
+        s.value = o.value; s.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 1500)); return true;`);
+      const nach = await warteGruppen(cdp, `z.text === "z-zwei"`);
+      const c = await planWahl(cdp);
+      const gebunden = JSON.stringify(c) === JSON.stringify({ endpointId: "zwei", model: "z-zwei" });
+      r6 = { ok: gruppenOk && gebunden && nach !== null,
+        detail: `Gruppen ${z.gruppen.map((g) => `${g.label}[${g.optionen.map((o) => o.text + (o.gesperrt ? " (gesperrt)" : "")).join(", ")}]`).join(" · ")} · nach der Wahl gezeigt "${nach?.text ?? "?"}", gespeichert ${JSON.stringify(c)} (soll {endpointId:zwei, model:z-zwei})` };
+    }
+    // ML7 — Endpunkt abschalten → verwaist; wieder an → die Wahl zeigt wieder (die Wahl zwei/z-zwei steht aus ML6).
+    const aus = await fakeManagerAendereMit(cdp, { enabled: { zwei: false } });
+    const orphan = await warteGruppen(cdp, `z.warn !== null && /^(Automatic|Automatisch)/.test(z.text)`);
+    const nachAus = await planWahl(cdp);
+    const bleibt = JSON.stringify(nachAus) === JSON.stringify({ endpointId: "zwei", model: "z-zwei" });
+    const an = await fakeManagerAendereMit(cdp, { enabled: { zwei: true } });
+    const zurueck = await warteGruppen(cdp, `z.warn === null && z.text === "z-zwei"`);
+    const r7: Ergebnis = { ok: orphan !== null && bleibt && zurueck !== null,
+      detail: `abgeschaltet (Hoerer gemeldet: ${"gemeldet" in aus ? aus.gemeldet : "?"}): ${orphan ? `Zeile "${orphan.text}", Warnzeichen "${orphan.warn}"` : "kein Automatisch mit Warnzeichen"} · Wahl blieb ${bleibt} (${JSON.stringify(nachAus)}) · wieder an (${"gemeldet" in an ? an.gemeldet : "?"}): ${zurueck ? `Zeile "${zurueck.text}", kein Warnzeichen` : "Wahl kam NICHT zurueck"}` };
+    // ML8 — Wahl von aussen.
+    await cdp.evaluate(`await app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}].llm.setChoice({ endpointId: "lm", model: "nv-zwei" }); return true;`);
+    const aussen = await warteGruppen(cdp, `z.text === "nv-zwei"`);
+    const r8: Ergebnis = { ok: aussen !== null, detail: `setChoice(lm/nv-zwei) an der Verbindung: Zeile zeigt "${aussen?.text ?? (await messeModellzeile(cdp)).optionen.join("|")}" ohne Bedienung (misst, dass die Zeile folgt, nicht ob Abo oder Neuzeichnen der Sidebar es tut)` };
+    return [r6, r7, r8];
+  });
+  return gruppenSitzungErgebnis;
 }
 
 const MGR_URL = "http://127.0.0.1:9312";
