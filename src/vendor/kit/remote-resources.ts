@@ -1,4 +1,4 @@
-// vendored from code-kit@0.40.0, src/ts/web/remote-resources.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.68.0, src/ts/web/remote-resources.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Removes every resource from a DOM subtree that the browser would load without a click and that is not
  *  on the positive list. The tree-shaped sibling of `neutralizeRemoteResources` in `pure/safe-markdown`
  *  (the regex pass over Markdown text), and the reason it exists: that pass is a partial protection by
@@ -80,8 +80,16 @@
  *  ── Limits ──────────────────────────────────────────────────────────────────────────────
  *  (1) **A clickable link stays** (`<a href>`, `<area href>`, SVG `<a>`): it loads nothing without a
  *  click; a restored secret in its URL is a documented residual risk, as in the regex version. (2) **No
- *  script defence.** Event-handler attributes (`onerror`, `onload`) and `javascript:` in a link are not
- *  touched; this pass is about resources, not about code. (3) Shadow roots are not entered: never parse the input with
+ *  script defence.** Event-handler attributes (`onerror`, `onload`) of an element that STAYS and `javascript:` in a link are not
+ *  touched; this pass is about resources, not about code (`link-guard` takes `on*` off every element). Since Welle 33 an element that is
+ *  removed as a whole is stripped of `on*`, `content` and `http-equiv` together with its loading attributes. **What a live tree still
+ *  does, measured in Chromium 148 and 153 (the review lab with 124 probes; `scripts/link-guard-chromium.mjs` repeats 36):** the browser starts the request of `<link rel=stylesheet|preload|modulepreload>`, `<style>@import`,
+ *  `<object data>`, `<embed src>` and SVG `feImage` while the element is inserted, whether the pass runs in the same task or in a
+ *  `MutationObserver` callback; `<img src|srcset>`, `<source srcset>`, `<video poster>`, `<input type=image>` and SVG `<image>` are
+ *  held by the same-task pass and requested before an observer callback. A `<meta http-equiv="refresh">` plans its redirect of the main
+ *  frame at insertion: removing the element, or its `content` and `http-equiv` first, calls nothing back (also not after a delay of a
+ *  second), so a live tree has to keep such a tag out of the document by parsing inert. `<iframe onload>` and `<object onerror>` fire
+ *  while the element is inserted. Only the inert way holds all of these. (3) Shadow roots are not entered: never parse the input with
  *  `Document.parseHTMLUnsafe` / `setHTMLUnsafe` (declarative shadow DOM would hide an `<img>` from this walk — measured);
  *  `DOMParser.parseFromString` and `innerHTML` create none. (3b) **Never serialise the result and parse it again**
  *  (`outerHTML`, `innerHTML` read back, a template round trip): HTML serialisation does not round-trip for every tree
@@ -173,7 +181,7 @@ export function neutralizeRemoteResourcesInTree(root: ParentNode, opts: RemoteRe
     const strip = (node: Element): void => {
       for (const a of Array.from(node.attributes)) {
         const n = a.localName.toLowerCase();
-        if (LOADING_ATTRS.has(n) || SRCSET_ATTRS.has(n) || n === "href" || n === "srcdoc" || a.name.toLowerCase() === "xlink:href") node.removeAttributeNode(a);
+        if (LOADING_ATTRS.has(n) || SRCSET_ATTRS.has(n) || n === "href" || n === "srcdoc" || a.name.toLowerCase() === "xlink:href" || n.startsWith("on") || n === "content" || n === "http-equiv") node.removeAttributeNode(a);
       }
     };
     strip(el);

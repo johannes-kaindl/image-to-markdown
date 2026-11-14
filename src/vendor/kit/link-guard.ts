@@ -1,4 +1,4 @@
-// vendored from code-kit@0.40.0, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.68.0, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Link guard for rendered model answers: the second line of defence after `MarkdownRenderer.render`. It cuts link targets that
  *  would run or open something (`javascript:`, `data:`, `vbscript:`, `file:`, `app:`, and `obsidian:` unless the caller allows it),
  *  removes the active elements, and removes `src` / `srcset` — except for local images, when the caller allows them.
@@ -26,7 +26,7 @@
  *
  *  Elements and sources:
  *  - {@link ACTIVE_TAGS} (`img iframe embed video audio object link style script source`, plus `base frame frameset portal fencedframe
- *    webview applet bgsound`) and a `<meta http-equiv="refresh">` are removed with their subtree,
+ *    webview applet bgsound form`) and a `<meta http-equiv="refresh">` are removed with their subtree,
  *    **except** an `<img>` with `allowLocalImages` whose `src` is local (relative, `app:` or `capacitor:`; `data:` is NOT local here).
  *    A kept image keeps only `src`, `srcset` (when every candidate is local, else the attribute goes), `alt`, `title`, `width`,
  *    `height`, `class`: an `onerror` or any other attribute would run code from an element this module lets through.
@@ -37,6 +37,16 @@
  *    with it the icon of an Obsidian callout and the one on the copy button of a code block (measured in Obsidian 1.14.5 by the pilot in
  *    obsidian-kit: svg 1 → 0 on both). A shape-only `<svg>` loads nothing and runs nothing once its attributes are plain.
  *  - `src` and `srcset` are removed from every other element.
+ *  - **Welle 33 (Opus review, measured in Chromium 148 and 153 by `scripts/link-guard-chromium.mjs`):** every `on*` attribute goes from
+ *    every element (a handler on an allowed link ran on the click, `ontoggle`, `onfocus` with `autofocus`, `onanimationstart` ran without
+ *    one); `ping` goes from every element (a click on an allowed link sent a POST to a second address); `formaction` goes unless
+ *    {@link isSafeHref} accepts it (same rule as an `href`, `obsidian:` behind the switch); `form` is an active tag, so its `action` and the
+ *    submit it would do are gone with it. An element that is removed as a whole is stripped of `on*`, `content` and `http-equiv` first
+ *    (`defuse`), together with the loading attributes.
+ *  - **Second review (N-A, N-B):** attributes that name an element of the HOST page by id go from every element: `form` (a button of the
+ *    answer would send a form of the page, with its fields, to an allowed `formaction`), `commandfor`, `command`, `popovertarget`,
+ *    `popovertargetaction` (they open a dialog or popover of the page), and `for` from `<label>` (it toggles a control of the page). No
+ *    code runs through them; they act on the page's own elements, which the answer must not be able to reach.
  *  - A remote image never stays, with or without the option: that is `remote-resources`' job on top, this pass does not load anything
  *    from far away either way.
  *
@@ -49,8 +59,10 @@
  *  has no scheme here either. The input is an attribute VALUE, i.e. the parser has already decoded character references.
  *
  *  ── Limits ──────────────────────────────────────────────────────────────────────────────
- *  (1) Only `href` of `<a>` / `<area>` is a link target here. `<form action>`, `formaction`, `<a ping>`, MathML `href` and event-handler
- *  attributes on elements other than a kept `<img>` are not touched; this pass is about link targets and sources. **Measured 2026-10-25
+ *  (1) Only `href` of `<a>` / `<area>` and `formaction` are link targets here; MathML `href` is not touched (Chromium does not know it:
+ *  measured, no effect without the guard either). Until Welle 33 `<form action>`, `formaction`, `<a ping>` and the event handlers of
+ *  every element but a kept `<img>` were not touched either, and the review measured all of them as live in Chromium (rules above);
+ *  the sentence below about the renderer is from before. **Measured 2026-10-25
  *  (kitok2-w27, Obsidian 1.14.5, pilot `pilot/link-schutz.ts` of obsidian-kit, point P11, 13 of 13 points green, no click): none of the five
  *  carriers (`form action`, `formaction`, `<a ping>`, MathML `href`, `onclick` on a `<p>`) is left in the DOM after `MarkdownRenderer.render`
  *  and this guard.** Which of the two removes them is not recorded: the pilot prints the column "without the guard" on the console and does
@@ -60,13 +72,31 @@
  *  `[[ms-excel:foo]]` in the same attribute form as a forged `<a data-href="ms-excel:foo" href="ms-excel:foo">` (`class="internal-link"`, `data-href` equal to
  *  `href`), and it is plain Markdown that passes any regex layer, so no test tells the two apart; a click on an `internal-link` is a note link in Obsidian, not a
  *  protocol handler. Only a path without that layer (`raw`) lets the forged `<a>` reach a click handler. The exception stays (Master, 2026-10-25).
- *  (2) Shadow roots are not entered (do not parse with `setHTMLUnsafe`, see `remote-resources`);
- *  `template.content` is. (3) Run it on an inert tree or before the nodes go live: removing an attribute from a tree that is already
+ *  (2) Shadow roots are not entered (do not parse with `setHTMLUnsafe`, see `remote-resources`); `template.content` is. **Measured
+ *  (U6): a renderer that attaches an open shadow root holding `<a href="javascript:…">` or an `<img>` gets both through in every
+ *  arm, inert included; nothing in this module can see into it.** (3) Run it on an inert tree or before the nodes go live: removing an attribute from a tree that is already
  *  attached cannot call off a fetch that the browser scheduled when the attribute was set; this pass removes the loading attributes
- *  before it removes an element (as `remote-resources` does), which is all it can do. (4) The renderer run is one measurement, not a
+ *  before it removes an element (as `remote-resources` does), which is all it can do. **What that leaves, measured (Chromium 148 and 153,
+ *  headless, no sanitizer in front; the review lab with 124 probes, `scripts/link-guard-chromium.mjs` repeats 36 of them): in a live tree, whether the pass runs in the same task as the
+ *  insertion (`sync`) or in a `MutationObserver` callback (`observer`), these still act, because the browser starts them while the
+ *  element is inserted: (a) the handler of `<iframe onload>` and `<object onerror>` (the event is queued at insertion; the other
+ *  handlers, `<style onload>` and `<video><source onerror>` included, are held by the strip); (b) a `<meta http-equiv="refresh">`
+ *  redirect of the main frame (planned at insertion, also with `content` and `http-equiv` taken off first and the element removed,
+ *  also after a delay of one second); (c) the request of `<link rel="stylesheet|preload|modulepreload">`, `<style>@import`,
+ *  `<object data>`, `<embed src>` and SVG `feImage` (observer and sync), and of `<img src|srcset>`, `<source srcset>`,
+ *  `<video poster>`, `<input type=image>` and SVG `<image>` (observer only; sync holds). Only the inert way (a `<template>` or a
+ *  document without a browsing context, both passes, then adopt) holds all of them. A consumer that renders into the live document
+ *  and cannot parse inert must have a sanitizer in front (Obsidian's removes these; this module did not measure it) or accept them.
+ *  The earlier sentence "no `img`, `source`/`picture`, `srcset`, `iframe`, `link`, `object` or `embed` any more" holds for the DOM that
+ *  is left, not for the requests that were made on the way. (4) The renderer run is one measurement, not a
  *  guarantee: the pilot ran `MarkdownRenderer.render` plus this guard in Obsidian 1.14.5 (points P11 and P12, the carriers above and the
  *  `<svg>` cases), once, without a click. Not measured: other Obsidian versions, and the path without the regex layer in front (`raw` /
  *  `renderMarkdownGuarded`, where limit (1b) stays). The cascade after the renderer is the consumer's to test (Fake DOM sees no cascade).
+ *  (5) **After the deadline, outside this module's reach (U7):** an observer that is disconnected after a deadline (obsidian-kit
+ *  `renderMarkdownGuarded`) does not see what the renderer or a post-processor inserts or sets later; a link set to `javascript:` 500 ms
+ *  after the start is live. A pass is a snapshot; keep the observer on if later changes are expected. (6) **The tree depth (U8):** the pass
+ *  is linear (a full pass over 64 000 elements: 0.1 to 0.4 s); the incremental walk of obsidian-kit `passRecords` is quadratic in the
+ *  depth, which an HTML parser does not reach and a DOM built through the API does (see `docs/internal/link-guard-review.md`).
  *
  *  Origin: settings-assistant `src/obsidian/dom-safety.ts` (`stripActiveContent`, `schemeOf`), n = 1; Welle 27. **Behaviour that differs
  *  from the source:** `file:` and `app:` targets are refused on an internal link too (the source kept them with `data-href`);
@@ -87,7 +117,7 @@ import { isLocalRef } from "./safe-markdown";
  *  A `<meta http-equiv="refresh">` goes as well (it navigates), checked in the walk: another `<meta>` stays. */
 export const ACTIVE_TAGS: ReadonlySet<string> = new Set([
   "img", "iframe", "embed", "video", "audio", "object", "link", "style", "script", "source",
-  "base", "frame", "frameset", "portal", "fencedframe", "webview", "applet", "bgsound",
+  "base", "frame", "frameset", "portal", "fencedframe", "webview", "applet", "bgsound", "form",
 ]);
 
 /** The only elements an `<svg>` may hold and still stay (0.37.4): shapes, nothing that loads, runs, styles, animates, references or
@@ -112,6 +142,11 @@ const SAFE_SCHEMES: ReadonlySet<string> = new Set(["http", "https", "mailto"]);
 const NEVER_SCHEMES: ReadonlySet<string> = new Set(["javascript", "data", "vbscript", "file", "app"]);
 /** Schemes that count as local for an image the caller allows: the app's own resource scheme and the iOS Capacitor one. */
 const LOCAL_IMAGE_SCHEMES: readonly string[] = ["app", "capacitor"];
+/** Attributes that point at an element of the HOST page by id (second review, N-A / N-B): `form` hands a button of the answer a form of the
+ *  page (its fields, its `action`), `commandfor` / `command` and `popovertarget` / `popovertargetaction` open or close a dialog or popover of
+ *  the page. Removed from every element; `for` is removed from `<label>` only (it toggles a control of the page; on `<output>` it lists ids
+ *  and acts on nothing). */
+const PAGE_REFERENCES: ReadonlySet<string> = new Set(["form", "commandfor", "command", "popovertarget", "popovertargetaction"]);
 /** What a kept `<img>` may still carry. */
 const IMG_KEEP_ATTRS: ReadonlySet<string> = new Set(["src", "srcset", "alt", "title", "width", "height", "class"]);
 const REF_CAP = 500;
@@ -180,7 +215,7 @@ export function neutralizeUnsafeLinksInTree(root: ParentNode, opts: LinkGuardOpt
     const strip = (node: Element): void => {
       for (const a of Array.from(node.attributes)) {
         const n = a.localName.toLowerCase();
-        if (n === "src" || n === "srcset" || n === "data" || n === "poster" || n === "href" || n === "srcdoc") node.removeAttributeNode(a);
+        if (n === "src" || n === "srcset" || n === "data" || n === "poster" || n === "href" || n === "srcdoc" || n.startsWith("on") || n === "content" || n === "http-equiv" || PAGE_REFERENCES.has(n)) node.removeAttributeNode(a);
       }
     };
     strip(el);
@@ -253,7 +288,8 @@ export function neutralizeUnsafeLinksInTree(root: ParentNode, opts: LinkGuardOpt
     }
     for (const a of Array.from(el.attributes)) {
       const n = a.localName.toLowerCase();
-      if (n === "src" || n === "srcset") { el.removeAttributeNode(a); report(tag, a.name, a.value); continue; }
+      if (n === "src" || n === "srcset" || n === "ping" || n.startsWith("on") || PAGE_REFERENCES.has(n) || (n === "for" && tag === "label")) { el.removeAttributeNode(a); report(tag, a.name, a.value); continue; }
+      if (n === "formaction" && !isSafeHref(a.value, { allowObsidianLinks: opts.allowObsidianLinks === true })) { el.removeAttributeNode(a); report(tag, a.name, a.value); continue; }
       if (n === "href" && (tag === "a" || tag === "area")
         && !isSafeHref(a.value, { allowObsidianLinks: opts.allowObsidianLinks === true, internal: el.hasAttribute("data-href") })) {
         el.removeAttributeNode(a);

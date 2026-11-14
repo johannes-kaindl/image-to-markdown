@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.88.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { MarkdownRenderer, type App, type Component } from "obsidian";
 import { realClock, type ClockPort } from "./clock";
 import { neutralizeRemoteResourcesInTree, type RemovedResource, type RemoteResourcesOptions } from "../kit/remote-resources";
@@ -24,7 +24,36 @@ import { neutralizeUnsafeLinksInTree } from "../kit/link-guard";
  * unverändert. Die 65 Reste nach Elementart: `style`-Attribut in HTML 42 von 42, SVG-Präsentationsattribute (`fill`,
  * `mask`, `clip-path`, `marker-*`, `stroke`) 13 von 24, `background`-Attribut an `table`/`td`/`th` 4 von 4, `style`
  * in SVG/MathML 3 von 3, SVG `feImage` 2 von 2, `video poster` 1 von 2. Kein `img`, `source`/`picture`, `srcset`,
- * `iframe`, `link`, `object` oder `embed` mehr.
+ * `iframe`, `link`, `object` oder `embed` mehr im DOM, das übrig bleibt, und zwar **hinter Obsidians Sanitizer** (siehe den
+ * nächsten Abschnitt: im Observer-Pfad ohne Sanitizer misst Chromium 148 und 153 anders).
+ *
+ * ## Was der Wächter nicht hält (Opus-Review, Welle 33, 2026-11-12)
+ *
+ * Ein Review hat den Linkschutz (code-kit `link-guard` und `remote-resources` mit diesem Wächter darüber) in einem echten Chromium 148
+ * und 153 gemessen, mit einem Renderer, der beliebiges DOM stehen lässt, **ohne** Obsidians Sanitizer (124 Proben, jede nur gezählt, wenn
+ * der Arm ohne Wächter eine Wirkung zeigt; Bericht und Wiederholung: code-kit `docs/internal/link-guard-review.md`). Gefunden und seit code-kit
+ * 0.68.0 geschlossen: `on*` an jedem Element (U1), `form` und `formaction` (U2), `ping` (U5). Offen bleiben diese Grenzen; die erste Aussage
+ * des vorigen Abschnitts („kein `img` … mehr“) beschreibt das DOM, das übrig bleibt, **nicht die Anfragen, die unterwegs gestellt wurden**:
+ * - **U3 `<meta http-equiv="refresh">`:** die Weiterleitung des Hauptfensters ist beim Einfügen geplant; das Element zu entfernen, oder vorher
+ *   `content` und `http-equiv`, ruft sie nicht zurück (auch nicht nach einer Sekunde).
+ * - **U4 Anfragen beim Einfügen:** `link rel=stylesheet|preload|modulepreload`, `style @import`, `object data`, `embed src`, SVG `feImage` stellt
+ *   der Browser im selben Task und im Observer-Callback; `img src|srcset`, `source srcset`, `video poster`, `input type=image` und SVG `image`
+ *   hält der Durchgang im selben Task, **im Observer-Pfad (unser Weg) sind sie schon unterwegs**. Dazu `<iframe onload>` und `<object onerror>`.
+ * - **U6 Shadow DOM:** ein Shadow Root, den ein Renderer anhängt, wird nicht betreten; Link und Bild darin wirken in jedem Arm.
+ * - **U7 nach der Frist:** `renderMarkdownGuarded` trennt den Observer nach der Frist; was ein Nachbearbeiter oder ein Timer später setzt (ein
+ *   `href` auf `javascript:` 500 ms nach dem Start), sieht niemand. Der Observer des `createStableWriter` lebt dagegen so lange wie der Schreiber.
+ *
+ * **Der inerte Weg** (Durchgang auf einem `<template>` oder einem Dokument ohne Browsing-Kontext, dann übernehmen) hält alle diese Fälle
+ * außer U6 und U7. Er ist die einzige Grenze; dieser Wächter ist das Netz dahinter. Ein Renderer, der in das lebende Dokument schreibt und
+ * nicht inert parsen kann, braucht davor einen Sanitizer oder nimmt die Reste in Kauf. Im Chat-Fenster mit dem Standard-Schreiber erreicht keiner dieser Fälle den Wächter: `neutralizeModelMarkdown` steht davor.
+ *
+ * **Gemessen in Obsidian 1.15.1** (Zweitinstanz, `pilot/link-schutz.ts` P14 bis P17, zwei Läufe mit gleicher Tabelle; `MarkdownRenderer.render` in ein Element am Dokument, Klick auf Fragment-Ziele, Gegenprobe jeweils dieselbe
+ * Zeichenkette per `innerHTML`, bei der der Marker wirkt): Obsidians Sanitizer **entfernt** jedes `on*`-Attribut (U1: `onclick` an `p` und `a`, `ontoggle`, `onfocus`, `onerror`; `onload` am `svg` ohne Gegenprobe, im DOM aber auch
+ * weg), `ping`, `formaction`, `<meta http-equiv>` (U3: die Weiterleitung wird nur im Arm `roh` geplant), `object`, `embed` und `link` (bei `link` wirkte die Gegenprobe nicht, die Anfrage ist nicht belegt, das Element ist im DOM weg).
+ * **Er lässt stehen:** ein `<form>` mit Knopf (der Klick löst das `submit`-Ereignis aus; die Navigation selbst wurde nicht ausgeführt, das Ziel war ein Fragment und das Ereignis wurde abgefangen) und ein `<iframe src>` (die Anfrage
+ * geht hinaus, `onload` ist weg). Der Wächter nimmt in diesen beiden Fällen Formular samt Knopf und das `iframe`, im Arm Wächter ging keine Anfrage hinaus. **Für die Schwere heißt das:** U1, U3 und die Elemente von U4 (`link`,
+ * `object`, `embed`) erreichen einen Renderer nicht, der durch Obsidians `MarkdownRenderer` läuft; sie bleiben für jeden Weg, der HTML selbst ins Dokument schreibt (`innerHTML`, `setHTMLUnsafe`, ein Nachbearbeiter). U2 (Formular) und
+ * das `iframe` sind im Obsidian-Renderer erreichbar und hängen am Wächter. Nicht gemessen: andere Obsidian-Versionen, ein Formular mit einem Ziel außerhalb des Fensters, U6 und U7.
  *
  * ## Warum ein Observer und kein Durchgang nach `render()`
  *
@@ -96,6 +125,11 @@ import { neutralizeUnsafeLinksInTree } from "../kit/link-guard";
  */
 export const DOM_GUARD_DEADLINE_MS = 1500;
 
+/** Stand eines Knotens im inkrementellen Durchgang (`attachDomGuard`): im Container ohne Wurzel über ihm, im Container unter oder in einer Wurzel, nicht im Container. */
+const IN_FREE = 0;
+const IN_COVERED = 1;
+const OUT = 2;
+
 export interface DomGuardOptions extends RemoteResourcesOptions {
   /** `obsidian://`-Links in Antworten behalten (Default aus, seit 0.70.0): eine Antwort soll keine Obsidian-Aktion auslösen können (einen anderen Vault öffnen). `javascript:`, `data:`,
    *  `vbscript:`, `file:` und `app:` als Link-Ziel gehen nie, mit und ohne Schalter; `http`, `https`, `mailto` und Ziele ohne Schema bleiben immer. Die Einstellungszeile dazu: `buildLinkSettings`. */
@@ -151,12 +185,37 @@ export function attachDomGuard(el: HTMLElement, opts: DomGuardOptions = {}): Dom
       else if (r.type === "characterData") addParent(r.target);
       else for (const n of Array.from(r.addedNodes)) { if (n.nodeType === 1) roots.add(n as Element); else addParent(n); }
     }
+    // Die obersten Wurzeln, ohne den Baum zu ändern: ein Knoten kennt seinen Stand (`IN_FREE`: im Container, keine Wurzel über ihm; `IN_COVERED`: im Container,
+    // eine Wurzel über oder in ihm; `OUT`: nicht (mehr) im Container). Wer den Stand seines Elternknotens schon kennt, läuft nicht weiter nach oben: jeder Knoten
+    // wird einmal besucht, die Kosten wachsen mit der Zahl der Knoten auf den Wegen, nicht mit Tiefe mal Wurzeln. Eine Kette der Tiefe n mit n Blättern kostete
+    // vorher n·n Besuche (`el.contains` und der Lauf über die Vorfahren, je Wurzel O(Tiefe); Opus-Review 2026-11-12, U8). „Schon entfernt“ heißt: der Weg nach
+    // oben endet vor dem Container.
+    const state = new Map<Element, number>();
+    const stateOf = (start: Element): number => {
+      const path: Element[] = [];
+      let cur: Element | null = start;
+      let base: number;
+      for (;;) {
+        if (cur === el) { base = IN_FREE; break; }
+        if (cur === null) { base = OUT; break; }
+        const known = state.get(cur);
+        if (known !== undefined) { base = known; break; }
+        path.push(cur);
+        cur = cur.parentElement;
+      }
+      for (const node of path.reverse()) {
+        base = base === OUT ? OUT : base === IN_COVERED || roots.has(node) ? IN_COVERED : IN_FREE;
+        state.set(node, base);
+      }
+      return base;
+    };
+    const tops: Element[] = [];
     for (const root of roots) {
-      if (!el.contains(root)) continue;   // schon entfernt
-      let covered = false;
-      for (let a = root.parentElement; a && a !== el; a = a.parentElement) if (roots.has(a)) { covered = true; break; }
-      if (!covered) neutralize(root);
+      const parent = root.parentElement;
+      if (parent === null) continue;   // schon entfernt
+      if (parent === el || stateOf(parent) === IN_FREE) tops.push(root);
     }
+    for (const root of tops) neutralize(root);
   };
   const observer = new MO((records: MutationRecord[]) => passRecords(records));
   observer.observe(el, { childList: true, subtree: true, attributes: true, characterData: true });

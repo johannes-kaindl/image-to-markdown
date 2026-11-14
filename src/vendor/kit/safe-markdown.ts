@@ -1,4 +1,4 @@
-// vendored from code-kit@0.40.0, src/ts/pure/safe-markdown.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.68.0, src/ts/pure/safe-markdown.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus settings-assistant/src/core/chat-markdown.ts, 2026-10-09
 /** Neutralises Markdown from an untrusted source (a model answer) BEFORE it is handed to a
  *  Markdown renderer. Pure, no dependencies.
@@ -86,6 +86,31 @@ const ENTITIES: Record<string, string> = {
 const IGNORED_IN_URL = new RegExp("[" + [[0, 0x20], [0x7f, 0x9f], [0x200b, 0x200f], [0x2028, 0x2029], [0xfeff, 0xfeff]]
   .map(([a, b]) => String.fromCharCode(a ?? 0) + "-" + String.fromCharCode(b ?? 0)).join("") + "]", "g");
 
+/** The one definition of "what the browser ignores inside a URL, then compared case-insensitively": drops the
+ *  characters of `IGNORED_IN_URL` and lower-cases. Shared by `isLocalRef` and by `web/svg-guard`, so the kit
+ *  does not hold two answers to the same question. Not widened beyond the WHATWG behaviour (C0 controls and
+ *  space, tab/LF/CR anywhere) plus zero-width and line separators, which a renderer may not show. */
+export function normalizeUrlRef(value: string): string {
+  return value.replace(IGNORED_IN_URL, "").toLowerCase();
+}
+
+const TAB_LF_CR = new RegExp("[\\t\\n\\r]", "g");
+
+/** The WHATWG URL parser's first two steps and nothing else: strips leading and trailing C0 controls and space
+ *  (U+0000 to U+0020), then removes tab, line feed and carriage return anywhere. Case and every other character stay.
+ *  This is the question "what does the browser see as the first character of this URL", e.g. is it `#`. The opposite
+ *  of `normalizeUrlRef`, which strips MORE (zero-width, C1, line separators) and is only safe for the question
+ *  "could this be a scheme": stripping more there only causes more rejections, while stripping more to ALLOW a
+ *  `#fragment` accepts `\u200b#c`, which the browser requests as a relative URL. */
+export function trimUrlLikeBrowser(value: string): string {
+  // Index scan, not `/^[…]+|[…]+$/`: a long run of spaces before a letter would make the trailing alternative quadratic.
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) <= 0x20) start++;
+  while (end > start && value.charCodeAt(end - 1) <= 0x20) end--;
+  return value.slice(start, end).replace(TAB_LF_CR, "");
+}
+
 function codePoint(n: number): string {
   try { return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : ""; } catch { return ""; }
 }
@@ -105,7 +130,7 @@ export function isLocalRef(raw: string, markdown: boolean, relativeOnly = false,
   let v = decodeEntities(raw);
   if (markdown) v = v.replace(/\\([!-/:-@[-`{-~])/g, "$1");
 
-  v = v.replace(/\\/g, "/").replace(IGNORED_IN_URL, "").toLowerCase();
+  v = normalizeUrlRef(v.replace(/\\/g, "/"));
   if (v === "") return true;
   if (v.startsWith("//")) return false;
   const scheme = /^([a-z][a-z0-9+.-]*):/.exec(v);
@@ -269,9 +294,9 @@ function unescapeCss(css: string): string {
  *  author-defined functions, any backslash (escapes, line continuations) and any comment. `attr()` hands over a URL from
  *  another attribute. Case-insensitive; checked after escapes are resolved. A backslash is checked on the raw text
  *  (`cssLoadsRemote`): after the escapes are resolved none is left. */
-const CSS_RISKY = /url\(|src\(|image-set\(|image\(|cross-fade\(|attr\(|@import|@function|@mixin|@apply|\/\*/i;
+export const CSS_RISKY = /url\(|src\(|image-set\(|image\(|cross-fade\(|attr\(|@import|@function|@mixin|@apply|\/\*/i;
 /** For an attribute that is not CSS (a free text may say "image(s)" or carry a `\`): only what names a resource. */
-const CSS_RISKY_PLAIN = /url\(|src\(|image-set\(|@import/i;
+export const CSS_RISKY_PLAIN = /url\(|src\(|image-set\(|@import/i;
 /** The one thing CSS may hold: a reference to an element of the same document (Mermaid's markers and filters). */
 const CSS_FRAGMENT_ONLY = /^\s*url\(\s*#[A-Za-z0-9_-]+\s*\)\s*$/i;
 
