@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-11-14
+
 ### Changed
 
 - **The model row lists the models of every endpoint, grouped by endpoint.** With the LLM Endpoint Manager installed the dropdown shows one group per endpoint (its "Default" entry, then its models) and picking a model also fixes its endpoint. A stored choice whose endpoint was switched off or deleted shows "Automatic" with a warning icon and the reason instead of silently sending the old model name to the automatic endpoint; the stored choice itself is left alone. The "Another endpoint …" entry is now "Manage endpoints …" and appears only when the manager is installed.
