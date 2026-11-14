@@ -1,22 +1,40 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/endpoint-plumbing.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.89.0, src/obsidian/endpoint-plumbing.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Verdrahtung der lokalen Endpunkt-Liste, die `createLlmConnection` (Chat) und `createLlmConnection` mit
  *  `capability: "embedding"` gemeinsam brauchen: der synchrone `persist`-Wächter, Erreichbarkeit und Modellliste einer Zeile
  *  (`GET /v1/models`, 5 s), die hydrierte Kopie mit Schlüssel und die Modellwahl eines Panels. Eigenes Modul statt zwei
  *  Kopien (Bibliothek ab Eins). Origin: der Block in `llm-connection.ts` bis 0.53.0. */
 import { requestUrl, type App } from "obsidian";
 import { normalizeEndpoint } from "../kit/endpoint";
+import { errorMessage } from "../kit/error-message";
 import { applyEndpointEdit, authHeaders, type EndpointConfig } from "../kit/endpoint_config";
 import { classifyEndpointStatus, extractModelIds, type EndpointStatus } from "../kit/endpoint_diagnostics";
-import type { ModelListClient } from "../kit/model-list-cache";
+import type { ModelListClient, ModelListResult } from "../kit/model-list-cache";
 import type { CapabilityFetch } from "../kit/capabilities";
 import type { ModelContext } from "../kit/model-context";
-import type { EndpointChoice, EndpointSourceResult } from "../kit/endpoint-source";
+import type { EndpointChoice, EndpointSourceResult, LlmEndpointManagerApi } from "../kit/endpoint-source";
 import type { ClockPort } from "./clock";
 import { fetchEndpointContext } from "./backend-probe";
 import { hydrateLocalEndpoints } from "./endpoint-secrets";
 import { findEndpointManager } from "./endpoint-source";
 
 const PROBE_TIMEOUT_MS = 5_000;
+
+/** Die Modelle eines Manager-Endpunkts mit Erreichbarkeit, wirft nie. Mit `api.modelList` (additiv in API v1, optional) kommt `reachable` vom Manager: ein gestoppter Server ist `{ models: [], reachable: false }`, ein Server
+ *  ohne Liste `{ models: [], reachable: true }`. Die Antwort wird der Form nach geprüft (`models` ein Array aus Strings, `reachable` ein Boolean); alles andere, ein `ApiError` und ein Wurf sind `{ models: [], reachable: false }`.
+ *  Ohne `modelList` der Rückfall wie bisher: `api.models(id)`, jede Liste gilt als `reachable: true` (der Manager trennt Offline dort nicht von „keine Liste“, Spec § 4.7). `force` geht in beiden Fällen mit. */
+export async function managerModelList(api: LlmEndpointManagerApi, id: string, opts?: { force?: boolean }): Promise<ModelListResult> {
+  const args = opts?.force ? { force: true } : undefined;
+  try {
+    if (typeof api.modelList === "function") {
+      const r: unknown = await api.modelList(id, args);
+      const o = r !== null && typeof r === "object" ? r as { models?: unknown; reachable?: unknown } : null;
+      if (o && Array.isArray(o.models) && o.models.every((m) => typeof m === "string") && typeof o.reachable === "boolean") return { models: [...o.models], reachable: o.reachable };
+      return { models: [], reachable: false };
+    }
+    const list = await api.models(id, args);
+    return "error" in list ? { models: [], reachable: false } : { models: list, reachable: true };
+  } catch { return { models: [], reachable: false }; }
+}
 
 /** Was die Verdrahtung von den Settings des Plugins braucht (Chat und Embedding tragen beide diese Felder). */
 export interface PlumbingSettings { endpoints: EndpointConfig[]; choice?: EndpointChoice }
@@ -52,8 +70,8 @@ export interface EndpointPlumbing<S extends PlumbingSettings> {
   probeOf: (cfg: EndpointConfig) => Promise<boolean>;
   listOf: (cfg: EndpointConfig) => Promise<string[]>;
   clientFor: (cfg: EndpointConfig) => { probe(): Promise<EndpointStatus> } & ModelListClient;
-  /** Modellwahl eines Panels (`setModel`): Manager → nur `choice.model`; lokal → Modell der aktiven Zeile. */
-  applyModel: (m: string, resolve: (opts?: { force?: boolean }) => Promise<EndpointSourceResult>) => Promise<void>;
+  /** Modellwahl eines Panels (`setModel`): Manager → nur `choice.model` (bindet den aktiven Endpunkt; bei `orphaned` auch eine verwaiste Wahl um); lokal → Modell der aktiven Zeile. */
+  applyModel: (m: string, resolve: (opts?: { force?: boolean }) => Promise<EndpointSourceResult>, activeId?: string, orphaned?: boolean) => Promise<void>;
   /** Kontextlänge des Zeilen-Modells (`model-context`): mit dem Schlüssel der Zeile, 5 s je Versuch, nie ein Fehler. */
   modelContext: EndpointContextSource;
 }
@@ -88,7 +106,7 @@ export function createEndpointPlumbing<S extends PlumbingSettings>(o: EndpointPl
       const status = classifyEndpointStatus({ kind: "response", status: res.status, body });
       return { status, ids: status.reachable ? extractModelIds(body) : [] };
     } catch (e) {
-      return { status: classifyEndpointStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) }), ids: [] };
+      return { status: classifyEndpointStatus({ kind: "error", message: errorMessage(e) }), ids: [] };
     }
   }
   const probeOf = o.probe ?? (async (cfg: EndpointConfig) => (await fetchStatus(cfg)).status.reachable);
@@ -106,10 +124,17 @@ export function createEndpointPlumbing<S extends PlumbingSettings>(o: EndpointPl
     };
   };
 
-  async function applyModel(m: string, resolve: (opts?: { force?: boolean }) => Promise<EndpointSourceResult>): Promise<void> {
+  /** `activeId` (seit 0.87.0): der Endpunkt, den die Verbindung gerade benutzt. Mit Manager bindet die Modellwahl ihn, wenn die Wahl noch keinen Endpunkt trägt:
+   *  ein Modellname gilt nur auf seinem Endpunkt (Spec § 4.10). Eine gespeicherte Wahl mit Endpunkt behält ihn; eine Alt-Wahl `{ model }` wird nur durch eine NEUE Wahl
+   *  umgeschrieben, nie beim Laden. Ist der aktive Endpunkt unbekannt (vor der ersten Auflösung, ohne `config`, ohne brauchbare `id`), bleibt es bei der Wahl, wie sie ist.
+   *  `orphaned` (Welle 34, Paket 11): die zuletzt gezeigte Auflösung trug einen `reason` UND ein `config` — die Wahl nannte einen Endpunkt, den der Manager nicht mehr liefert (abgeschaltet, gelöscht,
+   *  ohne Schlüssel), und er hat automatisch einen anderen aufgelöst. Dann schreibt die NEUE Wahl des Nutzers auf den aktiven um (`endpointId: activeId`), dieselbe Regel wie das Binden einer Wahl
+   *  ohne Endpunkt: das Modell wurde aus der Liste des aktiven gewählt, und ein Modellname gilt nur dort. Vorher blieb die tote Kennung stehen und die Wahl wirkte nie. */
+  async function applyModel(m: string, resolve: (opts?: { force?: boolean }) => Promise<EndpointSourceResult>, activeId?: string, orphaned = false): Promise<void> {
     if (findEndpointManager(o.app)) {
       const { model: _old, ...rest } = o.getSettings().choice ?? {};
-      await persist({ choice: m ? { ...rest, model: m } : rest } as Partial<S>);
+      const bound = activeId !== undefined && (rest.endpointId === undefined || orphaned) ? { ...rest, endpointId: activeId } : rest;
+      await persist({ choice: m ? { ...bound, model: m } : bound } as Partial<S>);
       await resolve({ force: true });
       return;
     }

@@ -6,6 +6,12 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The model row lists the models of every endpoint, grouped by endpoint.** With the LLM Endpoint Manager installed the dropdown shows one group per endpoint (its "Default" entry, then its models) and picking a model also fixes its endpoint. A stored choice whose endpoint was switched off or deleted shows "Automatic" with a warning icon and the reason instead of silently sending the old model name to the automatic endpoint; the stored choice itself is left alone. The "Another endpoint …" entry is now "Manage endpoints …" and appears only when the manager is installed.
+- **The model row and the model choice now name and bind the endpoint the manager really uses** (before: the first enabled one, even when it was unreachable). A model choice made while its endpoint is switched off or deleted now acts on the automatically chosen endpoint.
+- **gpt-oss: a saved "off" is sent as `minimal` again** (0.33.x sent `low`), and the thinking dropdown lists `minimal` as its lowest level, because that is the name of the state gpt-oss cannot leave. Other model families are unchanged.
+
 ## [0.33.2] — 2026-11-14
 
 ### Security

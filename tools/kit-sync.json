@@ -14,7 +14,10 @@
       "from": "src/pure",
       "modules": [
         "endpoint-secret-hook",
-        "endpoint-source",
+        {
+          "name": "endpoint-source",
+          "ref": "0.89.0"
+        },
         "ocr-provider",
         "override-guard"
       ],
@@ -44,6 +47,10 @@
         "endpoint_config",
         "endpoint_diagnostics",
         "error_body",
+        {
+          "name": "error-message",
+          "ref": "0.68.0"
+        },
         "local-stamp",
         "model-choice",
         "model-context",
@@ -58,7 +65,10 @@
           "name": "safe-markdown",
           "ref": "0.68.0"
         },
-        "sampling-profiles",
+        {
+          "name": "sampling-profiles",
+          "ref": "0.68.0"
+        },
         "secrets",
         "settings",
         {
@@ -126,21 +136,42 @@
         },
         "embedding-connection",
         "endpoint-list",
-        "endpoint-plumbing",
+        {
+          "name": "endpoint-plumbing",
+          "ref": "0.89.0"
+        },
         "endpoint-secrets",
-        "endpoint-source",
+        {
+          "name": "endpoint-source",
+          "ref": "0.89.0"
+        },
         "endpoint-status-text",
-        "llm-connection",
-        "llm-connection-strings",
-        "model-bar",
-        "model-bar-strings",
+        {
+          "name": "llm-connection",
+          "ref": "0.89.0"
+        },
+        {
+          "name": "llm-connection-strings",
+          "ref": "0.89.0"
+        },
+        {
+          "name": "model-bar",
+          "ref": "0.89.0"
+        },
+        {
+          "name": "model-bar-strings",
+          "ref": "0.89.0"
+        },
         "model-picker",
         "plugin-api",
         "request-section",
         "request-session",
         "secrets",
         "status-indicator",
-        "thinking-control"
+        {
+          "name": "thinking-control",
+          "ref": "0.89.0"
+        }
       ],
       "rewrite": [
         [
@@ -162,7 +193,10 @@
       "source": "obsidian-kit",
       "from": "src/testing",
       "modules": [
-        "kit-css",
+        {
+          "name": "kit-css",
+          "ref": "0.89.0"
+        },
         "obsidian-mock"
       ]
     }

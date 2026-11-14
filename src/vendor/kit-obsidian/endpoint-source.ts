@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.89.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, type App } from "obsidian";
 import { resolveModelChoice, type ModelHintKey } from "../kit/model-choice";
 import type { EndpointConfig } from "../kit/endpoint_config";
@@ -198,7 +198,9 @@ function renderModelRow(
       setting: modelRow, choice: labelled, ariaLabel: st.model, placeholder: "", hint: st.modelHint(c.hintKey), hintAs: "tooltip",
       savedSuffix: st.savedSuffix, refreshTooltip: st.refreshModels,
       onPick: (v) => {
-        void opts.setChoice({ ...opts.choice(), model: v || undefined })
+        // Die Wahl bindet den Endpunkt, dessen Modelle diese Zeile zeigt (`targetId`: der gewählte, bei „Automatisch“ oder verwaister Wahl der automatische): ein Modellname
+        // gilt nur auf seinem Endpunkt (0.87.0, Spec § 4.10).
+        void opts.setChoice({ ...opts.choice(), endpointId: targetId, model: v || undefined })
           .catch(() => { new Notice(st.saveFailed); opts.rerender(); });
       },
       onRefresh: () => { void api.models(targetId, { force: true }).then(() => opts.rerender()).catch(() => opts.rerender()); },

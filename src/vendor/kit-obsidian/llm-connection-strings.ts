@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.89.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -26,7 +26,7 @@
  *
  *  Überschreiben: `renderSettings(el, { lang: "de", request: { title: "…" } })` — ein Teil-Merge
  *  über dem Default, je Abschnitt ein Feld genau. */
-import { BACKENDS, FAMILIES, type FamilyId, type BackendId, type Deviation, type DeviationKind } from "../kit/sampling-profiles";
+import { BACKENDS, FAMILIES, type FamilyId, type BackendId, type Deviation, type DeviationKind, type ThinkingLevel } from "../kit/sampling-profiles";
 import type { EndpointSourceSectionStrings } from "./endpoint-source";
 import type { ApiErrorCode, SourceKind } from "../kit/endpoint-source";
 import type { EndpointListStrings } from "./endpoint-list";
@@ -91,7 +91,7 @@ interface Texts {
   states: Record<"sent-effective" | "sent-unproven" | "not-sent-ignored" | "not-sent-unsupported" | "not-sent-unknown-family" | "not-sent-no-value", string>;
   notes: Record<"raised-to-reserve" | "raised-to-thinking-floor" | "below-thinking-floor" | "off-not-possible", string>;
   topPHint: string;
-  reset: string; thinkingLevel: string; levels: Record<"off" | "low" | "medium" | "high" | "xhigh" | "max", string>;
+  reset: string; thinkingLevel: string; levels: Record<ThinkingLevel, string>;
   levelPicker: string; levelPickerDesc: string; requestSaveFailed: string; dormant: string; deleteDormant: string;
   lastRequest: string; lastRequestNone: string; copy: string; copied: string; deviationsOk: string; deviationsWarn: string;
   /** Knopf am Hinweis „Familie erkannt“: öffnet die Manager-Einstellungen. */
@@ -251,7 +251,7 @@ const EN: Texts = {
     "off-not-possible": "Thinking can't be fully turned off here; the lowest available level is sent.",
   },
   topPHint: " For near-deterministic answers use temperature 0 or top_k 1 instead of a very small top_p.",
-  reset: "Reset", thinkingLevel: "Thinking level", levels: { off: "off", low: "low", medium: "medium", high: "high", xhigh: "very high", max: "max" },
+  reset: "Reset", thinkingLevel: "Thinking level", levels: { off: "off", minimal: "minimal", low: "low", medium: "medium", high: "high", xhigh: "very high", max: "max" },
   levelPicker: "Level picker in chat",
   levelPickerDesc: "Shows a dropdown with the levels of the chosen model in the panel instead of the two-state button.",
   requestSaveFailed: "Could not save the request settings.",
@@ -340,7 +340,7 @@ const DE: Texts = {
     "off-not-possible": "Das Denken lässt sich hier nicht ganz abschalten; die niedrigste verfügbare Stufe wird gesendet.",
   },
   topPHint: " Für fast feste Antworten Temperatur 0 oder top_k 1 statt sehr kleinem top_p verwenden.",
-  reset: "Zurücksetzen", thinkingLevel: "Denkstufe", levels: { off: "aus", low: "niedrig", medium: "mittel", high: "hoch", xhigh: "sehr hoch", max: "maximal" },
+  reset: "Zurücksetzen", thinkingLevel: "Denkstufe", levels: { off: "aus", minimal: "minimal", low: "niedrig", medium: "mittel", high: "hoch", xhigh: "sehr hoch", max: "maximal" },
   levelPicker: "Stufenwahl im Chat",
   levelPickerDesc: "Zeigt im Panel ein Dropdown mit den Stufen des gewählten Modells statt des Zwei-Zustands-Knopfs.",
   requestSaveFailed: "Die Anfrage-Einstellungen konnten nicht gespeichert werden.",

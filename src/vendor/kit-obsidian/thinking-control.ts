@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.89.0, src/obsidian/thinking-control.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { DropdownComponent, setIcon } from "obsidian";
 import { familyThinking, resolveThinkingLevel, thinkingLevels, type BackendId, type FamilyId, type ThinkingLevel } from "../kit/sampling-profiles";
 
@@ -69,8 +69,8 @@ export interface ThinkingLevelTexts {
   name: (level: string, modelDefault: string | null) => string;
   costNote: string;
 }
-const LEVELS_EN: Record<ThinkingLevel, string> = { off: "Off", low: "Low", medium: "Medium", high: "High", xhigh: "Very high", max: "Max" };
-const LEVELS_DE: Record<ThinkingLevel, string> = { off: "Aus", low: "Niedrig", medium: "Mittel", high: "Hoch", xhigh: "Sehr hoch", max: "Maximal" };
+const LEVELS_EN: Record<ThinkingLevel, string> = { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Very high", max: "Max" };
+const LEVELS_DE: Record<ThinkingLevel, string> = { off: "Aus", minimal: "Minimal", low: "Niedrig", medium: "Mittel", high: "Hoch", xhigh: "Sehr hoch", max: "Maximal" };
 export const THINKING_LEVEL_TEXTS_EN: ThinkingLevelTexts = {
   level: (l) => LEVELS_EN[l],
   lockedLevel: "Always on",
@@ -122,7 +122,7 @@ export interface ThinkingControlOptions {
 /** Das Zeichen je Stufe (seit 0.76.0), in der Modellzeile vor dem Namen im Eintrag des Dropdowns: ein Zeichen breit, steigende Füllung (Block-Elemente), „aus“ ein leerer Kreis.
  *  Ein natives `<select>` zeigt im geschlossenen Zustand nur den Text des gewählten Eintrags; die gefaltete Zeile (`CHAT_WINDOW_CSS`, `MODEL_BAR_CSS`) beschneidet es auf dieses Zeichen,
  *  damit der Modellname den Platz behält. Liste und Name (`aria-label`) tragen den vollen Stufennamen. Das Zeichen ist keine Farbe und kein Wort: es trägt die Stufe als Form. */
-const LEVEL_GLYPHS: Record<ThinkingLevel, string> = { off: "○", low: "▂", medium: "▄", high: "▆", xhigh: "▇", max: "█" };
+const LEVEL_GLYPHS: Record<ThinkingLevel, string> = { off: "○", minimal: "▁", low: "▂", medium: "▄", high: "▆", xhigh: "▇", max: "█" };
 const LOCKED_GLYPH = "●";
 export function thinkingLevelGlyph(level: ThinkingLevel): string {
   return LEVEL_GLYPHS[level];

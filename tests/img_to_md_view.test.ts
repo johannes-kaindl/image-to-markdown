@@ -19,7 +19,7 @@ const ITEMS: ImgItem[] = [
   { raw: "![[b.heic]]", link: "b.heic", ext: "heic", supported: false, kind: "image" },
 ];
 
-/** Fake der Kit-Verbindung für die Modellzeile (`ModelBarConnection`: models, setModel, modelInUse, source). */
+/** Fake der Kit-Verbindung für die Modellzeile (`ModelBarConnection`: models, setModel, modelInUse, source und die sechs Endpunkt-Methoden). */
 function mkLlm(init: { models?: string[]; model?: string; defaultModel?: string; reachable?: boolean } = {}) {
   const st = { model: init.model ?? "vm", models: init.models ?? ["vm"], reachable: init.reachable ?? true, defaultModel: init.defaultModel };
   const llm = {
@@ -28,6 +28,13 @@ function mkLlm(init: { models?: string[]; model?: string; defaultModel?: string;
     setModel: vi.fn(async (m: string) => { st.model = m; }),
     modelInUse: () => st.model,
     source: () => (st.defaultModel === undefined ? {} : { defaultModel: st.defaultModel }),
+    // Seit Kit 0.87.0 gehören diese sechs zum Vertrag der Zeile (Gruppen je Endpunkt, verwaiste Wahl, Selbst-Abo). Ohne Manager gibt es keine Endpunkte: flache Liste.
+    endpoints: () => [] as { id: string; label: string }[],
+    activeEndpointId: () => undefined as string | undefined,
+    modelsOf: vi.fn(async (_id: string, _o?: { force?: boolean }) => ({ models: [...st.models], reachable: st.reachable })),
+    choice: () => ({}) as { endpointId?: string; model?: string },
+    setChoice: vi.fn(async (_c: { endpointId?: string; model?: string }) => undefined),
+    subscribe: (_cb: () => void) => () => undefined,
   };
   return llm;
 }
@@ -947,13 +954,13 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control, Dropdown in der 
     expect(dropdown(view)!.dd.getValue()).toBe("high");
   });
 
-  it("Familie ohne Aus-Stellung (gpt-oss): kein 'Off' in der Liste, das gespeicherte 'off' steht als niedrigste Stufe (code-kit 0.39.0)", async () => {
+  it("Familie ohne Aus-Stellung (gpt-oss): kein 'Off' in der Liste, das gespeicherte 'off' steht als niedrigste Stufe 'minimal' (code-kit 0.65.0: vorher 'low')", async () => {
     setLang("en");
     const { view } = mkView({ thinkingState: () => ({ family: "gpt-oss", level: "off", onLevel: "low" }) });
     await view.onOpen();
     const d = dropdown(view)!;
-    expect(Object.keys(d.dd.options)).toEqual(["low", "medium", "high"]);
-    expect(d.dd.getValue()).toBe("low");
+    expect(Object.keys(d.dd.options)).toEqual(["minimal", "low", "medium", "high"]);
+    expect(d.dd.getValue()).toBe("minimal");
   });
 
   it("gemma4 auf LM Studio: kein 'Off' in der Liste (lässt sich dort nicht abschalten), gezeigt wird die niedrigste Stufe", async () => {
@@ -1003,7 +1010,7 @@ describe("ImgToMdView — Denk-Steuerung (Kit thinking-control, Dropdown in der 
     const scans = scan.mock.calls.length;
     expect(dropdown(view)!.dd.getValue()).toBe("off");
     family = "gpt-oss"; view.refreshThinking();
-    expect(dropdown(view)!.dd.getValue()).toBe("low");
+    expect(dropdown(view)!.dd.getValue()).toBe("minimal");   // gpt-oss: „aus“ gibt es nicht, die niedrigste Stufe heißt seit code-kit 0.65.0 minimal
     expect(scan.mock.calls.length).toBe(scans);
   });
 });
