@@ -91,6 +91,7 @@ import {
 import { createBilanz, parseArgs, runDriver } from "../../tools/obsidian-cdp/bilanz.js";
 import { requireEigenerBuild } from "../../tools/obsidian-cdp/vault.js";
 import { MODES, familyFromName } from "../src/vendor/kit/sampling-profiles";
+import { MODE } from "../src/request_params";
 
 const PLUGIN_ID = "image-to-markdown";
 const VIEW_TYPE = "image-to-markdown-view";
@@ -199,7 +200,7 @@ async function mitClaudeManager<T>(cdp: Cdp, fn: (c: { claudeUrl: string; lokalU
 }
 
 const PUNKTE = [
-  "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3", "CL1", "CL2",
+  "A1", "A2", "B1", "B2", "C1", "C2", "B3", "D1", "E1", "E2", "E3", "F1", "F2", "F3", "CL1", "CL2", "CL3",
   "N1", "N2", "N3", "N4", "N5", "N6", "ML1", "ML2", "ML3", "ML4", "ML5", "ML6", "ML7", "ML8", "ML9", "LK1", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "R1", "P1", "P1b", "P2", "P2b", "G1", "G2", "G3",
 ] as const;
 type PunktName = (typeof PUNKTE)[number];
@@ -832,6 +833,51 @@ const PRUEFPUNKTE: Pruefpunkt[] = [
         const ok = !!bild && bild.source?.type === "base64" && bild.source.media_type === "image/png" && (bild.source.data ?? "").length > 100
           && schluessel === CL_SCHLUESSEL && body?.model === CL_MODELL && body.temperature === undefined && d.ok === true && (d.text ?? "").includes(CL_ANTWORT);
         return { ok, detail: `Bildblock ${bild ? `${bild.source?.type}/${bild.source?.media_type}, ${(bild.source?.data ?? "").length} Zeichen` : "FEHLT"} · Blöcke ${JSON.stringify(bloecke.map((b) => b.type))} · Schlüssel ${schluessel === CL_SCHLUESSEL ? "ok" : "falsch"} · Modell ${String(body?.model)} · temperature ${String(body?.temperature)} · Antwort "${(d.text ?? d.fehler ?? "").slice(0, 60)}"` };
+      });
+    },
+  },
+  {
+    key: "CL3",
+    titel: "Claude mit Stufe xhigh: die Anfrage OHNE Stream traegt max_tokens 16000, die mit Stream 64000 (Gegenprobe); der Schalter stream steht im Body",
+    async run(cdp) {
+      return mitClaudeManager(cdp, async (c) => {
+        const r = await cdp.evaluate<string>(`
+          const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}];
+          p.settings.choice = { endpointId: "cl-claude", model: ${JSON.stringify(CL_MODELL)} };
+          p.settings.request = { overrides: {}, thinking: { ${JSON.stringify(MODE)}: "xhigh" }, lastOnLevel: {}, levelPickerInChat: false };
+          p.llm.invalidate();
+          await p.llm.resolve({ force: true });
+          const deps = p.makeImgViewDeps();
+          const items = await deps.scan(${JSON.stringify(NOTIZ.bilder)});
+          const item = items.find((i) => i.supported && i.kind === "image");
+          if (!item) return JSON.stringify({ fehler: "kein unterstuetztes Bild in der Fixture-Notiz" });
+          const datei = app.metadataCache.getFirstLinkpathDest(item.link, ${JSON.stringify(NOTIZ.bilder)});
+          if (!datei) return JSON.stringify({ fehler: "Bild " + item.link + " nicht aufgeloest" });
+          const out = {};
+          try {
+            // Ohne Stream: derselbe Weg wie der Befehl „Transcribe active note“ (io.transcribe → callLlm mit stream false).
+            const io = p.makeImgIO();
+            await io.transcribe(await io.readImageDataUrl(datei.path, datei.extension));
+            out.ohne = true;
+          } catch (e) { out.fehlerOhne = String(e && e.message || e); }
+          try {
+            // Gegenprobe mit Stream: dieselbe Stufe, derselbe Endpunkt, die Karte der Seitenleiste.
+            await deps.transcribeStream(${JSON.stringify(NOTIZ.bilder)}, item, () => {}, () => {}, new AbortController().signal);
+            out.mit = true;
+          } catch (e) { out.fehlerMit = String(e && e.message || e); }
+          return JSON.stringify(out);
+        `);
+        const d = JSON.parse(r) as { fehler?: string; ohne?: boolean; mit?: boolean; fehlerOhne?: string; fehlerMit?: string };
+        const alle = c.claude.anfragen().filter((a) => a.route === "messages");
+        const ohne = alle.filter((a) => a.stream === false).at(-1);
+        const mit = alle.filter((a) => a.stream === true).at(-1);
+        const feld = (a: typeof ohne): { max?: unknown; stream?: unknown; effort?: unknown; thinking?: unknown } => {
+          const b = (a?.json ?? {}) as { max_tokens?: unknown; stream?: unknown; output_config?: { effort?: unknown }; thinking?: unknown };
+          return { max: b.max_tokens, stream: b.stream, effort: b.output_config?.effort, thinking: b.thinking };
+        };
+        const o = feld(ohne), m = feld(mit);
+        const ok = !!ohne && !!mit && d.ohne === true && d.mit === true && o.max === 16000 && m.max === 64000 && o.effort === "xhigh" && m.effort === "xhigh";
+        return { ok, detail: `Anfragen am Claude-Stub: ${alle.length} (ohne Stream ${alle.filter((a) => a.stream === false).length}, mit Stream ${alle.filter((a) => a.stream === true).length}) · OHNE Stream: max_tokens ${String(o.max)} (soll 16000), stream ${String(o.stream)}, effort ${String(o.effort)}, thinking ${JSON.stringify(o.thinking)} · MIT Stream (Gegenprobe): max_tokens ${String(m.max)} (soll 64000), effort ${String(m.effort)}${d.fehler ? ` · ${d.fehler}` : ""}${d.fehlerOhne ? ` · Fehler ohne Stream: ${d.fehlerOhne}` : ""}${d.fehlerMit ? ` · Fehler mit Stream: ${d.fehlerMit}` : ""}` };
       });
     },
   },
