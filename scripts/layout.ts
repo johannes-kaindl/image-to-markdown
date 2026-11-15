@@ -14,21 +14,20 @@
  *
  * Grenze: die Emulation ersetzt weder WKWebView noch die Schublade von Obsidian Mobile am Gerät.
  */
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { copyFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { argv, exit } from "node:process";
 
 import { Cdp, attachTo, bereiteInstanzVor, requireVisible } from "../../tools/obsidian-cdp/cdp.js";
+import { zweitinstanzStartargumente } from "../../tools/obsidian-cdp/instanz.js";
 import { startLlmStub } from "../../tools/obsidian-cdp/llm-stub.js";
 import { capture } from "../../tools/obsidian-cdp/shot.js";
 import { stagingVaultDir } from "../../tools/obsidian-cdp/vault.js";
+import { beendeZweitinstanzMitHome, starteZweitinstanzMitHome, type ZweitinstanzMitHome } from "../../tools/obsidian-cdp/zweitinstanz.js";
 
 const REPO_NAME = "image-to-markdown";
 const PLUGIN_ID = "image-to-markdown";
 const PROFILE = "/tmp/obs-test-w29-i2m";
-const OBSIDIAN_BIN = "/Applications/Obsidian.app/Contents/MacOS/Obsidian";
 const FAKE_MODEL = "google/gemma-4-e4b";
 const BREITE = 390;
 const HOEHE = 844;
@@ -37,41 +36,19 @@ const TASTATUR = 336;
 const q = (s: string): string => JSON.stringify(s);
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-function pgrepProfile(ud: string): string {
-  try { return execFileSync("pgrep", ["-f", `user-data-dir=${ud}`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return ""; }
-}
-function portHalten(port: number): boolean {
-  try { return execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() !== ""; } catch { return false; }
-}
-function neuesteAsar(): string | null {
-  const dir = join(homedir(), "Library/Application Support/obsidian");
-  const dateien = readdirSync(dir).filter((f) => /^obsidian-\d+\.\d+\.\d+\.asar$/.test(f));
-  dateien.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const letzte = dateien[dateien.length - 1];
-  return letzte ? join(dir, letzte) : null;
-}
-
-interface Instanz { child: ChildProcess; ud: string }
+/** Start und Ende der Zweitinstanz aus der Brücke (Welle 35, TREIBER-HOME): fremdes `HOME` mit Link auf den Schlüsselbund, die CLI der Haupt-App bleibt heil. */
+type Instanz = ZweitinstanzMitHome;
 function startInstanz(vaultDir: string, port: number): Instanz {
-  if (portHalten(port)) throw new Error(`Port ${port} ist belegt — anderen waehlen (nichts beendet).`);
-  if (pgrepProfile(PROFILE) !== "") throw new Error(`Das Profil ${PROFILE} wird von einer fremden Instanz gehalten — Abbruch (nichts beendet).`);
-  mkdirSync(PROFILE, { recursive: true });
-  writeFileSync(join(PROFILE, "obsidian.json"), JSON.stringify({ vaults: { [REPO_NAME]: { path: vaultDir, ts: Date.now(), open: true } } }));
-  for (const f of readdirSync(PROFILE)) if (/^obsidian-.*\.asar$/.test(f)) rmSync(join(PROFILE, f));
-  const asar = neuesteAsar();
-  if (asar) copyFileSync(asar, join(PROFILE, asar.split("/").pop() ?? "obsidian.asar"));
-  const child = spawn(OBSIDIAN_BIN, [`--user-data-dir=${PROFILE}`, `--remote-debugging-port=${port}`, "--lang=en-US"], { stdio: "ignore" });
-  console.log(`Zweitinstanz gestartet: PID ${child.pid ?? "?"}, Profil ${PROFILE}, Port ${port}`);
-  return { child, ud: PROFILE };
+  return starteZweitinstanzMitHome({
+    port,
+    profilBasis: PROFILE,
+    vaultName: REPO_NAME,
+    vaultPfad: vaultDir,
+    startargumente: (profil) => zweitinstanzStartargumente({ profil, port, sprache: "en" }),
+  });
 }
 async function stopInstanz(inst: Instanz): Promise<void> {
-  const exited = new Promise<void>((resolve) => { inst.child.once("exit", () => { resolve(); }); });
-  if (inst.child.exitCode === null) inst.child.kill("SIGTERM");
-  await Promise.race([exited, sleep(8000)]);
-  if (inst.child.exitCode === null && inst.child.signalCode === null) { inst.child.kill("SIGKILL"); await Promise.race([exited, sleep(4000)]); }
-  await sleep(500);
-  const rest = pgrepProfile(inst.ud);
-  console.log(`Zweitinstanz beendet; verbleibende Prozesse im Profil: ${rest === "" ? "keine" : rest.replace(/\n/g, ",")}`);
+  await beendeZweitinstanzMitHome(inst);
 }
 async function warteAufFenster(port: number, timeoutMs: number): Promise<Cdp> {
   const bis = Date.now() + timeoutMs;

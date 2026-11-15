@@ -77,6 +77,7 @@ import {
   pollUntil,
   requireVisible,
   schliesseEinstellungen,
+  warteAufFakeManagerHoerer,
 } from "../../tools/obsidian-cdp/cdp.js";
 import { echoText, startLlmStub } from "../../tools/obsidian-cdp/llm-stub.js";
 import { fakeManagerAendereMit } from "../../tools/obsidian-cdp/fake-manager.js";
@@ -1908,10 +1909,10 @@ async function mitGruppenManager<T>(cdp: Cdp, fn: (url: string) => Promise<T>): 
       ],
       invalidiere: [PLUGIN_ID],
     });
-    await cdp.evaluate(`app.workspace.trigger("layout-change"); return true;`);
+    // Vorbedingung aus der Bruecke (Welle 35): layout-change ausloesen und warten, bis zwei Hoerer am Fake haengen (Plugin und Zeile).
+    const hoerer = await warteAufFakeManagerHoerer(cdp);
+    if (!hoerer.erreicht) throw new Error(`am Fake-Manager haengen nicht zwei Hoerer (Plugin und Zeile; gezaehlt ${hoerer.hoerer}): die Aenderungs-Punkte haetten nichts zu messen`);
     await cdp.evaluate(`const p = app.plugins.plugins[${JSON.stringify(PLUGIN_ID)}]; p.settings.choice = {}; await p.saveSettings(); p.llm.invalidate(); return true;`);
-    const hoerer = await pollUntil<number>(cdp, "return (window.__fakeManagerHoerer || []).length >= 2 ? window.__fakeManagerHoerer.length : null;", 6_000, 250);
-    if (hoerer === null) throw new Error("am Fake-Manager haengen nicht zwei Hoerer (Plugin und Zeile): die Aenderungs-Punkte haetten nichts zu messen");
     return await fn(stub.url);
   } finally {
     await entferneFakeManager(cdp, { pluginId: CL_MANAGER_ID, invalidiere: [PLUGIN_ID] }).catch(() => undefined);
