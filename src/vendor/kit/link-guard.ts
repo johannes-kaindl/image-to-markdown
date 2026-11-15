@@ -1,4 +1,4 @@
-// vendored from code-kit@0.68.0, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.73.0, src/ts/web/link-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Link guard for rendered model answers: the second line of defence after `MarkdownRenderer.render`. It cuts link targets that
  *  would run or open something (`javascript:`, `data:`, `vbscript:`, `file:`, `app:`, and `obsidian:` unless the caller allows it),
  *  removes the active elements, and removes `src` / `srcset` — except for local images, when the caller allows them.
@@ -49,6 +49,12 @@
  *    code runs through them; they act on the page's own elements, which the answer must not be able to reach.
  *  - A remote image never stays, with or without the option: that is `remote-resources`' job on top, this pass does not load anything
  *    from far away either way.
+ *  - **A frame in the live document leaves later (`web/leave-tree`, measured in Obsidian 1.15.1):** an element that goes and is,
+ *    or holds, an `iframe`, `frame`, `object` or `embed` is cut down in the task of the pass to the frame owners and the elements on the way to them
+ *    (no attribute, no text, no other node: a `<style>` in it would keep its rules otherwise, 0.72.1), gets `hidden`, and is removed by
+ *    `deferRemoval` (default `setTimeout` of its window after `FRAME_REMOVAL_DELAY_MS`, 250 ms); removing it in the task of its insertion
+ *    made Obsidian's main process throw, and one task later still did in 1 of 21 starts. It is reported once, in the pass that met it first — `remote-resources` shares the mark, so the same frame is not reported
+ *    twice — and a later pass skips it. In an inert document and in a tree that is not attached nothing changes: the element leaves at once.
  *
  *  ── Scheme detection ────────────────────────────────────────────────────────────────────
  *  The browser drops tabs, newlines and leading control characters before it reads a scheme, and a renderer may add more. So {@link linkScheme}
@@ -110,6 +116,7 @@
  *  directory rewrites the import in its kit-sync config: `rewrite: [["../pure/", "./"]]`. */
 
 import { isLocalRef } from "./safe-markdown";
+import { leaveTree, stillLeaving, type DeferRemoval } from "./leave-tree";
 
 /** Elements that run, embed, draw or redirect something: removed with their subtree. The ten of the eleven settings-assistant used that stay on the list (`img iframe embed
  *  video audio object link style script source`; its eleventh, `svg`, is judged by {@link SVG_TAGS} since 0.37.4), plus the document-level ones `remote-resources` removes too (`base` would send every
@@ -156,6 +163,9 @@ export interface LinkGuardOptions {
   allowObsidianLinks?: boolean | undefined;
   /** Keep `<img>` elements whose `src` is local (relative, `app:`, `capacitor:`). Default off: a chat has no reason to load files. */
   allowLocalImages?: boolean | undefined;
+  /** Who runs the removal of an element that holds a frame in the live document (`web/leave-tree`). Default:
+   *  `setTimeout(remove, FRAME_REMOVAL_DELAY_MS)` of the element's window. */
+  deferRemoval?: DeferRemoval | undefined;
 }
 
 export interface IsSafeHrefOptions {
@@ -222,12 +232,11 @@ export function neutralizeUnsafeLinksInTree(root: ParentNode, opts: LinkGuardOpt
     for (const d of Array.from(el.querySelectorAll("*"))) strip(d);
   };
 
-  /** Takes `el` out of the tree; a root without a parent is emptied instead. */
+  /** Takes `el` out of the tree — later when it holds a frame in the live document (`leaveTree`); a root without a
+   *  parent is emptied instead. */
   const dropElement = (el: Element, tag: string, ref: string): void => {
     defuse(el);
-    const parent = el.parentNode;
-    if (parent) parent.removeChild(el);
-    else {
+    if (leaveTree(el, opts.deferRemoval) === "rootless") {
       for (const a of Array.from(el.attributes)) el.removeAttributeNode(a);
       while (el.firstChild) el.removeChild(el.firstChild);
     }
@@ -270,6 +279,7 @@ export function neutralizeUnsafeLinksInTree(root: ParentNode, opts: LinkGuardOpt
 
   /** Returns true when `el` is gone (its descendants are not visited). */
   const inspect = (el: Element): boolean => {
+    if (stillLeaving(el)) return true;   // waits for its deferred removal: reported already, bare, not walked
     const tag = el.localName.toLowerCase();
     if (tag === "svg") return inspectSvg(el);
     if (ACTIVE_TAGS.has(tag)) {

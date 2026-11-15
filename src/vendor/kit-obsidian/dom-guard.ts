@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.88.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.93.0, src/obsidian/dom-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { MarkdownRenderer, type App, type Component } from "obsidian";
 import { realClock, type ClockPort } from "./clock";
 import { neutralizeRemoteResourcesInTree, type RemovedResource, type RemoteResourcesOptions } from "../kit/remote-resources";
@@ -39,6 +39,9 @@ import { neutralizeUnsafeLinksInTree } from "../kit/link-guard";
  * - **U4 Anfragen beim Einfügen:** `link rel=stylesheet|preload|modulepreload`, `style @import`, `object data`, `embed src`, SVG `feImage` stellt
  *   der Browser im selben Task und im Observer-Callback; `img src|srcset`, `source srcset`, `video poster`, `input type=image` und SVG `image`
  *   hält der Durchgang im selben Task, **im Observer-Pfad (unser Weg) sind sie schon unterwegs**. Dazu `<iframe onload>` und `<object onerror>`.
+ * - **U4, Rahmen (gemessen in Welle 35, Kit-Master, Obsidian 1.15.1, drei Läufe von `pilot/link-schutz.ts --nur-w34`):** In 1 von 3 Läufen fordert ein live eingefügter `iframe` mit `app:`-Ziel seine Navigation an, bevor der Beobachter läuft; der Wächter nimmt die
+ *   Quelle, die Anfrage bricht ab (`net::ERR_ABORTED`), das Dokument lädt nicht. In allen drei Läufen war bei allen sechs Fällen des Wächter-Arms `geladen: false`, ohne Beacon und ohne Antwort, mit 0 Ausnahmen im Obsidian-Log; ob die Anfrage vor dem
+ *   Beobachter startet, hängt vom Takt ab. Der Treiber urteilt deshalb an Laden, Beacon und Antwort (rot nur dort) und weist die angeforderte, abgebrochene Navigation bei jedem Lauf als eigene Zeile „Grenze U4“ aus, ohne sie grün zu nennen.
  * - **U6 Shadow DOM:** ein Shadow Root, den ein Renderer anhängt, wird nicht betreten; Link und Bild darin wirken in jedem Arm.
  * - **U7 nach der Frist:** `renderMarkdownGuarded` trennt den Observer nach der Frist; was ein Nachbearbeiter oder ein Timer später setzt (ein
  *   `href` auf `javascript:` 500 ms nach dem Start), sieht niemand. Der Observer des `createStableWriter` lebt dagegen so lange wie der Schreiber.
@@ -84,8 +87,9 @@ import { neutralizeUnsafeLinksInTree } from "../kit/link-guard";
  *   Fällen lecken 66 (0.53.0) → 3 bis 4 (`video poster` ×2, SVG `feImage` ×1 bis ×2; `feImage` in einem `filter` flackert
  *   zwischen Läufen und leckt auch in 0.53.0). Sie laden bei der Elementerzeugung, dafür ist der Observer in jedem Arm zu spät,
  *   und die Regex-Schicht deckt sie. `style`-Attribut, SVG-Paint und `background` sind zu. 30 `keep` unverändert. Nicht
- *   auswertbar: `iframe relative`, `iframe app scheme` (lassen den Renderer hängen) und `frame in frameset` (wirft im
- *   Renderer), in allen Armen.
+ *   auswertbar waren damals `iframe relative`, `iframe app scheme` und `frame in frameset` (wirft im Renderer). Die Notiz „lassen den
+ *   Renderer hängen, in allen Armen“ war falsch (berichtigt in Welle 34): der Renderer hängt nicht, Obsidians Hauptprozess zeigt einen
+ *   Fehlerdialog, und nur dort, wo der Rahmen im selben Zug wieder entfernt wird. Siehe unten „Gemessen in Welle 34“.
  * - Der Durchgang im Observer und in `flush()` läuft **inkrementell** über die berührten Teilbäume (hinzugefügte Elemente,
  *   Elemente mit geändertem Attribut, das Eltern-Element eines geänderten Textes), nicht über den ganzen Container: ein
  *   Durchgang je Batch über den ganzen Body wäre über eine Antwort hinweg quadratisch. Gemessen (Renderer, 2 000 `push`
@@ -119,6 +123,36 @@ import { neutralizeUnsafeLinksInTree } from "../kit/link-guard";
  * Bilder (`![](bild.png)`, `![[bild.png]]`) kommen ohne Wächter als `app://…`-`img` an. **Im Chat-Fenster mit dem Standard-Schreiber erreichen Bilder und HTML den Wächter nie:** `neutralizeModelMarkdown` macht jedes Markdown-Bild
  * zu Text und escaped `<`; `allowLocalImages` und ein gefälschtes `<a data-href>` gibt es dort nicht. Beides gilt für `raw`-Schreiber und `renderMarkdownGuarded`. Ein gekappter Link behält seine Klasse, nur das `href` fehlt; `STREAM_AREA_CSS` (seit 0.72.0, `.okit-stream-body a:not([href])`) nimmt ihm
  * Farbe, Unterstrich, Zeiger und Pfeil, er sieht aus wie Text (ein Wirt ohne `.okit-stream-body` kopiert die Regel). Ein `svg` bleibt (code-kit 0.37.4), wenn sein Teilbaum nur Formen trägt (`SVG_TAGS`), gekürzt auf Geometrie- und Darstellungsattribute: das Icon eines Callouts und der Kopier-Knopf eines Codeblocks bleiben (gemessen 1→1); mit 0.37.0 bis 0.37.2 gingen sie mit.
+ *
+ * ## Gemessen in Welle 34: was der Wächter hält und was nicht
+ *
+ * Obsidian 1.15.1 (Chrome 142), 2026-11-14: `pilot/link-schutz.ts` P18 bis P20 in zwei Läufen mit gleicher Tabelle (47 Zeilen) und sechs Navigationen, `pilot/haenger.ts` in 13 Starts.
+ *
+ * - **Hält (P18, Formulare):** der Wächter entfernt `form` und `button` ganz, kein Klick, keine Anfrage. Obsidians eigener Renderer lässt `<form action="http://…">` samt Knopf stehen und nimmt nur `target`, `formaction` und
+ *   `formtarget` heraus: ein Klick öffnet das Ziel dort im Systembrowser. Wer Modellantworten ohne Wächter über `MarkdownRenderer.render` zeigt, hat diese Lücke.
+ * - **Hält (P19, `app:` und `file:`):** `object` und `form` mit `app:`- oder `file:`-Ziel sind im Wächter-Arm weg (keine Anfrage, keine Navigation). Ohne Wächter lädt ein `iframe` mit `app:`-Ziel eine Datei des Vaults (auch durch
+ *   Obsidians Renderer, auch mit `file:`-Ziel, das Obsidian auf `app:` auflöst), aber in fremder Origin (`app://<hash>` gegen `app://obsidian.md`): `parent.app` ist nicht erreichbar (SecurityError). Ein Formular mit `app:`-Ziel
+ *   navigiert das Fenster nicht (`net::ERR_ABORTED`).
+ * - **Nicht gemessen (P20, `onload` am `svg`):** in acht Bauformen im Arm ohne jeden Schutz nicht auslösbar (das Attribut steht im DOM und feuert nie). Daraus folgt NICHT, dass Renderer oder Wächter es halten; der Wächter schneidet
+ *   das Attribut, eine Wirkung war in keinem Arm zu sehen.
+ * - **Hielt bis 0.91.0 nicht, und der Wächter löste es aus: ein `iframe` mit `app:`-, relativem oder `file:`-Ziel führte zu einem Fehlerdialog aus Obsidians Hauptprozess.** Obsidians `webRequest.onBeforeRequest` für Anfragen an das Schema `app:`
+ *   liest `details.frame.origin` (`main.js:76` in 1.15.1); ist der Rahmen schon wieder aus dem DOM, ist `frame` `undefined`, der Hauptprozess wirft und zeigt den modalen Dialog „A JavaScript error occurred in the main process“. Bis
+ *   zum Klick auf OK beantwortet er nichts (jeder CDP-Aufruf läuft in die Frist: das war der „Hänger“ der Piloten seit Welle 17). Der Renderer läuft weiter (Herzschlag alle 250 ms ohne Lücke), `renderMarkdownGuarded` kehrt nach 2 bis
+ *   5 ms zurück. Auslöser ist „einfügen und im selben Zug entfernen“ (`dropElement` in `remote-resources`: Quelle ab, dann `removeChild`), auch ganz ohne Kit-Code (`innerHTML`, dann `remove()`). Es ist ein Rennen: derselbe Schritt in
+ *   einem frischen Prozess ergab einmal nichts und einmal den Dialog; 10 von 13 Starts mit Ausnahme. `http:`, `data:`, `about:blank` und ein Rahmen ohne Quelle lösten nichts aus.
+ *   **Seit 0.92.0 behoben (code-kit 0.73.0, `web/leave-tree`):** ein Element, das geht und ein `iframe`, `frame`, `object` oder `embed` ist oder hält, verlässt das lebende Dokument nicht mehr im Zug des Durchgangs. Es wird sofort zum
+ *   Gerüst gekürzt (es bleiben nur die Rahmenbesitzer und die Elemente auf dem Weg zu ihnen, ohne jedes Attribut und ohne Text; das Element selbst bekommt `hidden`) und nach 250 ms (`FRAME_REMOVAL_DELAY_MS`) entfernt. `onRemoved` meldet es
+ *   einmal, in dem Durchgang, der es zuerst trifft; ein späterer Durchgang überspringt es. Gemessen laut code-kit (`docs/internal/link-guard-review.md`, Obsidian 1.15.1, `pilot/haenger.ts`, ein frischer Prozess je Start): alter Stand 4 von 5
+ *   Starts mit Ausnahme, `setTimeout(…, 0)` noch 1 von 21 und 5 von 5 im Stoß, 50, 250 und 1 000 ms je 0 von 5 (600 Rahmen je Stufe). Die Frist ist ein Abstand, kein Handschlag: ein Hauptprozess, der länger steht als die Frist, verliert
+ *   das Rennen wieder (die Rate liegt unter etwa 0,5 %, sie ist nicht null).
+ *   **Folgen für Aufrufer:** bis zu 250 ms nach dem Durchgang findet `querySelector("iframe")` das Gerüst noch; ein Test oder Pilot wartet die Frist ab oder zählt `onRemoved`. Nimmt ein Wirt den Container selbst innerhalb der Frist heraus,
+ *   geht der Rahmen mit ihm (das ist dann sein Zug: Grenze 2 im Kopf von `leave-tree`). `renderMarkdownGuarded` trennt nach seiner Frist nur den Observer; die verzögerte Entfernung läuft davon unabhängig.
+ *   **Beim Vendoren gefunden (Welle 35, in code-kit 0.73.0 behoben; 0.71.0 und 0.72.0 hat das Kit nie vendort):** dort behielt das Gerüst seinen ganzen Teilbaum, und ein `<style>` darin wirkte 250 ms auf die ganze Seite weiter
+ *   (`<object><style>body{…}</style></object>`; gemessen in Chromium 153 mit `npm run check:link-guard-chromium` in code-kit, Fälle `frame-skeleton-style-…`). Eine Grenze bleibt in jedem Stand: eine Regel in einem `<style>` unter einem
+ *   `<object>` holt ihr `url()` schon beim Einfügen (Rest U4), das hält nur der inerte Weg.
+ *   **Urteil:** kein Datenverlust, keine Code-Ausführung, kein Zugriff über Origins; der Dialog war eine wiederholbare Störung über `renderMarkdownGuarded` oder einen `raw`-Schreiber und ist mit der Frist abgestellt, soweit gemessen. Der
+ *   Standard-Schreiber war nie betroffen (`neutralizeModelMarkdown` lässt kein HTML durch). Ungemessen: der Zustand nach dem Klick auf OK, Windows, Linux, iOS, `object` und `embed` im Stoß. `pilot/link-schutz.ts` fährt die beiden
+ *   `iframe`-Fälle im Wächter-Arm wieder mit; die Trefferquote misst `pilot/haenger.ts`. Die Reihe mit dem Stand 0.92.0 (20 Starts im Wächter-Arm, Positivkontrolle ohne Kit-Code) steht im CHANGELOG.
  *
  * Gebraucht wird ein DOM mit `MutationObserver`. Ohne einen wirft `attachDomGuard`, statt still ungeschützt zu
  * bleiben: ein Test mit dem Fake-DOM (`makeFakeEl`) übergibt `domGuard: false`.

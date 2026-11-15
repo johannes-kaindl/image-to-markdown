@@ -3,9 +3,9 @@
   "version": "0.77.1",
   "sha": "3fc29e1",
   "code_kit_version": "0.40.0",
-  "vendored": "endpoint-secret-hook.ts, endpoint-source.ts (obsidian-kit@0.89.0, d7d2edc), ocr-provider.ts, override-guard.ts",
+  "vendored": "endpoint-secret-hook.ts, endpoint-source.ts (obsidian-kit@0.93.0, 7997447), ocr-provider.ts, override-guard.ts",
   "note": "Verbatim snapshot aus ZWEI Quellen (obsidian-kit + code-kit); welche Datei woher stammt, sagt ihr eigener Kopf. Never hand-edit. Pins in tools/kit-sync.json, re-vendor via tools/sync-kit.sh (zentrales kit-sync im Dach). version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien, die aus obsidian-kit stammen; code-kit-Herkunft steht je Datei im Kopf. kit-obsidian/ siehe dortige VENDOR.json.",
   "code_kit_sha": "97b7277",
-  "code_kit_vendored": "anthropic-wire.ts, backend-probe.ts, capabilities.ts, data-url.ts, diff.ts, embeddings-client.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, error-message.ts (code-kit@0.68.0, 70b5b41), local-stamp.ts, model-choice.ts, model-context.ts, model-list-cache.ts, reasoning.ts, redact.ts (code-kit@0.60.0, acd3fe7), rounds.ts, safe-markdown.ts (code-kit@0.68.0, 70b5b41), sampling-profiles.ts (code-kit@0.68.0, 70b5b41), secrets.ts, settings.ts, split-list.ts (code-kit@0.63.0, ce90bf0), sse.ts, think-splitter.ts, timeout.ts, clipboard.ts, link-guard.ts (code-kit@0.68.0, 70b5b41), remote-resources.ts (code-kit@0.68.0, 70b5b41)",
+  "code_kit_vendored": "anthropic-wire.ts, backend-probe.ts, capabilities.ts, data-url.ts, diff.ts, embeddings-client.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, error-message.ts (code-kit@0.73.0, 09b7dcb), local-stamp.ts, model-choice.ts, model-context.ts, model-list-cache.ts, reasoning.ts, redact.ts (code-kit@0.60.0, acd3fe7), rounds.ts, safe-markdown.ts (code-kit@0.73.0, 09b7dcb), sampling-profiles.ts (code-kit@0.73.0, 09b7dcb), secrets.ts, settings.ts, split-list.ts (code-kit@0.73.0, 09b7dcb), sse.ts, think-splitter.ts, timeout.ts, clipboard.ts, link-guard.ts (code-kit@0.73.0, 09b7dcb), remote-resources.ts (code-kit@0.73.0, 09b7dcb), leave-tree.ts (code-kit@0.73.0, 09b7dcb)",
   "license": "AGPL-3.0-or-later"
 }

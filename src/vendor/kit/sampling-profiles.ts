@@ -1,4 +1,4 @@
-// vendored from code-kit@0.68.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.73.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -116,6 +116,9 @@ const QWEN_GREEDY = "Qwen docs quickstart (Qwen3): no greedy decoding while thin
 const HARNESS = "llm-benchmark-harness night run 2026-09-19, max reasoning tokens per level, rounded up";
 const GEMMA_LMS = "kitcc-w22 2026-10-14, google/gemma-4-e4b on LM Studio (one model size): none ignored, thought in content; low/minimal/medium/high/no field think into reasoning_content";
 const LMS_EFFORT = "llm-setup 2026-09-18, reasoning tokens none 0 / low 226 / medium 251 / xhigh 930";
+const QWEN36_LMS = "koda-w30 2026-11-03 (one run per level) and kit round 2026-11-14 (three runs per level, one longer question, no tool), qwen/qwen3.6-35b-a3b on LM Studio (MLX 4bit), characters of reasoning_content: none 0/0/0 · low 14132/9673/11649 · medium 4864/7613/4667 · high 8338/16423/5656";
+const QWEN36_LMS_OFF = `${QWEN36_LMS}; none switches thinking off (0 characters in 3 of 3 runs)`;
+const QWEN36_LMS_LEVEL = `${QWEN36_LMS}; the word is accepted and the model thinks, but the length shows no order low < medium < high (effect of the level on length unproven; measured on LM Studio only, one model size)`;
 
 export const FAMILIES: Record<FamilyId, FamilyProfile> = {
   "qwen3.8": {
@@ -138,8 +141,8 @@ export const FAMILIES: Record<FamilyId, FamilyProfile> = {
     thinking: { top_p: u(0.95, "LM Studio hub model.yaml (llm-setup)"), top_k: u(20, "LM Studio hub model.yaml (llm-setup)") },
     noThinking: { top_p: u(0.95, "LM Studio hub model.yaml (llm-setup)"), top_k: u(20, "LM Studio hub model.yaml (llm-setup)") },
     effort: withAbove({
-      off: us("none", "transferred from qwen3.8"), low: us("low", "transferred from qwen3.8"),
-      medium: us("medium", "transferred from qwen3.8"), high: us("high", "transferred from qwen3.8"),
+      off: ms("none", QWEN36_LMS_OFF), low: ms("low", QWEN36_LMS_LEVEL),
+      medium: ms("medium", QWEN36_LMS_LEVEL), high: ms("high", QWEN36_LMS_LEVEL),
     }),
     canTurnOff: true,
     thinkingTemperatureFloor: u(0.6, QWEN_GREEDY),

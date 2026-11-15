@@ -1,4 +1,4 @@
-// vendored from code-kit@0.68.0, src/ts/web/remote-resources.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.73.0, src/ts/web/remote-resources.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Removes every resource from a DOM subtree that the browser would load without a click and that is not
  *  on the positive list. The tree-shaped sibling of `neutralizeRemoteResources` in `pure/safe-markdown`
  *  (the regex pass over Markdown text), and the reason it exists: that pass is a partial protection by
@@ -41,6 +41,18 @@
  *  the element kind (a removed `<object>`, `<picture>` or `<svg>` carries its loading children with it). The pass itself uses
  *  `root.ownerDocument` and `nodeType` / `localName` (no `instanceof`, no global `document`), so it works
  *  on nodes of such a document and on nodes from another realm (an iframe, a pop-out window).
+ *
+ *  ── A frame leaves later ────────────────────────────────────────────────────────────────
+ *  An element that goes and is, or holds, an `iframe`, `frame`, `object` or `embed` is NOT removed in the task of the pass when it
+ *  sits in the live document (`web/leave-tree`). Measured in Obsidian 1.15.1 (obsidian-kit, Welle 34): an `<iframe>` with an `app:`,
+ *  a relative or a `file:` target that was inserted and removed in one task made Obsidian's main process throw (its `onBeforeRequest`
+ *  reads `details.frame.origin` of a frame that is gone) and show a modal error box. Such an element is cut down to a skeleton at once:
+ *  only the frame owners below it and the elements on the way to them stay, without any attribute; every other node of its subtree
+ *  (a `<style>` with its rules, text, a sibling of the frame) leaves in the task of the pass (since 0.72.1). It gets `hidden`, and its removal goes to `deferRemoval` (default: `setTimeout` of its window after
+ *  `FRAME_REMOVAL_DELAY_MS`, 250 ms; one task later still lost the race in 1 of 21 starts, see `leave-tree`).
+ *  It is reported in `removed` in the pass that met it, once; a later pass (this one or `link-guard`) skips it. So after the pass a
+ *  bare, hidden skeleton is still in the tree for that long — `querySelector("iframe")` finds it, nothing on it loads or styles. Nothing
+ *  changes on the inert way and for a tree that is not attached: the element leaves at once.
  *
  *  ── What it removes ─────────────────────────────────────────────────────────────────────
  *  One classification with the regex pass: {@link isLocalRef} and the attribute tables are exported from
@@ -105,11 +117,12 @@
  *  browser loads on its own. Iterative (no recursion), linear in the number of elements and attributes.
  *
  *  ── Vendoring ───────────────────────────────────────────────────────────────────────────
- *  This module imports `../pure/safe-markdown`. A consumer that flattens `pure/` and `web/` into one
+ *  This module imports `./leave-tree` (vendor it with this file) and `../pure/safe-markdown`. A consumer that flattens `pure/` and `web/` into one
  *  directory (e.g. slide-deck `src/vendor/kit`) rewrites the import at the web target in its kit-sync
  *  config: `rewrite: [["../pure/", "./"]]`. */
 
 import { CLICK_HREF_TAGS, DOCUMENT_TAGS, LOADING_ATTRS, SRCSET_ATTRS, cssLoadsRemote, isLocalRef } from "./safe-markdown";
+import { leaveTree, stillLeaving, type DeferRemoval } from "./leave-tree";
 
 /** Schemes that count as local for sources in a DOM: the app's own (`app:`), inline (`data:`) and the
  *  iOS Capacitor file scheme Obsidian resolves vault images to. */
@@ -119,6 +132,9 @@ export interface RemoteResourcesOptions {
   /** Replaces {@link DEFAULT_DOM_LOCAL_SCHEMES}. Names are compared case-insensitively, a trailing `:`
    *  is accepted. `data` / `app` / `capacitor` are never local in a document tag. */
   localSchemes?: readonly string[];
+  /** Who runs the removal of an element that holds a frame in the live document (see the module header, "A frame leaves
+   *  later"). Default: `setTimeout(remove, FRAME_REMOVAL_DELAY_MS)` of the element's window. */
+  deferRemoval?: DeferRemoval | undefined;
 }
 
 /** What the pass took out. `attr` is the attribute name as written, or `""` when the whole element went. */
@@ -188,12 +204,11 @@ export function neutralizeRemoteResourcesInTree(root: ParentNode, opts: RemoteRe
     for (const d of Array.from(el.querySelectorAll("*"))) strip(d);
   };
 
-  /** Takes `el` out of the tree. A root without a parent cannot be removed: it is stripped instead. */
+  /** Takes `el` out of the tree — later when it holds a frame in the live document (`leaveTree`). A root without a
+   *  parent cannot be removed: it is stripped instead. */
   const dropElement = (el: Element, tag: string, ref: string): void => {
     defuse(el);
-    const parent = el.parentNode;
-    if (parent) parent.removeChild(el);
-    else {
+    if (leaveTree(el, opts.deferRemoval) === "rootless") {
       for (const a of Array.from(el.attributes)) el.removeAttributeNode(a);
       while (el.firstChild) el.removeChild(el.firstChild);   // a root <style> keeps its rules otherwise
     }
@@ -202,6 +217,7 @@ export function neutralizeRemoteResourcesInTree(root: ParentNode, opts: RemoteRe
 
   /** Returns true when `el` is gone (its descendants are not visited). */
   const inspect = (el: Element): boolean => {
+    if (stillLeaving(el)) return true;   // waits for its deferred removal: reported already, bare, not walked
     const tag = el.localName.toLowerCase();
     const attrs = Array.from(el.attributes);   // a snapshot: removing while iterating the live map skips the next one
     const find = (...names: string[]): string => {

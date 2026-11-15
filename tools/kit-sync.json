@@ -16,7 +16,7 @@
         "endpoint-secret-hook",
         {
           "name": "endpoint-source",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         "ocr-provider",
         "override-guard"
@@ -49,7 +49,7 @@
         "error_body",
         {
           "name": "error-message",
-          "ref": "0.68.0"
+          "ref": "0.73.0"
         },
         "local-stamp",
         "model-choice",
@@ -63,17 +63,17 @@
         "rounds",
         {
           "name": "safe-markdown",
-          "ref": "0.68.0"
+          "ref": "0.73.0"
         },
         {
           "name": "sampling-profiles",
-          "ref": "0.68.0"
+          "ref": "0.73.0"
         },
         "secrets",
         "settings",
         {
           "name": "split-list",
-          "ref": "0.63.0"
+          "ref": "0.73.0"
         },
         "sse",
         "think-splitter",
@@ -88,11 +88,15 @@
         "clipboard",
         {
           "name": "link-guard",
-          "ref": "0.68.0"
+          "ref": "0.73.0"
         },
         {
           "name": "remote-resources",
-          "ref": "0.68.0"
+          "ref": "0.73.0"
+        },
+        {
+          "name": "leave-tree",
+          "ref": "0.73.0"
         }
       ],
       "rewrite": [
@@ -108,7 +112,10 @@
       "from": "src/obsidian",
       "modules": [
         "chat-transport",
-        "clock",
+        {
+          "name": "clock",
+          "ref": "0.93.0"
+        },
         "folder-suggest",
         "settings_walker",
         "help-setting",
@@ -125,42 +132,42 @@
         "chat-client",
         {
           "name": "choice-modal",
-          "ref": "0.83.0"
+          "ref": "0.93.0"
         },
         "clipboard",
         "collapsible",
         "confirm",
         {
           "name": "dom-guard",
-          "ref": "0.88.0"
+          "ref": "0.93.0"
         },
         "embedding-connection",
         "endpoint-list",
         {
           "name": "endpoint-plumbing",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         "endpoint-secrets",
         {
           "name": "endpoint-source",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         "endpoint-status-text",
         {
           "name": "llm-connection",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         {
           "name": "llm-connection-strings",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         {
           "name": "model-bar",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         {
           "name": "model-bar-strings",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         "model-picker",
         "plugin-api",
@@ -170,7 +177,7 @@
         "status-indicator",
         {
           "name": "thinking-control",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         }
       ],
       "rewrite": [
@@ -195,7 +202,7 @@
       "modules": [
         {
           "name": "kit-css",
-          "ref": "0.89.0"
+          "ref": "0.93.0"
         },
         "obsidian-mock"
       ]

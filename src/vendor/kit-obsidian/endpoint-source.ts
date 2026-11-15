@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.89.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.93.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, type App } from "obsidian";
 import { resolveModelChoice, type ModelHintKey } from "../kit/model-choice";
 import type { EndpointConfig } from "../kit/endpoint_config";
@@ -9,63 +9,73 @@ import {
 import { renderModelPicker } from "./model-picker";
 import { hydrateLocalEndpoints } from "./endpoint-secrets";
 import { readPluginApi } from "./plugin-api";
+import { realClock, type ClockPort } from "./clock";
 
 /** Bei JEDEM Aufruf frisch lesen — das Plugin kann jederzeit deaktiviert werden. */
 export function findEndpointManager(app: App): LlmEndpointManagerApi | null {
   return readPluginApi(app, LLM_ENDPOINT_MANAGER_PLUGIN_ID, isLlmEndpointManagerApi);
 }
 
-/** Abonniert Änderungen am Manager und gibt die Abmeldung zurück.
+/** Prüf-Zeitgeber in Millisekunden (nur der Identitätsvergleich `findEndpointManager(app) !== angehängtes`). Obsidian meldet das Ein- und Ausschalten eines Plugins mit keinem Workspace-Ereignis (Messung im Kopf von `onEndpointManagerChanged`), also trägt der Zeitgeber allein. */
+const POLL_MS = 2000;
+
+/** Abonniert die Quelle „Endpunkt-Manager“ und gibt die Abmeldung zurück. Das Abo meldet über seine ganze Lebensdauer **jeden Wechsel der Quelle, je Wechsel genau einmal** (`cb`):
  *
- *  **Manager schon da:** `api.on("changed", cb)` sofort.
+ *  1. kein Manager → Manager da: `api.on("changed", cb)` wird gehängt, `cb` einmal.
+ *  2. Der Manager meldet `changed`: `cb` (das Abo des Managers selbst, `cb` direkt).
+ *  3. Manager da → Manager weg (Plugin ausgeschaltet oder entladen, seit Welle 34): das alte `off` wird gerufen, `cb` einmal, das Abo wartet wieder.
+ *  4. Der Manager kommt wieder (ein **neues** API-Objekt): wie 1, das Abo hängt am neuen Objekt, nie am alten. Wechselt das API-Objekt zwischen zwei Prüfungen direkt (aus- und eingeschaltet), ist das ein Wechsel: `cb` einmal.
  *
- *  **Manager noch nicht da (seit 0.61.0):** Obsidians Ladereihenfolge der Plugins ist nicht garantiert, und ein Nutzer kann den
- *  Manager auch erst später einschalten. Statt für die Sitzung wirkungslos zu bleiben, versucht die Funktion es erneut — bei
- *  Layout-Ready und bei jedem `layout-change` (Obsidian hat kein Ereignis „Plugin eingeschaltet“; das nächste Layout-Ereignis
- *  nach dem Einschalten ist die frühste verlässliche Stelle). Sobald der Manager da ist, hängt sich das Abo an, die
- *  Workspace-Listener werden entfernt und `cb` wird **einmal** gerufen: aus „kein Manager“ wurde „Manager“, also ist die Quelle
- *  des Konsumenten eine andere (`invalidate` und Oberfläche neu zeichnen). Danach meldet `api.on` jede Änderung.
+ *  Erkannt wird der Wechsel an der Identität des API-Objekts, geprüft bei Layout-Ready (Ladereihenfolge beim Start) und danach alle `POLL_MS` ms über den `ClockPort` (`./clock`); es gibt genau EINEN Zeitgeber, die Abmeldung löscht ihn.
+ *  Die Meldung kommt also spätestens `POLL_MS` ms nach dem Ein- oder Ausschalten. Wer im `cb` `invalidate()` ruft und neu zeichnet, braucht für Meldung 3 nichts zu ändern.
  *
- *  **Grenze:** zwischen Einschalten und dem nächsten Layout-Ereignis bleibt das Abo still. Wer die Quelle vorher braucht, liest
- *  sie ohnehin frisch (`findEndpointManager` bei jedem `resolve`). Die Abmeldung ist idempotent und gilt auch, bevor der
- *  Manager je da war. */
-export function onEndpointManagerChanged(app: App, cb: () => void): () => void {
+ *  **Warum ein Zeitgeber und keine Workspace-Ereignisse (gemessen 2026-11-14, Obsidian 1.15.1, Pilot `pilot/manager-wechsel.ts`, Gastplugin `llm-endpoint-manager` mit der API-Form, je drei Durchläufe über `enablePlugin`/`disablePlugin` und
+ *  `enablePluginAndSave`/`disablePluginAndSave`, zwei Sekunden Beobachtung nach jedem Wechsel):** `layout-change`, `css-change`, `active-leaf-change`, `resize` und `window-open` feuerten in keiner der 12 Richtungen und auch nicht in den Kontrollfenstern ohne Eingriff
+ *  (0 von 12 je Ereignis). Die Modellzeile (`buildModelBar`) folgt damit binnen 2 Sekunden: Gruppen des Managers nach 608 und 759 ms beim Einschalten, weg nach 1980 und 1982 ms beim Ausschalten. Nebenbefund: `enablePlugin` trägt das Plugin nicht in
+ *  `app.plugins.enabledPlugins` ein, nur `enablePluginAndSave`; die API steht trotzdem in `app.plugins.plugins[id].api`. Es gibt keinen Monkeypatch an `app.plugins`.
+ *
+ *  Beim Abonnieren ist ein vorhandener Manager schon angehängt, ohne `cb` (der Konsument liest die Quelle ohnehin frisch). Die Abmeldung ist idempotent, entfernt Listener und Zeitgeber und gilt in jedem Zustand; ein Fehler in `cb` stört das Abo nicht,
+ *  ein Fehler von `api.on` ebenso wenig (das Abo bleibt dann ohne Manager-Meldungen an diesem Objekt, bis ein neues erscheint). `clock` ist für Tests; die Voreinstellung ist die echte Uhr, eine Umgebung ohne Zeitgeber (Test ohne `window`) bleibt ohne Prüfung. */
+export function onEndpointManagerChanged(app: App, cb: () => void, clock: ClockPort = realClock): () => void {
+  let attached: LlmEndpointManagerApi | null = null;
   let off: (() => void) | null = null;
   let stopped = false;
-  const refs: unknown[] = [];
+  let timer: number | null = null;
 
-  const attach = (): boolean => {
-    const api = findEndpointManager(app);
-    if (!api) return false;
+  const attach = (api: LlmEndpointManagerApi): void => {
+    attached = api;
     try { off = api.on("changed", cb); } catch { off = () => {}; }
-    return true;
   };
-  const unwatch = (): void => {
-    const ws = app.workspace as unknown as { offref?(ref: unknown): void };
-    for (const ref of refs.splice(0)) { try { ws.offref?.(ref); } catch { /* ein Fremd-Workspace ohne offref */ } }
+  const detach = (): void => {
+    const o = off;
+    off = null;
+    attached = null;
+    try { o?.(); } catch { /* schon abgemeldet oder entladen */ }
   };
-  const retry = (): void => {
-    if (stopped || off !== null) return;
-    if (!attach()) return;
-    unwatch();
+  const check = (): void => {
+    if (stopped) return;
+    const cur = findEndpointManager(app);
+    if (cur === attached) return;
+    detach();
+    if (cur) attach(cur);
     try { cb(); } catch { /* die Meldung ist ein Hinweis; ein Fehler des Konsumenten stört das Abo nicht */ }
   };
+  const arm = (): void => {
+    if (stopped) return;
+    try { timer = clock.setTimeout(() => { timer = null; check(); arm(); }, POLL_MS); } catch { timer = null; /* eine Umgebung ohne Zeitgeber (Test ohne window) */ }
+  };
 
-  if (!attach()) {
-    const ws = app.workspace as unknown as {
-      on?(name: string, fn: () => void): unknown;
-      onLayoutReady?(fn: () => void): void;
-    };
-    try { const ref = ws.on?.("layout-change", retry); if (ref !== undefined) refs.push(ref); } catch { /* kein Workspace-Ereignis */ }
-    try { ws.onLayoutReady?.(retry); } catch { /* ebenso */ }
-  }
+  const first = findEndpointManager(app);
+  if (first) attach(first);
+  const ws = app.workspace as unknown as { onLayoutReady?(fn: () => void): void };
+  try { ws.onLayoutReady?.(check); } catch { /* kein Workspace-Ereignis */ }
+  arm();
+
   return () => {
     if (stopped) return;
     stopped = true;
-    unwatch();
-    const o = off;
-    off = null;
-    try { o?.(); } catch { /* schon abgemeldet */ }
+    if (timer !== null) { try { clock.clearTimeout(timer); } catch { /* ebenso */ } timer = null; }
+    detach();
   };
 }
 

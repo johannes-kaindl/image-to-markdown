@@ -1,4 +1,4 @@
-// vendored from code-kit@0.68.0, src/ts/pure/safe-markdown.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.73.0, src/ts/pure/safe-markdown.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus settings-assistant/src/core/chat-markdown.ts, 2026-10-09
 /** Neutralises Markdown from an untrusted source (a model answer) BEFORE it is handed to a
  *  Markdown renderer. Pure, no dependencies.
@@ -451,6 +451,13 @@ export function mermaidLoadsRemote(source: string): boolean {
   return false;
 }
 
+// Why the two fence readings of this file (`PROCESSOR_FENCE`, and `MERMAID_OPEN` with `closesFence` below) are not `fences.ts` `listFences`
+// (decided 2026-11-15 with the scanner, kept on purpose): this is a security guard that must see every fence a renderer sees, and
+// `listFences` reads FLAT text (at most 3 columns of indent, no `>` or list marker before the fence, no lone CR as a line break). Measured in
+// tests/fences-scanner.test.ts ("the fence readings kept in safe-markdown.ts and heading-title.ts"): a Mermaid fence in a quote, in a list item,
+// indented by 5 spaces or ended by a lone CR is disarmed here and invisible to `listFences`. `PROCESSOR_FENCE` is no scan at all: it matches
+// an opening line anywhere, also inside another fence. A switch would also make this module import fences.ts, and every consumer that vendors
+// safe-markdown.ts alone (consumers.json) would have to vendor a second file.
 /** Opening line of a Mermaid fence: any run of indentation, `>` and list markers, then the fence and the info `mermaid`
  *  (case-insensitive, nothing word-like after it). Each prefix character matches exactly one alternative: linear per line. */
 const MERMAID_OPEN = /^((?:[ \t>]|[-*+](?=[ \t])|\d{1,9}[.)](?=[ \t]))*)(`{3,}|~{3,})([ \t]*)(mermaid)(?![\w-])/i;
