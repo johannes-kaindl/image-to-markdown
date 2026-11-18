@@ -3,17 +3,22 @@ import { splitList } from "./vendor/kit/split-list";
 
 export interface ParsedDescription { category: string | null; tags: string[]; prose: string; }
 
-/** Beschreiben-Prompt: fordert festes, sprach-unabhängiges Kopf-Format (literale Marker) + Prosa. */
-export function buildDescribePrompt(taxonomy: string[], lang: Lang): string {
+/** Ausführlichkeit der Prosa; `normal` ist der Prompt der Seitenleiste (`concise`), die beiden anderen kommen nur über die Anbieter-API. */
+export type DescribeProseLength = "short" | "normal" | "long";
+const PROSE_ADJ: Record<DescribeProseLength, string> = { short: "one-sentence", normal: "concise", long: "detailed" };
+
+/** Beschreiben-Prompt: fordert festes, sprach-unabhängiges Kopf-Format (literale Marker) + Prosa.
+ *  Eine leere Taxonomie lässt die CATEGORY-Zeile weg (die Anbieter-API erlaubt `categories: []`). */
+export function buildDescribePrompt(taxonomy: string[], lang: Lang, length: DescribeProseLength = "normal"): string {
   const list = taxonomy.join(", ");
   const proseLang = lang === "de" ? "auf Deutsch" : "in English";
   return [
     "Describe the image so it can be found later by semantic search.",
     `Respond in EXACTLY this format:`,
-    `CATEGORY: <choose exactly one of: ${list}>`,
+    ...(taxonomy.length > 0 ? [`CATEGORY: <choose exactly one of: ${list}>`] : []),
     `TAGS: <2-6 comma-separated free-form topic keywords>`,
     `---`,
-    `<a concise prose description ${proseLang}: what it shows, key elements, any visible text>`,
+    `<a ${PROSE_ADJ[length]} prose description ${proseLang}: what it shows, key elements, any visible text>`,
     "Output only that. No extra commentary.",
   ].join("\n");
 }

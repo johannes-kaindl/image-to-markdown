@@ -6,6 +6,10 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Other plugins can ask for an image description.** `describeImage(vaultPath, options)` on the plugin's `api` returns the description text, one category from a list the caller may pass, keywords and the model name; options are `language`, `length`, `categories` and an abort `signal`. It sits next to `extractText` on the same `api` object and uses the vision model of the sidebar (never the Apple shortcut); a PDF is not supported yet. The sidebar's own "Describe" prompt is unchanged.
+
 ## [0.34.1] — 2026-11-15
 
 ### Changed

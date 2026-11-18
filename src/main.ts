@@ -32,6 +32,8 @@ import type { FrontmatterMap } from "./frontmatter_map";
 import { copyToClipboard } from "./vendor/kit-obsidian/clipboard";
 import { createShortcutsBridge, type ShortcutsBridge } from "./vendor/kit-obsidian/shortcuts-bridge";
 import type { OcrProviderApi, OcrProviderError } from "./vendor/kit/ocr-provider";
+import type { DescribeProviderApi, DescribeProviderError } from "./vendor/kit/describe-provider";
+import { createDescribeProviderApi, type DescribeRawOut } from "./describe_provider";
 import { createOcrProviderApi, shortcutResultToOcr } from "./ocr_provider";
 
 /** Die Handler eines Stream-Aufrufs der View. */
@@ -57,7 +59,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
   /** Anbieter-API v1 (Spec Baustein 4/D, Kit-Vertrag `ocr-provider`) — Konsumenten fragen
    *  `app.plugins.plugins["image-to-markdown"].api`, nie die Brücke direkt. Sofort in onload
    *  gesetzt (Muster lingotuner): sobald das Plugin-Objekt sichtbar ist, soll `api` da sein. */
-  api!: OcrProviderApi;
+  api!: OcrProviderApi & DescribeProviderApi;
   private shortcutsBridge!: ShortcutsBridge;
   private settingTab?: ImageToMarkdownSettingTab;
 
@@ -121,7 +123,12 @@ export default class ImageToMarkdownPlugin extends Plugin {
     this.register(onEndpointManagerChanged(this.app, () => { void this.reconnect().then(() => { this.reloadModelBars(); }); }));
 
     this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });
-    this.api = createOcrProviderApi({ extractText: (p) => this.extractTextViaOcr(p) });
+    // OCR und Beschreiben auf demselben api-Objekt (beide Kit-Verträge fordern version 1).
+    this.api = createDescribeProviderApi(createOcrProviderApi({ extractText: (p) => this.extractTextViaOcr(p) }), {
+      taxonomy: () => this.settings.describeTaxonomy,
+      defaultLang: () => getLang(),
+      describeRaw: (p, o) => this.describeRawViaLlm(p, o),
+    });
 
     this.settingTab = new ImageToMarkdownSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
@@ -265,6 +272,20 @@ export default class ImageToMarkdownPlugin extends Plugin {
     } catch (e) {
       return { error: "failed", message: e instanceof Error ? e.message : String(e) };
     }
+  }
+
+  /** Backend der Beschreiben-API (Kit-Vertrag `describe-provider`): immer das Vision-LLM, nie der Kurzbefehl (der liefert nur OCR-Text).
+   *  Ohne Denken, wie bei `extractTextViaOcr`: der Konsument will die Beschreibung im festen Kopf-Format, nicht den Gedankengang.
+   *  v1 ohne PDF: eine PDF-Quelle ist "unsupported". Prompt und Parser stehen in `describe_provider.ts`. */
+  private async describeRawViaLlm(vaultPath: string, o: { prompt: string; signal?: AbortSignal }): Promise<DescribeRawOut | DescribeProviderError> {
+    const f = this.app.vault.getAbstractFileByPath(vaultPath);
+    if (!(f instanceof TFile)) return { error: "not-found", message: `Datei nicht gefunden: ${vaultPath}` };
+    const ext = f.extension.toLowerCase();
+    if (!SUPPORTED_EXTS.includes(ext)) return { error: "unsupported", message: `Dateityp nicht unterstützt: .${ext}` };
+    if (!(await this.llm.resolve()).config) return { error: "backend-unavailable", message: "kein Vision-Endpunkt erreichbar" };
+    const dataUrl = binaryToDataUrl(await this.app.vault.adapter.readBinary(vaultPath), ext);
+    const r = await this.callLlm(this.imageMessages(dataUrl, o.prompt), { stream: false, thinking: "off", ...(o.signal ? { signal: o.signal } : {}) });
+    return { raw: r.content, model: r.model, ...(r.finishReason !== undefined ? { finishReason: r.finishReason } : {}) };
   }
 
   // Kein Caching: die Settings-UI mutiert this.settings live, jeder Aufruf muss den aktuellen Stand lesen.

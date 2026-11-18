@@ -4,7 +4,7 @@ Modul-Layout und Datenfluss. Der Kern (`AGENTS.md`) nennt nur die Trennlinie; hi
 
 ## Trennlinie: reiner Kern und Obsidian-Schicht
 
-Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`, `llm_call.ts`, `capabilities.ts`, `i18n.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`, `describe.ts`, `prompts.ts`, `request_params.ts`, `card_cache.ts`, `frontmatter_map.ts`, `fm_migration.ts`, `ocr_provider.ts`, `resolve_endpoint.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`, `settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und die vendorte Schicht `vendor/kit-obsidian/*` importieren `obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
+Reiner Kern ohne obsidian-Imports (`img_to_md.ts`, `img_to_md_state.ts`, `vision_client.ts`, `llm_call.ts`, `capabilities.ts`, `i18n.ts`, `pdf_to_md.ts`, `backlinks.ts`, `refine.ts`, `describe.ts`, `prompts.ts`, `request_params.ts`, `card_cache.ts`, `frontmatter_map.ts`, `fm_migration.ts`, `ocr_provider.ts`, `describe_provider.ts`, `resolve_endpoint.ts`, `vendor/kit/*`) → in Node testbar ohne DOM-Mock (PROF-OBS-03/04). Nur `main.ts`, `settings.ts`, `img_to_md_view.ts`, `http.ts`, `diff_modal.ts`, `migration_modal.ts` und die vendorte Schicht `vendor/kit-obsidian/*` importieren `obsidian`; `pdf_render.ts` nutzt DOM/Canvas. Die View bekommt alle Abhängigkeiten über injizierte Closures (`ImgToMdViewDeps`) → headless testbar.
 
 ## Module in `src/`
 
@@ -60,6 +60,12 @@ capabilities.ts     Adapter über das vendored Kit-Modul (Vision-Achse projizier
 ocr_provider.ts     Anbieter-API v1 `extractText` (Muster lingotuner): dünner Adapter über `deps.extractText`
                     (Kurzbefehl mobil, Vision-LLM desktop) plus `shortcutResultToOcr`. Der Vertrag selbst kommt
                     aus dem Kit (`vendor/kit/ocr-provider.ts`). Reiner Kern.
+describe_provider.ts Anbieter-API v1 `describeImage` (Kit-Vertrag `describe-provider`, obsidian-kit 0.95.0): Adapter
+                    `createDescribeProviderApi(base, deps)` legt `describeImage` auf das `api`-Objekt von `extractText`.
+                    Hier liegen Optionen → Prompt (`describe.ts::buildDescribePrompt`), Parser (`parseDescription`) und
+                    die Pflichten des Anbieters (nie leerer `text`, `category` wortgleich aus `categories`, schon
+                    abgebrochenes Signal → `aborted` ohne Backend). Das Backend (`main.ts::describeRawViaLlm`) ist immer das
+                    Vision-LLM ohne Denken, nie der Kurzbefehl; PDF ist `unsupported`. Reiner Kern.
 resolve_endpoint.ts Konstanten rund um die Endpunkt-Quelle (`ENDPOINT_CALLER`); die Auflösung macht die
                     Kit-Verbindung.
 diff_modal.ts       DiffModal (Modal): Zeilen-Diff alt↔neu mit Checkbox pro Hunk (Default: alle an),
@@ -134,6 +140,7 @@ vendor/kit/
                     JSON-Fehlerkörper. Konsument ist der Kit-Chat-Client.
   clipboard.ts      writeClipboard (obsidian-frei) — Abhängigkeit von kit-obsidian/clipboard.ts.
   ocr-provider.ts   Vertrag der Anbieter-API `extractText`.
+  describe-provider.ts Vertrag der Anbieter-API `describeImage` (v1 eingefroren, nur additiv).
 vendor/kit-obsidian/
   llm-connection.ts createLlmConnection (Welle 15): die ganze LLM-Anbindung (Quelle, gemerkte Auflösung, Modellliste, Profil, Client, Schwärzung, Antwortprüfung, Settings-Abschnitte); zieht backend-probe, endpoint-secrets, secrets, llm-connection-strings mit. Alle Module stehen auf EINER Ref (kit-sync.json).
   chat-client.ts    createChatClient: Streaming, Idle-/Erst-Chunk-Frist, Abbruch, Fehlerkörper, Fallback ohne Stream. Obsidian-frei (Transport injiziert) — von der Verbindung genutzt.
