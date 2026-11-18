@@ -16,21 +16,16 @@
  * und haengt sich nicht ungefragt an sie. Er laeuft gegen eine eigene Instanz mit eigenem
  * Profil und eigenem Port (`--port` ist Pflicht, es gibt keinen Standardport):
  *
- * ```bash
- * npm run build && npm run shots -- --setup     # Vault aus dem getrackten Fixture
- * export OBSIDIAN_PLUGIN_DIR="$STAGING_VAULTS_DIR/image-to-markdown/.obsidian/plugins/image-to-markdown"
- * npm run deploy                                # PFLICHT: der Lauf misst den deployten Build
- * UD=/tmp/obs-test-image-to-markdown            # Profil je Repo; vorher: pgrep -f "user-data-dir=$UD"
- * cp ~/Library/Application\ Support/obsidian/obsidian-*.asar "$UD"/   # aktuelle Version, Pflicht
- * # $UD/obsidian.json: Vault ($STAGING_VAULTS_DIR/image-to-markdown) und "language":"en" eintragen
- * lsof -nP -iTCP:<port> -sTCP:LISTEN            # muss leer sein
- * /Applications/Obsidian.app/Contents/MacOS/Obsidian --user-data-dir="$UD" --remote-debugging-port=<port> &
- * python3 ~/.claude/hooks/obsidian-cdp-lock.py acquire --label image-to-markdown \
- *   --intent "GUI-Smoke" --exclusive focus --port <port> --ttl 300
- * npm run smoke:gui -- --port <port>
- * npm run smoke:gui -- --port <port> --with-model   # + die drei Modell-Punkte
- * python3 ~/.claude/hooks/obsidian-cdp-lock.py release
- * ```
+ * Lauf: `tools/obsidian-cdp/messlauf.sh` (Dach, README § Messlauf in einem Aufruf) startet die Zweitinstanz, hält den Lock (`--exclusive focus`, davor, mit `export`)
+ * und räumt auf; das Rezept steht nur dort. Für diesen Treiber: `REPO=image-to-markdown OHNE_SETUP=1`.
+ *
+ * Weitere Läufe (als `SMOKE_ARGS`):
+ *   --with-model   # + die drei Modell-Punkte
+ *
+ * Besonderheiten dieses Treibers (aus dem früheren Rezept übernommen):
+ *   Setup über ein anderes Skript: npm run shots -- --setup   # Vault aus dem getrackten Fixture
+ *   export OBSIDIAN_PLUGIN_DIR="$STAGING_VAULTS_DIR/image-to-markdown/.obsidian/plugins/image-to-markdown"
+ *   npm run deploy   # PFLICHT: der Lauf misst den deployten Build
  *
  * Den Vertrauensdialog und den Restricted Mode eines frischen Profils erledigt der Treiber
  * selbst (`bereiteInstanzVor`); je Messlauf ein frischer Prozess, der erste Lauf nach der
