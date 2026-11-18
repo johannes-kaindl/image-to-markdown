@@ -62,7 +62,7 @@
 
 import { argv, cwd, exit } from "node:process";
 
-import { attachTo, Cdp, openExisting, pollUntil, requireVisible, setPluginSetting } from "../../tools/obsidian-cdp/cdp.js";
+import { attachTo, bereiteInstanzVor, Cdp, openExisting, pollUntil, requireVisible, setPluginSetting } from "../../tools/obsidian-cdp/cdp.js";
 import { boxOf, capture, withMetrics, writeShot, type Rect } from "../../tools/obsidian-cdp/shot.js";
 import { buildVault, stagingVaultDir } from "../../tools/obsidian-cdp/vault.js";
 
@@ -241,6 +241,11 @@ async function main(): Promise<void> {
   try {
     // Nicht `osascript activate`: das holt die laufende Instanz statt der Zweitinstanz.
     await requireVisible(cdp);
+
+    // Frisches Profil: Vertrauensdialog bestätigen, Restricted Mode aufheben, Plugin laden, Aufnahmesprache setzen. Ohne den Aufruf zeigt jedes Bild
+    // den Vertrauensdialog, und das Plugin fehlt im Renderer (Brücke README § Frisches Profil vorbereiten).
+    const vor = await bereiteInstanzVor(cdp, { pluginIds: [PLUGIN_ID], nurVault: vault, sprache: "en" });
+    console.log(`Instanz: ${vor.hinweis}`);
 
     if (only === "settings.png") {
       await settingsBild(cdp, port, vault, outDir);
