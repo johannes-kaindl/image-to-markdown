@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.93.0, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { hydrateEndpointSecrets, resolveActiveEndpointConfig, type EndpointConfig } from "./endpoint_config";
 import type { SecretStore } from "./secrets";
 import { familyFromName, type BackendId, type FamilyId, type ModelFamilyId } from "./sampling-profiles";
@@ -64,6 +64,10 @@ export function isLlmEndpointManagerApi(x: unknown): x is LlmEndpointManagerApi 
 }
 
 export interface EndpointChoice { endpointId?: string; model?: string }
+
+/** Ein wählbarer Endpunkt in der Modellzeile (seit 0.87.0): `id` und `label` des Managers, `defaultModel` für „Standard (…)“ in seiner Gruppe. Liegt hier und nicht in `model-bar` (seit Welle 35): `llm-connection` braucht den Typ für `endpoints()`,
+ *  und ein Import aus `model-bar` zog die Modellzeile samt ihren Strings, dem Denk-Knopf und zwei CSS-Blöcken in jedes Plugin, das nur die Verbindung vendort. `model-bar` führt den Namen weiter (`export type`), `obsidian/index` bleibt gleich. */
+export interface ModelBarEndpoint { id: string; label: string; defaultModel?: string }
 
 /** Liest eine gespeicherte Endpunkt-Wahl aus `data.json`: nur nicht-leere Strings in `endpointId` und `model` bleiben, alles andere
  *  fällt weg. `raw` ist untrusted — die Datei ist von Hand editierbar, und ein unbekanntes Feld (ein Schlüssel, eine URL) soll nie

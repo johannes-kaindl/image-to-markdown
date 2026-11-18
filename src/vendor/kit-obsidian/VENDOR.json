@@ -1,8 +1,8 @@
 {
   "source": "obsidian-kit",
-  "version": "0.77.1",
-  "sha": "3fc29e1",
-  "vendored": "chat-transport.ts, clock.ts (obsidian-kit@0.93.0, 7997447), folder-suggest.ts, settings_walker.ts, help-setting.ts, shortcuts-bridge.ts, anthropic-transport.ts, backend-probe.ts, chat-client.ts, choice-modal.ts (obsidian-kit@0.93.0, 7997447), clipboard.ts, collapsible.ts, confirm.ts, dom-guard.ts (obsidian-kit@0.93.0, 7997447), embedding-connection.ts, endpoint-list.ts, endpoint-plumbing.ts (obsidian-kit@0.93.0, 7997447), endpoint-secrets.ts, endpoint-source.ts (obsidian-kit@0.93.0, 7997447), endpoint-status-text.ts, llm-connection.ts (obsidian-kit@0.93.0, 7997447), llm-connection-strings.ts (obsidian-kit@0.93.0, 7997447), model-bar.ts (obsidian-kit@0.93.0, 7997447), model-bar-strings.ts (obsidian-kit@0.93.0, 7997447), model-picker.ts, plugin-api.ts, request-section.ts, request-session.ts, secrets.ts, status-indicator.ts, thinking-control.ts (obsidian-kit@0.93.0, 7997447)",
+  "version": "0.95.0",
+  "sha": "3853245",
+  "vendored": "chat-transport.ts, clock.ts, folder-suggest.ts, settings_walker.ts, setting-body-host.ts, help-setting.ts, shortcuts-bridge.ts, anthropic-transport.ts, backend-probe.ts, chat-client.ts, choice-modal.ts, clipboard.ts, collapsible.ts, confirm.ts, dom-guard.ts, embedding-connection.ts, endpoint-list.ts, endpoint-plumbing.ts, endpoint-secrets.ts, endpoint-source.ts, endpoint-status-text.ts, llm-connection.ts, llm-connection-strings.ts, model-bar.ts, model-bar-strings.ts, model-picker.ts, plugin-api.ts, request-section.ts, request-session.ts, secrets.ts, status-indicator.ts, thinking-control.ts",
   "note": "Verbatim snapshot. Never hand-edit. Pins in tools/kit-sync.json, re-vendor via tools/sync-kit.sh (zentrales kit-sync im Dach). version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien. clipboard.ts, endpoint-list.ts und model-picker.ts tragen EINE mechanische Abweichung: kit-interne Importe ../vendor/code-kit/{pure,web}/ sind auf ../kit/ umgeschrieben (Vendor-Layout). Bei jedem Re-Vendoring reproduzieren; sonst darf nichts abweichen. Praezedenz: vim-dojo, markdown-presentation, vault-crews, kuro-gamification, lingotuner, vault-rag. Eigene Ablage neben src/vendor/kit/, weil diese Module \"obsidian\" importieren.",
   "license": "AGPL-3.0-or-later"
 }

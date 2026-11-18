@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/clipboard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/obsidian/clipboard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Zwischenablage **mit Quittung**: bindet `writeClipboard` aus `pure/clipboard` an Obsidians
  *  `Notice`. Der Kopiervorgang selbst steht vollständig dort — hier liegt nur die Entscheidung,
  *  wann welche Meldung erscheint. Wer gar keine Notice will (Quittung am Knopf, stiller
@@ -66,7 +66,7 @@ export interface CopyToClipboardOptions extends ClipboardOptions {
    *  - weggelassen → `"Copy failed"` (Kit-Default, s. Modulkopf Punkt 2),
    *  - `string` → dieser Text,
    *  - Funktion → bekommt Grund und Fehler und baut den Text (`obsidian-transmute`:
-   *    `(_r, err) => t("view.copyFailed", err instanceof Error ? err.message : String(err))`);
+   *    `(_r, err) => t("view.copyFailed", errorMessage(err))`);
    *    `error` ist dabei IMMER gesetzt, nie `undefined` — dafür sorgt `pure/clipboard`,
    *  - `null` → **keine** Notice; der Consumer meldet selbst über `onFailed` oder gar nicht
    *    (`kuro-gamification`: `ta.select()`; `markdown-presentation`: still). */

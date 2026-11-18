@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/testing/obsidian-mock.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // Self-contained Obsidian test double for obsidian-kit.
 // - Zero external imports (NOT from "obsidian", NOT from "vitest").
 // - Consumed via vitest `resolve.alias` as a drop-in for `import ... from "obsidian"`,
@@ -121,8 +121,13 @@ export function makeFakeEl(tagName = "DIV"): any {
     /** Hängt sich beim Elternknoten aus, wie im echten DOM. Nötig für Kit-Module, die
      *  Zusatz-DOM in-place wieder wegnehmen (Drittanbieter-Icon der Endpunkt-Liste). */
     remove() { parent?.removeChild?.(el); },
-    focus() {},
+    /** Zählt die Aufrufe (`__focusCount`, `__selectCount`, 0.80.0): ein Dialog, der den Fokus ins Feld setzt oder die Vorbelegung markiert, ist so prüfbar. */
+    focus() { el.__focusCount = (el.__focusCount ?? 0) + 1; },
+    select() { el.__selectCount = (el.__selectCount ?? 0) + 1; },
     blur() {},
+    /** Wie Obsidians `hide()`/`show()` (0.85.0): setzt und löscht `style.display`, damit ein Test das Ausblenden sieht. */
+    hide() { style.display = "none"; },
+    show() { style.display = ""; },
 
     createEl: (tag: string, o?: any) => makeChild(tag, o),
     createDiv: (o?: any) => makeChild("div", o),
@@ -826,23 +831,45 @@ export function setIcon(el: any, iconId: string): void {
 export function setTooltip(el: any, tooltip: string): void {
   el.setAttribute?.("data-tooltip", tooltip);
 }
-export function getLanguage(): string { return "en"; }
+let mockLanguage = "en";
+/** Die Sprache, die `getLanguage()` liefert (Standard `en`); ohne Argument oder mit leerem Text zurück auf `en`. Für Konsumenten, die die Obsidian-Sprache lesen
+ *  (`detectLang`, Seeding in der Oberflächensprache) und ihre deutschen Zweige prüfen. Nach dem Test zurücksetzen (`afterEach(() => __setMockLanguage())`). */
+export function __setMockLanguage(lang?: string): void { mockLanguage = lang === undefined || lang === "" ? "en" : lang; }
+export function getLanguage(): string { return mockLanguage; }
 
 // ---------------------------------------------------------------------------
 // Welle 19: Zusätze aus den Hand-Kopien (calendar-notes, health-vitals/vault-rag).
 // ---------------------------------------------------------------------------
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/;
+// Der Mock hat keine Importe (er wird einzeln vendort), darum liest er den Block selbst: dieselbe zeilenweise Regel wie `locateFrontmatter` (src/pure/frontmatter.ts), gemessen an Obsidian
+// (`pilot/frontmatter-leser.ts`, Tabelle im Kopf von frontmatter.ts): öffnender Zaun genau `---` in Zeile 1, schließend die ERSTE Zeile, die genau `---` ist (`---x` und `---` mit Leerraum dahinter nicht), zwei Zaunzeilen nacheinander sind ein
+// leerer Block, das Dateiende darf die schließende Zeile beenden. `tests/frontmatter-leser.test.ts` hält beide Leser auf denselben Dokumenten gleich. Nicht gebaut: YAML lesen.
+function mockLocateFrontmatter(content: string): { from: number; raw: string; bodyFrom: number } | null {
+  const first = /^---\r?\n/.exec(content);
+  if (!first) return null;
+  const from = first[0].length;
+  let pos = from;
+  for (;;) {
+    const nl = content.indexOf("\n", pos);
+    const lineEnd = nl === -1 ? content.length : nl;
+    const line = content.slice(pos, content[lineEnd - 1] === "\r" && lineEnd > pos ? lineEnd - 1 : lineEnd);
+    if (/^---$/.test(line)) {
+      const bodyFrom = nl === -1 ? content.length : nl + 1;
+      return { from, raw: pos === from ? "" : content.slice(from, pos - (content[pos - 2] === "\r" ? 2 : 1)), bodyFrom };
+    }
+    if (nl === -1) return null;
+    pos = nl + 1;
+  }
+}
 
 /** `getFrontMatterInfo(content)` (calendar-notes, Welle 19): Nachbildung nach `obsidian.d.ts`. Erkennt nur den einfachen
  *  `---\n…\n---`-Block am Dateianfang, ohne YAML zu lesen — gebraucht werden die Offsets (`contentStart` = Beginn des Rumpfes).
- *  Grenzen: ein leerer Block (`---\n---\n`) gilt als „kein Block“, und `frontmatter` ist der Text ohne die Begrenzer.
+ *  Grenzen: `frontmatter` ist der Text ohne die Begrenzer und ohne das Zeilenende davor (die echte Funktion liefert es mit, gemessen 1.15.1: `to` liegt dort eins höher);
+ *  `exists` und `contentStart` stimmen mit der echten Funktion überein (leerer Block = Block, schließende Zeile genau `---`, 0.79.2).
  *  `from`/`to` zählen die Zeichen des Blocktextes im Original, auch bei CRLF (die Hand-Kopie rechnete `from` mit 4 fest). */
 export function getFrontMatterInfo(content: string): { exists: boolean; frontmatter: string; from: number; to: number; contentStart: number } {
-  const m = FRONTMATTER_RE.exec(content);
-  if (!m) return { exists: false, frontmatter: "", from: 0, to: 0, contentStart: 0 };
-  const block = m[1] ?? "";
-  const from = content.indexOf("\n") + 1;
-  return { exists: true, frontmatter: block, from, to: from + block.length, contentStart: m[0].length };
+  const span = mockLocateFrontmatter(content);
+  if (!span) return { exists: false, frontmatter: "", from: 0, to: 0, contentStart: 0 };
+  return { exists: true, frontmatter: span.raw, from: span.from, to: span.from + span.raw.length, contentStart: span.bodyFrom };
 }
 
 /** `SecretComponent` (Obsidian 1.11.1; calendar-notes, Welle 19): ein VERWEIS auf einen Schlüsselbund-Eintrag, kein Passwortfeld.

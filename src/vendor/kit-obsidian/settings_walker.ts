@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/settings_walker.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/obsidian/settings_walker.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // obsidian-kit/src/obsidian/settings_walker.ts
 //
 // Der gemeinsame Fallback-Walker fuer zweigleisige deklarative Settings-Tabs
@@ -16,14 +16,8 @@ export interface SettingControlHost {
 
 type RenderHatch = (setting: Setting) => void | (() => void);
 
-/** Macht eine Setting-Zeile zum leeren Block-Container fuer Hatches mit
- *  Zusatz-DOM (Endpoint-Listen, Status-Anzeigen). Leert settingEl und entfernt
- *  die Zwei-Spalten-Klasse -- Name/Desc muss die Hatch selbst neu setzen. */
-export function settingBodyHost(setting: Setting): HTMLElement {
-  setting.settingEl.empty();
-  setting.settingEl.removeClass("setting-item");
-  return setting.settingEl;
-}
+// `settingBodyHost` liegt seit 0.89.0 in setting-body-host.ts (Welle 34, Paket 6); der Re-Export haelt bestehende Importe und Vendorings dicht.
+export { settingBodyHost } from "./setting-body-host";
 
 /** Erkennt die native 1.13-update()-API (partielles Re-Render der deklarativen
  *  Registrierung); faellt sonst auf den uebergebenen vollen Rebuild zurueck. */

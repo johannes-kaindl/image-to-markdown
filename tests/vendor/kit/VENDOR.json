@@ -1,8 +1,8 @@
 {
   "source": "obsidian-kit",
-  "version": "0.77.1",
-  "sha": "3fc29e1",
-  "vendored": "kit-css.ts (obsidian-kit@0.93.0, 7997447), obsidian-mock.ts",
+  "version": "0.95.0",
+  "sha": "3853245",
+  "vendored": "kit-css.ts, obsidian-mock.ts",
   "note": "Verbatim snapshot. Never hand-edit. Pins in tools/kit-sync.json, re-vendor via tools/sync-kit.sh (zentrales kit-sync im Dach).",
   "license": "AGPL-3.0-or-later"
 }

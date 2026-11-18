@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.93.0, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/obsidian/model-bar.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /**
  * Modellzeile (UI-STANDARD § 8, neu in 0.67.0): eine Zeile, in der man sieht, welches Modell eine Aufgabe benutzt, und es wechselt — Dropdown mit den Modellen
  * des aktiven Endpunkts (seit 0.87.0 aller Endpunkte, gruppiert), „Endpunkte verwalten …“, Neu-laden-Knopf und optional die Denk-Steuerung. Läuft eigenständig in jeder Seitenleiste und im
@@ -9,6 +9,15 @@
  * Reihenfolge `[Modell][Warnzeichen][Denkstufe][Neu laden]`, **ohne sichtbare Beschriftung** (`label` steht im `aria-label`, `showLabel` holt sie zurück) und **einzeilig**:
  * die Wurzel ist ein Container (`container-type: inline-size`), die Elemente liegen in einer inneren Flex-Zeile ohne Umbruch. Bei Enge schrumpft zuerst die Denkstufe auf ihr Zeichen
  * (Container unter 340 px, seit 0.77.1), danach kürzt nur der Modellname. Die Denk-Steuerung ist in der Zeile immer das Dropdown mit den Stufen des Modells (`inModelBar`).
+ *
+ * ## Rangfolge bei Enge: Name vor Wort (Entscheidung Johannes, 2026-11-15)
+ *
+ * Wird der Platz knapp, gibt die Zeile zuerst das **Stufenwort** her, nicht den Modellnamen: unter 340 px Containerbreite schrumpft das Denk-Dropdown auf das Zeichen der Stufe (`thinkingLevelGlyph`), das Wort steht in der
+ * offenen Liste, im Namen des Dropdowns (`aria-label`, zugleich Tooltip) und im Text jedes Eintrags; erst danach kürzt sich der Modellname (Mindestbreite 6 em, Auslassung). Die Regel bleibt, wie 0.77.1 sie gesetzt hat; es wird
+ * kein CSS umgebaut. **Grund:** die Stufen sind wenige und das Zeichen (steigende Füllung, „aus“ ein leerer Kreis) unterscheidet sie; ein auf rund 8 Zeichen gekürzter Modellname dagegen ist nicht mehr zuzuordnen: das Wort zu behalten und den Namen zu kürzen wäre die schlechtere Hälfte des Tauschs. **Gemessen:** 0.77.1 am Pilot `model-bar-breite` (bei 296 px Containerbreite zeigt das offene Dropdown von
+ * `google/gemma-4-e4b` 9 von 18 Zeichen, gefaltet 17; ab 340 px 11); am iPhone (iOS 27.2.1, neurovim UPLINK, Zeile 290 × 44 px, 2026-11-14) ist das Denk-Dropdown 46 px breit (nur das Zeichen), das Modell 172 px; bei 378 px (settings-assistant)
+ * stehen Zeichen und Wort (135 px). Wer das Wort bei Enge braucht, nimmt die offene Liste oder den Tooltip. Der zugängliche Name ist nicht gefaltet: `strings.name` (Kit-Fassung `thinkingLevelTexts(lang).name`) nennt die gewählte Stufe
+ * und den Standard des Modells; ein Wirt, der `strings.name` nicht setzt, behält als Namen `pickerLabel` und die Stufe als Wert des Dropdowns (Test: `tests/model-bar.test.ts`, „Rangfolge bei Enge“).
  *
  * ## Woher
  *
@@ -73,13 +82,13 @@ import { setIcon, type App } from "obsidian";
 import { resolveModelChoice } from "../kit/model-choice";
 import type { ModelListResult } from "../kit/model-list-cache";
 import { errorMessage } from "../kit/error-message";
-import type { ApiErrorCode, EndpointChoice } from "../kit/endpoint-source";
+import type { ApiErrorCode, EndpointChoice, ModelBarEndpoint } from "../kit/endpoint-source";
 import { findEndpointManager, onEndpointManagerChanged, openEndpointManagerSettings } from "./endpoint-source";
 import { resolveModelBarStrings, type ModelBarStringsOverride } from "./model-bar-strings";
 import { buildThinkingControl, type ThinkingControlOptions } from "./thinking-control";
 
-/** Ein wählbarer Endpunkt in der Modellzeile (seit 0.87.0): `id` und `label` des Managers, `defaultModel` für „Standard (…)“ in seiner Gruppe. */
-export interface ModelBarEndpoint { id: string; label: string; defaultModel?: string }
+/** Ein wählbarer Endpunkt in der Modellzeile (seit 0.87.0). Der Typ liegt seit Welle 35 in `pure/endpoint-source` (damit `llm-connection` die Modellzeile nicht mehr mitzieht); hier unter demselben Namen weitergereicht. */
+export type { ModelBarEndpoint };
 
 /** Die zehn Methoden, die die Zeile braucht (vier seit 0.67.0, sechs seit 0.87.0 für die Gruppen). Ein eigenes Interface, kein `Pick` von `LlmConnection` (seit 0.70.0): eine `LlmConnection` ist dem Typ zuweisbar, ein
  *  Adapter genügt (andere Einstellung, gleiche Form), und wer die Zeile vendort, nimmt die Kette von `llm-connection` nicht mit (zehn statt 28 Kit-Module).

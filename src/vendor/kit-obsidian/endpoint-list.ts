@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/obsidian/endpoint-list.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /* Geordneter Endpunkt-Fallback-Listen-Editor: eine Setting-Zeile je Endpunkt (URL ·
  * Schlüssel · Modell-Override · „zuerst verwenden" · entfernen) plus Adder-Zeile,
  * Status-Icon, Rollenzeile, Drittanbieter-Hinweis und Preset-Knöpfe.
@@ -124,13 +124,44 @@ export interface EndpointListOptions<T extends EndpointConfig = EndpointConfig> 
    *  `host` (ein `div.okit-ep-extra` unter der Rollenzeile). Für Einträge mit mehr Feldern als
    *  `EndpointConfig` — der Listen-Editor bleibt für URL/Schlüssel/Modell/Reihenfolge zuständig. */
   extraRow?(host: HTMLElement, cfg: T, index: number): void;
+  /** Seit 0.83.0: Zeilen einzeln aktualisieren statt den Tab neu zu bauen. Vorgabe `false` (bisheriges Verhalten: Zeilen sperren, danach `rerender()`).
+   *  Mit `true` passt die Liste nach einer Mutation sofort nur die betroffenen Zeilen an und ruft `rerender()` **nie** (auch nicht nach einem
+   *  gescheiterten Speichern, dann zeichnet sie ihre Zeilen selbst neu): Adresse geändert → dieselbe Zeile, Eingabefelder bleiben, Probe, Rolle,
+   *  Modell-Liste, Hinweise und `extraRow` werden neu gebildet; Eintrag hinzu (Adder, Vorlage) → neue Zeile vor dem Adder; Entfernen und
+   *  „zuerst verwenden“ → die Zeilen ab der Änderung bekommen ihren neuen Platz, die davor (und bei „zuerst verwenden“ die dahinter) bleiben
+   *  dieselben Elemente; Schlüssel setzen/entfernen → nur der Schlüsselbereich der Zeile. Es gibt keine Sperre (`okit-ep-busy`, `aria-busy`).
+   *  Nach `reconnect()` werden die Rollenzeilen aller Zeilen aus den festgehaltenen Probe-Ergebnissen nachgezogen. „Verbindung prüfen“ ruft weiter
+   *  `rerender()`. `extraRow` wird bei jeder Aktualisierung der Zeile erneut gerufen (der Host ist vorher leer) und bekommt den frischen Eintrag. */
+  rowwise?: boolean;
+}
+
+/** Eine gezeichnete Zeile (Eintrag oder Adder), von außen nur über diese vier Griffe erreichbar. */
+interface RowSlot {
+  settingEl: HTMLElement;
+  /** Abgeleitete Teile (Probe, Rolle, Modell-Liste, Hinweis-Icons, Kontext, Zusatzzeile) am Ort neu zeichnen; die Eingabefelder bleiben. */
+  refresh(): void;
+  /** Nur die Rollenzeile aus dem festgehaltenen Probe-Ergebnis neu bilden (kein Netz). */
+  syncRole(): void;
+  /** Zeile aushängen; spätere Antworten ihrer Anfragen werden verworfen. */
+  dispose(): void;
+}
+
+/** Rückgabe von `buildEndpointList`. */
+export interface EndpointListHandle {
+  /** Mit `rowwise`: ohne Index alle Zeilen der Liste neu zeichnen, mit Index nur die abgeleiteten Teile dieser Zeile (Probe, Rolle, Modell-Liste)
+   *  neu laden; die Eingabefelder bleiben stehen. Ohne `rowwise`: ruft `opts.rerender()`. */
+  rerender(row?: number): void;
 }
 
 /** Rendert `[...endpoints, Adder]` (leeres Add-Feld), Label/Desc als eigene Zeile davor.
  *  Mutation NUR bei blur (nicht pro Tastendruck), via applyEndpointEdit → save → reconnect →
  *  Re-Render. Pro echtem Eintrag: Status-Icon (loader → check/x, aktiver Endpunkt markiert),
- *  URL-, Schlüssel- (maskiert) und Modell-Feld + Mülleimer. */
-export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opts: EndpointListOptions<T>): void {
+ *  URL-, Schlüssel- (maskiert) und Modell-Feld + Mülleimer.
+ *
+ *  Zwei Betriebsarten. **Vorgabe:** eine Mutation der Listen-Form sperrt die Zeilen und ruft `opts.rerender()`; das Plugin zeichnet den ganzen Tab neu.
+ *  **`rowwise: true` (seit 0.83.0):** die Liste zeichnet selbst nur die betroffenen Zeilen neu und ruft `opts.rerender()` nie; Details bei der Option. */
+export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opts: EndpointListOptions<T>): EndpointListHandle {
+  const rowwise = opts.rowwise === true;
   // Default-Hook: Schlüsselbund für die lokale Liste, wenn der Konsument `app` + `pluginId` gibt
   // und keinen eigenen Hook. Die Migration läuft hier beim ersten Render — der Resolver migriert
   // ebenfalls (`prepareLocalEndpoints`), damit auch migriert, wer den Tab nie öffnet.
@@ -142,12 +173,11 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
     const m = migrateLocalEndpoints(opts.app, opts.pluginId, opts.get());
     if (m.changed) { opts.set(m.list); void opts.save().catch(() => { /* Schlüssel liegt im Schlüsselbund; nächster Save zieht nach */ }); }
   }
-  const eps = opts.get();
-  const rows: EndpointConfig[] = [...eps, { url: "" }];   // leeres Zusatzfeld am Ende
-  // Jede Mutation, die die Listen-FORM ändert (URL-Edit, Mülleimer, Preset), macht die
+  // Vorgabe-Betrieb: Jede Mutation, die die Listen-FORM ändert (URL-Edit, Mülleimer, Preset), macht die
   // gerenderten Zeilen-Indizes stale — bis der Re-Render kommt, wäre ein blur in einer anderen
   // Zeile auf den falschen Eintrag gebucht (im schlimmsten Fall ein Anbieter-Schlüssel am
   // falschen Host). Darum: Zeilen sofort sperren, das Re-Render entsperrt durch Neuaufbau.
+  // Mit `rowwise` entfällt die Sperre: die Zeilen werden SYNCHRON nach `opts.set(…)` angepasst, ein Index ist nie stale.
   /** Sperr-ZUSTAND des Containers. Die Klasse sperrt auch die Icon-Buttons (Obsidian rendert sie
    *  als div, das kein `disabled` kennt), `aria-busy` sagt es Screenreadern. */
   const setLockState = (locked: boolean): void => {
@@ -169,17 +199,35 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
   // nicht seine Klassen/Attribute. Ohne das bliebe die Liste dauerhaft pointer-events: none.
   // Nur der Zustand: die Zeilen entstehen erst darunter, es gibt hier noch nichts zu entsperren.
   setLockState(false);
+
+  const slots: RowSlot[] = [];
+  let actionsSetting: Setting | null = null;
+  /** Unsichtbarer Ablageort: eine Zeile entsteht hier und wird dann VOR eine andere Zeile gehängt (ein `Setting` hängt sich sonst ans Ende). */
+  let staging: HTMLElement | null = null;
+  const stagingEl = (): HTMLElement => {
+    if (!staging) { staging = opts.containerEl.createDiv(); staging.remove(); }
+    return staging;
+  };
+
+  /** Rollenzeilen aller Zeilen nachziehen (nach `reconnect()` kann ein anderer Endpunkt der aktive sein). Kein Netzzugriff. */
+  const syncAllRoles = (): void => { slots.forEach((sl) => { sl.syncRole(); }); };
+  /** Gemeinsamer Schluss einer Listen-Mutation nach dem Speichern. */
+  const settle = (chain: Promise<void>): void => {
+    void (rowwise ? chain.then(syncAllRoles) : chain.then(() => opts.rerender())).catch(failSafe);
+  };
+
   // Rettungsnetz: eine gescheiterte Kette (Speichern, reconnect) darf die UI nicht verriegelt
   // zurücklassen. Bewusst ohne Fehlerdetails in Log/Notice — hier hängen Anbieter-Schlüssel dran.
   const failSafe = (): void => {
-    setLockState(false);
-    setRowsDisabled(false);
+    if (!rowwise) setLockState(false);
+    if (!rowwise) setRowsDisabled(false);
     new Notice(opts.strings.saveFailed, 8000);
     // Re-Render statt bloßem Entsperren: bei einer gescheiterten Kette hat opts.set(...) die
     // Settings im Speicher bereits mutiert, bevor save()/reconnect() geworfen hat — ohne
     // Rebuild zeigt das DOM weiter die alte Reihenfolge/Indizes, und der nächste Klick auf
     // Mülleimer/„zuerst verwenden" träfe den falschen Eintrag.
-    opts.rerender();
+    if (rowwise) reconcile(0);
+    else opts.rerender();
   };
   // Beschriftung + Erklärung als EIGENE Zeile ohne Steuerelemente. Vorher hingen sie an der
   // ersten Endpunkt-Zeile — Obsidians `Setting` teilt die Zeile in Info (links) und Controls
@@ -188,13 +236,22 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
   // bekommen über `okit-ep-row` die volle Breite für ihre Felder.
   new Setting(opts.containerEl).setName(opts.label).setDesc(opts.desc);
 
-  rows.forEach((cfg, i) => {
-    // Der Eintrag dieser Zeile, frisch gelesen (Commits ersetzen die Liste). Nicht-Adder-Zeile: `cfg` stammt aus `eps` (T), nur die Adder-Zeile ist kein T.
+  /** Zeichnet Zeile `i` (Adder, wenn `i` hinter dem letzten Eintrag liegt). `anchor`: die Zeile, vor der sie stehen soll; `null` hängt ans Ende. */
+  const buildRow = (i: number, anchor: HTMLElement | null): RowSlot => {
+    const list = opts.get();
+    const isAdder = i >= list.length;
+    const cfg: EndpointConfig = list[i] ?? { url: "" };
+    // Der Eintrag dieser Zeile, frisch gelesen (Commits ersetzen die Liste). Nicht-Adder-Zeile: `cfg` stammt aus `list` (T), nur die Adder-Zeile ist kein T.
     const currentOf = (): T => opts.get()[i] ?? (cfg as T);
-    const isAdder = i >= eps.length;
-    const s = new Setting(opts.containerEl);
+    const s = anchor === null ? new Setting(opts.containerEl) : new Setting(stagingEl());
+    if (anchor !== null) opts.containerEl.insertBefore(s.settingEl, anchor);
     s.settingEl.addClass("okit-ep-row");
+    /** Runde der abgeleiteten Teile: jedes Neuzeichnen zählt hoch, Antworten einer früheren Runde (Probe, Modell-Liste, Kontext) verfallen. */
+    let epoch = 0;
+    let dead = false;
+    const alive = (round: number): boolean => !dead && round === epoch;
     const statusIcon = s.controlEl.createSpan({ cls: "okit-ep-status" });
+    let actionsEl: HTMLElement | null = null;
     // Drittanbieter-Hinweis: in-place umschaltbar, NICHT nur einmal beim Zeilen-Render gebaut —
     // der apiKey-Commit unten baut den Tab bewusst nicht neu (siehe dort), also muss dieses Icon
     // sich selbst zeigen/verstecken können, sonst bleibt der Nutzer genau im Moment, in dem er den
@@ -212,24 +269,42 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         thirdPartyIcon = null;
       }
     };
-    /** Schreibt die Rollen-Zeile neu, ohne den Tab neu aufzubauen. Wird vom probe-Block
-     *  unten gesetzt (vorher gibt es keine Zeile) und beim Modell-Commit aufgerufen —
+    /** Festgehaltenes Probe-Ergebnis: die Rolle hängt auch am Modell-Override, ändert sich also ohne neue Probe. */
+    let probed: EndpointStatus | null = null;
+    let stateEl: HTMLElement | null = null;
+    /** Schreibt die Rollen-Zeile neu, ohne den Tab neu aufzubauen. Wird beim Modell-Commit aufgerufen —
      *  das Modell-Override entscheidet über `skipped-model`, ändert die Listen-FORM aber
      *  nicht, löst also bewusst kein `rerender()` aus. Ohne diesen Rückruf behielte die
      *  Zeile ihre Aussage von vor der Modellwahl: ein Endpunkt, den der Guard längst
      *  überspringt, meldete weiter „erreichbar, aber Platz N" (gemeldet 2026-08-05). */
-    let syncRoleLine: (() => void) | null = null;
+    const syncRole = (): void => {
+      if (!probed || !stateEl) return;
+      const c = currentOf();
+      const isActive = normalizeEndpoint(c.url.trim()) === (opts.active() ?? "");
+      const role = endpointRole({
+        isActive,
+        reachable: probed.reachable,
+        // Gilt nur für Embedding-Endpunkte; für Chat hängt kein Index am Modell (immer true).
+        modelFits: opts.modelFits?.(c) ?? true,
+        position: i + 1,
+        ...(opts.isSearchOnly ? { searchOnly: opts.isSearchOnly(c) } : {}),
+      });
+      stateEl.setText(opts.strings.role(role));
+      stateEl.toggleClass("is-active", role.kind === "active");
+    };
     // Listen-Mutation NUR bei blur, NICHT in onChange: onChange feuert pro Tastendruck und
     // würde im Add-Feld jeden Zwischenstand (h, ht, htt, …) als eigenen Eintrag anhängen.
-    // Nur URL-Änderungen rendern neu (Statuszeile hängt an der URL). Schlüssel/Modell tun das
+    // Vorgabe-Betrieb: nur URL-Änderungen rendern neu (Statuszeile hängt an der URL). Schlüssel/Modell tun das
     // NICHT: rerender baut den Tab komplett neu auf, und da reconnect() jeden Endpunkt pingt
     // (bis 5 s), risse es dem Nutzer sonst mitten im Tippen des nächsten Feldes das DOM weg.
     const commit = (field: "url" | "apiKey" | "model", value: string): void => {
       const before = opts.get();
       const updated = applyEndpointEdit(before, i, field, value, isAdder) as T[];
       if (JSON.stringify(updated) === JSON.stringify(before)) return;   // unverändert → kein Re-Render
-      const rerender = field === "url";
-      if (rerender) lockRows();
+      const urlEdit = field === "url";
+      // Zeilenweise: dieselbe Zeile bleibt (nur ihre URL-abhängigen Teile werden neu gebaut), solange die Zahl der Einträge gleich bleibt.
+      const shapeChange = urlEdit && (isAdder || updated.length !== before.length);
+      if (urlEdit && !rowwise) lockRows();
       // apiKey ändert die Listen-FORM nicht (kein Re-Render) — das Drittanbieter-Icon muss sich
       // deshalb hier selbst aktualisieren, statt auf den (bewusst ausbleibenden) Neuaufbau zu warten.
       if (field === "apiKey") {
@@ -248,21 +323,27 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
       // schon einmal (unter einem anderen Eintrag) geladen wurde, z. B. nach Loeschen +
       // Neuanlage derselben Adresse (gemeldet von image-to-markdown, 2026-09-12). Ohne beide
       // Invalidierungen zeigt das Dropdown die Liste von VOR der Mutation weiter an.
-      if (field === "url") {
+      if (urlEdit) {
         const oldUrl = before[i]?.url;
         if (oldUrl) opts.cache.invalidate(normalizeEndpoint(oldUrl));
         const newUrl = value.trim();
         if (newUrl) opts.cache.invalidate(normalizeEndpoint(newUrl));
       }
-      if (field === "url" && !isAdder && updated.length < before.length && before[i]) secret?.release?.(before[i]);
+      if (urlEdit && !isAdder && updated.length < before.length && before[i]) secret?.release?.(before[i]);
       opts.set(updated);
+      if (rowwise) {
+        // Sofort, vor dem Speichern: das DOM entspricht der Liste, kein Index ist stale. Die Sperre braucht es deshalb nicht.
+        if (shapeChange) reconcile(i);
+        else if (urlEdit) refresh();
+      }
       const chain = opts.save().then(() => opts.reconnect());
+      if (rowwise) { settle(chain); return; }
       // Das Modell-Override entscheidet mit über die Rolle der Zeile (`skipped-model`).
       // Erst NACH reconnect() nachziehen: der Resolver kann den Endpunkt wegen des neuen
       // Modells gerade fallengelassen oder übernommen haben, und die Zeile soll den
       // Zustand danach zeigen, nicht den davor.
-      const withRoleSync = field === "model" ? chain.then(() => { syncRoleLine?.(); }) : chain;
-      void (rerender ? withRoleSync.then(() => opts.rerender()) : withRoleSync).catch(failSafe);
+      const withRoleSync = field === "model" ? chain.then(() => { syncRole(); }) : chain;
+      void (urlEdit ? withRoleSync.then(() => opts.rerender()) : withRoleSync).catch(failSafe);
     };
     s.addText(tx => {
       tx.setPlaceholder(isAdder ? opts.strings.addPlaceholder : opts.placeholder).setValue(cfg.url);
@@ -272,70 +353,132 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
     // Schlüssel + Modell nur an bestehenden Einträgen — am leeren Adder gäbe es nichts zu tragen.
     // aria-label statt bloßem Placeholder: der verschwindet beim Tippen, und drei unbeschriftete
     // Felder in einer Zeile sind für Screenreader nicht auseinanderzuhalten.
+    /** Beschriftungen der Schlüsselfelder, die an der Adresse hängen; `refresh()` zieht sie nach einer URL-Änderung nach. */
+    let keyAria: (() => void) | null = null;
+    /** Die Elemente des Schlüsselbereichs (Hook-Betrieb), damit er an seinem Platz neu gezeichnet werden kann. */
+    let secretEls: HTMLElement[] = [];
+    let tailEl: HTMLElement | null = null;
+    let drawSecret: ((t: Setting, editing: boolean) => void) | null = null;
+    /** Schlüsselbereich neu zeichnen (nach Setzen/Entfernen/„ändern“), an der Stelle des alten: zwischen URL-Feld und Tail. */
+    const rebuildSecret = (editing: boolean): void => {
+      if (!drawSecret || !tailEl) return;
+      secretEls.forEach((el) => { el.remove(); });
+      const t = new Setting(stagingEl());
+      drawSecret(t, editing);
+      const made = Array.from(t.controlEl.children) as HTMLElement[];
+      made.forEach((el) => { s.controlEl.insertBefore(el, tailEl); });
+      s.components.push(...t.components);
+      t.settingEl.remove();
+      secretEls = made;
+    };
     if (!isAdder && secret) {
       const hook = secret;
-      const current = currentOf();
       const st = opts.strings;
       const afterSecret = (): void => {
+        if (rowwise) {
+          rebuildSecret(false);
+          syncThirdPartyIcon(hook.has(currentOf(), i));
+          settle(opts.save().then(() => opts.reconnect()));
+          return;
+        }
         lockRows();
         void opts.save().then(() => opts.reconnect()).then(() => opts.rerender()).catch(failSafe);
       };
-      const secretInput = (): void => {
-        s.addText(tx => {
-          tx.setPlaceholder(st.apiKeyPlaceholder).setValue("");
-          tx.inputEl.type = "password";
-          tx.inputEl.setAttribute("autocomplete", "off");
-          if (!hook.available) {
-            tx.inputEl.disabled = true;
-            tx.inputEl.setAttribute("aria-label", `${st.ariaApiKey(cfg.url)} — ${st.secretUnavailable ?? ""}`);
-            setTooltip(tx.inputEl, st.secretUnavailable ?? "");
-            return;
-          }
-          tx.inputEl.setAttribute("aria-label", st.ariaApiKey(cfg.url));
-          tx.inputEl.addEventListener("blur", () => {
-            const v = tx.getValue();
-            if (!v) return;
-            // Cache-Eintrag der URL invalidieren: mit Token antwortet ein gehosteter Endpunkt anders.
-            opts.cache.invalidate(normalizeEndpoint(cfg.url));
-            void hook.set(current, i, v).then(afterSecret).catch(failSafe);
+      const ariaWatchers: Array<() => void> = [];
+      keyAria = () => { ariaWatchers.forEach((f) => { f(); }); };
+      drawSecret = (t, editing) => {
+        ariaWatchers.length = 0;
+        const secretInput = (): void => {
+          t.addText(tx => {
+            tx.setPlaceholder(st.apiKeyPlaceholder).setValue("");
+            tx.inputEl.type = "password";
+            tx.inputEl.setAttribute("autocomplete", "off");
+            if (!hook.available) {
+              tx.inputEl.disabled = true;
+              const label = (): void => { tx.inputEl.setAttribute("aria-label", `${st.ariaApiKey(currentOf().url)} — ${st.secretUnavailable ?? ""}`); };
+              label(); ariaWatchers.push(label);
+              setTooltip(tx.inputEl, st.secretUnavailable ?? "");
+              return;
+            }
+            const label = (): void => { tx.inputEl.setAttribute("aria-label", st.ariaApiKey(currentOf().url)); };
+            label(); ariaWatchers.push(label);
+            tx.inputEl.addEventListener("blur", () => {
+              const v = tx.getValue();
+              if (!v) return;
+              // Cache-Eintrag der URL invalidieren: mit Token antwortet ein gehosteter Endpunkt anders.
+              opts.cache.invalidate(normalizeEndpoint(currentOf().url));
+              void hook.set(currentOf(), i, v).then(afterSecret).catch(failSafe);
+            });
           });
-        });
-      };
-      if (hook.has(current, i)) {
-        const saved = s.controlEl.createSpan({ cls: "okit-ep-secret", text: st.secretSaved ?? "" });
-        saved.setAttribute("aria-label", st.ariaApiKey(cfg.url));
-        // Beide Knöpfe gehören zusammen: „ändern" zeichnet ein leeres Eingabefeld darunter —
-        // bleibt „entfernen" dabei stehen, wirkt er weiter auf den ALTEN, noch gespeicherten
-        // Schlüssel, während der Nutzer gerade einen neuen einträgt (gemeldet im Review).
-        let clearBtnEl: HTMLElement | null = null;
-        s.addExtraButton(b => b.setIcon("pencil").setTooltip(st.secretChange ?? "").onClick(() => {
-          saved.remove();
-          b.extraSettingsEl.remove();
-          clearBtnEl?.remove();
+        };
+        if (!editing && hook.has(currentOf(), i)) {
+          const saved = t.controlEl.createSpan({ cls: "okit-ep-secret", text: st.secretSaved ?? "" });
+          const label = (): void => { saved.setAttribute("aria-label", st.ariaApiKey(currentOf().url)); };
+          label(); ariaWatchers.push(label);
+          // Beide Knöpfe gehören zusammen: „ändern" zeichnet ein leeres Eingabefeld an ihrer Stelle —
+          // bleibt „entfernen" dabei stehen, wirkt er weiter auf den ALTEN, noch gespeicherten
+          // Schlüssel, während der Nutzer gerade einen neuen einträgt (gemeldet im Review).
+          t.addExtraButton(b => b.setIcon("pencil").setTooltip(st.secretChange ?? "").onClick(() => { rebuildSecret(true); }));
+          t.addExtraButton(b => b.setIcon("key-round").setTooltip(st.secretClear ?? "").onClick(() => {
+            opts.cache.invalidate(normalizeEndpoint(currentOf().url));
+            void hook.clear(currentOf(), i).then(afterSecret).catch(failSafe);
+          }));
+        } else {
           secretInput();
-        }));
-        s.addExtraButton(b => {
-          clearBtnEl = b.extraSettingsEl;
-          return b.setIcon("key-round").setTooltip(st.secretClear ?? "").onClick(() => {
-            opts.cache.invalidate(normalizeEndpoint(cfg.url));
-            void hook.clear(current, i).then(afterSecret).catch(failSafe);
-          });
-        });
-      } else {
-        secretInput();
-      }
+        }
+      };
+      // Erstzeichnung gleich in die Zeile: die Elemente, die der Aufruf anhängt, sind der Schlüsselbereich.
+      const start = s.controlEl.children.length;
+      drawSecret(s, false);
+      secretEls = (Array.from(s.controlEl.children) as HTMLElement[]).slice(start);
     } else if (!isAdder) {
       s.addText(tx => {   // bisheriges Passwortfeld, unverändert
         tx.setPlaceholder(opts.strings.apiKeyPlaceholder).setValue(cfg.apiKey ?? "");
         tx.inputEl.type = "password";                    // maskiert gegen Schultergucken/Screenshots
         tx.inputEl.setAttribute("autocomplete", "off");
-        tx.inputEl.setAttribute("aria-label", opts.strings.ariaApiKey(cfg.url));
+        const label = (): void => { tx.inputEl.setAttribute("aria-label", opts.strings.ariaApiKey(currentOf().url)); };
+        label(); keyAria = label;
         tx.inputEl.addEventListener("blur", () => { commit("apiKey", tx.getValue()); });
       });
     }
     // Modell-Platz und Aktionen sitzen in EINEM Block (`okit-ep-tail`): bricht die Zeile um, wandert er
     // als Ganzes in Zeile zwei, statt dass ein einzelner Knopf (bei Platz 1 nur der Papierkorb) allein steht.
-    let tailEl: HTMLElement | null = null;
+    let modelSlot: HTMLElement | null = null;
+    /** Modell-Liste dieser Zeile laden und das Dropdown in den reservierten Platz zeichnen. */
+    const loadModels = (round: number): void => {
+      if (!modelSlot) return;
+      const slotEl = modelSlot;
+      const now = currentOf();
+      const listKey = normalizeEndpoint(now.url);
+      const gen = opts.cache.generation();
+      void opts.cache.load(listKey, opts.clientFor(now)).then(({ models, reachable }) => {
+        if (gen !== opts.cache.generation() || !alive(round)) return;   // Liste hat sich verschoben oder die Zeile wurde neu gezeichnet
+        // Das Zeilen-Modell ist die einzige Wahrheit (kein globales Modell-Feld seit 0.55.0). Die Leer-Option
+        // bleibt trotzdem: sie heißt nicht „nimm das globale“, sondern „der Server wählt“ — sonst ließe sich ein
+        // gewähltes Zeilen-Modell in der Oberfläche nicht mehr zurücknehmen.
+        const row = currentOf();
+        const resolved = resolveModelChoice({ reachable, models, current: row.model ?? "", allowEmpty: opts.allowEmptyModel ?? true });
+        const emptyLabel = opts.strings.emptyModel ?? "—";
+        const choice = { ...resolved, options: resolved.options.map((o) => (o.value === "" && o.label === "" ? { ...o, label: emptyLabel } : o)) };
+        slotEl.empty();
+        renderModelPicker({
+          setting: s,
+          target: slotEl,
+          choice,
+          ariaLabel: opts.strings.ariaModel(row.url),
+          placeholder: opts.strings.modelPlaceholder,
+          hint: opts.strings.modelHint(choice.hintKey),
+          hintAs: "tooltip",
+          savedSuffix: opts.strings.savedSuffix,
+          refreshTooltip: opts.strings.refreshModels,
+          onPick: (v: string) => { commit("model", v); },
+          onRefresh: () => {
+            opts.cache.invalidate(listKey); opts.modelContext?.invalidate?.(currentOf());
+            if (rowwise) refresh(); else opts.rerender();
+          },
+        });
+      });
+    };
     if (!isAdder) {
       // Modell-Override: Dropdown mit den Modellen GENAU DIESES Endpunkts. Die Liste kommt
       // aus dem Cache, nicht vom aktiven Client — eine Zeile kann einen ganz anderen
@@ -346,37 +489,14 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
       // Ende der Zeile — hinter den Mülleimer, ein Layout-Sprung inklusive. `renderModelPicker`
       // zeichnet über `target` deshalb direkt in dieses Element statt in `s.controlEl`.
       tailEl = s.controlEl.createDiv({ cls: "okit-ep-tail" });
-      const modelSlot = tailEl.createSpan({ cls: "okit-model-slot" });
-      const listKey = normalizeEndpoint(cfg.url);
-      const gen = opts.cache.generation();
-      void opts.cache.load(listKey, opts.clientFor(currentOf())).then(({ models, reachable }) => {
-        if (gen !== opts.cache.generation()) return;   // Liste hat sich verschoben
-        // Das Zeilen-Modell ist die einzige Wahrheit (kein globales Modell-Feld seit 0.55.0). Die Leer-Option
-        // bleibt trotzdem: sie heißt nicht „nimm das globale“, sondern „der Server wählt“ — sonst ließe sich ein
-        // gewähltes Zeilen-Modell in der Oberfläche nicht mehr zurücknehmen.
-        const resolved = resolveModelChoice({ reachable, models, current: cfg.model ?? "", allowEmpty: opts.allowEmptyModel ?? true });
-        const emptyLabel = opts.strings.emptyModel ?? "—";
-        const choice = { ...resolved, options: resolved.options.map((o) => (o.value === "" && o.label === "" ? { ...o, label: emptyLabel } : o)) };
-        renderModelPicker({
-          setting: s,
-          target: modelSlot,
-          choice,
-          ariaLabel: opts.strings.ariaModel(cfg.url),
-          placeholder: opts.strings.modelPlaceholder,
-          hint: opts.strings.modelHint(choice.hintKey),
-          hintAs: "tooltip",
-          savedSuffix: opts.strings.savedSuffix,
-          refreshTooltip: opts.strings.refreshModels,
-          onPick: (v: string) => { commit("model", v); },
-          onRefresh: () => { opts.cache.invalidate(listKey); opts.modelContext?.invalidate?.(currentOf()); opts.rerender(); },
-        });
-      });
+      modelSlot = tailEl.createSpan({ cls: "okit-model-slot" });
+      loadModels(++epoch);
     }
     // „Zuerst verwenden“ und Löschen sitzen in EINEM Container (`okit-ep-actions`): ein Flex-Wrap
     // bricht einzelne Kinder um, den Container nur als Ganzes — sonst steht der Mülleimer allein
     // in Zeile zwei, sobald die Felder die Breite füllen (gemessen 2026-09-27, 900 px, vault-rag
     // und vault-crews). `addExtraButton` hängt ans Ende von controlEl, der Knopf wird umgehängt.
-    const actionsEl = tailEl === null ? null : tailEl.createDiv({ cls: "okit-ep-actions" });
+    actionsEl = tailEl === null ? null : tailEl.createDiv({ cls: "okit-ep-actions" });
     const addAction = (build: Parameters<Setting["addExtraButton"]>[0]): void => {
       s.addExtraButton(b => { actionsEl?.appendChild(b.extraSettingsEl); build(b); });
     };
@@ -389,12 +509,10 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         .setIcon("arrow-up-to-line")
         .setTooltip(opts.strings.moveToFront)
         .onClick(() => {
-          lockRows();
+          if (!rowwise) lockRows();
           opts.set(moveEndpointToFront(opts.get(), i) as T[]);
-          void opts.save()
-            .then(() => opts.reconnect())
-            .then(() => opts.rerender())
-            .catch(failSafe);
+          if (rowwise) reconcile(0, i);   // nur die Zeilen bis zur verschobenen: die dahinter behalten Platz und Element
+          settle(opts.save().then(() => opts.reconnect()));
         }));
     }
     // Löschen: expliziter Mülleimer-Button (nicht am leeren Add-Feld). Das Status-Icon links
@@ -404,109 +522,144 @@ export function buildEndpointList<T extends EndpointConfig = EndpointConfig>(opt
         .setIcon("trash-2")
         .setTooltip(opts.strings.remove)
         .onClick(() => {
-          lockRows();
+          if (!rowwise) lockRows();
           // Geht an commit() vorbei (kein blur-Feld) — die Invalidierung muss deshalb hier
           // selbst passieren, sonst ueberlebt die Modell-Liste dieser URL ihren Eintrag.
-          opts.cache.invalidate(normalizeEndpoint(cfg.url));
+          opts.cache.invalidate(normalizeEndpoint(currentOf().url));
           const removed = opts.get()[i];
           if (removed) secret?.release?.(removed);
           opts.set(applyEndpointEdit(opts.get(), i, "url", "", false) as T[]);
-          void opts.save()
-            .then(() => opts.reconnect())
-            .then(() => opts.rerender())
-            .catch(failSafe);
+          if (rowwise) reconcile(i);
+          settle(opts.save().then(() => opts.reconnect()));
         }));
     }
-    // Pro-Feld-Status in A11y-Form (Form + Text + Farbe): loader → check/x, aktiver markiert.
-    const ep = cfg.url.trim();
-    if (!isAdder && ep) {
-      setIcon(statusIcon, "loader"); setTooltip(statusIcon, opts.strings.probing);
-      // Rolle der Zeile als eigene Zeile UNTER den Feldern (flex-basis 100% im umbrechenden
-      // Control-Container): horizontal ist die Zeile mit drei Feldern + bis zu drei Icons +
-      // zwei Knöpfen ausgereizt (Layout-Fix 2026-08-04). Synchron angelegt, asynchron befüllt.
-      const stateEl = s.controlEl.createDiv({ cls: "okit-ep-state", text: opts.strings.probing });
-      // Erreichbarkeit ändert sich nur durch eine neue Probe, die Rolle aber auch durch das
-      // Modell-Override. Das Probe-Ergebnis wird deshalb festgehalten, damit die Rolle ohne
-      // erneuten Netzzugriff nachgezogen werden kann.
-      let probed: EndpointStatus | null = null;
-      const applyRole = (): void => {
-        if (!probed) return;
-        const isActive = normalizeEndpoint(ep) === (opts.active() ?? "");
-        // Den Eintrag frisch aus der Liste lesen, nicht das `cfg` vom Render-Zeitpunkt:
-        // nach einem Modell-Commit trägt nur die Liste den neuen Wert.
-        const current = currentOf();
-        const role = endpointRole({
-          isActive,
-          reachable: probed.reachable,
-          // Gilt nur für Embedding-Endpunkte; für Chat hängt kein Index am Modell (immer true).
-          modelFits: opts.modelFits?.(current) ?? true,
-          position: i + 1,
-          ...(opts.isSearchOnly ? { searchOnly: opts.isSearchOnly(current) } : {}),
+    let warnIcon: HTMLElement | null = null;
+    let contextEl: HTMLElement | null = null;
+    let extraHost: HTMLElement | null = null;
+    /** Alles, was von Adresse und Probe abhängt: Status, Rolle, Warn- und Drittanbieter-Hinweis, Kontextlänge. Beim Erstzeichnen und bei `refresh()`. */
+    const drawDerived = (round: number): void => {
+      if (isAdder) return;
+      const ep = currentOf().url.trim();
+      // Reste einer früheren Runde weg (beim Erstzeichnen ist nichts da).
+      statusIcon.empty(); statusIcon.removeClass("is-ok"); statusIcon.removeClass("is-error");
+      warnIcon?.remove(); warnIcon = null;
+      contextEl?.remove(); contextEl = null;
+      thirdPartyIcon?.remove(); thirdPartyIcon = null;
+      probed = null;
+      stateEl?.remove(); stateEl = null;
+      if (ep) {
+        // Pro-Feld-Status in A11y-Form (Form + Text + Farbe): loader → check/x, aktiver markiert.
+        setIcon(statusIcon, "loader"); setTooltip(statusIcon, opts.strings.probing);
+        // Rolle der Zeile als eigene Zeile UNTER den Feldern (flex-basis 100% im umbrechenden
+        // Control-Container): horizontal ist die Zeile mit drei Feldern + bis zu drei Icons +
+        // zwei Knöpfen ausgereizt (Layout-Fix 2026-08-04). Synchron angelegt, asynchron befüllt.
+        stateEl = s.controlEl.createDiv({ cls: "okit-ep-state", text: opts.strings.probing });
+        void opts.clientFor(currentOf()).probe().then(status => {
+          if (!alive(round)) return;
+          statusIcon.empty();
+          setIcon(statusIcon, status.reachable ? "circle-check" : "circle-x");
+          statusIcon.toggleClass("is-ok", status.reachable);
+          statusIcon.toggleClass("is-error", !status.reachable);
+          // Tooltip trägt nur noch die Erreichbarkeits-Diagnose; das frühere " · aktiv" entfällt,
+          // weil die Rolle jetzt als Text in der Zeile steht (keine zweite Wahrheit im Hover).
+          setTooltip(statusIcon, opts.strings.statusTooltip(status));
+          probed = status;
+          syncRole();
+          // Kontextlänge: nur für eine erreichbare Zeile mit Modell, erst nach der Probe (ein toter Endpunkt wird
+          // sonst ein zweites Mal angefragt), und nur, wenn der Server überhaupt eine Zahl nennt.
+          const rowNow = currentOf();
+          const contextText = opts.strings.contextText;
+          if (opts.modelContext && contextText && status.reachable && (rowNow.model ?? "").trim() !== "") {
+            void opts.modelContext.load(rowNow).then((ctx) => {
+              if (!alive(round)) return;
+              if (!ctx || (ctx.loadedContextLength === undefined && ctx.maxContextLength === undefined)) return;
+              contextEl?.remove();
+              contextEl = s.controlEl.createDiv({ cls: "okit-ep-context", text: contextText(ctx) });
+            }).catch(() => { /* nur Hinweis, nie ein Fehler in den Einstellungen */ });
+          }
         });
-        stateEl.setText(opts.strings.role(role));
-        stateEl.toggleClass("is-active", role.kind === "active");
-      };
-      syncRoleLine = applyRole;
-      void opts.clientFor(currentOf()).probe().then(status => {
-        statusIcon.empty();
-        setIcon(statusIcon, status.reachable ? "circle-check" : "circle-x");
-        statusIcon.toggleClass("is-ok", status.reachable);
-        statusIcon.toggleClass("is-error", !status.reachable);
-        // Tooltip trägt nur noch die Erreichbarkeits-Diagnose; das frühere " · aktiv" entfällt,
-        // weil die Rolle jetzt als Text in der Zeile steht (keine zweite Wahrheit im Hover).
-        setTooltip(statusIcon, opts.strings.statusTooltip(status));
-        probed = status;
-        applyRole();
-        // Kontextlänge: nur für eine erreichbare Zeile mit Modell, erst nach der Probe (ein toter Endpunkt wird
-        // sonst ein zweites Mal angefragt), und nur, wenn der Server überhaupt eine Zahl nennt.
-        const rowNow = currentOf();
-        const contextText = opts.strings.contextText;
-        if (opts.modelContext && contextText && status.reachable && (rowNow.model ?? "").trim() !== "") {
-          void opts.modelContext.load(rowNow).then((ctx) => {
-            if (!ctx || (ctx.loadedContextLength === undefined && ctx.maxContextLength === undefined)) return;
-            s.controlEl.createDiv({ cls: "okit-ep-context", text: contextText(ctx) });
-          }).catch(() => { /* nur Hinweis, nie ein Fehler in den Einstellungen */ });
+        // Eingabe-Prüfung: nicht-blockierendes Warn-Icon (WCAG-Form + Tooltip)
+        const warnings = validateEndpointInput(ep);
+        if (warnings.length) {
+          warnIcon = (actionsEl ?? s.controlEl).createSpan({ cls: "okit-ep-warn" });
+          setIcon(warnIcon, "alert-triangle");
+          setTooltip(warnIcon, opts.strings.warnings(warnings));
         }
-      });
-      // Eingabe-Prüfung: nicht-blockierendes Warn-Icon (WCAG-Form + Tooltip)
-      const warnings = validateEndpointInput(ep);
-      if (warnings.length) {
-        const warnIcon = (actionsEl ?? s.controlEl).createSpan({ cls: "okit-ep-warn" });
-        setIcon(warnIcon, "alert-triangle");
-        setTooltip(warnIcon, opts.strings.warnings(warnings));
+        // Drittanbieter-Hinweis (Erst-Render): der Schlüssel ist der verlässliche Indikator, nicht
+        // die URL (ein eigener Server im LAN braucht keinen — eine URL-Heuristik wäre unzuverlässig).
+        // Sachlicher Hinweis, keine Warnung vor einem Fehler — Form/Icon + Text, nie Farbe allein
+        // (WCAG 1.4.1); NIE den Schlüssel selbst im Text/Tooltip. syncThirdPartyIcon() hält das
+        // danach auch beim apiKey-Commit aktuell (siehe dort), ohne den Tab neu zu bauen.
+        syncThirdPartyIcon(secret ? secret.has(currentOf(), i) : carriesApiKey(currentOf()));
       }
-      // Drittanbieter-Hinweis (Erst-Render): der Schlüssel ist der verlässliche Indikator, nicht
-      // die URL (ein eigener Server im LAN braucht keinen — eine URL-Heuristik wäre unzuverlässig).
-      // Sachlicher Hinweis, keine Warnung vor einem Fehler — Form/Icon + Text, nie Farbe allein
-      // (WCAG 1.4.1); NIE den Schlüssel selbst im Text/Tooltip. syncThirdPartyIcon() hält das
-      // danach auch beim apiKey-Commit aktuell (siehe dort), ohne den Tab neu zu bauen.
-      syncThirdPartyIcon(secret ? secret.has(currentOf(), i) : carriesApiKey(cfg));
-    }
-    if (!isAdder && opts.extraRow) {
-      const host = s.controlEl.createDiv({ cls: "okit-ep-extra" });
-      opts.extraRow(host, currentOf(), i);
-    }
-  });
-  const actions = new Setting(opts.containerEl);
+    };
+    const drawExtra = (): void => {
+      if (isAdder || !opts.extraRow) return;
+      extraHost ??= s.controlEl.createDiv({ cls: "okit-ep-extra" });
+      extraHost.empty();
+      opts.extraRow(extraHost, currentOf(), i);
+    };
+    drawDerived(epoch);
+    drawExtra();
+    /** Abgeleitete Teile am Ort neu zeichnen (Adresse geändert, „Modelle neu laden“, `handle.rerender(i)`); Eingabefelder bleiben stehen. */
+    const refresh = (): void => {
+      if (isAdder || dead) return;
+      const round = ++epoch;
+      keyAria?.();
+      loadModels(round);
+      drawDerived(round);
+      drawExtra();
+    };
+    return {
+      settingEl: s.settingEl,
+      refresh,
+      syncRole,
+      dispose: () => { dead = true; epoch++; s.settingEl.remove(); },
+    };
+  };
+
+  /** Zeilen ab `from` an die Liste im Speicher angleichen. Ohne `through` (oder bei geänderter Zeilenzahl, weil dann alle Indizes dahinter rücken)
+   *  bis zum Ende; mit `through` nur `from…through`, die Zeilen dahinter behalten Element und Platz. */
+  const reconcile = (from: number, through?: number): void => {
+    const total = opts.get().length + 1;   // Einträge plus Adder
+    const bounded = through !== undefined && total === slots.length;
+    const lastNew = bounded ? Math.min(through, total - 1) : total - 1;
+    const lastOld = bounded ? lastNew : slots.length - 1;
+    for (let k = from; k <= lastOld; k++) slots[k]?.dispose();
+    const next = bounded ? slots[lastNew + 1] : undefined;
+    const anchor = next ? next.settingEl : (actionsSetting ? actionsSetting.settingEl : null);
+    const fresh: RowSlot[] = [];
+    for (let k = from; k <= lastNew; k++) fresh.push(buildRow(k, anchor));
+    slots.splice(from, lastOld - from + 1, ...fresh);
+  };
+
+  const count = opts.get().length + 1;   // leeres Zusatzfeld am Ende
+  for (let i = 0; i < count; i++) slots.push(buildRow(i, null));
+  actionsSetting = new Setting(opts.containerEl);
   (opts.presets ?? ENDPOINT_PRESETS).forEach(preset => {
-    actions.addButton(b => b
+    actionsSetting?.addButton(b => b
       .setButtonText(opts.strings.presetLabel(preset))
       .setTooltip(opts.strings.presetTooltip(preset))
       .onClick(() => {
         const cur = opts.get();
         if (cur.some(c => c.url === preset.url)) return;   // schon in der Liste — kein Duplikat anhängen
-        lockRows();
+        if (!rowwise) lockRows();
         // Geht an commit() vorbei — dieselbe URL kann von einem zuvor geloeschten Eintrag noch
         // eine (veraltete) Liste im Cache tragen.
         opts.cache.invalidate(normalizeEndpoint(preset.url));
         opts.set(applyEndpointEdit(cur, cur.length, "url", preset.url, true) as T[]);
-        void opts.save()
-          .then(() => opts.reconnect())
-          .then(() => opts.rerender())
-          .catch(failSafe);
+        if (rowwise) reconcile(cur.length);
+        settle(opts.save().then(() => opts.reconnect()));
       }));
   });
-  actions.addButton(b => b.setButtonText(opts.strings.checkConnection).onClick(() => opts.rerender()));
+  actionsSetting.addButton(b => b.setButtonText(opts.strings.checkConnection).onClick(() => opts.rerender()));
+  return {
+    rerender: (row?: number): void => {
+      if (!rowwise) { opts.rerender(); return; }
+      if (row === undefined) reconcile(0);
+      else slots[row]?.refresh();
+    },
+  };
 }
 
 /** Regeln der Endpunkt-Zeile. Consumer hängen sie in ihre styles.css (kein CSS-Import im

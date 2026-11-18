@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.77.1, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/obsidian/embedding-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die Embedding-Anbindung eines Fachplugins (`createLlmConnection({ capability: "embedding" })`): Endpunkt-Quelle (Manager oder
  *  lokale Liste mit Schlüsselbund), gemerkte Auflösung mit Index-Passung, Modellliste, ein `Embedder` (code-kit) und der
  *  Settings-Abschnitt für Quelle und Liste. Schmaler als die Chat-Verbindung: kein Modus, kein Anfrage-Abschnitt, kein Streaming,
@@ -41,7 +41,7 @@ import { describeModel, resolveEndpointSource, type EndpointChoice, type Endpoin
 import { realClock, type ClockPort } from "./clock";
 import { buildEndpointList } from "./endpoint-list";
 import { prepareLocalEndpoints } from "./endpoint-secrets";
-import { createEndpointPlumbing } from "./endpoint-plumbing";
+import { createEndpointPlumbing, managerModelList } from "./endpoint-plumbing";
 import { buildEndpointSourceSection, findEndpointManager } from "./endpoint-source";
 import { LLM_CONNECTION_STRINGS_DE, LLM_CONNECTION_STRINGS_EN, resolveLlmConnectionStrings, type LlmConnectionStringsOverride } from "./llm-connection-strings";
 import type { LlmConnectionStrings } from "./llm-connection";
@@ -141,15 +141,12 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
   let last: EmbeddingResolution | null = null;
   let shown: EmbeddingResolution | null = null;
   let freshSinceInvalidate = false;
-  let lastManagerEntry: string | undefined;
   let pendingModel: string | null = null;
 
   async function resolveManager(manager: LlmEndpointManagerApi, s: EmbeddingConnectionSettings): Promise<EmbeddingResolution> {
     const src = await resolveEndpointSource({
       manager, local: [], capability: "embedding", caller: o.caller, ...(s.choice ? { choice: s.choice } : {}),
     }, () => Promise.resolve(false));
-    const entries = manager.list({ capability: "embedding" });
-    lastManagerEntry = s.choice?.endpointId && entries.some((e) => e.id === s.choice?.endpointId) ? s.choice.endpointId : entries[0]?.id;
     if (!src.config) return { source: src, state: "no-endpoint", skipped: [] };
     const model = (src.sentModel || src.model).trim();
     if (model === "") return { source: src, state: "no-model", skipped: [] };
@@ -173,6 +170,7 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
     try {
       const wanted = s.choice?.endpointId;
       const candidates = manager.list({ capability: "embedding" }).filter((e) => e.enabled && (!wanted || e.id === wanted));
+      // Ohne `transports` (Absicht): Embedding läuft nur über http; es gilt der Default `["http"]` des Managers, ein Shortcuts- oder Anthropic-Endpunkt wird für den Index nie materialisiert.
       const opts = { caller: o.caller };
       for (const entry of candidates) {
         const mat = await manager.materialize(entry.id, opts).catch(() => null);
@@ -181,6 +179,7 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
         const fits = (id: string): boolean => accepts(mat.config, describeModel(id, mat.models ?? entry.models).sentModel) === true;
         let hit = ids.find(fits);
         if (hit === undefined && ids.length === 0) {
+          // Bewusst `models()`, nicht `modelList`: die Suche braucht nur die Namen, die Erreichbarkeit prüft der nächste Schritt selbst (`probeOf`), `reachable` brächte kein neues Wissen.
           const live = await manager.models(entry.id).catch(() => null);
           ids = Array.isArray(live) ? live : [];
           hit = ids.find(fits);
@@ -191,7 +190,6 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
           manager, local: [], capability: "embedding", caller: o.caller, choice: { endpointId: entry.id, model: hit },
         }, () => Promise.resolve(false));
         if (!src.config) continue;
-        lastManagerEntry = entry.id;
         return { source: src, state: "active", skipped };
       }
     } catch { /* bleibt beim Standard */ }
@@ -268,12 +266,9 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
     const r = (await resolve()).source;
     if (r.kind === "manager") {
       const api = findEndpointManager(o.app);
-      const id = lastManagerEntry;
+      const id = r.endpointId;
       if (!api || !id) return { models: [], reachable: false };
-      try {
-        const list = await api.models(id, opts?.force ? { force: true } : undefined);
-        return "error" in list ? { models: [], reachable: false } : { models: list, reachable: true };
-      } catch { return { models: [], reachable: false }; }
+      return managerModelList(api, id, opts);
     }
     if (!r.config) return { models: [], reachable: false };
     const key = normalizeEndpoint(r.config.url);
@@ -324,10 +319,12 @@ export function createEmbeddingConnection(o: EmbeddingConnectionOptions): Embedd
 
   async function setModel(m: string): Promise<void> {
     pendingModel = m;
-    try { await plumbing.applyModel(m, async (opts) => (await resolve(opts)).source); }
+    try { await plumbing.applyModel(m, async (opts) => (await resolve(opts)).source, activeEndpointId(), shown?.source.reason !== undefined && shown.source.config !== null); }
     finally { if (pendingModel === m) pendingModel = null; }
   }
   const modelInUse = (): string => pendingModel ?? (shown ?? { source: NEUTRAL_SOURCE() }).source.model;
+  /** Der Manager-Endpunkt, den die Verbindung gerade benutzt (privat; `EmbeddingConnection` hat kein `endpoints()`), gelesen aus `source.endpointId` (Welle 34, Paket 9): `undefined` ohne Manager, vor der ersten Auflösung und ohne brauchbare `id` des Managers. */
+  const activeEndpointId = (): string | undefined => (shown?.source.kind === "manager" && shown.source.config ? shown.source.endpointId : undefined);
 
   // ── Settings ───────────────────────────────────────────────────────────────────────────────
   function renderSettings(containerEl: HTMLElement, input?: LlmConnectionStrings | LlmConnectionStringsOverride): void {

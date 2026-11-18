@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.93.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.95.0, src/obsidian/llm-connection.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Die LLM-Anbindung eines Fachplugins als EINE Komposition: Endpunkt-Quelle (Manager oder lokale
  *  Liste mit Schlüsselbund), gemerkte Auflösung, Modellliste, Anfrage-Parameter je Modus, Client mit
  *  Transport und Fristen, Prüfung der Antwort und beide Settings-Abschnitte.
@@ -58,7 +58,7 @@ import {
 } from "../kit/sampling-profiles";
 import {
   resolveEndpointSource, describeModel, sanitizeChoice,
-  type Capability, type EndpointChoice, type EndpointSourceResult, type ShortcutTransportConfig,
+  type Capability, type EndpointChoice, type EndpointSourceResult, type ModelBarEndpoint, type ShortcutTransportConfig,
 } from "../kit/endpoint-source";
 import {
   createChatClient, JIT_FIRST_CHUNK_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS,
@@ -76,7 +76,6 @@ import { createEndpointPlumbing, managerModelList } from "./endpoint-plumbing";
 import { createEmbeddingConnection, type EmbeddingConnection, type EmbeddingConnectionOptions } from "./embedding-connection";
 import { buildEndpointSourceSection, findEndpointManager, openEndpointManagerSettings } from "./endpoint-source";
 import { buildRequestSection, type RequestSectionState } from "./request-section";
-import type { ModelBarEndpoint } from "./model-bar";
 import { createRequestSession, type RequestSession } from "./request-session";
 import { LLM_CONNECTION_STRINGS_DE, LLM_CONNECTION_STRINGS_EN, resolveLlmConnectionStrings, type LlmConnectionStrings, type LlmConnectionStringsOverride } from "./llm-connection-strings";
 

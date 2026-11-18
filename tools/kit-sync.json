@@ -1,7 +1,7 @@
 {
   "sources": {
     "obsidian-kit": {
-      "ref": "0.77.1"
+      "ref": "0.95.0"
     },
     "code-kit": {
       "ref": "0.40.0"
@@ -13,15 +13,9 @@
       "source": "obsidian-kit",
       "from": "src/pure",
       "modules": [
-        {
-          "name": "describe-provider",
-          "ref": "0.95.0"
-        },
+        "describe-provider",
         "endpoint-secret-hook",
-        {
-          "name": "endpoint-source",
-          "ref": "0.93.0"
-        },
+        "endpoint-source",
         "ocr-provider",
         "override-guard"
       ],
@@ -116,12 +110,10 @@
       "from": "src/obsidian",
       "modules": [
         "chat-transport",
-        {
-          "name": "clock",
-          "ref": "0.93.0"
-        },
+        "clock",
         "folder-suggest",
         "settings_walker",
+        "setting-body-host",
         "help-setting",
         "shortcuts-bridge"
       ]
@@ -134,55 +126,28 @@
         "anthropic-transport",
         "backend-probe",
         "chat-client",
-        {
-          "name": "choice-modal",
-          "ref": "0.93.0"
-        },
+        "choice-modal",
         "clipboard",
         "collapsible",
         "confirm",
-        {
-          "name": "dom-guard",
-          "ref": "0.93.0"
-        },
+        "dom-guard",
         "embedding-connection",
         "endpoint-list",
-        {
-          "name": "endpoint-plumbing",
-          "ref": "0.93.0"
-        },
+        "endpoint-plumbing",
         "endpoint-secrets",
-        {
-          "name": "endpoint-source",
-          "ref": "0.93.0"
-        },
+        "endpoint-source",
         "endpoint-status-text",
-        {
-          "name": "llm-connection",
-          "ref": "0.93.0"
-        },
-        {
-          "name": "llm-connection-strings",
-          "ref": "0.93.0"
-        },
-        {
-          "name": "model-bar",
-          "ref": "0.93.0"
-        },
-        {
-          "name": "model-bar-strings",
-          "ref": "0.93.0"
-        },
+        "llm-connection",
+        "llm-connection-strings",
+        "model-bar",
+        "model-bar-strings",
         "model-picker",
         "plugin-api",
         "request-section",
         "request-session",
         "secrets",
         "status-indicator",
-        {
-          "name": "thinking-control",
-          "ref": "0.93.0"
-        }
+        "thinking-control"
       ],
       "rewrite": [
         [
@@ -204,10 +169,7 @@
       "source": "obsidian-kit",
       "from": "src/testing",
       "modules": [
-        {
-          "name": "kit-css",
-          "ref": "0.93.0"
-        },
+        "kit-css",
         "obsidian-mock"
       ]
     }
