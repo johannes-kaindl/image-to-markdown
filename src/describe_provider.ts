@@ -4,6 +4,7 @@ import type {
   DescribeProviderApi, DescribeProviderError, DescribeOptions, DescribeResult,
 } from "./vendor/kit/describe-provider";
 import { DESCRIBE_PROVIDER_API_VERSION } from "./vendor/kit/describe-provider";
+import { isTruncated } from "./vendor/kit/sampling-profiles";
 import type { OcrProviderApi } from "./vendor/kit/ocr-provider";
 
 /** Anbieter-API „Bild beschreiben“ (Kit-Vertrag `describe-provider`, obsidian-kit 0.95.0) — dünner Adapter wie `ocr_provider.ts`:
@@ -53,7 +54,7 @@ export function createDescribeProviderApi(base: OcrProviderApi, deps: DescribePr
       if (isError(out)) return out;
       const parsed = parseDescription(out.raw, taxonomy);
       if (parsed.prose === "") {
-        return { error: "failed", message: out.finishReason === "length" ? "Antwort abgeschnitten, ohne Beschreibung" : "leere Beschreibung vom Modell" };
+        return { error: "failed", message: isTruncated(out.finishReason) ? "Antwort abgeschnitten, ohne Beschreibung" : "leere Beschreibung vom Modell" };
       }
       return {
         text: parsed.prose,

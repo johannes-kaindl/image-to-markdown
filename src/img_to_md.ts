@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import { isTruncated } from "./vendor/kit/sampling-profiles";
 import type { ImgItem } from "./img_to_md_state";
 import { diffLines, type DiffLine } from "./vendor/kit/diff";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
@@ -350,7 +351,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
       const dataUrl = await io.readImageDataUrl(resolved.path, resolved.ext);
       res = await io.transcribe(dataUrl);
     } catch (err) { io.notify(t("core.transcribeFailed", e.link, err instanceof Error ? err.message : String(err))); skipped++; continue; }
-    const truncated = res.finishReason === "length";
+    const truncated = isTruncated(res.finishReason);
     if (!res.content.trim()) { io.notify(truncated ? t("core.truncatedEmpty") : t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
     // Teiltext ist gueltig und wird geschrieben — aber ungesagt saehe die Notiz vollstaendig aus.
     if (truncated) io.notify(t("core.truncatedLink", e.link));

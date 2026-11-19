@@ -84,6 +84,13 @@ describe("createDescribeProviderApi", () => {
     expect(await api2.describeImage("a.png")).toMatchObject({ error: "failed" });
   });
 
+  it("leere Prosa am Token-Limit (finishReason length) nennt das Abschneiden, sonst die leere Beschreibung", async () => {
+    const { api } = make({ describeRaw: async () => ({ raw: "", finishReason: "length" }) });
+    expect(await api.describeImage("a.png")).toMatchObject({ error: "failed", message: "Antwort abgeschnitten, ohne Beschreibung" });
+    const { api: api2 } = make({ describeRaw: async () => ({ raw: "", finishReason: "stop" }) });
+    expect(await api2.describeImage("a.png")).toMatchObject({ error: "failed", message: "leere Beschreibung vom Modell" });
+  });
+
   it("ein schon abgebrochenes Signal liefert aborted ohne Backend-Aufruf", async () => {
     const { api, describeRaw } = make();
     const ac = new AbortController(); ac.abort();

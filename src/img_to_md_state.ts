@@ -1,4 +1,5 @@
 import { t } from "./i18n";
+import { isTruncated } from "./vendor/kit/sampling-profiles";
 import type { ParsedDescription } from "./describe";
 import { EMPTY_ROUNDS, pushRound, selectRound, refineBase, type Rounds } from "./vendor/kit/rounds";
 
@@ -103,7 +104,7 @@ export class ImgToMdState {
 
   setDone(i: number, finishReason?: string): void {
     const c = this.cards[i]; if (!c) return;
-    const truncated = finishReason === "length";
+    const truncated = isTruncated(finishReason);
     if (truncated) c.truncated = true;
     if (c.text.trim()) c.status = "done";
     // Leer UND abgeschnitten ist der haeufige Reasoning-Fall: das Denken hat das Antwortbudget
@@ -114,7 +115,7 @@ export class ImgToMdState {
 
   setDescribed(i: number, parsed: ParsedDescription, model: string, finishReason?: string): void {
     const c = this.cards[i]; if (!c) return;
-    const truncated = finishReason === "length";
+    const truncated = isTruncated(finishReason);
     if (truncated) c.truncated = true;
     c.text = parsed.prose;
     c.category = parsed.category;
