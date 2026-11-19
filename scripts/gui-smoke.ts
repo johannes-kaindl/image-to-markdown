@@ -17,7 +17,7 @@
  * Profil und eigenem Port (`--port` ist Pflicht, es gibt keinen Standardport):
  *
  * Lauf: `tools/obsidian-cdp/messlauf.sh` (Dach, README § Messlauf in einem Aufruf) startet die Zweitinstanz, hält den Lock (`--exclusive focus`, davor, mit `export`)
- * und räumt auf; das Rezept steht nur dort. Für diesen Treiber: `REPO=image-to-markdown OHNE_SETUP=1`.
+ * und räumt auf; das Rezept steht nur dort. Für diesen Treiber: `REPO=image-to-markdown SETUP_BEFEHL='npm run shots -- --setup'`.
  *
  * Weitere Läufe (als `SMOKE_ARGS`):
  *   --with-model   # + die drei Modell-Punkte
