@@ -14,6 +14,7 @@ and versioning follows [SemVer](https://semver.org/).
 
 ### Changed
 
+- **Text recognition (`extractText` on the plugin API) can be cancelled** (library contract obsidian-kit 0.93.0): a caller that passes a `signal` gets `aborted` at once, without a request, when it is already cancelled, and while the model is reading or a shortcut is running; the model request is stopped, a shortcut runs on but its late result is dropped.
 - **The link guard of the answer view carries the library's current version** (obsidian-kit 0.106.0); the code is unchanged.
 
 ## [0.35.0] — 2026-11-18

@@ -31,7 +31,7 @@ import { askMigration } from "./migration_modal";
 import type { FrontmatterMap } from "./frontmatter_map";
 import { copyToClipboard } from "./vendor/kit-obsidian/clipboard";
 import { createShortcutsBridge, type ShortcutsBridge } from "./vendor/kit-obsidian/shortcuts-bridge";
-import type { OcrProviderApi, OcrProviderError } from "./vendor/kit/ocr-provider";
+import type { OcrOptions, OcrProviderApi, OcrProviderError } from "./vendor/kit/ocr-provider";
 import type { DescribeProviderApi, DescribeProviderError } from "./vendor/kit/describe-provider";
 import { createDescribeProviderApi, type DescribeRawOut } from "./describe_provider";
 import { createOcrProviderApi, shortcutResultToOcr } from "./ocr_provider";
@@ -124,7 +124,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
 
     this.shortcutsBridge = createShortcutsBridge(this, { protocolAction: "image-to-markdown-shortcut" });
     // OCR und Beschreiben auf demselben api-Objekt (beide Kit-Verträge fordern version 1).
-    this.api = createDescribeProviderApi(createOcrProviderApi({ extractText: (p) => this.extractTextViaOcr(p) }), {
+    this.api = createDescribeProviderApi(createOcrProviderApi({ extractText: (p, o) => this.extractTextViaOcr(p, o) }), {
       taxonomy: () => this.settings.describeTaxonomy,
       defaultLang: () => getLang(),
       describeRaw: (p, o) => this.describeRawViaLlm(p, o),
@@ -248,7 +248,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
   /** Backend-Auswahl der Anbieter-API (Spec Baustein 4/D): abstrahiert über die WEGE
    *  (Kurzbefehl mobil, Vision-LLM desktop), nie über die Brücke — ein Konsument des `api`
    *  merkt den Unterschied nie. v1 ohne PDF (Spec § Nicht-Ziele): eine PDF-Quelle ist "unsupported". */
-  private async extractTextViaOcr(vaultPath: string): Promise<string | OcrProviderError> {
+  private async extractTextViaOcr(vaultPath: string, opts?: OcrOptions): Promise<string | OcrProviderError> {
     if (this.settings.ocrMethod === "shortcut") {
       const r = await this.shortcutsBridge.run({
         shortcut: this.settings.ocrShortcutName,
@@ -267,9 +267,10 @@ export default class ImageToMarkdownPlugin extends Plugin {
       const prompt = resolvePromptText(this.settings.promptPreset, this.settings.visionPrompt);
       // Ohne Denken: ein Konsument (Koda read_image) will den Text, nicht den Gedankengang — manche Backends (gemma-4 unter LM Studio)
       // schreiben ihn sonst in den Inhalt. Die Stufe der Sidebar bleibt unberuehrt (nur dieser Aufruf).
-      const { content } = await this.callLlm(this.imageMessages(dataUrl, prompt), { stream: false, thinking: "off" });
+      const { content } = await this.callLlm(this.imageMessages(dataUrl, prompt), { stream: false, thinking: "off", ...(opts?.signal ? { signal: opts.signal } : {}) });
       return content;
     } catch (e) {
+      if (opts?.signal?.aborted || (e instanceof Error && e.name === "AbortError")) return { error: "aborted", message: "abgebrochen" };
       return { error: "failed", message: e instanceof Error ? e.message : String(e) };
     }
   }
