@@ -6,6 +6,8 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.1] — 2026-11-24
+
 ### Security
 
 - **A secret that a model or an OCR line glues to a word is now redacted before it is sent** (shared library code-kit 0.87.0): `key_sk-proj-…`, `my_AKIA…` and `x_Bearer …` stayed in clear text before, and an IBAN behind `_` (`iban_DE89…`) was not read as an IBAN. Ordinary words that end in `sk` (`task-…`, `risk_…`) stay untouched.
