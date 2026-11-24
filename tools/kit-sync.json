@@ -56,7 +56,7 @@
         "reasoning",
         {
           "name": "redact",
-          "ref": "0.60.0"
+          "ref": "0.87.0"
         },
         "rounds",
         {
@@ -130,7 +130,10 @@
         "clipboard",
         "collapsible",
         "confirm",
-        "dom-guard",
+        {
+          "name": "dom-guard",
+          "ref": "0.106.0"
+        },
         "embedding-connection",
         "endpoint-list",
         "endpoint-plumbing",

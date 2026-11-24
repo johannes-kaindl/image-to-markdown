@@ -6,6 +6,14 @@ and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **A secret that a model or an OCR line glues to a word is now redacted before it is sent** (shared library code-kit 0.87.0): `key_sk-proj-…`, `my_AKIA…` and `x_Bearer …` stayed in clear text before, and an IBAN behind `_` (`iban_DE89…`) was not read as an IBAN. Ordinary words that end in `sk` (`task-…`, `risk_…`) stay untouched.
+
+### Changed
+
+- **The link guard of the answer view carries the library's current version** (obsidian-kit 0.106.0); the code is unchanged.
+
 ## [0.35.0] — 2026-11-18
 
 ### Added

@@ -1,4 +1,4 @@
-// vendored from code-kit@0.60.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.87.0, src/ts/pure/redact.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 // uebernommen aus ghostline/src/core/context.ts (redactText) und settings-assistant/src/core/secrets.ts (redactFields), 2026-10-09; vault-crews/src/core/redact.ts und llm-lab/src/core/redact_secrets.ts + redact_pii.ts (redactKeys, redactKeysInValue, createPiiRedactor), 2026-10-10
 /** Redaction of secrets, in two entry points (plus a reversible session for text): over free
  *  text and over parsed JSON.
@@ -50,14 +50,38 @@
  *  expansion). Use the `g` flag: without it only the first match of a rule is replaced. */
 export type RedactRules = readonly (readonly [RegExp, string])[];
 
+// Where a secret may start. The rules below carry the character in FRONT of the hit as group 1 (kept) and the hit as group 2 (replaced), the way
+// EMAIL does (see `LEAD_RULES`): they used to demand `\b`, and `\b` is no boundary after a word character, so `key_sk-proj-ABCDEFGHIJKLMNOP`,
+// `my_AKIA…` and `x_Bearer …` were left in clear text. That was a hole on the way back: the model glues a placeholder to a word (`key_[redacted-token-1]`),
+// `restore` puts the secret back, and a second `redactText` over the restored text (a trace, a log) saw `key_sk-…` and found nothing. What a prefix may follow
+// is decided per rule, with the ordinary words it must not cut named (the list is pinned in tests/redact-glued.test.ts):
+//  - `sk`, `rk`, `pk` (two letters, the END of many words: `task-`, `desk-`, `risk_`, `disk-`, `mask-`, `flask-`, `ask-`, `work-`, `park-`, `mark-`, `fork-`,
+//    `network-`, `bookmark-`) are read at the start of the text and after anything that is NOT a lowercase letter: a space, `_`, a digit, a capital, a symbol.
+//    A lowercase letter in front means the two letters end a lowercase word. Real keys (`sk-proj-…`, `sk-ant-…`) are lower case, so a key glued
+//    DIRECTLY to a lowercase letter (`keysk-…`) stays unread: it cannot be told from `task-…` by its shape, and a rule that read it would blank every
+//    `task-…`/`network-…` of an ordinary note. The miss is the narrower one; the restore path puts `_` or a space in front, not a letter.
+//  - `ghp`, `gho`, `github_pat`, `xoxb`, `xoxp` (three letters or more, followed by `-`/`_` and 12 token characters) end no ordinary word, so they are read
+//    after ANY character. They sit in the first key rule (one expression, so that in a run like `gho-…-pk-…` the leftmost prefix wins as before) and, for the
+//    one place that rule does not reach (a lowercase letter in front: `keyghp_…`), in a second rule behind it.
+//  - `AKIA` + 16 capitals/digits: read after anything that is not a capital (`key_AKIA…`, `keyAKIA…`, `1AKIA…`). A capital in front means the sixteen are the
+//    tail of a longer capital token (an ID, base32); the closing `\b` stays (more characters after them is no access key id).
+//  - `Bearer` (any case): read at the start and after anything that is NOT a letter (`x_Bearer abc…`, `1bearer abc…`). A letter in front is the end of a word
+//    (`pallbearer`, `cupbearer`, `standardbearer` followed by a word of eight letters).
+// No lookbehind (iOS Safari before 16.4); every attempt reads at most the 12+ body characters of a run it then consumes, so the scan stays linear.
+const BEARER_RULE: readonly [RegExp, string] = [/(^|[^A-Za-z])(Bearer\s+[A-Za-z0-9._~+/=-]{8,})/gi, "Bearer [redacted-token]"];
+const KEY_RULE: readonly [RegExp, string] = [/(^|[^a-z])((?:sk|rk|pk|ghp|gho|github_pat|xoxb|xoxp)[-_][A-Za-z0-9_-]{12,})/g, "[redacted-token]"];
+const GLUED_LONG_KEY_RULE: readonly [RegExp, string] = [/(?:ghp|gho|github_pat|xoxb|xoxp)[-_][A-Za-z0-9_-]{12,}/g, "[redacted-token]"];
+const AKIA_RULE: readonly [RegExp, string] = [/(^|[^A-Z])(AKIA[0-9A-Z]{16})\b/g, "[redacted-token]"];
+
 /** Keys, tokens, Bearer headers and PEM private-key blocks. */
 export const SECRET_REDACT_RULES: RedactRules = [
   // The body may not contain another BEGIN: without that, every BEGIN lacking an END scans to the
   // end of the text and a long run of them costs quadratic time.
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----(?:(?!-----BEGIN)[\s\S])*?-----END [A-Z ]*PRIVATE KEY-----/g, "[redacted-private-key]"],
-  [/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, "Bearer [redacted-token]"],
-  [/\b(?:sk|rk|pk|ghp|gho|github_pat|xoxb|xoxp)[-_][A-Za-z0-9_-]{12,}/g, "[redacted-token]"],
-  [/\bAKIA[0-9A-Z]{16}\b/g, "[redacted-token]"],
+  BEARER_RULE,
+  KEY_RULE,
+  GLUED_LONG_KEY_RULE,
+  AKIA_RULE,
 ];
 
 /** E-mail addresses. Not part of the default: whether an address is a secret depends on the
@@ -68,7 +92,7 @@ export const EMAIL_REDACT_RULE: readonly [RegExp, string] = [/(^|[^A-Z0-9._%+-])
 // Safari before 16.4 does not parse `(?<!…)` and the whole bundle fails to load, which is what eslint-plugin-obsidianmd's
 // `regex-lookbehind` guards against). The lead is kept, only the hit is replaced. Without it every start inside a long
 // run of local-part characters would scan to the end of the run, quadratic; with it only the start of a run is tried.
-const LEAD_RULES = new WeakSet<RegExp>([EMAIL_REDACT_RULE[0]]);
+const LEAD_RULES = new WeakSet<RegExp>([EMAIL_REDACT_RULE[0], BEARER_RULE[0], KEY_RULE[0], AKIA_RULE[0]]);
 
 /** What `redactText` applies when no rules are passed. */
 export const DEFAULT_REDACT_RULES: RedactRules = SECRET_REDACT_RULES;
@@ -287,13 +311,25 @@ export function redactKeysInValue<T>(value: T, keys: readonly (string | undefine
 
 export type PiiLabel = "EMAIL" | "IBAN" | "PHONE" | "URLCRED" | "CUSTOM";
 
-// The patterns of llm-lab/src/core/redact_pii.ts, in meaning unchanged (a differential test pins that). The EMAIL pattern
+// The patterns of llm-lab/src/core/redact_pii.ts, in meaning unchanged except IBAN (a differential test pins that). The EMAIL pattern
 // has a lead more (the character in front, group 1, kept; the hit is group 2): without it every start inside a long
 // run of local-part characters scans to the end of the run, quadratic; the leftmost start of a run is the only one that
 // can succeed, so the matches are the same. It was a lookbehind up to 0.58.0, see `LEAD_RULES`.
-const PII_PATTERNS: readonly (readonly [Exclude<PiiLabel, "CUSTOM">, RegExp])[] = [
+//
+// IBAN carries a lead too, but there it CHANGES what is read (Welle 36, kp2c; same cause as the secret rules of 0.79.1): llm-lab's `\b` before the two
+// capitals is no boundary after a word character, so `iban_DE89370400440532013000` kept its `DE` and the digits went as a PHONE by accident, no IBAN
+// label. The lead (the character in front, kept) is read as: the start, or anything that is NOT a capital letter and NOT a digit. So a hit now also starts
+// behind `_` and behind a lowercase letter (`iban_DE89…`, `ibanDE89…`), the places the old pattern could not read, and nowhere else changes (the
+// differential test pins that: the texts that differ all have an IBAN-shaped hit behind `_` or a lowercase letter). What it must not cut, and why a
+// capital or a digit in front stays unread: the sixteen to thirty characters are then the tail of a longer capital/digit token (an ID, a serial number,
+// a base32 or hex string, `ORDER2024DE89…`, `X1DE89…`); reading the tail would blank the middle of a token that is not an IBAN. The closing `\b` stays.
+// No lookbehind (iOS Safari before 16.4). Linear: every attempt reads a lead character, two capitals, two digits and at most ~40 more characters.
+/** The four patterns of {@link createPiiRedactor}, shared (additive export, Welle 36, kp2d) with `pii-detect`, which reads the same shapes and adds the checks (IBAN check
+ *  digits, phone normalisation). The regular expressions are GLOBAL and so carry `lastIndex`: copy one (`new RegExp(re.source, re.flags)`) before you run it. EMAIL and IBAN
+ *  have a lead group (the character in front, group 1) and the hit as group 2. */
+export const PII_PATTERNS: readonly (readonly [Exclude<PiiLabel, "CUSTOM">, RegExp])[] = [
   ["EMAIL", /(^|[^A-Za-z0-9._%+-])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g],
-  ["IBAN", /\b[A-Z]{2}\d{2}(?:[ ]?[A-Za-z0-9]{4}){2,7}(?:[ ]?[A-Za-z0-9]{1,4})?\b/g],
+  ["IBAN", /(^|[^A-Z0-9])([A-Z]{2}\d{2}(?:[ ]?[A-Za-z0-9]{4}){2,7}(?:[ ]?[A-Za-z0-9]{1,4})?\b)/g],
   ["PHONE", /(?:\+\d{1,3}[ /-]?)?(?:\(?\d{2,5}\)?[ /-]?)\d{3,}(?:[ -]?\d{2,})+/g],
   ["URLCRED", /\/\/[^\s:/@]+:[^\s:/@]+@/g],
 ];
@@ -345,7 +381,7 @@ export function createPiiRedactor(opts: PiiRedactorOptions = {}): PiiRedactor {
       seen.set(hit, created);
       return created;
     };
-    return label === "EMAIL" ? text.replace(re, (_m, lead: string, hit: string) => lead + token(hit)) : text.replace(re, token);
+    return label === "EMAIL" || label === "IBAN" ? text.replace(re, (_m, lead: string, hit: string) => lead + token(hit)) : text.replace(re, token);
   };
 
   return {
