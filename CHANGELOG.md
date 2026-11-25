@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-11-25
+
 ### Changed
 - The provider API honours cancellation (Kit contract 0.93.0): `extractText` returns `aborted` right away when the caller's signal is already aborted, without calling a backend, and also when it is aborted during the call; the signal reaches the request.
 - Transcript and description notes are created through the shared building block: a taken name now gets ` 2`, ` 3` … like the other plugins of the family (was `-2`, `-3`), and an installed Filename Sanitizer applies its rules to the name; the embed in the source note follows the final name.
