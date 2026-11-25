@@ -95,7 +95,7 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 
 | Filename | Referenced by | Must show |
 | --- | --- | --- |
-| `hero.png` | `README.md`, `README.de.md` (top, hero) | The **"IMG → MD"** sidebar open next to a source note, **mid-transcription of a PDF** — several page cards (`… · page 1/3`, `2/3`, …), one streaming Markdown live. The money shot; shows the headline PDF feature + streaming at once. |
+| `hero.png` | `README.md`, `README.de.md` (top, hero) | The **"Image transcription"** sidebar open next to a source note, **mid-transcription of a PDF** — several page cards (`… · page 1/3`, `2/3`, …), one streaming Markdown live. The money shot; shows the headline PDF feature + streaming at once. |
 | `pdf-sidebar.png` | `README.md`, `README.de.md` (Features) | The sidebar list with an **embedded PDF**: the file name, **"N pages"**, and the **"Page [ ] to [ ]"** range inputs. The "pick your pages" state before pressing Transcribe. |
 | `pdf-streaming.png` | `README.md`, `README.de.md` (Features) | PDF transcription in progress: **one card per page** (`<name> · page k/n`), at least one streaming live. Shows that a PDF becomes one note from many page cards. |
 | `exists-open.png` | `README.md`, `README.de.md` (idempotency) | A sidebar entry whose source already has a transcript: the **"✓ transcript exists"** badge + **"open"** link, checkbox **off** (override is opt-in). |
@@ -113,7 +113,7 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 
 ### `hero.png`
 
-- **Shows:** Obsidian with the **"IMG → MD"** sidebar (ribbon icon `scan-text`, label
+- **Shows:** Obsidian with the **"Image transcription"** sidebar (ribbon icon `scan-text`, label
   "Image → Markdown") open on the right, a note that embeds a **multi-page PDF** on the left, and
   the sidebar mid-run: several **page cards** (`<name> · page 1/3`, `page 2/3`, …) with at least
   one streaming Markdown live (partial text is desirable — it says "streaming"). A reasoning
@@ -320,7 +320,7 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
    the sidebar's model row once this model is selected (the dropdown on a level above Off);
    optionally a second close-up on Off.
 
-6. **Image shots.** Open the sidebar (command **"Open sidebar"** or the `scan-text` ribbon). With
+6. **Image shots.** Open the sidebar (command **"Open image transcription"** or the `scan-text` ribbon). With
    `Tutorial.md` active, capture `tutorial-sidebar.png` before pressing the button; right-click an
    embedded image for `context-menu.png`. Press **"Transcribe"** and capture a finished card with
    body + **"💭 Thoughts"** + copy button for `sidebar-streaming.png` / `thinking-block.png`.
@@ -361,7 +361,7 @@ Keep this table in sync whenever a doc adds or renames an image. The README embe
 
 Verified against `src/i18n.ts` (`STRINGS.en`) — do not guess these, quote them verbatim.
 
-- View title: **"IMG → MD"** · ribbon label / context-menu item: **"Image → Markdown"** · ribbon
+- View title: **"Image transcription"** · ribbon label / context-menu item: **"Image → Markdown"** · ribbon
   icon: `scan-text`
 - Run button: **"Transcribe"** (mode: transcribe) or **"Describe"** (mode: describe) · select
   toggle: **"Deselect all"** / **"Select all"**
@@ -397,7 +397,7 @@ Verified against `src/i18n.ts` (`STRINGS.en`) — do not guess these, quote them
   key"**, **"Source PDF key"**, **"Source note key"**, **"Category key"**, **"Tags key"**,
   **"Transcribed-by key"**, **"Described-by key"**, **"Created key"**, **"Pages key"**,
   **"Kind key"**, **"Kind value: transcript"**, **"Kind value: description"**
-- Commands: **"Open sidebar"**, **"Transcribe images in the active note"**
+- Commands: **"Open image transcription"**, **"Transcribe images in the active note"**
 
 Once the real images land here, embed them in `README.md` / `README.de.md` (top hero + Features)
 with **absolute Forgejo raw URLs** and add the relevant ones to the manual.

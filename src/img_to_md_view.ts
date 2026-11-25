@@ -151,7 +151,7 @@ export class ImgToMdView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf, private deps: ImgToMdViewDeps) { super(leaf); }
   getViewType(): string { return VIEW_TYPE_IMGMD; }
-  getDisplayText(): string { return "IMG → MD"; }
+  getDisplayText(): string { return t("view.title"); }
   getIcon(): string { return "scan-text"; }
 
   async onOpen(): Promise<void> {

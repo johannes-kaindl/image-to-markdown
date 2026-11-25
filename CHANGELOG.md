@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format is based on 
 - The provider API honours cancellation (Kit contract 0.93.0): `extractText` returns `aborted` right away when the caller's signal is already aborted, without calling a backend, and also when it is aborted during the call; the signal reaches the request.
 - Transcript and description notes are created through the shared building block: a taken name now gets ` 2`, ` 3` … like the other plugins of the family (was `-2`, `-3`), and an installed Filename Sanitizer applies its rules to the name; the embed in the source note follows the final name.
 - Frontmatter is detected with Obsidian's own fence rule (an empty block ends at the second fence line, a later horizontal rule stays text).
+- The sidebar view is titled "Image transcription" (German "Bildtranskription") instead of "IMG → MD", and its command reads "Open image transcription" (was "Open sidebar"); the command id `open-sidebar` and any hotkey stay.
 - Kit pins raised to obsidian-kit 0.111.0 and code-kit 0.91.1.
 
 ## [0.35.1] — 2026-11-24

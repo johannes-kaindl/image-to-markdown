@@ -211,7 +211,7 @@ instruction in their own language from the very first run. The default is meant 
 and "usable as-is" only holds if it reads naturally to the person reading it.
 
 A small set of strings stays the same in every language on purpose: the plugin name
-"Image → Markdown", the sidebar title "IMG → MD", and the "Stop" control. These are brand and
+"Image → Markdown", and the "Stop" control. These are brand and
 control marks rather than prose; translating them would buy nothing and would make the tool harder
 to talk about across languages.
 

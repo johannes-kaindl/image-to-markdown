@@ -68,7 +68,7 @@
 Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — Scans, Screenshots, fotografierte Seiten — mit einem OpenAI-kompatiblen Vision-Modell auf der eigenen Maschine in editierbares Markdown um. Nichts verlässt den Rechner. Die Quellnotiz wird nie überschrieben: jedes Bild und jede PDF bekommt eine eigene Transkript-Notiz, und der Original-Embed wird durch einen Embed dieser neuen Notiz ersetzt — kein Datenverlust, keine Duplikate, nichts an Cloud oder Dritte.
 
 - **Sidebar-View.** Das Ribbon-Icon `scan-text` (Label „Image → Markdown") öffnet die Sidebar
-  „IMG → MD". Sie zeigt alle eingebetteten Bilder der aktiven Notiz als Checkbox-Liste (alle
+  „Bildtranskription". Sie zeigt alle eingebetteten Bilder der aktiven Notiz als Checkbox-Liste (alle
   vorausgewählt; nicht unterstützte Formate deaktiviert). Der Button „Transkribieren" streamt
   die Antwort des Vision-Modells **live** in eine Karte pro Bild — mit aufklappbarem
   Gedanken-/Thinking-Block bei Reasoning-Modellen und einem Kopier-Button. Pro Karte gibt es
@@ -150,7 +150,7 @@ Image to Markdown wandelt eingebettete Bilder und PDFs einer Obsidian-Notiz — 
   Die Sprache wird einmalig beim Laden des Plugins erkannt (zum Wechseln neu laden).
 - **Command** „Bilder der aktiven Notiz transkribieren" (`transcribe-active-note`) —
   Batch-Transkription ohne Sidebar.
-- **Command** „Sidebar öffnen" (`open-sidebar`) — öffnet die Sidebar.
+- **Command** „Bildtranskription öffnen" (`open-sidebar`) — öffnet die Sidebar.
 - **Editor-Kontextmenü** „Image → Markdown" (Icon `scan-text`) — nur das Bild unter dem Cursor.
   (PDFs werden über das Kontextmenü nicht unterstützt — Sidebar verwenden.)
 
@@ -195,8 +195,8 @@ Danach `main.js`, `manifest.json` und `styles.css` nach
 1. Das Plugin auf den lokalen Vision-Server ausrichten (siehe [Konfiguration](#konfiguration)
    weiter unten) und sicherstellen, dass das Modell geladen ist.
 2. Eine Notiz mit eingebetteten Bildern oder PDFs öffnen.
-3. Auf das Ribbon-Icon **„Image → Markdown"** klicken (oder den Command **„Sidebar öffnen"**
-   ausführen), um die Sidebar **„IMG → MD"** zu öffnen. Die eingebetteten Bilder und PDFs erscheinen als
+3. Auf das Ribbon-Icon **„Image → Markdown"** klicken (oder den Command **„Bildtranskription öffnen"**
+   ausführen), um die Sidebar **„Bildtranskription"** zu öffnen. Die eingebetteten Bilder und PDFs erscheinen als
    vorausgewählte Checkbox-Liste; nicht unterstützte Formate sind deaktiviert.
 4. Auf **„Transkribieren"** klicken. Jedes ausgewählte Bild oder jede PDF bekommt eine Karte, die sich live mit
    dem gestreamten Markdown füllt. Bei Reasoning-Modellen den Gedanken-Block aufklappen, um dem

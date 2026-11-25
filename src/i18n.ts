@@ -11,7 +11,8 @@ export type { Lang };
 type Dict = Record<string, string>;
 
 const EN: Dict = {
-  "cmd.openSidebar": "Open sidebar",
+  "cmd.openSidebar": "Open image transcription",
+  "view.title": "Image transcription",
   "cmd.transcribeActive": "Transcribe images in the active note",
   "notice.noActiveNote": "No active note.",
   "notice.copied": "Copied",
@@ -211,7 +212,8 @@ const EN: Dict = {
 };
 
 const DE: Dict = {
-  "cmd.openSidebar": "Sidebar öffnen",
+  "cmd.openSidebar": "Bildtranskription öffnen",
+  "view.title": "Bildtranskription",
   "cmd.transcribeActive": "Bilder der aktiven Notiz transkribieren",
   "notice.noActiveNote": "Keine aktive Notiz.",
   "notice.copied": "Kopiert",

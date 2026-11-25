@@ -70,7 +70,7 @@ or, when you transcribed from the command palette: `Empty transcript: <image>`
 
 **Cause:** the command **Transcribe images in the active note** handles images only.
 
-**Fix:** open the sidebar (**Open sidebar**) and transcribe the PDF there.
+**Fix:** open the sidebar (**Open image transcription**) and transcribe the PDF there.
 
 > Page 7 — transcription failed
 

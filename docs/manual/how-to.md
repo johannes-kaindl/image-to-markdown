@@ -67,7 +67,7 @@ Unsupported formats are skipped with a notice (see
 non-destructive and idempotent, so already-transcribed images are not processed
 again.
 
-> Tip: there is also a command **"Sidebar öffnen"** (Open sidebar) if you would
+> Tip: there is also a command **"Bildtranskription öffnen"** (Open image transcription) if you would
 > rather pick images individually and watch the transcription stream live.
 
 ---
@@ -100,7 +100,7 @@ you can see how the model arrived at a transcription.
 
 1. Configure a reasoning-capable vision model as the model of your endpoint row (see
    [Pick or pin a specific model](#pick-or-pin-a-specific-model)).
-2. Open the sidebar (ribbon **"Image → Markdown"**, view title **"IMG → MD"**)
+2. Open the sidebar (ribbon **"Image → Markdown"**, view title **"Image transcription"**)
    and click **"Transkribieren"** (Transcribe).
 3. As each card streams, click the thinking block at the top of the card to
    expand or collapse the model's reasoning.
@@ -157,7 +157,7 @@ The sidebar has a preset picker below the model row. With a local vision
 model the prompt is the main quality lever, so switching the preset switches the
 transcription mode without editing any text.
 
-1. Open the **"IMG → MD"** sidebar (`scan-text` ribbon icon).
+1. Open the **"Image transcription"** sidebar (`scan-text` ribbon icon).
 2. Use the **preset dropdown** below the model row to pick a mode:
    - **Default** — your editable prompt (the text area in settings, see above).
    - **Tables → Markdown** — render tables as GitHub-Flavored Markdown tables.
@@ -295,8 +295,8 @@ page by page, as a single transcript note.
 > "Transcribe images" batch command do not process PDFs — open the sidebar first.
 
 1. Open the note that embeds the PDF you want to transcribe.
-2. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to open
-   the **"IMG → MD"** sidebar. The PDF appears in the list alongside any images, with a page-range
+2. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open image transcription"**) to open
+   the **"Image transcription"** sidebar. The PDF appears in the list alongside any images, with a page-range
    widget — **"Page" [from] "to" [to]** ("Seite" [von] "bis" [bis]) — built from two number
    fields. (The total page count itself is shown in the row's tooltip on hover.)
 3. *(Optional)* Adjust the **page range** in those two fields if you only need a subset of pages.
@@ -349,7 +349,7 @@ The plugin recognises both embed syntax (`![[x]]` / `![alt](x)`) and plain link 
 **"linked"** ("verlinkt") badge next to the file name.
 
 1. Open the note containing the plain link.
-2. Open the sidebar (**"Image → Markdown"** ribbon icon or **"Open sidebar"** command).
+2. Open the sidebar (**"Image → Markdown"** ribbon icon or **"Open image transcription"** command).
    The linked image or PDF appears in the list with the **"linked"** badge.
 3. Select its checkbox and click **"Transcribe"** ("Transkribieren"). Transcription proceeds
    exactly as for an embed.
@@ -370,8 +370,8 @@ embedding it in a note.
 
 1. Open the PDF or image directly in Obsidian (for example via the file explorer or a link
    that resolves to the media file itself).
-2. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open sidebar"**) to
-   open the **"IMG → MD"** sidebar. Because the active file is itself the source, the sidebar
+2. Click the ribbon icon **"Image → Markdown"** (or run the command **"Open image transcription"**) to
+   open the **"Image transcription"** sidebar. Because the active file is itself the source, the sidebar
    shows a single entry labelled **"this file"** ("diese Datei") instead of scanning a
    note's embeds.
 3. *(PDF only)* Adjust the page range if needed. The default covers all pages.

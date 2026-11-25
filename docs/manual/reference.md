@@ -2,7 +2,7 @@
 
 Dry, exhaustive reference for **Image to Markdown** (plugin id `image-to-markdown`, version 0.3.0, minimum Obsidian 1.11.4, Desktop and Mobile). For the source-level architecture and module layout, see [architecture.md](../internal/architecture.md).
 
-The plugin's user-facing strings follow Obsidian's display language: **English is canonical**, with a **German** translation. This reference quotes the English strings verbatim, with the German equivalent in parentheses where it helps. A small set of brand and control strings ("Image → Markdown", "IMG → MD", "Stop") is intentionally left unlocalized. See [UI language & localization](#ui-language--localization) for how the language is detected and what is and is not translated.
+The plugin's user-facing strings follow Obsidian's display language: **English is canonical**, with a **German** translation. This reference quotes the English strings verbatim, with the German equivalent in parentheses where it helps. A small set of brand and control strings ("Image → Markdown", "Image transcription", "Stop") is intentionally left unlocalized. See [UI language & localization](#ui-language--localization) for how the language is detected and what is and is not translated.
 
 ## Commands
 
@@ -11,7 +11,7 @@ Registered under Obsidian's command palette (`Cmd/Ctrl-P`). The displayed comman
 | Command id | Name (EN) | Name (DE) | Behaviour |
 | --- | --- | --- | --- |
 | `transcribe-active-note` | "Transcribe images in the active note" | "Bilder der aktiven Notiz transkribieren" | Batch-transcribes every supported embedded image of the active note without opening the sidebar. PDFs are skipped here (a notice points to the sidebar). With no active note, shows a notice ("No active note." / "Keine aktive Notiz."). |
-| `open-sidebar` | "Open sidebar" | "Sidebar öffnen" | Reveals the "IMG → MD" sidebar view (creates it in the right leaf if not already open). |
+| `open-sidebar` | "Open image transcription" | "Bildtranskription öffnen" | Reveals the "Image transcription" sidebar view (creates it in the right leaf if not already open). |
 
 ## Ribbon & context menu
 
@@ -20,7 +20,7 @@ Registered under Obsidian's command palette (`Cmd/Ctrl-P`). The displayed comman
 | Ribbon icon | `scan-text` | Activates the sidebar view. |
 | Ribbon label | "Image → Markdown" | Tooltip on the ribbon icon. |
 | Editor context menu item | "Image → Markdown" (icon `scan-text`) | Appears when the cursor is on a line containing an image embed. Transcribes only the image under the cursor (falls back to the first image on the line). |
-| View title | "IMG → MD" | Display text of the sidebar view. |
+| View title | "Image transcription" / "Bildtranskription" | Display text of the sidebar view. |
 | View type | `image-to-markdown-view` | Internal Obsidian view-type identifier. |
 
 The sidebar view lists every embedded image and PDF of the active note as a checkbox list. Supported images with no existing transcript are pre-selected; unsupported formats are disabled, and rows that already have a transcript are left **unchecked by default** (see [Re-transcribing & override](#re-transcribing--override)). A "Deselect all" / "Select all" ("Alle abwählen" / "Alle auswählen") toggle flips the whole supported set. The "Transcribe" ("Transkribieren") button streams the vision response live into one card per unit — with a collapsible thinking block for reasoning models and a copy button. While a run is in progress the button becomes "Stop" (unlocalized). Each card has a "Create note" ("Notiz anlegen") button; the "Apply" ("Anwenden") button at the bottom of the sidebar writes all finished cards at once. Cards are read-only and render the raw Markdown as pre-wrapped text. After a transcript note is written, the handled image drops out of the list on the next re-scan.
@@ -45,7 +45,7 @@ Settings tab heading in Obsidian: "Vision (Image → Markdown)". The leading wor
 | --- | --- | --- |
 | "Vision endpoints" ("Vision-Endpunkte") | Ordered list of OpenAI-compatible servers, each with an optional API key (password field beside the address; leave empty for local servers; the key is stored in Obsidian's keychain, not in `data.json`). The plugin pings them in priority order and uses the **first reachable** one. Each entry is a base URL with its own vision model. The settings tab renders a dynamic field per entry; an empty trailing field is the "add new" slot — blurring an empty field removes it from the list. Each field shows its own per-field reachability icon (circle-check / circle-x / loader, with accessible `title` text), and the currently **active** endpoint is marked. See also [Endpoint fallback resolution](#endpoint-fallback-resolution). | `[{"url": "http://localhost:8080"}]` |
 | "Vision prompt" ("Vision-Prompt") | Text of the **"Default"** prompt preset (large free-text area). The shipped default is itself localized — see note below. Other presets are fixed and chosen via the sidebar preset picker (see the next row). | English: "Transcribe the text in the image exactly to Markdown. Preserve the structure: headings, paragraphs, \*\*emphasis\*\*, lists and tables. Output only the Markdown, no comments." German: "Transkribiere den Text im Bild exakt nach Markdown. Erhalte die Struktur: Überschriften, Absätze, \*\*Hervorhebungen\*\*, Listen und Tabellen. Gib nur das Markdown aus, keine Kommentare." |
-| Prompt preset (sidebar dropdown) | Selects which prompt is sent. **Default** uses the editable "Vision prompt" above; the fixed built-ins are **Tables → Markdown**, **Handwriting**, **Math → LaTeX**, **Source code**, **Describe image**. Stored as `promptPreset` in `data.json`; the choice is sticky across runs and sessions. Not a settings-tab control — chosen in the "IMG → MD" sidebar below the model row. | `default` |
+| Prompt preset (sidebar dropdown) | Selects which prompt is sent. **Default** uses the editable "Vision prompt" above; the fixed built-ins are **Tables → Markdown**, **Handwriting**, **Math → LaTeX**, **Source code**, **Describe image**. Stored as `promptPreset` in `data.json`; the choice is sticky across runs and sessions. Not a settings-tab control — chosen in the "Image transcription" sidebar below the model row. | `default` |
 | "PDF max. pages per run" ("PDF max. Seiten pro Lauf") | Safety cap — PDFs with more pages than this limit must be narrowed via the page range selector in the sidebar. | `25` |
 | "PDF render scale" ("PDF-Render-Auflösung") | Controls the render resolution for PDF pages before they are sent to the vision model. Shown as a slider from `1.0` to `4.0` in steps of `0.5`. `2.0` ≈ 144 dpi; higher values produce sharper images but use more memory. On mobile the scale is automatically capped at `1.5` regardless of this setting. | `2.0` |
 | "PDF page separator" ("PDF-Seitentrenner") | How pages are separated in the merged PDF transcript note. Dropdown with five options: "Obsidian comment %% Page N %% (hidden in reading view)" (`comment`), "Heading ## Page N" (`heading`), "Horizontal rule ---" (`rule`), "Page break (HTML, for export)" (`pagebreak`), "None (seamless text)" (`none`). | `comment` (the Obsidian comment `%% Page N %%`) |
@@ -158,7 +158,7 @@ The plugin's interface is bilingual. **English is the canonical language; German
 
 ### What is not localized
 
-- **Brand and control strings**: the plugin name "Image → Markdown", the sidebar view title "IMG → MD", and the in-progress "Stop" label stay fixed in every language.
+- **Brand and control strings**: the plugin name "Image → Markdown", the sidebar view title "Image transcription", and the in-progress "Stop" label stay fixed in every language.
 - **Transcript front matter**: the keys (`source_image` / `source_pdf`, `source_note`, `created`, `transcribed_by`, `pages`) and their values are data, not UI, and are written verbatim regardless of language.
 
 ---

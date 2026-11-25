@@ -107,7 +107,7 @@ step. The plugin always works on the note you have open.
 > change.
 
 Click the ribbon icon **"Image → Markdown"** on the left. A sidebar opens with the title
-**"IMG → MD"**.
+**"Image transcription"**.
 
 Look at what it shows: a checkbox list of every image embedded in your active note. Your
 scanned page is there, and it is **already ticked** — everything supported is
@@ -115,7 +115,7 @@ pre-selected, so you do not have to hunt for checkboxes on your first run. (If a
 contained an unsupported format like HEIC, that entry would appear greyed out and
 disabled, which is your cue to convert it.)
 
-![The “IMG → MD” sidebar listing the embedded images of the active note as a checkbox list — supported formats pre-selected, an unsupported .heic disabled — above the “Transcribe” button](../images/tutorial-sidebar.png)
+![The “Image transcription” sidebar listing the embedded images of the active note as a checkbox list — supported formats pre-selected, an unsupported .heic disabled — above the “Transcribe” button](../images/tutorial-sidebar.png)
 
 ## Step 6 — Click "Transcribe" and watch it stream
 
@@ -171,7 +171,7 @@ In this tutorial you:
   learned that LM Studio uses port `:1234` while the plugin default is `:8080`.
 - **Installed and enabled** Image to Markdown.
 - Set the **"Vision endpoints"** address correctly — base URL only, no trailing `/v1`.
-- Opened a note with an embedded image and saw it **pre-selected** in the **"IMG → MD"**
+- Opened a note with an embedded image and saw it **pre-selected** in the **"Image transcription"**
   sidebar.
 - Clicked **"Transcribe"** ("Transkribieren") and watched the transcript **stream in
   live**, including a reasoning model's thoughts block.
