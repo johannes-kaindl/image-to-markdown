@@ -1,8 +1,12 @@
+import { locateFrontmatter, splitFrontmatter } from "./vendor/kit/frontmatter";
+import { baseName, splitFileName } from "./vendor/kit/rel-path";
+import { vaultDirname } from "./vendor/kit/vault-path";
 import { t } from "./i18n";
 import { isTruncated } from "./vendor/kit/sampling-profiles";
 import type { ImgItem } from "./img_to_md_state";
 import { diffLines, type DiffLine } from "./vendor/kit/diff";
 import { DEFAULT_FM_MAP, type FrontmatterMap } from "./frontmatter_map";
+import { errorMessage } from "./vendor/kit/error-message";
 
 export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif"];
 export const SUPPORTED_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
@@ -11,9 +15,7 @@ export const PDF_EXT = "pdf";
 export interface ImageEmbed { raw: string; link: string; ext: string; kind: "image" | "pdf"; page?: number; embed: boolean }
 
 export function extOf(link: string): string {
-  const clean = link.split("#")[0].split("|")[0].trim();
-  const dot = clean.lastIndexOf(".");
-  return dot >= 0 ? clean.slice(dot + 1).toLowerCase() : "";
+  return splitFileName(link.split("#")[0].split("|")[0].trim()).ext;
 }
 
 /** Kürzt einen Namen mittig auf genau max Zeichen: "anfang…ende" (Ellipsis = 1 Zeichen).
@@ -45,8 +47,7 @@ function pageOf(rawTarget: string): number | undefined {
 /** Entfernt einen führenden YAML-Frontmatter-Block (---\n…\n---). Ohne Frontmatter unverändert.
  *  Schützt den Link-Scan davor, source_pdf/source_note-Wikilinks als Quelle zu erkennen. */
 export function stripFrontmatter(content: string): string {
-  const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(content);
-  return m ? content.slice(m[0].length) : content;
+  return splitFrontmatter(content).body;
 }
 
 /** Findet Bild-/PDF-Embeds UND reine Links: ![[x]] / [[x]] (Wikilink) und ![alt](p) / [t](p)
@@ -131,9 +132,9 @@ export function rewriteTranscript(
 ): string {
   const esc = (s: string) => s.replace(/"/g, '\\"');
   const kEsc = (k: string) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");   // Key defensiv escapen (Regex-Metazeichen)
-  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(old);
+  const fm = locateFrontmatter(old);
   // Fallback nur theoretisch — Override wirkt ausschließlich auf unsere Transkript-Notizen, die immer Frontmatter haben.
-  let frontmatter = fm ? fm[1] : `${map.authorTranscribed}: "${esc(o.model)}"`;
+  let frontmatter = fm !== null ? fm.raw : `${map.authorTranscribed}: "${esc(o.model)}"`;
   frontmatter = frontmatter.replace(new RegExp(`^${kEsc(map.authorTranscribed)}:.*$`, "m"), `${map.authorTranscribed}: "${esc(o.model)}"`);
   if (o.pages !== undefined) {
     const pagesRe = new RegExp(`^${kEsc(map.pages)}:.*$`, "m");
@@ -160,7 +161,7 @@ export function rewriteTranscript(
  *  ![[…]]-Embed-Zeile (samt Leerzeile). Für den Diff — Frontmatter (transcribed_by/pages) und die
  *  unveränderte Embed-Zeile sind Rauschen. */
 export function extractTranscriptBody(note: string): string {
-  let s = note.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  let s = splitFrontmatter(note).body;
   // `^\s*` toleriert Leerzeilen zwischen Frontmatter und Embed — der Obsidian-Linter fügt dort
   // eine ein, sonst bliebe das Embed im Body hängen und der Diff wäre um die Embed-Zeile verschoben.
   s = s.replace(/^\s*!\[\[[^\]]*\]\]\r?\n?/, "");
@@ -172,20 +173,16 @@ export function replaceEmbed(content: string, raw: string, newBasename: string):
   return content.split(raw).join(`![[${newBasename}]]`);
 }
 
-/** Erzeugt einen kollisionsfreien Notiz-Pfad (Zähler-Suffix bei Konflikt). */
-export function uniqueNotePath(io: { noteExists(p: string): boolean }, dir: string, base: string): string {
-  const join = (n: string) => (dir ? `${dir}/${n}.md` : `${n}.md`);
-  if (!io.noteExists(join(base))) return join(base);
-  let i = 2;
-  while (io.noteExists(join(`${base}-${i}`))) i++;
-  return join(`${base}-${i}`);
+/** Gewünschter Notiz-Pfad; frei machen (` 2`, ` 3` …) und die Dateinamen-Richtlinie anwenden tut der Port `createNote` (Kit-Baustein „Notiz anlegen“). */
+function notePathIn(dir: string, base: string): string {
+  return dir ? `${dir}/${base}.md` : `${base}.md`;
 }
 
-function dirOf(path: string): string { const i = path.lastIndexOf("/"); return i >= 0 ? path.slice(0, i) : ""; }
-export function basenameNoExt(path: string): string { const b = path.slice(path.lastIndexOf("/") + 1); const d = b.lastIndexOf("."); return d >= 0 ? b.slice(0, d) : b; }
+/** Dateiname ohne Endung (code-kit `splitFileName`). */
+export function basenameNoExt(path: string): string { return splitFileName(path).stem; }
 
 /** Letztes Pfadsegment inkl. Extension (für Wikilink/Anzeige der Selbst-Quelle). */
-export function basename(path: string): string { return path.slice(path.lastIndexOf("/") + 1); }
+export { baseName as basename } from "./vendor/kit/rel-path";
 
 /** Baut das eine ImgItem für eine direkt geöffnete Medien-Datei (Selbst-Quelle).
  *  null, wenn sourcePath kein Bild/PDF ist. pageCount/existingTranscriptPath kommen
@@ -197,7 +194,7 @@ export function buildSelfSourceItem(
   const ext = extOf(sourcePath);
   const cls = classifySource(ext);
   if (!cls) return null;
-  const common = { raw: "", link: basename(sourcePath), ext, existingTranscriptPath: opts.existingTranscriptPath, embed: false, selfSource: true };
+  const common = { raw: "", link: baseName(sourcePath), ext, existingTranscriptPath: opts.existingTranscriptPath, embed: false, selfSource: true };
   if (cls === "pdf") {
     const pageCount = opts.pageCount ?? 0;
     const cappedTo = Math.min(pageCount, opts.pdfMaxPages);
@@ -210,18 +207,16 @@ function transcriptSuffix(kind: "image" | "pdf"): string {
   return t(kind === "pdf" ? "note.suffix.pdf" : "note.suffix.image");
 }
 
-/** Pfad für die Transkript-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
- *  Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
-export function transcriptNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, kind: "image" | "pdf", destDir?: string): string {
-  const base = `${basenameNoExt(imagePath)} ${transcriptSuffix(kind)}`;
-  return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
+/** Gewünschter Pfad für die Transkript-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
+ *  Basename des Bildes + lokalisierter Suffix. Den endgültigen (freien) Pfad liefert `io.createNote`. */
+export function transcriptNotePath(sourcePath: string, imagePath: string, kind: "image" | "pdf", destDir?: string): string {
+  return notePathIn(destDir ?? vaultDirname(sourcePath), `${basenameNoExt(imagePath)} ${transcriptSuffix(kind)}`);
 }
 
-/** Pfad für die Beschreibungs-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
- *  Basename des Bildes + lokalisierter Suffix, kollisionsfrei. */
-export function descriptionNotePath(io: { noteExists(p: string): boolean }, sourcePath: string, imagePath: string, destDir?: string): string {
-  const base = `${basenameNoExt(imagePath)} ${t("note.suffix.description")}`;
-  return uniqueNotePath(io, destDir ?? dirOf(sourcePath), base);
+/** Gewünschter Pfad für die Beschreibungs-Notiz: unter `destDir` (falls gesetzt) bzw. neben der Quellnotiz,
+ *  Basename des Bildes + lokalisierter Suffix. Den endgültigen (freien) Pfad liefert `io.createNote`. */
+export function descriptionNotePath(sourcePath: string, imagePath: string, destDir?: string): string {
+  return notePathIn(destDir ?? vaultDirname(sourcePath), `${basenameNoExt(imagePath)} ${t("note.suffix.description")}`);
 }
 
 /** Ziel-Ordner für Transkript-/Beschreibungs-Notizen: das Settings-Feld `exportFolder` hat
@@ -238,8 +233,8 @@ export interface ImgToMdIO {
   date: () => string;
   readNote(path: string): Promise<string>;
   writeNote(path: string, content: string): Promise<void>;
-  createNote(path: string, content: string): Promise<void>;
-  noteExists(path: string): boolean;
+  /** Legt eine neue Notiz an (Kit-Baustein „Notiz anlegen“: Richtlinie des filename-sanitizer, belegter Name wird ` 2`) und liefert den endgültigen Pfad. */
+  createNote(path: string, content: string): Promise<string>;
   resolveImage(link: string, sourcePath: string): { path: string; ext: string } | null;
   readImageDataUrl(path: string, ext: string): Promise<string>;
   transcribe(dataUrl: string): Promise<{ content: string; model: string; finishReason?: string }>;
@@ -289,8 +284,7 @@ export async function writeTranscripts(
       continue;
     }
     const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
-    const newPath = transcriptNotePath(io, sourcePath, imagePath, "image", destDir);
-    await io.createNote(newPath, buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript, truncated: e.truncated }, map));
+    const newPath = await io.createNote(transcriptNotePath(sourcePath, imagePath, "image", destDir), buildTranscriptNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, transcript, truncated: e.truncated }, map));
     if (!self && e.embed !== false) content = replaceEmbed(content, e.raw, basenameNoExt(newPath));
     results.push({ path: newPath, body: transcript });
   }
@@ -317,8 +311,7 @@ export async function writeDescriptions(
     const prose = e.prose.trim();
     if (!prose) { results.push({ path: null }); continue; }
     const imagePath = self ? sourcePath : (io.resolveImage(e.link, sourcePath)?.path ?? e.link);
-    const newPath = descriptionNotePath(io, sourcePath, imagePath, destDir);
-    await io.createNote(newPath, buildDescriptionNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, category: e.category, tags: e.tags, prose }, map));
+    const newPath = await io.createNote(descriptionNotePath(sourcePath, imagePath, destDir), buildDescriptionNote({ imageLink: e.link, sourceName, date: io.date(), model: e.model, category: e.category, tags: e.tags, prose }, map));
     results.push({ path: newPath });
   }
   return { results };
@@ -350,7 +343,7 @@ export async function runImgToMd(io: ImgToMdIO, sourcePath: string, opts?: { onl
     try {
       const dataUrl = await io.readImageDataUrl(resolved.path, resolved.ext);
       res = await io.transcribe(dataUrl);
-    } catch (err) { io.notify(t("core.transcribeFailed", e.link, err instanceof Error ? err.message : String(err))); skipped++; continue; }
+    } catch (err) { io.notify(t("core.transcribeFailed", e.link, errorMessage(err))); skipped++; continue; }
     const truncated = isTruncated(res.finishReason);
     if (!res.content.trim()) { io.notify(truncated ? t("core.truncatedEmpty") : t("core.emptyTranscriptLink", e.link)); skipped++; continue; }
     // Teiltext ist gueltig und wird geschrieben — aber ungesagt saehe die Notiz vollstaendig aus.

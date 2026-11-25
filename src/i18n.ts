@@ -3,17 +3,10 @@
 // die Sprach-Detektion lebt in der obsidian-Schicht (main.ts) und ruft setLang() beim onload.
 // EN ist kanonisch und universeller Fallback. Standard: siehe _docs PROF-OBS-07 / obsidian-i18n.md.
 
-export type Lang = "en" | "de";
-
-let currentLang: Lang = "en";
-
-/** Wählt die Sprache aus einem rohen Locale-String (z.B. von obsidian.getLanguage()). */
-export function pickLang(raw?: string | null): Lang {
-  return raw && raw.toLowerCase().startsWith("de") ? "de" : "en";
-}
-
-export function setLang(lang: Lang): void { currentLang = lang; }
-export function getLang(): Lang { return currentLang; }
+// Sprachwahl, Platzhalter und Fallback kommen aus code-kit `i18n` (vendort); hier stehen nur die Texte.
+import { defineStrings, getLang, pickLang, setLang, t, type Lang } from "./vendor/kit/i18n";
+export { getLang, pickLang, setLang, t };
+export type { Lang };
 
 type Dict = Record<string, string>;
 
@@ -416,14 +409,8 @@ const DE: Dict = {
 /** Exportiert für den EN/DE-Paritätstest; zur Laufzeit nur über t() lesen. */
 export const STRINGS: Record<Lang, Dict> = { en: EN, de: DE };
 
-/** Übersetzt key in der aktuellen Sprache; Fallback currentLang → en → key. {0},{1}… aus args. */
-export function t(key: string, ...args: (string | number)[]): string {
-  const raw = STRINGS[currentLang][key] ?? STRINGS.en[key] ?? key;
-  return raw.replace(/\{(\d+)\}/g, (_m, i) => {
-    const v = args[Number(i)];
-    return v === undefined ? `{${i}}` : String(v);
-  });
-}
+// Läuft beim ersten Import dieses Moduls und damit vor jedem `t`.
+defineStrings(STRINGS);
 
 /** Default-Vision-Prompt in der aktuellen Sprache (zur Aufrufzeit, nach setLang). */
 export function defaultVisionPrompt(): string { return t("prompt.default"); }

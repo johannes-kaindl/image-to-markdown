@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, TFile, Notice, Editor, Menu, getLanguage, Platform } from "obsidian";
+import { Plugin, WorkspaceLeaf, Notice, Editor, Menu, getLanguage, Platform } from "obsidian";
 import { migrateVisionModel, defaultSettings, ImageToMarkdownSettings, ImageToMarkdownSettingTab, migrateEndpoints, fmMapFromSettings } from "./settings";
 import { mergeSettings } from "./vendor/kit/settings";
 import { setHttp } from "./vision_client";
@@ -12,7 +12,7 @@ import { MODE, REQUEST_MIGRATIONS } from "./request_params";
 import { chatOutOrThrow, type ChatOut } from "./llm_call";
 import { VISION_TEST_PROMPT, isVisionConfirmed } from "./capabilities";
 import { obsidianHttp } from "./http";
-import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem, resolveDestDir } from "./img_to_md";
+import { runImgToMd, findImageEmbeds, ImgToMdIO, writeTranscripts, writeDescriptions, SUPPORTED_EXTS, classifySource, extOf, buildSelfSourceItem, resolveDestDir, basenameNoExt } from "./img_to_md";
 import { findExistingTranscript, findExistingDescription, BacklinkLookup } from "./backlinks";
 import { resolvePromptText, isPromptPreset, PROMPT_PRESETS, promptPresetLabel, normalizePreset } from "./prompts";
 import { ImgToMdView, VIEW_TYPE_IMGMD, ImgToMdViewDeps } from "./img_to_md_view";
@@ -35,6 +35,9 @@ import type { OcrOptions, OcrProviderApi, OcrProviderError } from "./vendor/kit/
 import type { DescribeProviderApi, DescribeProviderError } from "./vendor/kit/describe-provider";
 import { createDescribeProviderApi, type DescribeRawOut } from "./describe_provider";
 import { createOcrProviderApi, shortcutResultToOcr } from "./ocr_provider";
+import { createNote } from "./vendor/kit-obsidian/create-note";
+import { vaultDirname } from "./vendor/kit/vault-path";
+import { errorMessage } from "./vendor/kit/error-message";
 
 /** Die Handler eines Stream-Aufrufs der View. */
 function streamHandlers(onToken: (t: string) => void, onReasoning: (t: string) => void, signal?: AbortSignal, onContentReset?: () => void): CompleteHandlers {
@@ -64,8 +67,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
   private settingTab?: ImageToMarkdownSettingTab;
 
   private openPath = (p: string): void => {
-    const f = this.app.vault.getAbstractFileByPath(p);
-    if (f instanceof TFile) void this.app.workspace.getLeaf(false).openFile(f);
+    const f = this.app.vault.getFileByPath(p);
+    if (f !== null) void this.app.workspace.getLeaf(false).openFile(f);
   };
 
   onunload(): void {
@@ -257,8 +260,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
       });
       return shortcutResultToOcr(r);
     }
-    const f = this.app.vault.getAbstractFileByPath(vaultPath);
-    if (!(f instanceof TFile)) return { error: "not-found", message: `Datei nicht gefunden: ${vaultPath}` };
+    const f = this.app.vault.getFileByPath(vaultPath);
+    if (f === null) return { error: "not-found", message: `Datei nicht gefunden: ${vaultPath}` };
     const ext = f.extension.toLowerCase();
     if (!SUPPORTED_EXTS.includes(ext)) return { error: "unsupported", message: `Dateityp nicht unterstützt: .${ext}` };
     if (!(await this.llm.resolve()).config) return { error: "backend-unavailable", message: "kein Vision-Endpunkt erreichbar" };
@@ -271,7 +274,7 @@ export default class ImageToMarkdownPlugin extends Plugin {
       return content;
     } catch (e) {
       if (opts?.signal?.aborted || (e instanceof Error && e.name === "AbortError")) return { error: "aborted", message: "abgebrochen" };
-      return { error: "failed", message: e instanceof Error ? e.message : String(e) };
+      return { error: "failed", message: errorMessage(e) };
     }
   }
 
@@ -279,8 +282,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
    *  Ohne Denken, wie bei `extractTextViaOcr`: der Konsument will die Beschreibung im festen Kopf-Format, nicht den Gedankengang.
    *  v1 ohne PDF: eine PDF-Quelle ist "unsupported". Prompt und Parser stehen in `describe_provider.ts`. */
   private async describeRawViaLlm(vaultPath: string, o: { prompt: string; signal?: AbortSignal }): Promise<DescribeRawOut | DescribeProviderError> {
-    const f = this.app.vault.getAbstractFileByPath(vaultPath);
-    if (!(f instanceof TFile)) return { error: "not-found", message: `Datei nicht gefunden: ${vaultPath}` };
+    const f = this.app.vault.getFileByPath(vaultPath);
+    if (f === null) return { error: "not-found", message: `Datei nicht gefunden: ${vaultPath}` };
     const ext = f.extension.toLowerCase();
     if (!SUPPORTED_EXTS.includes(ext)) return { error: "unsupported", message: `Dateityp nicht unterstützt: .${ext}` };
     if (!(await this.llm.resolve()).config) return { error: "backend-unavailable", message: "kein Vision-Endpunkt erreichbar" };
@@ -318,8 +321,8 @@ export default class ImageToMarkdownPlugin extends Plugin {
         await this.saveSettings();
         let ok = 0, fail = 0;
         for (const p of plan.migrations) {
-          const file = this.app.vault.getAbstractFileByPath(p.path);
-          if (!(file instanceof TFile)) { fail++; continue; }
+          const file = this.app.vault.getFileByPath(p.path);
+          if (file === null) { fail++; continue; }
           try { await this.app.vault.modify(file, p.next); ok++; }
           catch (e) { fail++; console.error("[i2m-migration]", p.path, e); }
         }
@@ -340,11 +343,14 @@ export default class ImageToMarkdownPlugin extends Plugin {
       date: () => localDate(new Date()),
       readNote: (p) => this.app.vault.adapter.read(p),
       writeNote: async (p, c) => {
-        const f = this.app.vault.getAbstractFileByPath(p);
-        if (f instanceof TFile) await this.app.vault.modify(f, c); else await this.app.vault.adapter.write(p, c);
+        const f = this.app.vault.getFileByPath(p);
+        if (f !== null) await this.app.vault.modify(f, c); else await this.app.vault.adapter.write(p, c);
       },
-      createNote: async (p, c) => { await this.app.vault.create(p, c); },
-      noteExists: (p) => this.app.vault.getAbstractFileByPath(p) != null,
+      createNote: async (p, c) => {
+        const r = await createNote(this.app, { folder: vaultDirname(p), name: basenameNoExt(p), content: c, caller: this.manifest.id });
+        if (!r.ok) throw new Error(r.message);
+        return r.path;
+      },
       resolveImage: (link, src) => { const f = this.app.metadataCache.getFirstLinkpathDest(link, src); return f ? { path: f.path, ext: f.extension } : null; },
       readImageDataUrl: async (p, ext) => binaryToDataUrl(await this.app.vault.adapter.readBinary(p), ext),
       // Ohne Stream (Befehl „Transcribe active note“, Kontextmenü): die Fristen bleiben die der Volltext-Antwort.
@@ -358,14 +364,14 @@ export default class ImageToMarkdownPlugin extends Plugin {
     return {
       resolvedLinks: this.app.metadataCache.resolvedLinks,
       frontmatterLinks: (notePath) => {
-        const f = this.app.vault.getAbstractFileByPath(notePath);
-        const cache = f instanceof TFile ? this.app.metadataCache.getFileCache(f) : null;
+        const f = this.app.vault.getFileByPath(notePath);
+        const cache = f !== null ? this.app.metadataCache.getFileCache(f) : null;
         return (cache?.frontmatterLinks ?? []).map(fl => ({ key: fl.key, link: fl.link }));
       },
       resolveLink: (link, fromPath) => this.app.metadataCache.getFirstLinkpathDest(link, fromPath)?.path ?? null,
       frontmatterValue: (notePath, key) => {
-        const f = this.app.vault.getAbstractFileByPath(notePath);
-        if (!(f instanceof TFile)) return null;
+        const f = this.app.vault.getFileByPath(notePath);
+        if (f === null) return null;
         const cache = this.app.metadataCache.getFileCache(f);
         if (!cache?.frontmatter) return null;
         const value: unknown = cache.frontmatter[key];

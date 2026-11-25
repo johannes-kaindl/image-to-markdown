@@ -6,6 +6,7 @@ import type {
 import { DESCRIBE_PROVIDER_API_VERSION } from "./vendor/kit/describe-provider";
 import { isTruncated } from "./vendor/kit/sampling-profiles";
 import type { OcrProviderApi } from "./vendor/kit/ocr-provider";
+import { errorMessage } from "./vendor/kit/error-message";
 
 /** Anbieter-API „Bild beschreiben“ (Kit-Vertrag `describe-provider`, obsidian-kit 0.95.0) — dünner Adapter wie `ocr_provider.ts`:
  *  der Vertrag kommt aus dem Kit, Prompt und Parser (`describe.ts`) bleiben Fachinhalt dieses Plugins. Die Datei ist rein (kein
@@ -49,7 +50,7 @@ export function createDescribeProviderApi(base: OcrProviderApi, deps: DescribePr
         out = await deps.describeRaw(vaultPath, { prompt, ...(signal ? { signal } : {}) });
       } catch (e) {
         if (signal?.aborted || (e instanceof Error && e.name === "AbortError")) return aborted();
-        return { error: "failed", message: e instanceof Error ? e.message : String(e) };
+        return { error: "failed", message: errorMessage(e) };
       }
       if (isError(out)) return out;
       const parsed = parseDescription(out.raw, taxonomy);

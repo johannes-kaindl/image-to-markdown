@@ -2149,8 +2149,8 @@ async function main(): Promise<void> {
     // nicht belegt der Repo-Stand war.
     //
     // Der Pfad kommt aus der LAUFENDEN Instanz, nicht aus `stagingVaultDir(PLUGIN_ID)` —
-    // dieser Treiber dockt per `--vault` an ein beliebiges Fenster an, und `--vault
-    // 10_Pallas` ist im Kopf dieser Datei ausdruecklich vorgesehen. Ein Check gegen den
+    // dieser Treiber dockt per `--vault` an ein beliebiges Fenster an, und `--vault <Name>`
+    // auf den eigenen Arbeits-Vault ist im Kopf dieser Datei ausdruecklich vorgesehen. Ein Check gegen den
     // Staging-Pfad pruefte dann eine Datei, die mit dem Lauf nichts zu tun hat.
     // Geprueft wird, was gemessen wird.
     const vaultInfo = await cdp.evaluate<{ name: string; basePath: string; configDir: string }>(`

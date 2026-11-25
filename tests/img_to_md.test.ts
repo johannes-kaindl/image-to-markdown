@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { findImageEmbeds, buildTranscriptNote, replaceEmbed, uniqueNotePath, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody, buildDescriptionNote, descriptionNotePath, writeDescriptions, resolveDestDir } from "../src/img_to_md";
+import { findImageEmbeds, buildTranscriptNote, replaceEmbed, transcriptNotePath, writeTranscripts, runImgToMd, SUPPORTED_EXTS, basenameNoExt, rewriteTranscript, stripFrontmatter, classifySource, buildSelfSourceItem, basename, truncateMiddle, extractTranscriptBody, buildDescriptionNote, descriptionNotePath, writeDescriptions, resolveDestDir } from "../src/img_to_md";
+import { firstFreeName } from "../src/vendor/kit/filename-policy";
 import { applySelection } from "../src/vendor/kit/diff";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
 
 describe("stripFrontmatter", () => {
+  it("folgt der Zaunregel von Obsidian (obsidian-kit): ein leerer Block endet an der zweiten Zaunzeile, eine spätere Trennlinie bleibt Text", () => {
+    expect(stripFrontmatter("---\n---\nA ![[a.png]]\n---\nB")).toBe("A ![[a.png]]\n---\nB");
+  });
   it("entfernt führenden YAML-Block", () => {
     expect(stripFrontmatter("---\nsource_pdf: \"[[x.pdf]]\"\n---\nBody [[y.png]]")).toBe("Body [[y.png]]");
   });
@@ -166,27 +170,15 @@ describe("replaceEmbed", () => {
   });
 });
 
-describe("uniqueNotePath", () => {
-  it("hängt Zähler an bei Kollision", () => {
-    const exists = new Set(["dir/foto.md", "dir/foto-2.md"]);
-    const io = { noteExists: (p: string) => exists.has(p) };
-    expect(uniqueNotePath(io, "dir", "foto")).toBe("dir/foto-3.md");
-    expect(uniqueNotePath(io, "", "neu")).toBe("neu.md");
-  });
-});
-
 describe("transcriptNotePath", () => {
-  it("legt neben die Quellnotiz, Basename + lokalisierter Suffix, Kollisions-Zähler", () => {
-    const exists = new Set(["dir/foto (transcript).md"]);
-    const io = { noteExists: (p: string) => exists.has(p) };
-    expect(transcriptNotePath(io, "dir/quelle.md", "dir/img/foto.png", "image")).toBe("dir/foto (transcript)-2.md");
-    expect(transcriptNotePath(io, "quelle.md", "foto.png", "image")).toBe("foto (transcript).md");
+  it("legt neben die Quellnotiz, Basename + lokalisierter Suffix (frei macht der Port createNote)", () => {
+    expect(transcriptNotePath("dir/quelle.md", "dir/img/foto.png", "image")).toBe("dir/foto (transcript).md");
+    expect(transcriptNotePath("quelle.md", "foto.png", "image")).toBe("foto (transcript).md");
   });
 
   it("destDir überschreibt das Verzeichnis der Quellnotiz", () => {
-    const io = { noteExists: () => false };
-    expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "Transkripte")).toBe("Transkripte/scan (PDF transcript).md");
-    expect(transcriptNotePath(io, "Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "")).toBe("scan (PDF transcript).md");
+    expect(transcriptNotePath("Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "Transkripte")).toBe("Transkripte/scan (PDF transcript).md");
+    expect(transcriptNotePath("Anhänge/scan.pdf", "Anhänge/scan.pdf", "pdf", "")).toBe("scan (PDF transcript).md");
   });
 });
 
@@ -204,16 +196,13 @@ describe("resolveDestDir", () => {
 });
 
 describe("descriptionNotePath", () => {
-  it("legt neben die Quellnotiz, Basename + lokalisierter Suffix, Kollisions-Zähler", () => {
-    const exists = new Set(["dir/foto (description).md"]);
-    const io = { noteExists: (p: string) => exists.has(p) };
-    expect(descriptionNotePath(io, "dir/quelle.md", "dir/img/foto.png")).toBe("dir/foto (description)-2.md");
-    expect(descriptionNotePath(io, "quelle.md", "foto.png")).toBe("foto (description).md");
+  it("legt neben die Quellnotiz, Basename + lokalisierter Suffix (frei macht der Port createNote)", () => {
+    expect(descriptionNotePath("dir/quelle.md", "dir/img/foto.png")).toBe("dir/foto (description).md");
+    expect(descriptionNotePath("quelle.md", "foto.png")).toBe("foto (description).md");
   });
 
   it("destDir überschreibt das Verzeichnis der Quellnotiz", () => {
-    const io = { noteExists: () => false };
-    expect(descriptionNotePath(io, "Anhänge/scan.png", "Anhänge/scan.png", "Beschreibungen")).toBe("Beschreibungen/scan (description).md");
+    expect(descriptionNotePath("Anhänge/scan.png", "Anhänge/scan.png", "Beschreibungen")).toBe("Beschreibungen/scan (description).md");
   });
 });
 
@@ -226,8 +215,8 @@ function fakeIO(over: any = {}) {
     date: () => "2026-06-20",
     readNote: over.readNote ?? (async (p: string) => notes.get(p) ?? ""),
     writeNote: async (p: string, c: string) => { notes.set(p, c); },
-    createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
-    noteExists: (p: string) => notes.has(p),
+    // wie der Kit-Baustein createNote: ein belegter Name wird ` 2`, ` 3` …
+    createNote: async (p: string, c: string) => { const q = firstFreeName(p, "file", (x) => notes.has(x)); created[q] = c; notes.set(q, c); return q; },
     resolveImage: over.resolveImage ?? ((link: string) => ({ path: link, ext: link.split(".").pop() })),
     readImageDataUrl: async () => "data:image/jpeg;base64,AAAA",
     transcribe: over.transcribe ?? (async () => ({ content: "# Transkript", model: "vmodel" })),
@@ -313,7 +302,14 @@ describe("writeTranscripts", () => {
       { raw: "![[a/foto.jpg]]", link: "a/foto.jpg", content: "A", model: "m" },
       { raw: "![[b/foto.jpg]]", link: "b/foto.jpg", content: "B", model: "m" },
     ]);
-    expect(r.results.map(x => x.path)).toEqual(["foto (transcript).md", "foto (transcript)-2.md"]);
+    expect(r.results.map(x => x.path)).toEqual(["foto (transcript).md", "foto (transcript) 2.md"]);
+  });
+  it("die Einbettung folgt dem Pfad, den createNote liefert (Richtlinie des filename-sanitizer ändert den Namen)", async () => {
+    const { io, notes } = fakeIO({ notes: [["q.md", "x ![[foto#1.jpg]] y"]] });
+    io.createNote = async (p: string, c: string) => { const q = p.replace("#", "-"); notes.set(q, c); return q; };
+    const r = await writeTranscripts(io, "q.md", [{ raw: "![[foto#1.jpg]]", link: "foto#1.jpg", content: "T", model: "m" }]);
+    expect(r.results.map((x) => x.path)).toEqual(["foto-1 (transcript).md"]);
+    expect(notes.get("q.md")).toBe("x ![[foto-1 (transcript)]] y");
   });
   it("embed:false legt Notiz an, lässt den Quell-Link aber unverändert", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "siehe [[scan.png]] dazu"]] });
@@ -552,7 +548,7 @@ describe("runImgToMd", () => {
   it("Namens-Kollision → Zähler", async () => {
     const { io, created } = fakeIO({ notes: [["q.md", "![[foto.jpg]]"], ["foto (transcript).md", "alt"]] });
     await runImgToMd(io, "q.md");
-    expect(created["foto (transcript)-2.md"]).toBeTruthy();
+    expect(created["foto (transcript) 2.md"]).toBeTruthy();
   });
   it("Duplikat-Embeds desselben Bildes → eine Transkription, alle Vorkommen ersetzt", async () => {
     const { io, created, notes } = fakeIO({ notes: [["q.md", "![[foto.jpg]]\ntext\n![[foto.jpg]]"]] });

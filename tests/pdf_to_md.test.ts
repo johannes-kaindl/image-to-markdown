@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { firstFreeName } from "../src/vendor/kit/filename-policy";
 import { buildPdfNote, writePdfTranscript, buildPdfBody, reconstructPdfText, countNonWhitespace, PDF_TEXTLAYER_MIN_CHARS } from "../src/pdf_to_md";
 import { applySelection, DiffLine } from "../src/vendor/kit/diff";
 import { DEFAULT_FM_MAP } from "../src/frontmatter_map";
@@ -108,8 +109,7 @@ function pdfIO(initial: string) {
     date: () => "2026-06-22",
     readNote: async (p: string) => notes.get(p) ?? "",
     writeNote: async (p: string, c: string) => { notes.set(p, c); },
-    createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
-    noteExists: (p: string) => notes.has(p),
+    createNote: async (p: string, c: string) => { const q = firstFreeName(p, "file", (x) => notes.has(x)); created[q] = c; notes.set(q, c); return q; },
     resolveImage: (l: string) => ({ path: l, ext: "pdf" }),
   };
   return { io, created, notes };
@@ -206,8 +206,7 @@ describe("writePdfTranscript", () => {
       date: () => "2026-06-28",
       readNote: async (p: string) => notes.get(p) ?? "",
       writeNote: async (p: string, c: string) => { notes.set(p, c); },
-      createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
-      noteExists: (p: string) => notes.has(p),
+      createNote: async (p: string, c: string) => { const q = firstFreeName(p, "file", (x) => notes.has(x)); created[q] = c; notes.set(q, c); return q; },
       resolveImage: (l: string) => ({ path: l, ext: "pdf" }),
     };
     // Seite 2 jetzt erholt (Retry), Seite 3 weiter fehlend — Produktionspfad: overwritePath UND range.
@@ -234,8 +233,7 @@ describe("writePdfTranscript", () => {
       date: () => "2026-06-23",
       readNote: async (p: string) => notes.get(p) ?? "",
       writeNote: async (p: string, c: string) => { notes.set(p, c); },
-      createNote: async (p: string, c: string) => { created[p] = c; notes.set(p, c); },
-      noteExists: (p: string) => notes.has(p),
+      createNote: async (p: string, c: string) => { const q = firstFreeName(p, "file", (x) => notes.has(x)); created[q] = c; notes.set(q, c); return q; },
       resolveImage: (l: string) => ({ path: l, ext: "pdf" }),
     };
     const r = await writePdfTranscript(io, "q.md", { raw: "![[doc.pdf]]", link: "doc.pdf" }, [
@@ -260,8 +258,7 @@ describe("writePdfTranscript", () => {
         date: () => "2026-06-29",
         readNote: async (p: string) => notes.get(p) ?? "",
         writeNote: async (p: string, c: string) => { writes.push(p); notes.set(p, c); },
-        createNote: async (p: string, c: string) => { notes.set(p, c); },
-        noteExists: (p: string) => notes.has(p),
+        createNote: async (p: string, c: string) => { const q = firstFreeName(p, "file", (x) => notes.has(x)); notes.set(q, c); return q; },
         resolveImage: (l: string) => ({ path: l, ext: "pdf" }),
         notify: () => {},
         confirmOverwrite,

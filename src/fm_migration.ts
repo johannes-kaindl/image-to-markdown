@@ -1,4 +1,5 @@
 import { FrontmatterMap } from "./frontmatter_map";
+import { locateFrontmatter } from "./vendor/kit/frontmatter";
 
 export type MappingChange = { field: keyof FrontmatterMap; from: string; to: string };
 
@@ -11,8 +12,8 @@ export function diffMappings(oldMap: FrontmatterMap, newMap: FrontmatterMap): Ma
 }
 
 function fmBlock(content: string): string | null {
-  const m = /^---\r?\n(?:([\s\S]*?)\r?\n)?---/.exec(content);
-  return m ? (m[1] ?? "") : null;
+  const span = locateFrontmatter(content);
+  return span !== null ? span.raw : null;
 }
 
 function kEsc(key: string): string {
@@ -40,9 +41,11 @@ export function isI2mNote(content: string, oldMap: FrontmatterMap): boolean {
 export interface MigrationResult { changed: boolean; next: string; conflict: boolean }
 
 export function migrateNoteFrontmatter(content: string, oldMap: FrontmatterMap, newMap: FrontmatterMap): MigrationResult {
-  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)/.exec(content);
-  if (!m) return { changed: false, next: content, conflict: false };
-  const [full, open, block, close] = m;
+  // Zaunregel von Obsidian (obsidian-kit locateFrontmatter): `close` reicht bis hinter die Zaunzeile, `full` ist der ganze Kopf.
+  const span = locateFrontmatter(content);
+  if (span === null) return { changed: false, next: content, conflict: false };
+  const { open, raw: block, close } = span;
+  const full = content.slice(0, span.bodyFrom);
 
   // Key-Umbenennungen (die zwei reinen Wert-Felder ausgenommen).
   const rename = new Map<string, string>();

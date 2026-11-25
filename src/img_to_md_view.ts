@@ -11,6 +11,7 @@ import { buildStatus, paintStatus, type StatusParts } from "./vendor/kit-obsidia
 import type { BackendId, FamilyId, ThinkingLevel } from "./vendor/kit/sampling-profiles";
 import { CardCache } from "./card_cache";
 import { parseDescription } from "./describe";
+import { errorMessage } from "./vendor/kit/error-message";
 
 export const VIEW_TYPE_IMGMD = "image-to-markdown-view";
 export type ViewMode = "transcribe" | "describe";
@@ -244,7 +245,7 @@ export class ImgToMdView extends ItemView {
       // Eine Pfeilfunktion statt `this.running`: die Zeile liest den Laufzustand bei jedem `update()` neu.
       disabled: () => this.running,
       onChange: () => { this.updateModelStatus(); },
-      onError: (e) => { this.status?.labelEl.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); },
+      onError: (e) => { this.status?.labelEl.setText(t("view.modelError", errorMessage(e))); },
       // Denk-Steuerung in derselben Zeile: seit Kit 0.73.0 immer ein Dropdown mit den Stufen des Modells (`levelPicker` gilt in der Zeile nicht).
       // Die Familie kommt aus der Endpunkt-Aufloesung, nicht aus dem Modellnamen.
       thinking: {
@@ -832,7 +833,7 @@ export class ImgToMdView extends ItemView {
         else this.refineErrors.set(i, t("view.refineEmpty"));
       }
     } catch (e) {
-      if (!signal.aborted) this.refineErrors.set(i, e instanceof Error ? e.message : String(e));
+      if (!signal.aborted) this.refineErrors.set(i, errorMessage(e));
     } finally {
       this.refineDrafts.delete(i);
       this.running = false; this.runBtn?.setText(this.runLabel()); this.modelBar?.update();
@@ -881,7 +882,7 @@ export class ImgToMdView extends ItemView {
         }
       } catch (e) {
         if (signal.aborted) break;   // Stop gedrückt — Rest unten als „Abgebrochen" markieren
-        this.state.setError(i, e instanceof Error ? e.message : String(e));
+        this.state.setError(i, errorMessage(e));
       }
       this.updateCard(i);
     }
@@ -896,7 +897,7 @@ export class ImgToMdView extends ItemView {
     if (actual && chosen === "") {
       this.status?.labelEl.setText(t("view.modelRan", actual));
     } else if (actual && actual !== chosen) {
-      try { await this.deps.llm.setModel(actual); } catch (e) { this.status?.labelEl.setText(t("view.modelError", e instanceof Error ? e.message : String(e))); }
+      try { await this.deps.llm.setModel(actual); } catch (e) { this.status?.labelEl.setText(t("view.modelError", errorMessage(e))); }
       await this.modelBar?.refresh({ force: true });   // ein JIT geladenes Modell steht jetzt in der Liste
       if (this.deps.getModel() === actual) this.status?.labelEl.setText(t("view.modelChanged", actual));
     }

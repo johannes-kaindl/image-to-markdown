@@ -2,6 +2,7 @@
 import type { App } from "obsidian";
 import { DiffLine, diffLines } from "./vendor/kit/diff";
 import { t } from "./i18n";
+import { locateFrontmatter } from "./vendor/kit/frontmatter";
 import { askChoice } from "./vendor/kit-obsidian/choice-modal";
 import { confirmAction } from "./vendor/kit-obsidian/confirm";
 import { MigrationPlan, NotePlan, MappingChange } from "./fm_migration";
@@ -12,8 +13,8 @@ export type MigrationChoice = "migrate" | "apply" | "cancel";
 /** Extrahiert den Frontmatter-Block (inkl. Fences) für den read-only Diff — der Rest der
  *  Notiz (Body) bleibt bewusst unberücksichtigt (Task 7: nur die Frontmatter-Änderung zeigen). */
 function frontmatterBlock(content: string): string {
-  const m = /^---\r?\n[\s\S]*?\r?\n---/.exec(content);
-  return m ? m[0] : content;
+  const span = locateFrontmatter(content);
+  return span !== null ? content.slice(0, span.bodyFrom).replace(/\r?\n$/, "") : content;
 }
 
 function renderDiffLine(parent: HTMLElement, d: DiffLine): void {

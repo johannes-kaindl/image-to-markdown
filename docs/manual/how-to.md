@@ -412,7 +412,7 @@ the first reachable one automatically, so the same config file works on every de
    bottom as the "add new" slot.
 3. In the **first field**, enter `http://localhost:1234` (the address of your local LM Studio).
 4. Click into the **empty field** at the bottom and enter the LAN IP of the machine running LM
-   Studio, e.g. `http://192.168.178.27:1234`.
+   Studio, e.g. `http://192.0.2.10:1234` (your LAN address).
 5. Press Tab or click away. Each field immediately shows its reachability status:
    - Circle-check (green) — reachable right now.
    - Circle-x (red) — not reachable from this device / network.

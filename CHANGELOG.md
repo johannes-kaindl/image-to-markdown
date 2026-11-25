@@ -1,10 +1,14 @@
 # Changelog
 
-All notable changes to this project are documented here.
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and versioning follows [SemVer](https://semver.org/).
+All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
+
+### Changed
+- The provider API honours cancellation (Kit contract 0.93.0): `extractText` returns `aborted` right away when the caller's signal is already aborted, without calling a backend, and also when it is aborted during the call; the signal reaches the request.
+- Transcript and description notes are created through the shared building block: a taken name now gets ` 2`, ` 3` … like the other plugins of the family (was `-2`, `-3`), and an installed Filename Sanitizer applies its rules to the name; the embed in the source note follows the final name.
+- Frontmatter is detected with Obsidian's own fence rule (an empty block ends at the second fence line, a later horizontal rule stays text).
+- Kit pins raised to obsidian-kit 0.111.0 and code-kit 0.91.1.
 
 ## [0.35.1] — 2026-11-24
 
@@ -775,7 +779,7 @@ and versioning follows [SemVer](https://semver.org/).
   list can be configured — the plugin pings it in order and automatically uses the **first reachable one**
   (re-resolved on sidebar refresh and, with one retry, after a failed call). This way a single synced config works
   across several devices and networks: e.g.
-  `localhost:1234` (the device running LM Studio) first, then `192.168.178.27:1234`
+  `localhost:1234` (the device running LM Studio) first, then a LAN address such as `192.0.2.10:1234`
   (LAN IP, reachable from iPhone/iPad via WireGuard). The settings tab has a dynamic
   endpoint field per entry (an empty field at the end = "Add new"; clearing a field removes the
   entry when you leave it), each with a reachability icon per field (circle-check / circle-x /

@@ -125,12 +125,12 @@ export async function writePdfTranscript(
   }
   const sourceName = self ? undefined : basenameNoExt(sourcePath);
   const pdfPath = self ? sourcePath : (io.resolveImage(source.link, sourcePath)?.path ?? source.link);
-  const notePath = transcriptNotePath(io, sourcePath, pdfPath, "pdf", opts?.destDir);
+  const wanted = transcriptNotePath(sourcePath, pdfPath, "pdf", opts?.destDir);
   const content = buildPdfNote({
     pdfLink: source.link, sourceName, date: io.date(), model,
     pages: bodyPages, rangeFrom, rangeTo, separator, range,
   }, map);
-  await io.createNote(notePath, content);
+  const notePath = await io.createNote(wanted, content);
   if (embed && !self) {
     const before = await io.readNote(sourcePath);
     const replaced = replaceEmbed(before, source.raw, basenameNoExt(notePath));
