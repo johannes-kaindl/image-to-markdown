@@ -1,10 +1,10 @@
 {
   "sources": {
     "obsidian-kit": {
-      "ref": "0.95.0"
+      "ref": "0.111.0"
     },
     "code-kit": {
-      "ref": "0.40.0"
+      "ref": "0.91.1"
     }
   },
   "targets": [
@@ -17,7 +17,10 @@
         "endpoint-secret-hook",
         "endpoint-source",
         "ocr-provider",
-        "override-guard"
+        "override-guard",
+        "frontmatter",
+        "filename-sanitizer-source",
+        "vault-path"
       ],
       "rewrite": [
         [
@@ -45,37 +48,28 @@
         "endpoint_config",
         "endpoint_diagnostics",
         "error_body",
-        {
-          "name": "error-message",
-          "ref": "0.73.0"
-        },
+        "error-message",
         "local-stamp",
         "model-choice",
         "model-context",
         "model-list-cache",
         "reasoning",
-        {
-          "name": "redact",
-          "ref": "0.87.0"
-        },
+        "redact",
         "rounds",
-        {
-          "name": "safe-markdown",
-          "ref": "0.73.0"
-        },
-        {
-          "name": "sampling-profiles",
-          "ref": "0.73.0"
-        },
+        "safe-markdown",
+        "sampling-profiles",
         "secrets",
         "settings",
-        {
-          "name": "split-list",
-          "ref": "0.73.0"
-        },
+        "split-list",
         "sse",
         "think-splitter",
-        "timeout"
+        "timeout",
+        "filename-policy",
+        "ensure-dir",
+        "rel-path",
+        "folder-scope",
+        "fold-case",
+        "i18n"
       ]
     },
     {
@@ -84,18 +78,9 @@
       "from": "src/ts/web",
       "modules": [
         "clipboard",
-        {
-          "name": "link-guard",
-          "ref": "0.73.0"
-        },
-        {
-          "name": "remote-resources",
-          "ref": "0.73.0"
-        },
-        {
-          "name": "leave-tree",
-          "ref": "0.73.0"
-        }
+        "link-guard",
+        "remote-resources",
+        "leave-tree"
       ],
       "rewrite": [
         [
@@ -130,10 +115,7 @@
         "clipboard",
         "collapsible",
         "confirm",
-        {
-          "name": "dom-guard",
-          "ref": "0.106.0"
-        },
+        "dom-guard",
         "embedding-connection",
         "endpoint-list",
         "endpoint-plumbing",
@@ -150,7 +132,9 @@
         "request-session",
         "secrets",
         "status-indicator",
-        "thinking-control"
+        "thinking-control",
+        "create-note",
+        "safe-file-name"
       ],
       "rewrite": [
         [

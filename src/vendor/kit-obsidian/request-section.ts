@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.95.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.111.0, src/obsidian/request-section.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting } from "obsidian";
 import { buildStatus, paintStatus, type StatusParts } from "./status-indicator";
 import { collapsibleSection, type CollapsibleStorage } from "./collapsible";
@@ -7,7 +7,7 @@ import type { RequestSession } from "./request-session";
 import type { ApiErrorCode, EndpointTransport } from "../kit/endpoint-source";
 import { isModelLoaded, type LoadedModel } from "../kit/capabilities";
 import {
-  FAMILY_IDS, resolveRequestParams, resolveThinkingLevel, thinkingFor, thinkingLevels, validateOverride, withThinkingLevel,
+  BACKENDS, FAMILY_IDS, resolveRequestParams, resolveThinkingLevel, thinkingFor, thinkingLevels, validateOverride, withThinkingLevel,
   type BackendId, type FamilyId, type FamilyKey, type FieldExplain, type FieldId, type ModeId, type ModelFamilyId,
   type RequestSettings, type ThinkingLevel, type DeviationKind,
 } from "../kit/sampling-profiles";
@@ -115,11 +115,13 @@ const memoryStorage: CollapsibleStorage = (() => {
 const famKey = (f: FamilyId | null): FamilyKey => f ?? "unknown";
 const clone = (s: RequestSettings): RequestSettings => structuredClone(s);
 
-function parseInput(field: FieldId, raw: string): number | string | null {
+/** Prüft die Eingabe gegen die Grenze des Backends, das tatsächlich sendet (`top_p` an LM Studio und Ollama ab 0,1, sonst ab 0,01; code-kit 0.77.0).
+ *  Ohne bekanntes Backend gilt die globale Grenze (`validateOverride` ohne dritten Wert). */
+function parseInput(field: FieldId, raw: string, backend?: string): number | string | null {
   const t = raw.trim();
   if (field === "reasoning_effort") return validateOverride(field, t);
   if (t === "") return null;
-  return validateOverride(field, Number(t.replace(",", ".")));
+  return validateOverride(field, Number(t.replace(",", ".")), backend);
 }
 
 export function buildRequestSection(opts: RequestSectionOptions): void {
@@ -188,7 +190,13 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
     for (const e of resolved.explain) {
       const s = new Setting(body).setName(st.fieldName(e.field, state.backend)).setDesc(st.fieldDesc(e));
       const own = ov[e.field];
-      const notSent = e.state.startsWith("not-sent") && own === undefined;
+      // `seed` hat nie einen Familien- oder Modus-Wert (er kommt nur aus einer Überschreibung): ohne Eingabe steht die Zeile immer auf „kein Wert“, und
+      // „nicht gesendet ⇒ gesperrt“ sperrte das Feld überall. Für `seed` entscheidet deshalb, wie das Backend das Feld führt: wirkungslos (`ignored`) oder
+      // unbekannt (`unsupported`) sperrt wie bei den anderen Feldern, `effective` und `accepted` lassen die Eingabe zu.
+      const seedSupport = e.field === "seed" ? BACKENDS[state.backend]?.fields.seed : undefined;
+      const notSent = e.field === "seed"
+        ? (seedSupport === undefined || seedSupport === "ignored" || seedSupport === "unsupported") && own === undefined
+        : e.state.startsWith("not-sent") && own === undefined;
       s.addText((t) => {
         t.inputEl.dataset.field = e.field;
         t.setPlaceholder(e.value !== undefined ? String(e.value) : "");
@@ -198,7 +206,7 @@ export function buildRequestSection(opts: RequestSectionOptions): void {
         t.inputEl.addEventListener("blur", () => {
           const raw = t.getValue();
           if (raw.trim() === "") return;
-          const v = parseInput(e.field, raw);
+          const v = parseInput(e.field, raw, state.backend);
           if (v === null) { t.inputEl.addClass("is-invalid"); return; }
           const next = clone(opts.settings());
           ((next.overrides[mode] ??= {})[key] ??= {})[e.field] = v;

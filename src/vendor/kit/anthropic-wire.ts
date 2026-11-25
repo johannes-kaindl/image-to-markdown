@@ -1,4 +1,4 @@
-// vendored from code-kit@0.40.0, src/ts/pure/anthropic-wire.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.91.1, src/ts/pure/anthropic-wire.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Origin: obsidian-kit `src/pure/anthropic-wire.ts` (0.71.0; the Claude transport exists since 0.62.0); moved to code-kit in Welle 28 with the
  *  logic unchanged — only these comments were translated.
  *
@@ -256,8 +256,10 @@ export function toAnthropicBody(body: unknown, opts: ToAnthropicOptions): Record
   out.model = b.model;
   const streaming = b.stream === true;
   const requested = typeof b.max_tokens === "number" ? b.max_tokens : typeof b.max_completion_tokens === "number" ? b.max_completion_tokens : undefined;
-  const fallback = Math.min(streaming ? ANTHROPIC_DEFAULT_MAX_TOKENS_STREAM : ANTHROPIC_DEFAULT_MAX_TOKENS, opts.caps?.maxOutputTokens ?? Number.POSITIVE_INFINITY);
-  out.max_tokens = requested !== undefined && requested > 0 ? Math.trunc(requested) : fallback;
+  const limit = opts.caps?.maxOutputTokens ?? Number.POSITIVE_INFINITY;
+  const fallback = Math.min(streaming ? ANTHROPIC_DEFAULT_MAX_TOKENS_STREAM : ANTHROPIC_DEFAULT_MAX_TOKENS, limit);
+  // A requested value is clamped to the model's output limit too: a larger one would be a 400 from the API (a reserve of 64000 at `xhigh` on a model with a smaller limit).
+  out.max_tokens = requested !== undefined && requested > 0 ? Math.min(Math.trunc(requested), limit) : fallback;
   out.messages = turns.map((t) => ({ role: t.role, content: t.role === "user" ? toolResultsFirst(t.blocks) : t.blocks }));
   if (system.length > 0) out.system = system.join("\n\n");
   if (streaming) out.stream = true;

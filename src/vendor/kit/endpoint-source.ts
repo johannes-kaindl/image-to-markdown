@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.95.0, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.111.0, src/pure/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { hydrateEndpointSecrets, resolveActiveEndpointConfig, type EndpointConfig } from "./endpoint_config";
 import type { SecretStore } from "./secrets";
 import { familyFromName, type BackendId, type FamilyId, type ModelFamilyId } from "./sampling-profiles";
@@ -12,7 +12,10 @@ export const LLM_ENDPOINT_MANAGER_PLUGIN_ID = "llm-endpoint-manager";
 export type Provider = "openai" | "ollama" | "a1111" | "comfy" | "apple-shortcuts" | "anthropic";
 export type Capability = "chat" | "embedding" | "vision" | "image";
 export type ApiErrorCode = "no-endpoint" | "not-found" | "disabled" | "secret-missing" | "unreachable";
-export interface ApiError { error: ApiErrorCode }
+/** Fehlerwert der Plugin-API v1. `message` ist seit Welle 37 ein **optionales** Feld (Entscheidung 2026-11-24, `docs/internal/decisions.md` „Zwei Vertragsfragen aus dem Crews-API-Design“; Angleichen an die sechs anderen Fehlerformen des Kits
+ *  `audio-provider`, `describe-provider`, `image-gen-provider`, `ocr-provider`, `filename-sanitizer-source`, `pseudonymizer-source`, die `message: string` als Pflichtfeld tragen): der Manager füllt es, wo der Grund schon als Text vorliegt, eine ältere
+ *  Fassung des Managers liefert `{ error }` allein. Anzeige, nicht tragend: wer verzweigt, liest `error`. Pflicht wäre ein v2 und ist bewusst nicht gewählt (additiv, kein Bruch für die Konsumenten). */
+export interface ApiError { error: ApiErrorCode; message?: string }
 /** `family` ist der Sampling-Schlüssel; `displayFamily` die Anzeige-Familie (kann `apple-fm` sein,
  *  das keinen Sampling-Schlüssel hat). Fehlt `displayFamily`, gilt `family` gespiegelt. */
 export interface ApiModelInfo { id: string; family?: FamilyId; displayFamily?: ModelFamilyId; aliasOf?: string }

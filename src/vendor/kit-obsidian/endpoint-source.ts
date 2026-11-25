@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.95.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.111.0, src/obsidian/endpoint-source.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { Notice, Setting, type App } from "obsidian";
 import { resolveModelChoice, type ModelHintKey } from "../kit/model-choice";
 import type { EndpointConfig } from "../kit/endpoint_config";
@@ -173,9 +173,17 @@ export function buildEndpointSourceSection(opts: EndpointSourceSectionOptions): 
   });
 
   if (opts.modelRow !== false) {
-    const autoEntries = opts.autoTransports ? api.list({ capability: opts.capability, transports: opts.autoTransports }) : entries;
-    const targetId = choice.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : autoEntries[0]?.id;
-    if (targetId) renderModelRow(opts, opts.strings, api, entries, choice, targetId);
+    const chosen = choice.endpointId && entries.some((e) => e.id === choice.endpointId) ? choice.endpointId : undefined;
+    const modelRow = new Setting(opts.containerEl).setName(opts.strings.model);   // der Platz steht sofort; gefüllt wird, sobald der Endpunkt feststeht
+    if (chosen) renderModelRow(opts, opts.strings, api, modelRow, choice, { id: chosen, defaultModel: entries.find((e) => e.id === chosen)?.defaultModel });
+    else {
+      // „Automatisch“ (oder verwaiste Wahl): die Zeile gehört dem Endpunkt, den der Manager für „Automatisch“ nimmt, also `resolve` (überspringt abgeschaltete, schlüssellose und
+      // unerreichbare), nicht dem ersten Eintrag der Liste (Welle 36).
+      void automaticTarget(opts, api).then((t) => {
+        if (t) renderModelRow(opts, opts.strings, api, modelRow, choice, t);
+        else modelRow.settingEl.remove();   // gar kein Endpunkt: keine Zeile, wie bisher
+      });
+    }
   }
 
   const local = opts.pluginId ? hydrateLocalEndpoints(opts.app, opts.pluginId, opts.local()) : opts.local();
@@ -190,17 +198,31 @@ export function buildEndpointSourceSection(opts: EndpointSourceSectionOptions): 
   }
 }
 
-/** Die Modell-Zeile: reservierter Platz sofort, gefüllt nach `api.models`. */
+/** Welchen Endpunkt „Automatisch“ nimmt: den, den `resolve` liefert. Meldet `resolve` einen Fehler (nichts eingeschaltet, nichts erreichbar) oder wirft es, gilt wie vor 0.96 der erste Eintrag der automatischen Liste:
+ *  die Zeile soll dann den Hinweis „nicht erreichbar“ zeigen können, statt zu verschwinden. Ohne Eintrag: `undefined`. Kein `caller`: eine Anzeige ist keine Nutzung des Endpunkts. Wirft nie. */
+async function automaticTarget(opts: EndpointSourceSectionBase, api: LlmEndpointManagerApi): Promise<{ id: string; defaultModel?: string } | undefined> {
+  const transports = opts.autoTransports ?? opts.transports;
+  try {
+    const r = await api.resolve(opts.capability, transports ? { transports } : undefined);
+    if (!("error" in r)) return { id: r.id, defaultModel: r.defaultModel };
+  } catch { /* der Rückfall unten */ }
+  try {
+    const first = api.list(transports ? { capability: opts.capability, transports } : { capability: opts.capability })[0];
+    return first ? { id: first.id, defaultModel: first.defaultModel } : undefined;
+  } catch { return undefined; }
+}
+
+/** Die Modell-Zeile: der Platz (`modelRow`) steht schon, gefüllt nach `api.models`. */
 function renderModelRow(
   opts: EndpointSourceSectionBase,
   st: EndpointSourceSectionStrings,
   api: LlmEndpointManagerApi,
-  entries: ReturnType<LlmEndpointManagerApi["list"]>,
+  modelRow: Setting,
   choice: EndpointChoice,
-  targetId: string,
+  target: { id: string; defaultModel?: string },
 ): void {
-  const modelRow = new Setting(opts.containerEl).setName(st.model);
-  const entry = entries.find((e) => e.id === targetId);
+  const targetId = target.id;
+  const entry = target;
   const draw = (models: string[], reachable: boolean): void => {
     const c = resolveModelChoice({ reachable, models, current: choice.model ?? "", allowEmpty: true });
     const labelled = { ...c, options: c.options.map((o) => (o.value === "" ? { ...o, label: entry?.defaultModel ? `${st.automatic} (${entry.defaultModel})` : st.automatic } : o)) };

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.95.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.111.0, src/obsidian/llm-connection-strings.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Default-Texte (EN/DE) für `LlmConnection.renderSettings` — nach dem Muster von
  *  `HELP_SETTING_TEXTS_EN/DE`. Ohne sie formulierte jeder Konsument rund 60 Texte selbst, obwohl
  *  „Reset“ oder „Open manager settings“ je Plugin nichts anderes heißen soll.
@@ -85,11 +85,11 @@ interface Texts {
   requestTitle: string; requestFamily: string; requestFamilyNone: string; requestBackend: string; requestBackendNone: string; familyManager: string; familyName: string; familyNone: string;
   backendManager: string; backendProbe: string; backendNone: string; unknownFamily: string; unrecognisedBackend: string; unrecognisedFamily: string; jitWarning: string; jitRuntimeWarning: string; sentAs: string;
   modes: Record<"agent" | "structured" | "transform" | "grounded" | "companion" | "creative" | "complete", string>;
-  fields: Record<"temperature" | "top_p" | "top_k" | "min_p" | "presence_penalty" | "reasoning_effort" | "max_tokens", string>;
+  fields: Record<"temperature" | "top_p" | "top_k" | "min_p" | "presence_penalty" | "reasoning_effort" | "max_tokens" | "seed", string>;
   /** `fields.reasoning_effort` mit dem Wire-Namen der Messages-API: Backend `anthropic` sendet `effort`. */
   effortAnthropic: string;
   states: Record<"sent-effective" | "sent-unproven" | "not-sent-ignored" | "not-sent-unsupported" | "not-sent-unknown-family" | "not-sent-no-value", string>;
-  notes: Record<"raised-to-reserve" | "raised-to-thinking-floor" | "below-thinking-floor" | "off-not-possible", string>;
+  notes: Record<"raised-to-reserve" | "raised-to-thinking-floor" | "below-thinking-floor" | "off-not-possible" | "override-below-backend-min", string>;
   topPHint: string;
   reset: string; thinkingLevel: string; levels: Record<ThinkingLevel, string>;
   levelPicker: string; levelPickerDesc: string; requestSaveFailed: string; dormant: string; deleteDormant: string;
@@ -234,6 +234,7 @@ const EN: Texts = {
     temperature: "Temperature (temperature)", top_p: "Nucleus sampling (top_p)", top_k: "Top-k sampling (top_k)",
     min_p: "Minimum probability (min_p)", presence_penalty: "Presence penalty (presence_penalty)",
     reasoning_effort: "Thinking effort (reasoning_effort)", max_tokens: "Token budget (max_tokens)",
+    seed: "Random seed (seed)",
   },
   effortAnthropic: "Thinking effort (effort)",
   states: {
@@ -249,6 +250,7 @@ const EN: Texts = {
     "raised-to-thinking-floor": "Raised to the family's floor while thinking (the vendor warns against greedy decoding).",
     "below-thinking-floor": "Below the family's thinking floor — your value wins anyway.",
     "off-not-possible": "Thinking can't be fully turned off here; the lowest available level is sent.",
+    "override-below-backend-min": "Your value is below the minimum this backend takes, so it is not sent (the family value applies, if there is one).",
   },
   topPHint: " For near-deterministic answers use temperature 0 or top_k 1 instead of a very small top_p.",
   reset: "Reset", thinkingLevel: "Thinking level", levels: { off: "off", minimal: "minimal", low: "low", medium: "medium", high: "high", xhigh: "very high", max: "max" },
@@ -323,6 +325,7 @@ const DE: Texts = {
     temperature: "Temperatur (temperature)", top_p: "Nucleus-Sampling (top_p)", top_k: "Top-k-Sampling (top_k)",
     min_p: "Mindestwahrscheinlichkeit (min_p)", presence_penalty: "Präsenz-Strafe (presence_penalty)",
     reasoning_effort: "Denkaufwand (reasoning_effort)", max_tokens: "Token-Budget (max_tokens)",
+    seed: "Zufallsstartwert (seed)",
   },
   effortAnthropic: "Denkaufwand (effort)",
   states: {
@@ -338,6 +341,7 @@ const DE: Texts = {
     "raised-to-thinking-floor": "Beim Denken auf die Untergrenze der Familie angehoben (der Hersteller warnt vor Greedy Decoding).",
     "below-thinking-floor": "Unter der Denk-Untergrenze der Familie — dein Wert gewinnt trotzdem.",
     "off-not-possible": "Das Denken lässt sich hier nicht ganz abschalten; die niedrigste verfügbare Stufe wird gesendet.",
+    "override-below-backend-min": "Dein Wert liegt unter dem Minimum, das dieses Backend annimmt, und wird deshalb nicht gesendet (es gilt der Wert der Familie, wenn es einen gibt).",
   },
   topPHint: " Für fast feste Antworten Temperatur 0 oder top_k 1 statt sehr kleinem top_p verwenden.",
   reset: "Zurücksetzen", thinkingLevel: "Denkstufe", levels: { off: "aus", minimal: "minimal", low: "niedrig", medium: "mittel", high: "hoch", xhigh: "sehr hoch", max: "maximal" },

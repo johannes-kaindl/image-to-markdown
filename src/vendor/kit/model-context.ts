@@ -1,4 +1,4 @@
-// vendored from code-kit@0.40.0, src/ts/pure/model-context.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.91.1, src/ts/pure/model-context.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { ANTHROPIC_VERSION } from "./anthropic-wire";
 import type { CapabilityFetch } from "./capabilities";
 import { withTimeout, type TimeoutTimers } from "./timeout";
@@ -190,4 +190,63 @@ export function lowerContextHint(current: number, candidates: ReadonlyArray<numb
     if (typeof c === "number" && c > 0 && c < current && (min === null || c < min)) min = c;
   }
   return min;
+}
+
+// ── Does the input fit the context of the model? (Welle 34, package 7) ────────────────────────────────────────────────────────────────────
+// Four plugins wrote this on their own; the rules below are what the comparison of 2026-11-14 left (every difference had a reason or it fell):
+//   svg-studio   `src/core/context-fit.ts` `inputOverflow` (31eff1f): 4 chars per token, `max_tokens` not counted, an unknown limit passes, the
+//                caller BLOCKS the request ("a request locked by mistake is worse than the server error there would be anyway"), l. 1-3 and 15-21;
+//   koda-agent   `src/core/agent/compaction/estimate.ts:7` `estimateTokens`: chars of the wire form / 4, no tokenizer, the 75 % threshold and
+//                the reactive net absorb the error (it starts a compaction), l. 3-6;
+//   slide-deck   `src/llm/model-info.ts` `estimateTokens` (3.5, "English/German prose average") and `contextOverflow` (`inputTokens + maxTokens`
+//                over the limit; a WARNING), l. 4-10; the `+ 400` and the warning above 30 000 chars for an unknown limit stay with the caller
+//                (`src/generate-deck-view.ts:279-280`);
+//   vault-crews  `src/core/prompt-builder.ts:12` `estimateTokens` (3.5), the budget `limit - max_tokens - 15 %` in `src/core/orchestrator.ts:335`
+//                (it TRUNCATES before the call; the 15 % and the two separate roundings have no reason in the code and stay with the caller).
+
+/** Characters per token of the two estimates. There are exactly two, because there is exactly one difference with a reason: the cost of a wrong
+ *  estimate. `optimistic` (4) is for a decision that BLOCKS or starts an expensive step: a request locked by mistake is worse than the
+ *  server error there would have been anyway (svg-studio blocks, koda-agent compacts). `cautious` (3.5, prose) is for a warning or a budget
+ *  that cuts: too small an estimate there lets the overflow through unseen (slide-deck warns, vault-crews truncates). Not a free number: a caller
+ *  that wants a third value has a reason this table does not know yet, and says it here. */
+export const CHARS_PER_TOKEN = { optimistic: 4, cautious: 3.5 } as const;
+
+export type TokenEstimate = keyof typeof CHARS_PER_TOKEN;
+
+/** Tokens of `chars` characters: `ceil(chars / CHARS_PER_TOKEN[estimate])`; a count that is not finite or is negative gives 0. */
+export function estimateTokens(chars: number, estimate: TokenEstimate): number {
+  if (!Number.isFinite(chars) || chars <= 0) return 0;
+  return Math.ceil(chars / CHARS_PER_TOKEN[estimate]);
+}
+
+export interface ContextOverflow {
+  /** The input, as given. */
+  tokens: number;
+  /** What the caller keeps free on top (`max_tokens`, a margin), as used (never negative). */
+  reserve: number;
+  /** The context the comparison was made against. */
+  limit: number;
+}
+
+/**
+ * `null` when the input fits or the limit is unknown, else the three numbers. The limit is unknown when it is `null`, `undefined`, not finite
+ * or `<= 0` (a context of 0 is no number to compare with; `effectiveContext` gives `null` for "the endpoint does not say"). The input
+ * overflows when `tokens + reserve > limit`: exactly at the limit it fits, one above it does not. A `reserveTokens` that is negative or not
+ * finite counts as 0, an `inputTokens` that is negative or not finite as 0.
+ *
+ * How to measure the input (the standard, from svg-studio): the SUM of the characters of all messages that are really sent, estimated ONCE
+ * with {@link estimateTokens} (one rounding at the end), with no flat surcharge for instructions or tools. Whatever else goes along (a tool list
+ * as `overheadChars`, images) is added to the characters before the estimate, not to the tokens after it. Whether `max_tokens` is a reserve is
+ * the caller's decision: do not pass it when the caller blocks (svg-studio: `max_tokens` 16384 alone would lock every model with a small
+ * context), pass it when the caller warns that the whole answer must fit too (slide-deck).
+ */
+export function contextOverflow(
+  inputTokens: number,
+  contextLimit: number | null | undefined,
+  reserveTokens = 0,
+): ContextOverflow | null {
+  if (contextLimit === null || contextLimit === undefined || !Number.isFinite(contextLimit) || contextLimit <= 0) return null;
+  const tokens = Number.isFinite(inputTokens) && inputTokens > 0 ? inputTokens : 0;
+  const reserve = Number.isFinite(reserveTokens) && reserveTokens > 0 ? reserveTokens : 0;
+  return tokens + reserve > contextLimit ? { tokens, reserve, limit: contextLimit } : null;
 }

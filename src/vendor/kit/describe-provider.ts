@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.95.0, src/pure/describe-provider.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.111.0, src/pure/describe-provider.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Öffentlicher Vertrag des Fähigkeits-Besitzers `image-to-markdown` (Bild beschreiben) — Muster `pure/ocr-provider.ts`: EINE Quelle, der Besitzer re-exportiert sie, Konsumenten vendoren.
  *  Fehler sind Werte (`DescribeProviderError`), Methoden fangen selbst — nie werfen. Form-Guard statt Versionskopie, siehe `audio-provider.ts` (dieselbe Begründung).
  *

@@ -1,4 +1,4 @@
-// vendored from code-kit@0.73.0, src/ts/web/leave-tree.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.91.1, src/ts/web/leave-tree.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Takes an element out of a DOM tree — at once where that is safe, a moment later where the element holds a frame
  *  the host is still asking about. Written here for `web/remote-resources` and `web/link-guard` (code-kit, 2026-11-15);
  *  both passes drop elements through {@link leaveTree}, so one element is handled once whichever pass meets it first.

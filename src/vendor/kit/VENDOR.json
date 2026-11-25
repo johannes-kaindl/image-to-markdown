@@ -1,11 +1,11 @@
 {
   "source": "obsidian-kit",
-  "version": "0.95.0",
-  "sha": "3853245",
-  "code_kit_version": "0.40.0",
-  "vendored": "describe-provider.ts, endpoint-secret-hook.ts, endpoint-source.ts, ocr-provider.ts, override-guard.ts",
+  "version": "0.111.0",
+  "sha": "3ba6442",
+  "code_kit_version": "0.91.1",
+  "vendored": "describe-provider.ts, endpoint-secret-hook.ts, endpoint-source.ts, ocr-provider.ts, override-guard.ts, frontmatter.ts, filename-sanitizer-source.ts, vault-path.ts",
   "note": "Verbatim snapshot aus ZWEI Quellen (obsidian-kit + code-kit); welche Datei woher stammt, sagt ihr eigener Kopf. Never hand-edit. Pins in tools/kit-sync.json, re-vendor via tools/sync-kit.sh (zentrales kit-sync im Dach). version/sha gelten AUSSCHLIESSLICH fuer die unter \"vendored\" gelisteten Dateien, die aus obsidian-kit stammen; code-kit-Herkunft steht je Datei im Kopf. kit-obsidian/ siehe dortige VENDOR.json.",
-  "code_kit_sha": "97b7277",
-  "code_kit_vendored": "anthropic-wire.ts, backend-probe.ts, capabilities.ts, data-url.ts, diff.ts, embeddings-client.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, error-message.ts (code-kit@0.73.0, 09b7dcb), local-stamp.ts, model-choice.ts, model-context.ts, model-list-cache.ts, reasoning.ts, redact.ts (code-kit@0.87.0, 7c6cc31), rounds.ts, safe-markdown.ts (code-kit@0.73.0, 09b7dcb), sampling-profiles.ts (code-kit@0.73.0, 09b7dcb), secrets.ts, settings.ts, split-list.ts (code-kit@0.73.0, 09b7dcb), sse.ts, think-splitter.ts, timeout.ts, clipboard.ts, link-guard.ts (code-kit@0.73.0, 09b7dcb), remote-resources.ts (code-kit@0.73.0, 09b7dcb), leave-tree.ts (code-kit@0.73.0, 09b7dcb)",
+  "code_kit_sha": "512aa5c",
+  "code_kit_vendored": "anthropic-wire.ts, backend-probe.ts, capabilities.ts, data-url.ts, diff.ts, embeddings-client.ts, endpoint.ts, endpoint_config.ts, endpoint_diagnostics.ts, error_body.ts, error-message.ts, local-stamp.ts, model-choice.ts, model-context.ts, model-list-cache.ts, reasoning.ts, redact.ts, rounds.ts, safe-markdown.ts, sampling-profiles.ts, secrets.ts, settings.ts, split-list.ts, sse.ts, think-splitter.ts, timeout.ts, filename-policy.ts, ensure-dir.ts, rel-path.ts, folder-scope.ts, fold-case.ts, i18n.ts, clipboard.ts, link-guard.ts, remote-resources.ts, leave-tree.ts",
   "license": "AGPL-3.0-or-later"
 }

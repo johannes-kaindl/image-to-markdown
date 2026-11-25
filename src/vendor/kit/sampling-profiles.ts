@@ -1,4 +1,4 @@
-// vendored from code-kit@0.73.0, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.91.1, src/ts/pure/sampling-profiles.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Request profiles for local and hosted LLM backends: which sampling values, which
  *  reasoning_effort and which minimum token budget a plugin sends, per model family × mode,
  *  and which of those fields a backend actually honours.
@@ -36,10 +36,10 @@ export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 /** Sampling fields a family supplies (temperature comes from the mode). */
 export type FamilyField = "top_p" | "top_k" | "min_p" | "presence_penalty";
-export type FieldId = "temperature" | FamilyField | "reasoning_effort" | "max_tokens";
+export type FieldId = "temperature" | FamilyField | "reasoning_effort" | "max_tokens" | "seed";
 /** Display and explanation order. */
 export const FIELD_ORDER: readonly FieldId[] = [
-  "temperature", "top_p", "top_k", "min_p", "presence_penalty", "reasoning_effort", "max_tokens",
+  "temperature", "top_p", "top_k", "min_p", "presence_penalty", "reasoning_effort", "max_tokens", "seed",
 ];
 
 export type Evidence = "measured" | "unmeasured";
@@ -81,6 +81,9 @@ export interface ModeProfile { temperature: Sourced<number>; thinking: ThinkingL
 export interface BackendProfile {
   label: string;
   fields: Record<FieldId, FieldSupport>;
+  /** Why a field is not sent on this backend, where the table has a reason of its own (`seed`). The explain row of a field the backend
+   *  does not take or ignores carries it as `source`; a reason the FAMILY gives (`unsupportedFields`) goes first. */
+  fieldNotes?: Partial<Record<FieldId, string>>;
   source: string;
   /** Name of the request key `reasoning_effort` is sent under when the backend calls it something else
    *  (`effort` on Anthropic). The explain row keeps the field name `reasoning_effort`. A FLAT key: the native Messages API
@@ -220,8 +223,9 @@ export const MODES: Record<ModeId, ModeProfile> = {
 
 const STANDARD_ONLY: Record<FieldId, FieldSupport> = {
   temperature: "accepted", top_p: "accepted", top_k: "unsupported", min_p: "unsupported",
-  presence_penalty: "unsupported", reasoning_effort: "accepted", max_tokens: "accepted",
+  presence_penalty: "unsupported", reasoning_effort: "accepted", max_tokens: "accepted", seed: "unsupported",
 };
+const SEED_UNMEASURED = "seed: not measured on this backend, so not sent (the table holds `unsupported` for what it has not measured)";
 
 export const BACKENDS: Record<BackendId, BackendProfile> = {
   lmstudio: {
@@ -229,7 +233,13 @@ export const BACKENDS: Record<BackendId, BackendProfile> = {
     fields: {
       temperature: "effective", top_p: "effective", top_k: "effective", min_p: "effective",
       presence_penalty: "ignored", reasoning_effort: "effective", max_tokens: "effective",
+      // Measured 2026-11-18 on LM Studio at localhost:1234 with the model that was loaded (qwen2.5-coder-7b, /api/v0/models state loaded; nothing was
+      // loaded or unloaded): POST /v1/chat/completions, temperature 1, max_tokens 40, stream false, two prompts. The same request with `seed: 42` twice
+      // gave two DIFFERENT texts on both prompts (0 of 2 equal), `seed: 43` another again. The field is accepted and has no effect, so `ignored`. One
+      // model and the chat completions endpoint only; a model or a runtime that honours it would change this row. `seed: 0` is in range and unmeasured.
+      seed: "ignored",
     },
+    fieldNotes: { seed: "measured 2026-11-18 on LM Studio (qwen2.5-coder-7b, /v1/chat/completions, temperature 1, max_tokens 40): the same request with seed 42 twice gave different texts on two prompts, so the seed has no effect and is not sent" },
     source: "llm-setup setup.md § Sampling, § Penalty-Felder, § top_k/top_p/min_p (6f75737, qwen3.8 only)",
   },
   openwebui: {
@@ -237,6 +247,9 @@ export const BACKENDS: Record<BackendId, BackendProfile> = {
     fields: {
       temperature: "effective", top_p: "effective", top_k: "accepted", min_p: "accepted",
       presence_penalty: "accepted", reasoning_effort: "effective", max_tokens: "effective",
+      // Measured by focus-crew on the LGS AI (Open WebUI), source `llm-configs docs/reference/openwebui-api.md`, as reported in the inbox note "Vault Crews
+      // — Anforderungen aus focus-crew" (2026-11-17): `seed` takes effect. Not re-measured here. `seed: 0` is in range and unmeasured there.
+      seed: "effective",
     },
     source: "llm-configs openwebui-api.md § Welche Parameter ankommen (Open WebUI 0.11.3, 2026-09-17)",
   },
@@ -244,15 +257,16 @@ export const BACKENDS: Record<BackendId, BackendProfile> = {
     label: "Anthropic",
     fields: {
       temperature: "unsupported", top_p: "unsupported", top_k: "unsupported", min_p: "unsupported",
-      presence_penalty: "unsupported", reasoning_effort: "accepted", max_tokens: "accepted",
+      presence_penalty: "unsupported", reasoning_effort: "accepted", max_tokens: "accepted", seed: "unsupported",
     },
+    fieldNotes: { seed: "the Anthropic Messages API has no seed parameter; anthropic-wire passes only max_tokens, stop and effort on" },
     source: "Anthropic docs (claude-api skill 2026-10-06): no sampling fields (400 on Claude 4.7 and newer), depth through output_config.effort, max_tokens required and includes the thinking; the obsidian-kit transport sends output_config.effort (the wire layer is anthropic-wire, in this library since 0.38.0); levels per model: CLAUDE_MODEL_LEVELS",
     effortParam: "effort",
     effortValues: ["low", "medium", "high", "xhigh", "max"],
   },
-  ollama: { label: "Ollama", fields: STANDARD_ONLY, source: "unmeasured: standard fields only" },
-  openai: { label: "OpenAI", fields: STANDARD_ONLY, source: "unmeasured: standard fields only" },
-  unknown: { label: "unknown", fields: STANDARD_ONLY, source: "unknown backend: standard fields only" },
+  ollama: { label: "Ollama", fields: STANDARD_ONLY, fieldNotes: { seed: SEED_UNMEASURED }, source: "unmeasured: standard fields only" },
+  openai: { label: "OpenAI", fields: STANDARD_ONLY, fieldNotes: { seed: SEED_UNMEASURED }, source: "unmeasured: standard fields only" },
+  unknown: { label: "unknown", fields: STANDARD_ONLY, fieldNotes: { seed: SEED_UNMEASURED }, source: "unknown backend: standard fields only" },
 };
 
 export const FAMILY_PATTERNS: readonly [RegExp, FamilyId][] = [
@@ -491,7 +505,7 @@ export type FieldState =
   | "sent-effective" | "sent-unproven" | "not-sent-ignored" | "not-sent-unsupported"
   | "not-sent-unknown-family" | "not-sent-no-value";
 export type FieldOrigin = "mode" | "family" | "override" | "reserve" | "plugin";
-export type FieldNote = "raised-to-reserve" | "raised-to-thinking-floor" | "below-thinking-floor" | "off-not-possible";
+export type FieldNote = "raised-to-reserve" | "raised-to-thinking-floor" | "below-thinking-floor" | "off-not-possible" | "override-below-backend-min";
 export interface FieldExplain {
   field: FieldId;
   /** Set on EVERY row when the request named a backend and/or a family this table does not know: the row was decided as
@@ -554,10 +568,16 @@ export function resolveRequestParams(rawInput: ResolveInput): ResolvedRequest {
     candidates.set("temperature", { value: mode.temperature.value, origin: "mode", source: mode.temperature.source, evidence: mode.temperature.evidence });
   }
 
-  // 2. family sampling fields
+  // 2. family sampling fields. An override below the minimum this BACKEND takes (`RANGES[f].minByBackend`: top_p on LM Studio and Ollama) is not
+  //    sent, the same as a value out of range at load time (`sanitizeRequestSettings` drops it): the field falls back to the family value, and the
+  //    row says so (`override-below-backend-min`), also where there is no family value to fall back to.
+  const overrideNotes = new Map<FieldId, FieldNote>();
   for (const f of FAMILY_FIELDS) {
     const o = ov[f];
-    if (typeof o === "number") { candidates.set(f, { value: o, origin: "override" }); continue; }
+    if (typeof o === "number") {
+      if (!belowBackendMin(f, o, input.backend)) { candidates.set(f, { value: o, origin: "override" }); continue; }
+      overrideNotes.set(f, "override-below-backend-min");
+    }
     if (!fam) { candidates.set(f, "unknown-family"); continue; }
     const s = (thinkingOn ? fam.thinking : fam.noThinking)[f];
     candidates.set(f, s ? { value: s.value, origin: "family", source: s.source, evidence: s.evidence } : "no-value");
@@ -590,7 +610,10 @@ export function resolveRequestParams(rawInput: ResolveInput): ResolvedRequest {
     }
   }
 
-  // 5. backend filter
+  // 5. seed: only from an override (no profile, family or mode default exists for it), so an unset seed is "no value" and never reaches `params`
+  candidates.set("seed", typeof ov.seed === "number" ? { value: ov.seed, origin: "override" } : "no-value");
+
+  // 6. backend filter
   const params: Record<string, number | string> = {};
   const explain: FieldExplain[] = [];
   for (const field of FIELD_ORDER) {
@@ -598,10 +621,19 @@ export function resolveRequestParams(rawInput: ResolveInput): ResolvedRequest {
     const refused = fam?.unsupportedFields?.[field];
     if (c === undefined || c === "no-value") {
       // A field the family refuses is reported as refused even where the table holds no value for it.
-      explain.push(refused ? { field, state: "not-sent-unsupported", source: refused.source, evidence: refused.evidence } : { field, state: "not-sent-no-value" });
+      const empty: FieldExplain = refused ? { field, state: "not-sent-unsupported", source: refused.source, evidence: refused.evidence } : { field, state: "not-sent-no-value" };
+      const dropped = overrideNotes.get(field);
+      if (dropped !== undefined) empty.note = dropped;
+      explain.push(empty);
       continue;
     }
-    if (c === "unknown-family") { explain.push({ field, state: "not-sent-unknown-family" }); continue; }
+    if (c === "unknown-family") {
+      const row: FieldExplain = { field, state: "not-sent-unknown-family" };
+      const dropped = overrideNotes.get(field);
+      if (dropped !== undefined) row.note = dropped;
+      explain.push(row);
+      continue;
+    }
     const effortValues = field === "reasoning_effort" ? BACKENDS[input.backend].effortValues : undefined;
     const outOfList = effortValues !== undefined && !effortValues.includes(String(c.value));
     const s = refused || outOfList ? "unsupported" : support(input.backend, field, fam !== null);
@@ -609,11 +641,13 @@ export function resolveRequestParams(rawInput: ResolveInput): ResolvedRequest {
     if (c.source !== undefined) row.source = c.source;
     if (c.evidence !== undefined) row.evidence = c.evidence;
     if (c.note !== undefined) row.note = c.note;
+    else if (overrideNotes.has(field)) row.note = overrideNotes.get(field);
     if (s === "ignored" || s === "unsupported") {
       row.state = s === "ignored" ? "not-sent-ignored" : "not-sent-unsupported";
       delete row.value;
-      // The reason the family refuses the field replaces the source of the value that was not sent.
-      if (refused) { row.source = refused.source; row.evidence = refused.evidence; }
+      // The reason the family refuses the field replaces the source of the value that was not sent; without one, the backend's own reason for the field.
+      const backendNote = BACKENDS[input.backend].fieldNotes?.[field];
+      if (refused) { row.source = refused.source; row.evidence = refused.evidence; } else if (backendNote !== undefined) { row.source = backendNote; }
     } else {
       row.state = s === "effective" ? "sent-effective" : "sent-unproven";
       params[field === "reasoning_effort" ? (BACKENDS[input.backend].effortParam ?? field) : field] = c.value;
@@ -636,20 +670,44 @@ export interface RequestSettings {
 }
 export const DEFAULT_REQUEST_SETTINGS: RequestSettings = { overrides: {}, thinking: {}, lastOnLevel: {}, levelPickerInChat: false };
 
-export const RANGES: Record<Exclude<FieldId, "reasoning_effort">, { min: number; max: number; int: boolean }> = {
+/** The range of a numeric field. `minByBackend` raises `min` on the backends it names (see {@link rangeFor}). */
+export interface FieldRange { min: number; max: number; int: boolean; minByBackend?: Partial<Record<BackendId, number>> }
+export const RANGES: Record<Exclude<FieldId, "reasoning_effort">, FieldRange> = {
   temperature: { min: 0, max: 2, int: false },
-  top_p: { min: 0.1, max: 1, int: false },   // measured: top_p <= 0.05 yields garbage on LM Studio (llm-setup 6f75737)
+  // The global minimum is 0.01 (0.01 takes effect on the LGS AI, measured by focus-crew, Open WebUI; the inbox note "Vault Crews — Anforderungen aus
+  // focus-crew", 2026-11-17). On LM Studio, top_p <= 0.05 yields garbage (measured, llm-setup 6f75737), so the minimum stays 0.1 there; Ollama runs the same
+  // llama.cpp sampler and gets the same bound, UNMEASURED. Anthropic takes no top_p at all (`unsupportedFields`). Read the range through `rangeFor`.
+  top_p: { min: 0.01, max: 1, int: false, minByBackend: { lmstudio: 0.1, ollama: 0.1 } },
   top_k: { min: 1, max: Number.MAX_SAFE_INTEGER, int: true },
   min_p: { min: 0, max: 1, int: false },
   presence_penalty: { min: 0, max: 2, int: false },
   max_tokens: { min: 1, max: Number.MAX_SAFE_INTEGER, int: true },
+  // From an override only, an integer from 0 (`seed: 0` is in range and unmeasured on every backend; a negative or fractional seed is dropped). The upper
+  // bound is the largest integer a JSON number carries exactly.
+  seed: { min: 0, max: Number.MAX_SAFE_INTEGER, int: true },
 };
+
+/** The range of `field` on `backend`: `RANGES[field]` with `min` raised by `minByBackend[backend]`. Without a backend (or one that raises nothing) it is the
+ *  global range. An id the table does not hold counts as no backend (no exception). */
+export function rangeFor(field: Exclude<FieldId, "reasoning_effort">, backend?: string): { min: number; max: number; int: boolean } {
+  const r = RANGES[field];
+  const by = r.minByBackend;
+  const raised = backend !== undefined && by !== undefined && Object.prototype.hasOwnProperty.call(by, backend) ? by[backend as BackendId] : undefined;
+  return { min: raised !== undefined && raised > r.min ? raised : r.min, max: r.max, int: r.int };
+}
+
+/** `true` when `value` is in the GLOBAL range of `field` but under the minimum this backend takes. */
+function belowBackendMin(field: Exclude<FieldId, "reasoning_effort">, value: number, backend: string): boolean {
+  return value < rangeFor(field, backend).min && value >= RANGES[field].min;
+}
 export const EFFORT_VALUES = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
-export function validateOverride(field: FieldId, raw: unknown): number | string | null {
+/** The value if it is valid for `field`, else `null`. Without `backend` the GLOBAL range counts (what a stored setting is checked against: it is kept per
+ *  mode × family, not per backend); with one, the minimum of that backend counts too. `resolveRequestParams` applies the backend minimum itself. */
+export function validateOverride(field: FieldId, raw: unknown, backend?: string): number | string | null {
   if (field === "reasoning_effort") return typeof raw === "string" && EFFORT_VALUES.has(raw) ? raw : null;
   if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
-  const r = RANGES[field];
+  const r = rangeFor(field, backend);
   if (raw < r.min || raw > r.max) return null;
   if (r.int && !Number.isInteger(raw)) return null;
   return raw;

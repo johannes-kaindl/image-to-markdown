@@ -1,4 +1,4 @@
-// vendored from code-kit@0.40.0, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from code-kit@0.91.1, src/ts/pure/capabilities.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 import { ThinkingSupport } from "./reasoning";
 import { familyFromName, type BackendId } from "./sampling-profiles";
 
@@ -103,7 +103,9 @@ export function parseLmStudioV1(json: unknown, model: string): Capabilities | nu
   if (!m) return null;
   const caps = (m.capabilities ?? {}) as { vision?: unknown; reasoning?: unknown };
   const vision: Confidence = caps.vision === true ? "confirmed" : "no";
-  const canThink = caps.reasoning != null;
+  // An object (`{ allowed_options, default }`) or `true` is thinking; `false`, `null` and other scalars are not. Measured against LM Studio
+  // 0.4.28+2 on 2026-11-12: 8 models, `reasoning` is an object or the key is missing, never `false`.
+  const canThink = caps.reasoning === true || isRecord(caps.reasoning);
   return {
     vision,
     thinking: canThink ? { support: "hybrid", confidence: "confirmed" } : { support: "none", confidence: "no" },
@@ -125,6 +127,38 @@ export function parseLmStudioV0(json: unknown, model: string): Capabilities | nu
   if (!m) return null;
   const vision: Confidence = m.type === "vlm" ? "confirmed" : "no";
   return { vision, thinking: { support: "none", confidence: "no" } }; // thinking in v0 nicht erkennbar
+}
+
+// ── Model kind: embedding or chat ─────────────────────────────────────
+/** What a model is for, as far as a server says. `unknown` is the honest third value: the server did not answer, does not know the
+ *  model, or does not tell. A caller must not read it as "chat". */
+export type ModelKind = "embedding" | "chat" | "unknown";
+
+/** Which answer {@link parseModelKind} reads: Ollama's `POST /api/show`, LM Studio's native `GET /api/v1/models` (also its
+ *  OpenAI-style `{ data }` form, like {@link parseLmStudioV1}), or LM Studio's `GET /api/v0/models`. */
+export type ModelKindFlavor = "ollama" | "lmstudio-v1" | "lmstudio-v0";
+
+/** LM Studio's `type`: v0 says `embeddings | llm | vlm`, the native v1 says `embedding | llm` (both measured against a local LM Studio
+ *  on 2026-11-12); both spellings are accepted on both routes, since a later version may unify them. */
+function kindOfType(type: unknown): ModelKind {
+  if (type === "embedding" || type === "embeddings") return "embedding";
+  if (type === "llm" || type === "vlm") return "chat";
+  return "unknown";
+}
+
+/** The kind of `model` in one server answer. Ollama: `capabilities` of `/api/show` holds `embedding` for an embedding model and
+ *  `completion` for one that generates (an Ollama without `capabilities`, from before 0.6.4, is `unknown`); the answer is for the
+ *  one model that was asked, so `model` is not looked up. LM Studio: the entry of `model` in the list, by its `type`. Pure, never
+ *  throws; anything it cannot read is `unknown`. */
+export function parseModelKind(json: unknown, model: string, flavor: ModelKindFlavor): ModelKind {
+  if (flavor === "ollama") {
+    const caps = isRecord(json) ? json.capabilities : undefined;
+    if (!Array.isArray(caps)) return "unknown";
+    if (caps.includes("embedding")) return "embedding";
+    return caps.includes("completion") ? "chat" : "unknown";
+  }
+  const m = flavor === "lmstudio-v1" ? (findNativeModel(json, model) ?? findModel(json, model, "data", "id")) : findModel(json, model, "data", "id");
+  return m ? kindOfType(m.type) : "unknown";
 }
 
 // ── Geladene Modelle (LM Studio) ─────────────────────────────────────
@@ -264,6 +298,25 @@ export async function fetchCapabilities(
     if (r) { const c = parseLmStudioV0(r.json, model); if (c) return c; }
   } catch { /* weiter */ }
   return null;
+}
+
+/** The kind of `model` on a server, asked in the order of {@link fetchCapabilities}: Ollama, LM Studio v1, LM Studio v0. The first
+ *  answer that is not `unknown` wins; an answer that does not know the model does not end the sequence. No server, no answer, an
+ *  adapter that throws or rejects: `unknown`, never an exception (one try/catch per attempt). Plain reads, except Ollama's POST, which
+ *  only asks. */
+export async function fetchModelKind(fetchJson: CapabilityFetch, baseUrl: string, model: string): Promise<ModelKind> {
+  const attempts: { flavor: ModelKindFlavor; req: Parameters<CapabilityFetch>[0] }[] = [
+    { flavor: "ollama", req: { url: `${baseUrl}/api/show`, method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) } },
+    { flavor: "lmstudio-v1", req: { url: `${baseUrl}/api/v1/models` } },
+    { flavor: "lmstudio-v0", req: { url: `${baseUrl}/api/v0/models` } },
+  ];
+  for (const { flavor, req } of attempts) {
+    try {
+      const r = await fetchJson(req);
+      if (r) { const k = parseModelKind(r.json, model, flavor); if (k !== "unknown") return k; }
+    } catch { /* next */ }
+  }
+  return "unknown";
 }
 
 /** Probes are sent to the origin of the configured endpoint URL (LM Studio `/v1`,

@@ -1,4 +1,4 @@
-// vendored from obsidian-kit@0.95.0, src/pure/override-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
+// vendored from obsidian-kit@0.111.0, src/pure/override-guard.ts — do not hand-edit; re-vendor via tools/sync-kit.sh
 /** Werte je Aufruf, die das Profil nicht annimmt, werden NICHT gesendet (Welle 23, Entscheidung des Masters 2026-10-16).
  *
  *  `createLlmConnection` mischt die Überschreibungen eines Aufrufs (`CompleteHandlers.overrides`, z. B. transmute
@@ -6,7 +6,10 @@
  *  Familie und `BACKENDS[b].fields` schützen sie deshalb nicht. Auf Claude 4.7 und neuer ist ein `temperature` unter 1 ein
  *  HTTP 400. Diese Funktion legt dieselbe Regel auf die Werte je Aufruf, die das Profil für die Werte aus den Settings
  *  schon anwendet: ein Feld, das die Familie als nicht angenommen führt oder das das Backend als `unsupported` führt, fällt
- *  weg. Felder ohne Profil-Eintrag (`stop`, `seed`, …) bleiben, das Profil kennt sie nicht.
+ *  weg. Felder außerhalb von `FIELDS` (`stop`, `seed`, …) bleiben. **`seed` ist seit code-kit 0.77.0 ein Profilfeld (`FieldId`), steht aber mit
+ *  Absicht NICHT in `FIELDS`** (Welle 36, k9e4): die Tabelle führt es auf Ollama, OpenAI und `unknown` als `unsupported`, weil dort ungemessen, nicht weil
+ *  belegt unwirksam; ein Wert je Aufruf ist der Code des Aufrufers (nicht eine Einstellung des Nutzers), und ihn auf Verdacht zu verlieren, änderte das
+ *  Verhalten jedes Aufrufers mit `seed` still. Auf Anthropic trägt `anthropic-wire` ihn ohnehin nicht auf den Draht.
  *
  *  Ausnahme Backend `unknown`: dort führt die Tabelle nur „Standardfelder“, ohne Beleg; ein Server, den wir nicht kennen, soll
  *  nicht auf Verdacht Werte verlieren. Eine Familie mit einem Eintrag in `unsupportedFields` (belegt) gilt auf jedem Backend. */
